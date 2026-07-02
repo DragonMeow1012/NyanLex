@@ -1,0 +1,29 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mixins]]
+config = "mctranslator.neoforge26.mixins.json"
+
+[[mods]]
+modId = "mctranslator"
+version = "${version}"
+displayName = "Minecraft Translator"
+description = "Translates chat and item names/lore into Traditional/Simplified Chinese. Client-only."
+authors = "DragonMeow"
+# Client-only QoL mod: do not block joining servers that don't have it.
+displayTest = "IGNORE_ALL_VERSION"
+
+[[dependencies.mctranslator]]
+modId = "neoforge"
+type = "required"
+versionRange = "[26.2,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.mctranslator]]
+modId = "minecraft"
+type = "required"
+versionRange = "[26.2,27)"
+ordering = "NONE"
+side = "CLIENT"

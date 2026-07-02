@@ -1,0 +1,30 @@
+plugins {
+    id 'net.neoforged.gradle.userdev' version '7.0.192'
+    id 'java'
+}
+version = project.mod_version
+group = project.maven_group
+base { archivesName = 'mctranslator' }
+tasks.named('jar') { archiveClassifier = 'NeoForge-1.20.1' }
+repositories { mavenCentral() }
+dependencies {
+    implementation "net.neoforged:forge:${project.forge_version}"
+}
+java {
+    // No JDK 17 installed; recompile MC + mod with JDK 21 targeting Java 17 bytecode.
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('META-INF/mods.toml') {
+        expand 'version': project.version
+    }
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "mctranslator",
+  "version": "1.0.1",
+  "name": "Minecraft Translator",
+  "description": "Translates in-game text into Traditional Chinese via Google / AI.",
+  "authors": ["DragonMeow"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26"]
+  },
+  "mixins": [
+    "mctranslator.fabric26.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

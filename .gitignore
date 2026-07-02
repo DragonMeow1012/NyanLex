@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+.gradle-local/
+build/
+out/
+
+# Loom
+.fabric/
+run/
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local test scratch
+.localtest/

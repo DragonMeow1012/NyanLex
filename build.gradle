@@ -1,0 +1,67 @@
+plugins {
+    id 'fabric-loom' version '1.7.4'
+    id 'java'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+// Final jar name: mctranslator-1.0.0-Fabric-1.21.1.jar (mirrors the NeoForge classifier scheme).
+tasks.named('remapJar') {
+    archiveClassifier = 'Fabric-1.21.1'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+    // Minecraft + mappings + loader. Use OFFICIAL MOJANG mappings (same net.minecraft.* names as
+    // the NeoForge build) so the mixins / FabricTextStyle / config screens are shared verbatim.
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+    // Fabric API (provides ClientReceiveMessageEvents, KeyBindingHelper, ClientTickEvents, ...)
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // Gson is bundled with Minecraft at runtime; declared here only so the
+    // Minecraft-free unit tests can run without Loom/Minecraft on the classpath.
+    testImplementation 'com.google.code.gson:gson:2.11.0'
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    // Minecraft 1.21.x requires Java 21. Loom provisions a matching JDK via toolchains.
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
+    }
+}
