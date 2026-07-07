@@ -68,6 +68,14 @@ public final class TranslatorConfig {
     /** Remembered keys per endpoint (raw, comma-separated) so switching providers restores its key. */
     public java.util.Map<String, String> aiKeysByEndpoint = new java.util.HashMap<>();
 
+    /**
+     * User-pinned term translations — the "訂翻譯" mechanism. Each entry is a line like
+     * {@code "Skill Book=技能書"} ({@code "英文=中文"}). These are appended to the AI system
+     * prompt AFTER the built-in Minecraft glossary, so a user entry overrides the default
+     * for the same term. Empty by default; malformed / blank lines are ignored at prompt time.
+     */
+    public java.util.List<String> aiGlossary = new java.util.ArrayList<>();
+
     /** Google target language. Traditional Chinese = {@code zh-TW}. */
     public String targetLang = "zh-TW";
 
@@ -155,6 +163,7 @@ public final class TranslatorConfig {
         if (aiModel == null) aiModel = "";
         if (aiApiKeys == null) aiApiKeys = new java.util.ArrayList<>();
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
+        if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
         if (blockSeparator == null) blockSeparator = "----------";
         if (pretranslateBatchSize <= 0) pretranslateBatchSize = 100;
         if (pretranslateDelayMs < 0) pretranslateDelayMs = 1000;

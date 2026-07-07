@@ -61,9 +61,9 @@ public final class OpenAiTranslator implements Translator {
         }
 
         String numbered = buildPrompt(texts, targetLang);
-        String requestBody = buildRequestBody(s.model(), targetLang, numbered, true);
+        String requestBody = buildRequestBody(s, targetLang, numbered, true);
         // If the endpoint rejects the reasoning override (HTTP 400), retry without it.
-        String plainBody = wantsNoReasoning(s.model()) ? buildRequestBody(s.model(), targetLang, numbered, false) : null;
+        String plainBody = wantsNoReasoning(s.model()) ? buildRequestBody(s, targetLang, numbered, false) : null;
         String content = postWithKeyRotation(s, requestBody, plainBody);
         List<String> lines = parseNumbered(content, texts.size());
         if (lines.size() != texts.size()) {
@@ -118,7 +118,8 @@ public final class OpenAiTranslator implements Translator {
         return sb.toString();
     }
 
-    private String buildRequestBody(String model, String targetLang, String numberedLines, boolean noReasoning) {
+    private String buildRequestBody(AiSettings s, String targetLang, String numberedLines, boolean noReasoning) {
+        String model = s.model();
         JsonObject root = new JsonObject();
         root.addProperty("model", model);
         root.addProperty("temperature", 0.3);
@@ -129,16 +130,117 @@ public final class OpenAiTranslator implements Translator {
         }
 
         JsonArray messages = new JsonArray();
-        messages.add(message("system",
-                "You are a video-game localizer. Translate each numbered line into "
-                        + langName(targetLang) + ", keeping terminology coherent across lines. "
-                        + "Keep numbers, symbols, formatting codes, player names and untranslatable "
-                        + "proper nouns intact. Any ⟦…⟧ token (e.g. ⟦MT0⟧, ⟦0⟧, ⟦CS1⟧…⟦/CS1⟧ marker pairs) "
-                        + "must be copied verbatim and stay attached to the words it wraps. "
-                        + "Reply with ONLY the numbered translations, same numbering and line count, no commentary."));
+        messages.add(message("system", buildSystemPrompt(targetLang, s.glossary())));
         messages.add(message("user", numberedLines));
         root.add("messages", messages);
         return GSON.toJson(root);
+    }
+
+    // ---- Minecraft-aware system prompt ----
+
+    /**
+     * Curated Minecraft English → 繁體中文 glossary (official language-file /
+     * community wording). Appended to the system prompt for Traditional-Chinese targets so
+     * the model uses Minecraft's ESTABLISHED terms instead of generic dictionary
+     * translations — e.g. Melon 西瓜 (not 甜瓜), Enchant 附魔 (not 魔法), Skill Book 技能書
+     * (not 食譜書).
+     *
+     * <p>Easy to extend: add a {@code "English → 中文"} line. When several English synonyms
+     * share one Chinese term, list them on one line separated by {@code " / "}. Keep the
+     * arrow ({@code →}) so the compact prompt rendering stays consistent.</p>
+     */
+    static final List<String> MINECRAFT_GLOSSARY_ZH_TW = List.of(
+            "Melon / Watermelon → 西瓜",
+            "Enchant / Enchanting / Enchantment → 附魔",
+            "Enchanting Table → 附魔台",
+            "Skill Book → 技能書",
+            "Recipe Book → 食譜",
+            "Creeper → 苦力怕",
+            "Enderman → 終界使者",
+            "The End → 終界",
+            "Ender Pearl → 終界珍珠",
+            "Nether → 地獄",
+            "Redstone → 紅石",
+            "Obsidian → 黑曜石",
+            "Netherite → 獄髓",
+            "Diamond → 鑽石",
+            "Mob → 生物",
+            "Spawn → 生成",
+            "Spawner / Monster Spawner → 生怪磚",
+            "Villager → 村民",
+            "Raid → 襲擊",
+            "Trident → 三叉戟",
+            "Ghast → 惡魂",
+            "Blaze → 烈焰使者",
+            "Elytra → 鞘翅",
+            "Shulker → 界伏蚌",
+            "Slime → 史萊姆");
+
+    /**
+     * Build the system message. Unconditionally frames the text as Minecraft (Java Edition
+     * and mods) in-game strings and asks for Minecraft's established terminology. For Chinese
+     * targets it then appends a glossary block: the curated 繁體 defaults (Traditional targets
+     * only, since the terms are Traditional-specific) followed by the user's own overrides.
+     */
+    static String buildSystemPrompt(String targetLang, List<String> userGlossary) {
+        String lang = langName(targetLang);
+        StringBuilder sb = new StringBuilder();
+        sb.append("You are a professional video-game localizer for Minecraft (Java Edition) and its mods. ")
+                .append("The numbered lines below are in-game text (item and block names, tooltips/lore, GUI labels, chat, advancements). ")
+                .append("Translate each numbered line into ").append(lang).append(", keeping terminology coherent across lines. ")
+                .append("Use Minecraft's own ESTABLISHED terminology in the target language — the wording from the game's official language files and the community glossary — rather than a generic dictionary translation. ")
+                .append("Keep numbers, symbols and formatting codes intact. ")
+                .append("Translate each word as a WHOLE: NEVER mix the original script and the target script inside a single word. ")
+                .append("For a personal name or any untranslatable proper noun, either transliterate/translate it COMPLETELY into ").append(lang)
+                .append(" or keep it ENTIRELY in its original spelling — never output a partly-converted word (for example, never turn \"jacob\" into \"傑cob\"; write either \"雅各\" or \"jacob\"). ")
+                .append("Any ⟦…⟧ token (e.g. ⟦MT0⟧, ⟦0⟧, ⟦CS1⟧…⟦/CS1⟧ marker pairs) must be copied verbatim and stay attached to the words it wraps. ")
+                .append("Reply with ONLY the numbered translations, same numbering and line count, no commentary.");
+
+        if (isChineseTarget(targetLang)) {
+            List<String> user = parseUserGlossary(userGlossary);
+            boolean traditional = isTraditionalChineseTarget(targetLang);
+            // Only emit the glossary block if there is actually something to put in it.
+            if (traditional || !user.isEmpty()) {
+                List<String> entries = new ArrayList<>();
+                if (traditional) entries.addAll(MINECRAFT_GLOSSARY_ZH_TW);
+                entries.addAll(user); // user entries come LAST → they override the defaults
+                sb.append("\n\nMinecraft glossary — use these exact translations")
+                        .append(" (if a term appears more than once, the LAST entry wins): ")
+                        .append(String.join("; ", entries))
+                        .append('.');
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Parse user "英文=中文" glossary lines into compact "English → 中文" prompt entries.
+     *  Splits on the FIRST {@code '='}; blank lines and lines missing an English or Chinese
+     *  side are skipped so a malformed entry never corrupts the prompt. */
+    static List<String> parseUserGlossary(List<String> lines) {
+        List<String> out = new ArrayList<>();
+        if (lines == null) return out;
+        for (String raw : lines) {
+            if (raw == null) continue;
+            String line = raw.strip();
+            if (line.isEmpty()) continue;
+            int eq = line.indexOf('=');
+            if (eq <= 0) continue; // no '=' at all, or empty English side
+            String en = line.substring(0, eq).strip();
+            String zh = line.substring(eq + 1).strip();
+            if (en.isEmpty() || zh.isEmpty()) continue;
+            out.add(en + " → " + zh);
+        }
+        return out;
+    }
+
+    /** Any Chinese target (Traditional or Simplified). */
+    static boolean isChineseTarget(String targetLang) {
+        return langName(targetLang).contains("Chinese");
+    }
+
+    /** Traditional Chinese only — the script the curated 繁體 glossary is written for. */
+    static boolean isTraditionalChineseTarget(String targetLang) {
+        return langName(targetLang).contains("Traditional Chinese");
     }
 
     /** Whether to disable model "thinking" for this model id (Gemini 2.5+ Flash family). */

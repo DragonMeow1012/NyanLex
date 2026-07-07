@@ -249,4 +249,35 @@ class TranslationServiceTest {
         assertFalse(s.translateItemLine("64").changed());
         assertEquals(0, calls.get());
     }
+
+    @Test
+    void halfTransliteratedWordIsNeitherCachedNorDisplayed() {
+        // The backend (AI) returns the half-transliterated hybrid "傑cob" for "jacob".
+        Translator poison = (text, target) -> {
+            String out = switch (text) {
+                case "jacob" -> "傑cob";        // "Ja" transliterated, "cob" left as English
+                case "Diamond Sword" -> "鑽石劍"; // a clean translation on the same engine
+                default -> "[" + text + "]";
+            };
+            return new TranslationResult(out, "en");
+        };
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        TranslationService s = service(cfg, poison, DIRECT);
+
+        // First frame queues the miss; the tick flush hands it to the backend.
+        assertFalse(s.translateItemLine("jacob").changed());
+        pump(s);
+        // The hybrid is rejected: the surface still shows the ORIGINAL, and nothing usable was
+        // cached — so it can never serve other surfaces via the AI→Google read-through fallback.
+        assertFalse(s.translateItemLine("jacob").changed(),
+                "half-transliterated 傑cob must be rejected, never displayed");
+
+        // A clean translation on the very same engine is unaffected.
+        s.translateItemLine("Diamond Sword");
+        pump(s);
+        TranslationDecision d = s.translateItemLine("Diamond Sword");
+        assertTrue(d.changed());
+        assertEquals("鑽石劍", d.translated());
+    }
 }

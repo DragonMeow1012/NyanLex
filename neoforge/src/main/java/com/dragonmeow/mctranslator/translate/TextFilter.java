@@ -98,4 +98,114 @@ public final class TextFilter {
         }
         return false;
     }
+
+    private static boolean isAsciiLetter(int cp) {
+        return (cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z');
+    }
+
+    /**
+     * Detects a HALF-transliterated word: a translation that fuses a leftover fragment of an
+     * original Latin word directly onto the CJK target script. Two flavours of the same bug:
+     * the AI turning "jacob" into "傑cob" (the "Ja" syllable transliterated, "cob" glued on),
+     * and — even when every word is translated correctly — "Jacob's Contest" coming back as
+     * "雅各的競賽t" (the final "t" of "Contest" fused onto 賽). Such hybrids are never correct,
+     * so callers reject them (show the original instead) and keep them out of the cache —
+     * otherwise the poison is cached and, via the AI→Google read-through fallback, served to
+     * every surface (scoreboard / tooltip / name tag / boss bar / book / HUD) at once.
+     *
+     * <p><b>Deliberately conservative</b> to minimise false positives: a wrong reject only
+     * shows the original English (acceptable), but a legitimate translation must never be
+     * dropped. {@code translated} must contain a CJK ideograph; then each whitespace-split
+     * {@code source} token that is ASCII-letter dominant and at least 4 characters long is
+     * examined, and it is a hybrid when {@code translated} holds a maximal run of ASCII
+     * letters that is a PROPER (strictly shorter), case-insensitive PREFIX or SUFFIX of such a
+     * token AND that run is GLUED to a CJK ideograph, with a <b>direction-aware</b> floor:</p>
+     * <ul>
+     *   <li><b>Trailing residue</b> (a CJK ideograph immediately BEFORE the run — the AI left
+     *       the tail of a half-converted word): a run as short as ONE letter flags it — the
+     *       "t" of "競賽t", "n" of "南瓜n", "e" of "蘋果e", "cob" of "傑cob".</li>
+     *   <li><b>Leading residue</b> (a CJK ideograph immediately AFTER the run, none before):
+     *       require at least TWO letters — so a genuine residue like "st" of "st史蒂夫" flags,
+     *       but a legitimate Chinese idiom with a single Latin head letter ("T恤", "A級",
+     *       "X光") is NOT flagged.</li>
+     * </ul>
+     *
+     * <p>A run that is not adjacent to any CJK char is never flagged ("資訊 info" is left
+     * alone). A fully-kept token is never flagged either: its run equals the whole token,
+     * which is not a PROPER prefix/suffix — so "TNT"→"TNT炸藥", "Java"→"Java版" and
+     * "SkyBlock"→"SkyBlock年度" pass. A short kept English word ("Buy now"→"購買 now") is below
+     * the 4-char token floor, and an ASCII run that is not an affix of any source token
+     * ("distance"→"距離km") is left alone.</p>
+     */
+    public static boolean isPartialTransliteration(String source, String translated) {
+        if (source == null || translated == null) return false;
+        String s = source.strip();
+        if (s.isEmpty() || translated.isEmpty()) return false;
+
+        // Precondition: the translation must actually contain CJK (else nothing was converted).
+        if (!containsCjk(translated)) return false;
+
+        // Evaluate each whitespace-split source token that is ASCII-letter dominant + long enough.
+        for (String token : s.split("\\s+")) {
+            if (!isAsciiDominantWord(token)) continue;
+            if (hasGluedResidueOf(token, translated)) return true;
+        }
+        return false;
+    }
+
+    private static boolean containsCjk(String text) {
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if (isCjk(cp)) return true;
+        }
+        return false;
+    }
+
+    /** Rule-2 applied per token: at least 4 ASCII letters and ASCII letters are the MAJORITY. */
+    private static boolean isAsciiDominantWord(String token) {
+        if (token.length() < 4) return false;
+        int asciiLetters = 0;
+        for (int i = 0; i < token.length(); ) {
+            int cp = token.codePointAt(i);
+            i += Character.charCount(cp);
+            if (isAsciiLetter(cp)) asciiLetters++;
+        }
+        return asciiLetters >= 4 && asciiLetters * 2 > token.length();
+    }
+
+    /**
+     * True when {@code translated} contains a maximal ASCII-letter run that is a PROPER
+     * (strictly shorter), case-insensitive prefix/suffix of {@code token} AND is glued to a
+     * CJK ideograph, using a direction-aware length floor: a TRAILING residue (CJK before the
+     * run) flags at length ≥1, a purely LEADING residue (CJK only after the run) flags at
+     * length ≥2. A run not adjacent to any CJK char is never flagged.
+     */
+    private static boolean hasGluedResidueOf(String token, String translated) {
+        String lowerToken = token.toLowerCase(java.util.Locale.ROOT);
+        int n = translated.length();
+        int i = 0;
+        while (i < n) {
+            if (isAsciiLetter(translated.charAt(i))) {
+                int j = i;
+                while (j < n && isAsciiLetter(translated.charAt(j))) j++;
+                String run = translated.substring(i, j).toLowerCase(java.util.Locale.ROOT);
+                if (run.length() < lowerToken.length()                 // PROPER: strictly shorter
+                        && (lowerToken.startsWith(run) || lowerToken.endsWith(run))) {
+                    boolean gluedBefore = i > 0 && isCjk(translated.codePointBefore(i));
+                    boolean gluedAfter = j < n && isCjk(translated.codePointAt(j));
+                    // Trailing residue (CJK…Latin): floor 1. Leading residue (Latin…CJK): floor 2,
+                    // so a single Latin head letter of a Chinese idiom (T恤 / A級 / X光) is kept.
+                    if ((gluedBefore && run.length() >= 1)
+                            || (gluedAfter && !gluedBefore && run.length() >= 2)) {
+                        return true;
+                    }
+                }
+                i = j;
+            } else {
+                i++;
+            }
+        }
+        return false;
+    }
 }

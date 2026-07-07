@@ -400,6 +400,13 @@ public final class TranslationService {
                 || translated.equals(original) || translated.trim().equals(original.trim())) {
             return TranslationDecision.unchanged(original);
         }
+        // Reject a half-transliterated single word (e.g. "jacob" → "傑cob"): the AI mixed the
+        // original spelling and the target script inside one word. It is never correct, so
+        // show the original instead of the poison (belt-and-suspenders: the cache gate keeps
+        // it from ever being stored, this keeps a stray one from ever being displayed).
+        if (TextFilter.isPartialTransliteration(original, translated)) {
+            return TranslationDecision.unchanged(original);
+        }
         // Keep the original line's indentation/centering on the translation.
         return TranslationDecision.of(mode, original, LayoutPreserver.matchOuterWhitespace(original, translated));
     }

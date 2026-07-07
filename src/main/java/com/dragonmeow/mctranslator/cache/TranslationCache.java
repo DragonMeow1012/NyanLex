@@ -177,13 +177,13 @@ public final class TranslationCache {
     private String getStored(String key) {
         String value = cache.get(key);
         if (value != null) {
-            if (isUsableTranslation(value)) return value;
+            if (isUsableTranslation(key, value)) return value;
             discardStored(key);
         }
         if (store != null) {
             String fromDisk = store.get(key);
             if (fromDisk != null) {
-                if (!isUsableTranslation(fromDisk)) {
+                if (!isUsableTranslation(key, fromDisk)) {
                     discardStored(key);
                     return null;
                 }
@@ -225,7 +225,7 @@ public final class TranslationCache {
         try {
             TranslationResult r = translator.translate(prepared.text(), targetLang);
             String out = r.translatedText();
-            if (isUsableTranslation(out)) {
+            if (isUsableTranslation(prepared.text(), out)) {
                 store(source, out);
                 failedUntil.remove(prepared.text());
                 return prepared.restore(out);
@@ -284,7 +284,7 @@ public final class TranslationCache {
                 if (getCached(source) == null) {
                     TranslationResult r = translator.translate(key, targetLang);
                     String out = r.translatedText();
-                    if (isUsableTranslation(out)) {
+                    if (isUsableTranslation(key, out)) {
                         store(source, out);
                         failedUntil.remove(key);
                     } else {
@@ -373,7 +373,7 @@ public final class TranslationCache {
             for (int i = 0; i < todo.size(); i++) {
                 String key = todo.get(i);
                 String out = results.get(i).translatedText();
-                if (isUsableTranslation(out)) {
+                if (isUsableTranslation(key, out)) {
                     cache.put(key, out);
                     failedUntil.remove(key);
                     toPersist.put(key, out);
@@ -600,6 +600,15 @@ public final class TranslationCache {
 
     private boolean isUsableTranslation(String translated) {
         return translated != null && !translated.isEmpty() && !TextFilter.isLikelyMojibake(translated);
+    }
+
+    /**
+     * Source-aware usability gate. Adds one rule the source-less overload cannot check: a
+     * half-transliterated single word (e.g. source "jacob" translated to "傑cob") is poison —
+     * it must never be cached, never read back, and never leak into the AI→Google fallback.
+     */
+    private boolean isUsableTranslation(String source, String translated) {
+        return isUsableTranslation(translated) && !TextFilter.isPartialTransliteration(source, translated);
     }
 
     private void discardStored(String key) {

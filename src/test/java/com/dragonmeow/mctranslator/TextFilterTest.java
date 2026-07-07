@@ -73,4 +73,76 @@ class TextFilterTest {
         assertFalse(TextFilter.isLikelyMojibake("你好世界"));
         assertFalse(TextFilter.isLikelyMojibake("Hello world"));
     }
+
+    @Test
+    void rejectsHalfTransliteratedSingleWord() {
+        // The reported bug: "Ja" transliterated, "cob" left as verbatim English.
+        assertTrue(TextFilter.isPartialTransliteration("jacob", "傑cob"));
+        assertTrue(TextFilter.isPartialTransliteration("Jacob", "傑COB"), "match is case-insensitive");
+        // Leading fragment kept, rest transliterated is just as broken.
+        assertTrue(TextFilter.isPartialTransliteration("steve", "st史蒂夫"));
+    }
+
+    @Test
+    void rejectsCjkGluedLatinResidue() {
+        // Multi-word source, both words translated, but the final "t" of "Contest" is fused
+        // onto 賽 -> per-token evaluation of "Contest" flags the glued 1-letter suffix.
+        assertTrue(TextFilter.isPartialTransliteration("Jacob's Contest", "雅各的競賽t"));
+        // A single leftover letter glued to CJK is caught (suffix "n" of "Pumpkin" on 瓜).
+        assertTrue(TextFilter.isPartialTransliteration("Pumpkin", "南瓜n"));
+        // Even one letter glued to a fully-translated apple ("e" suffix on 果).
+        assertTrue(TextFilter.isPartialTransliteration("apple", "蘋果e"));
+    }
+
+    @Test
+    void acceptsFullyTranslatedOrFullyKeptWords() {
+        assertFalse(TextFilter.isPartialTransliteration("jacob", "雅各"), "clean full translation");
+        assertFalse(TextFilter.isPartialTransliteration("jacob", "jacob"), "fully kept (no CJK)");
+        assertFalse(TextFilter.isPartialTransliteration("TNT", "TNT"), "fully kept, no CJK");
+        // Leftover ASCII equals the WHOLE source (proper prefix/suffix rule fails) -> not a hybrid.
+        assertFalse(TextFilter.isPartialTransliteration("Redstone", "Redstone紅石"));
+    }
+
+    @Test
+    void acceptsWholeTokenKeptGluedToCjk() {
+        // The kept Latin run equals the WHOLE token -> not a PROPER prefix/suffix, even glued.
+        assertFalse(TextFilter.isPartialTransliteration("TNT", "TNT炸藥"), "TNT is short + whole token");
+        assertFalse(TextFilter.isPartialTransliteration("Java", "Java版"));
+        assertFalse(TextFilter.isPartialTransliteration("SkyBlock", "SkyBlock年度"));
+        assertFalse(TextFilter.isPartialTransliteration("Diamond Sword", "鑽石劍"), "no leftover Latin");
+        assertFalse(TextFilter.isPartialTransliteration("www.hypixel.net", "www.hypixel.net"), "no CJK");
+    }
+
+    @Test
+    void acceptsLeadingLatinIdiomAndNonGluedResidue() {
+        // A single Latin head letter followed by CJK is a legit Chinese idiom, not a residue:
+        // the leading-residue floor is 2, so these length-1 leads pass.
+        assertFalse(TextFilter.isPartialTransliteration("T-Shirt", "T恤"));
+        assertFalse(TextFilter.isPartialTransliteration("A-Grade", "A級"));
+        assertFalse(TextFilter.isPartialTransliteration("X-ray", "X光"));
+        // The kept "C" is its own whitespace token, not a proper affix of "Vitamin".
+        assertFalse(TextFilter.isPartialTransliteration("Vitamin C", "維他命C"));
+        // A leftover not glued to CJK (space before "info") is never flagged now.
+        assertFalse(TextFilter.isPartialTransliteration("Information", "資訊 info"));
+    }
+
+    @Test
+    void doesNotFlagShortTokensOrAcronyms() {
+        // "OP" is only 2 ASCII letters -> below the 4-letter floor; "OP權限" is keep+gloss.
+        assertFalse(TextFilter.isPartialTransliteration("OP", "OP權限"));
+        assertFalse(TextFilter.isPartialTransliteration("id", "id編號"));
+        // A short kept English word next to CJK stays: "now" is below the 4-char token floor.
+        assertFalse(TextFilter.isPartialTransliteration("Buy now", "購買 now"));
+    }
+
+    @Test
+    void doesNotFlagWhenLeftoverIsNotATokenAffix() {
+        // Output keeps an ASCII run that is NOT a prefix/suffix of any qualifying source token
+        // (e.g. a unit glued to CJK) -> not a leftover fragment of THAT word.
+        assertFalse(TextFilter.isPartialTransliteration("distance", "距離km"));
+        assertFalse(TextFilter.isPartialTransliteration("diamond sword", "鑽石劍cob"));
+        assertFalse(TextFilter.isPartialTransliteration("Welcome to the server", "歡迎to伺服器"));
+        // Single glued letter that is NOT an affix of "apple" ("z") stays accepted.
+        assertFalse(TextFilter.isPartialTransliteration("apple", "蘋果z"));
+    }
 }

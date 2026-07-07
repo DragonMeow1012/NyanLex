@@ -390,7 +390,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         GoogleFreeTranslator google = new GoogleFreeTranslator(transport, config.sourceLang);
         OpenAiTranslator ai = new OpenAiTranslator(transport,
-                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys));
+                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary));
         Translator aiTranslator = new DispatchingTranslator(ai, google,
                 () -> config.aiApiKeys != null && !config.aiApiKeys.isEmpty());
 

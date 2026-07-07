@@ -203,6 +203,69 @@ class OpenAiTranslatorTest {
     }
 
     @Test
+    void systemPromptForbidsMixedScriptWords() throws Exception {
+        List<String> sentBodies = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                sentBodies.add(body);
+                return chatJson("1. 嗨");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k")));
+        t.translate("Hi", "zh-TW");
+
+        String body = sentBodies.get(0);
+        assertTrue(body.contains("as a WHOLE") && body.contains("NEVER mix"),
+                "prompt must forbid mixing the original and target scripts inside one word: " + body);
+        // The concrete "jacob" -> "傑cob" counter-example must be spelled out.
+        assertTrue(body.contains("jacob") && body.contains("傑cob"),
+                "prompt must give the jacob->傑cob counter-example: " + body);
+    }
+
+    @Test
+    void systemPromptAddsMinecraftContextAndGlossaryForChinese() throws Exception {
+        List<String> sentBodies = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                sentBodies.add(body);
+                return chatJson("1. 技能書");
+            }
+        };
+        // User pins a term NOT in the curated defaults, to prove the user glossary is merged.
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k"), List.of("Warden=伏守者")));
+        t.translate("Skill Book", "zh-TW");
+
+        String body = sentBodies.get(0);
+        assertTrue(body.contains("Minecraft"), "prompt must state this is Minecraft text: " + body);
+        assertTrue(body.contains("西瓜"), "curated glossary term (Melon→西瓜) must be present: " + body);
+        assertTrue(body.contains("Warden") && body.contains("伏守者"),
+                "user aiGlossary entry (Warden→伏守者) must be merged into the prompt: " + body);
+    }
+
+    @Test
+    void curatedGlossaryIsOmittedForNonChineseTargets() throws Exception {
+        List<String> sentBodies = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                sentBodies.add(body);
+                return chatJson("1. Melon");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k"))); // 3-arg: no user glossary
+        t.translate("Melon", "fr"); // French target
+
+        String body = sentBodies.get(0);
+        assertTrue(body.contains("Minecraft"), "Minecraft context is unconditional: " + body);
+        assertTrue(!body.contains("西瓜"), "the 繁體 glossary must NOT be sent for a non-Chinese target: " + body);
+    }
+
+    @Test
     void shiftedTokensFailTheLineInsteadOfPoisoningTheCache() throws Exception {
         // The model answered line 1 with line 2's tokens (merged/shifted lines): that
         // line must come back EMPTY (per-line failure), never as a wrong translation.
