@@ -428,7 +428,11 @@ public final class FabricTextStyle {
      * {@value #MAX_MARKED_SEGMENTS} runs) come back unmarked and use the stretch fallback.
      */
     public static MarkedChat markChatContent(Component c, int fromChar) {
-        List<Seg> segs = mergeSegments(segmentsFrom(c, fromChar));
+        // Coalesce sub-word colour runs first, so a per-letter gradient name never gets a
+        // marker pair walled INSIDE a word (the backend can't translate isolated letters).
+        // After this every marker boundary lands at a whitespace/punctuation gap → whole
+        // words reach the translator. The existing size gate then runs on the coalesced list.
+        List<Seg> segs = coalesceSubWordRuns(mergeSegments(segmentsFrom(c, fromChar)));
         if (segs.size() <= 1 || segs.size() > MAX_MARKED_SEGMENTS) {
             StringBuilder plain = new StringBuilder();
             for (Seg seg : segs) plain.append(seg.text());
@@ -529,7 +533,7 @@ public final class FabricTextStyle {
             cumulative += weights[i];
             int end = (i == lastWeighted) ? core.length()
                     : Math.round((float) cumulative * core.length() / (float) total);
-            end = safeBoundary(core, Math.max(start, Math.min(end, core.length())));
+            end = safeBoundary(core, start, Math.max(start, Math.min(end, core.length())));
             if (end > start) {
                 out.append(Component.literal(core.substring(start, end)).setStyle(segs.get(i).style()));
                 start = end;
@@ -639,7 +643,7 @@ public final class FabricTextStyle {
             cumulative += weights[k];
             int end = (k == lastWeighted) ? text.length()
                     : Math.round((float) cumulative * text.length() / (float) total);
-            end = safeBoundary(text, Math.max(start, Math.min(end, text.length())));
+            end = safeBoundary(text, start, Math.max(start, Math.min(end, text.length())));
             if (end > start) {
                 out.append(Component.literal(text.substring(start, end)).setStyle(segs.get(from + k).style()));
                 start = end;
@@ -667,6 +671,90 @@ public final class FabricTextStyle {
         return out;
     }
 
+    /**
+     * Coalesce adjacent runs whose shared boundary sits mid-word — the last code point of the
+     * left run and the first code point of the right run are BOTH word chars (letter/digit/{@code _},
+     * per {@link #isWordChar}, so usernames like {@code xX_Player_Xx} stay whole). A per-letter
+     * gradient/rainbow name (each character its own {@link TextColor}) survives
+     * {@link #mergeSegments} as N single-character runs; wrapping each in its own ⟦CS#⟧ pair
+     * would wall the letters apart, so the backend can't recognise the word and returns it
+     * shredded letter-by-letter. Merging every maximal word-char run into ONE segment keeps
+     * all marker boundaries at whitespace/punctuation, so whole words reach the translator. The
+     * merged run takes the DOMINANT style (the colour covering the most name chars); only
+     * sub-word gradient colour collapses to that one colour — marker-isolated letters were
+     * untranslatable anyway. Whole-word coloured runs share no mid-word boundary, so
+     * single-colour and word-coloured lines pass through unchanged.
+     */
+    private static List<Seg> coalesceSubWordRuns(List<Seg> segs) {
+        List<Seg> out = new ArrayList<>();
+        List<Seg> group = new ArrayList<>();
+        for (Seg seg : segs) {
+            if (!group.isEmpty()) {
+                Seg prev = group.get(group.size() - 1);
+                boolean midWord = isWordChar(lastCodePoint(prev.text()))
+                        && isWordChar(firstCodePoint(seg.text()));
+                if (!midWord) {
+                    out.add(mergeDominant(group));
+                    group = new ArrayList<>();
+                }
+            }
+            group.add(seg);
+        }
+        if (!group.isEmpty()) out.add(mergeDominant(group));
+        return out;
+    }
+
+    /** Merge a maximal mid-word group into one run: text concatenated, style = the one whose
+     *  runs cover the most name chars (semantic weight; earliest wins on a tie, as a pure
+     *  rainbow has no majority). A single-element group is returned unchanged. */
+    private static Seg mergeDominant(List<Seg> group) {
+        if (group.size() == 1) return group.get(0);
+        StringBuilder text = new StringBuilder();
+        Map<Style, Integer> weightByStyle = new java.util.LinkedHashMap<>();
+        for (Seg seg : group) {
+            text.append(seg.text());
+            weightByStyle.merge(seg.style(), Math.max(1, semanticWeight(seg.text())), Integer::sum);
+        }
+        Style dominant = group.get(0).style();
+        int best = -1;
+        for (Map.Entry<Style, Integer> e : weightByStyle.entrySet()) {
+            if (e.getValue() > best) {
+                best = e.getValue();
+                dominant = e.getKey();
+            }
+        }
+        return new Seg(text.toString(), dominant);
+    }
+
+    /** First code point of {@code s} (surrogate-aware), or {@code -1} when empty —
+     *  {@link Character#isLetterOrDigit(int)} treats {@code -1} as non-name, so an empty
+     *  side never triggers a merge. */
+    private static int firstCodePoint(String s) {
+        return (s == null || s.isEmpty()) ? -1 : s.codePointAt(0);
+    }
+
+    /** Last code point of {@code s} (surrogate-aware), or {@code -1} when empty. */
+    private static int lastCodePoint(String s) {
+        return (s == null || s.isEmpty()) ? -1 : s.codePointBefore(s.length());
+    }
+
+    /** Intra-word (name) char per the codebase's definition ({@code NameMasker.isNameChar}):
+     *  a letter/digit or {@code '_'} — so a per-letter-coloured Minecraft username like
+     *  {@code xX_Player_Xx} coalesces whole instead of splitting at each underscore. Empty
+     *  sides pass {@code -1}, which is correctly non-word. */
+    private static boolean isWordChar(int cp) {
+        return Character.isLetterOrDigit(cp) || cp == '_';
+    }
+
+    /** Word char for the proportional slicer's boundary snap ({@link #safeBoundary}): an
+     *  {@link #isWordChar} that is NOT a CJK ideograph. Latin words / underscore usernames /
+     *  ASCII proper nouns are kept whole in one colour, while each ideograph legitimately
+     *  remains its own colour unit — a translated CJK sentence must still distribute colour
+     *  across its characters, so ideographs must stay individually splittable here. */
+    private static boolean isSliceWordChar(int cp) {
+        return isWordChar(cp) && !Character.isIdeographic(cp);
+    }
+
     private static int semanticWeight(String text) {
         int weight = 0;
         for (int i = 0; i < text.length(); ) {
@@ -677,13 +765,59 @@ public final class FabricTextStyle {
         return weight;
     }
 
-    private static int safeBoundary(String text, int index) {
-        if (index > 0 && index < text.length()
+    /**
+     * A colour-boundary index for the proportional slicer ({@link #styledChatContent},
+     * {@link #appendWeighted}) that never falls INSIDE a maximal Latin/underscore word run —
+     * so a verbatim token the translator kept (a player name like {@code Steve}, a proper noun
+     * like {@code SkyBlock}, a number, a URL, a {@code xX_Player_Xx} handle, or a ⟦CS#⟧ /
+     * ⟦MT#⟧ placeholder body) is emitted WHOLE in one colour instead of as two adjacent
+     * differently-coloured literals.
+     *
+     * <p>Two guards, in order:</p>
+     * <ol>
+     *   <li>Never split a UTF-16 surrogate pair (the original behaviour).</li>
+     *   <li>If the (surrogate-safe) {@code index} sits mid-word — {@link #isSliceWordChar} true
+     *       on BOTH sides — snap to a word EDGE. Prefer the END of the word (the whole word
+     *       joins the earlier colour run); only if that word reaches the segment end do we snap
+     *       to the word START instead (the word joins the later run), and only when that keeps
+     *       the current run non-empty ({@code back > start}). The result is always in
+     *       {@code (start, len]} for a real snap, so no empty leading/trailing run is created.</li>
+     * </ol>
+     *
+     * <p>CJK ideographs are deliberately NOT word chars here (see {@link #isSliceWordChar}):
+     * each ideograph legitimately stays its own colour unit so a translated CJK sentence keeps
+     * distributing colour across its characters — this snap does not touch that. It therefore
+     * does NOT prevent a <em>transliterated</em> CJK name (e.g. 史蒂夫) from being colour-split;
+     * that would need name-awareness at the slicer stage.</p>
+     */
+    private static int safeBoundary(String text, int start, int index) {
+        int len = text.length();
+        if (index > 0 && index < len
                 && Character.isHighSurrogate(text.charAt(index - 1))
                 && Character.isLowSurrogate(text.charAt(index))) {
-            return index + 1;
+            index++;
         }
-        return index;
+        if (index <= start || index >= len) return index;
+        if (!isSliceWordChar(text.codePointBefore(index)) || !isSliceWordChar(text.codePointAt(index))) {
+            return index; // boundary is already at a word edge (or between non-word chars)
+        }
+        // Mid-word: prefer snapping FORWARD to the end of the word (word joins the earlier run).
+        int end = index;
+        while (end < len) {
+            int cp = text.codePointAt(end);
+            if (!isSliceWordChar(cp)) break;
+            end += Character.charCount(cp);
+        }
+        if (end < len) return end;
+        // The word runs to the segment end: snap BACKWARD to the word start (word joins the
+        // later run) unless that would empty the current run, in which case keep the word here.
+        int back = index;
+        while (back > start) {
+            int cp = text.codePointBefore(back);
+            if (!isSliceWordChar(cp)) break;
+            back -= Character.charCount(cp);
+        }
+        return back > start ? back : end;
     }
 
     /** Concatenate per-segment-coloured runs (no trimming / centering) — for prefixed lines. */
