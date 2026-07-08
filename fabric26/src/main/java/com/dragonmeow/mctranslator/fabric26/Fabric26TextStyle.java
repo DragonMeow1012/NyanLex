@@ -739,12 +739,22 @@ public final class Fabric26TextStyle {
             if (!chunk.isEmpty()) out.append(Component.literal(chunk).setStyle(current == Style.EMPTY ? last : current));
         }
         String plain = out.getString();
-        if (!saw || plain.isBlank()) return styledAnchored(original, contentStart, stripMarkers(translated));
+        if (!saw || plain.isBlank()) return styledAnchored(original, contentStart, stripMarkerResidue(translated));
         return out;
     }
 
     private static final java.util.regex.Pattern MARKER =
             java.util.regex.Pattern.compile("\\u27E6\\s*(/?)\\s*CS\\s*(\\d+)\\s*\\u27E7");
+
+    private static final java.util.regex.Pattern MARKER_RESIDUE =
+            java.util.regex.Pattern.compile("\\u27E6?\\s*/?\\s*CS\\s*\\d+\\s*\\u27E7?");
+    /** Strip complete ⟦CS#⟧ markers AND orphaned residue left when a translator ate the rare
+     *  U+27E6/27E7 brackets but kept the "CS#" body — otherwise bare "CS4" leaks on screen.
+     *  Used ONLY on the marked-mode fallback, where these markers were definitely injected. */
+    private static String stripMarkerResidue(String text) {
+        if (text == null) return "";
+        return MARKER_RESIDUE.matcher(MARKER.matcher(text).replaceAll("")).replaceAll("");
+    }
 
     private static String openMarker(int index) {
         return "\u27E6CS" + index + "\u27E7";

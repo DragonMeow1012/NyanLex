@@ -132,6 +132,44 @@ class GoogleFreeTranslatorTest {
         assertTrue(urls.size() <= 5, "but only a handful, not one per item: " + urls.size());
     }
 
+    @Test
+    void rejectsTranslationThatAteThePlaceholderBrackets() throws Exception {
+        // Google mangled the rare ⟦…⟧ brackets: the token came back as bare "CS0".
+        // The reassembly would break, so translate must keep the SOURCE line intact.
+        HttpTransport inline = url -> "[[[\"CS0 hello\",\"src\",null,null]],null,\"en\"]";
+        GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
+
+        TranslationResult r = t.translate("⟦CS0⟧hello", "zh-TW");
+        assertEquals("⟦CS0⟧hello", r.translatedText(), "token-losing result must fall back to source");
+        assertEquals("en", r.detectedSourceLang());
+    }
+
+    @Test
+    void passesThroughTranslationThatKeptThePlaceholder() throws Exception {
+        // The token survived verbatim — the translation is trusted and passes through.
+        HttpTransport inline = url -> "[[[\"⟦CS0⟧你好\",\"src\",null,null]],null,\"en\"]";
+        GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
+
+        TranslationResult r = t.translate("⟦CS0⟧hello", "zh-TW");
+        assertEquals("⟦CS0⟧你好", r.translatedText());
+    }
+
+    @Test
+    void batchRevertsPerLineWhenATokenDriftsToTheWrongLine() throws Exception {
+        // Symptom B: the joined result keeps all three tokens (so the whole-batch check
+        // passes), but ⟦CS1⟧ drifted onto line 0. The per-line guard reverts every line
+        // whose token set no longer matches its source; the untouched line stays translated.
+        HttpTransport inline = url -> "[[[\"⟦CS0⟧⟦CS1⟧A\\nB\\n⟦CS2⟧C\",\"src\",null,null]],null,\"en\"]";
+        GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
+
+        List<TranslationResult> out = t.translateBatch(
+                List.of("⟦CS0⟧a", "⟦CS1⟧b", "⟦CS2⟧c"), "zh-TW");
+        assertEquals(3, out.size());
+        assertEquals("⟦CS0⟧a", out.get(0).translatedText());   // gained a stray token -> original
+        assertEquals("⟦CS1⟧b", out.get(1).translatedText());   // lost its token -> original
+        assertEquals("⟦CS2⟧C", out.get(2).translatedText());   // token intact -> translated
+    }
+
     private interface ResultSupplier {
         List<TranslationResult> get() throws Exception;
     }

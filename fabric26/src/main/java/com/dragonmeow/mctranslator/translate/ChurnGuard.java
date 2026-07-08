@@ -78,7 +78,12 @@ public final class ChurnGuard {
         String signature = signatureOf(requestKey);
         if (signature.isEmpty()) return false; // letter-free line: TextFilter's problem, not ours
         if (bySignature.size() >= MAX_SIGNATURES && !bySignature.containsKey(signature)) {
-            bySignature.clear();
+            long nowCap = clock.getAsLong();
+            // Keep signatures still on cooldown (a live animation must not get a fresh burst
+            // just because the table filled); evict only the settled ones. Full clear only if
+            // everything is still cooling — pathological, and it refills fast.
+            bySignature.values().removeIf(e -> nowCap >= e.cooldownUntil);
+            if (bySignature.size() >= MAX_SIGNATURES) bySignature.clear();
         }
         Entry entry = bySignature.computeIfAbsent(signature, ignored -> new Entry());
         long now = clock.getAsLong();

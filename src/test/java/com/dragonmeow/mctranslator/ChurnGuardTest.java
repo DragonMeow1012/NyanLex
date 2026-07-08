@@ -121,6 +121,32 @@ class ChurnGuardTest {
                 "signature table must stay bounded, got " + guard.signatureCount());
     }
 
+    /** Hitting the 512-cap must NOT wipe a signature that is still on cooldown — a live
+     *  animation keeps its suppression instead of getting a fresh doomed burst. */
+    @Test
+    void capEvictionPreservesCoolingSignatures() {
+        long[] now = {0L};
+        ChurnGuard guard = new ChurnGuard(4, 60_000L, 300_000L, () -> now[0]);
+
+        // Trip "vote": four distinct variants put the signature on cooldown until t=300_000.
+        for (String key : new String[]{"»VOTE«", "»»VOTE««", "»»»VOTE«««", "«VOTE»"}) {
+            guard.shouldSuppress(key);
+        }
+
+        // Flood with 512 distinct SETTLED signatures (one variant each, never tripped) to
+        // force the cap eviction while "vote" is still cooling (the clock stays at t=0).
+        for (int i = 0; i < 512; i++) {
+            guard.shouldSuppress("line " + uniqueWord(i));
+        }
+
+        // A brand-new COSMETIC variant of the cooled signature (still signs to "vote") is
+        // suppressed: eviction kept the cooling entry.
+        assertTrue(guard.shouldSuppress("»»»»VOTE««««"),
+                "a signature still on cooldown must survive the cap eviction");
+        assertTrue(guard.signatureCount() >= 1 && guard.signatureCount() <= 512,
+                "the table stays bounded but was not fully cleared, got " + guard.signatureCount());
+    }
+
     /** Distinct letter suffix per index so every line really is a distinct signature. */
     private static String uniqueWord(int i) {
         StringBuilder sb = new StringBuilder();

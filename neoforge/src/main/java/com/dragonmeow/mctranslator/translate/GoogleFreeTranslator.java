@@ -17,6 +17,9 @@ public final class GoogleFreeTranslator implements Translator {
 
     static final String ENDPOINT = "https://translate.googleapis.com/translate_a/single";
 
+    private static final java.util.regex.Pattern ANY_TOKEN =
+            java.util.regex.Pattern.compile("\\u27E6[^\\u27E6\\u27E7]*\\u27E7");
+
     private final HttpTransport transport;
     private final String sourceLang;
 
@@ -37,7 +40,11 @@ public final class GoogleFreeTranslator implements Translator {
     public TranslationResult translate(String text, String targetLang) throws TranslationException {
         try {
             String body = transport.get(buildUrl(text, targetLang));
-            return GoogleResponseParser.parse(body);
+            TranslationResult r = GoogleResponseParser.parse(body);
+            if (!preservesTokens(text, r.translatedText())) {
+                return new TranslationResult(text, r.detectedSourceLang());
+            }
+            return r;
         } catch (IOException e) {
             throw new TranslationException("http error: " + e.getMessage(), e);
         }
@@ -87,7 +94,9 @@ public final class GoogleFreeTranslator implements Translator {
         if (translated != null) {
             String[] parts = translated.split("\n", -1);
             if (parts.length == texts.size()) {
-                for (String part : parts) {
+                for (int i = 0; i < parts.length; i++) {
+                    String src = texts.get(i);
+                    String part = preservesTokens(src, parts[i]) ? parts[i] : src;
                     out.add(new TranslationResult(part, combined.detectedSourceLang()));
                 }
                 return;
@@ -97,5 +106,26 @@ public final class GoogleFreeTranslator implements Translator {
         int mid = texts.size() / 2;
         translateChunk(texts.subList(0, mid), targetLang, out);
         translateChunk(texts.subList(mid, texts.size()), targetLang, out);
+    }
+
+    /** True unless the source's ⟦…⟧ tokens were lost or altered by the translation. Google
+     *  mangles the rare U+27E6/27E7 placeholder brackets used by chat colour markers (⟦CS#⟧)
+     *  and TemplateText (⟦MT#⟧); a mismatch means the marker reassembly would break, so the
+     *  caller keeps the original line instead. Order-independent, exact multiset. */
+    static boolean preservesTokens(String source, String translated) {
+        List<String> want = tokensOf(source);
+        if (want.isEmpty()) return true;              // nothing fragile to protect
+        List<String> got = tokensOf(translated);
+        if (got.size() != want.size()) return false;
+        for (String t : got) if (!want.remove(t)) return false;
+        return want.isEmpty();
+    }
+
+    private static List<String> tokensOf(String text) {
+        List<String> out = new ArrayList<>();
+        if (text == null) return out;
+        java.util.regex.Matcher m = ANY_TOKEN.matcher(text);
+        while (m.find()) out.add(m.group().replace(" ", ""));
+        return out;
     }
 }
