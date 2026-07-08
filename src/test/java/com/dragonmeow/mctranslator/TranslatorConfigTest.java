@@ -21,6 +21,19 @@ class TranslatorConfigTest {
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
         assertTrue(cfg.pretranslateItemsOnLoad);
+        assertTrue(cfg.churnGuard, "特效字防護預設開啟");
+        assertEquals(4, cfg.churnVariantThreshold);
+        assertEquals(60, cfg.churnWindowSeconds);
+        assertEquals(300, cfg.churnCooldownSeconds);
+    }
+
+    @Test
+    void churnFieldsNormalizeInvalidValues() {
+        String json = "{ \"churnVariantThreshold\": 1, \"churnWindowSeconds\": 0, \"churnCooldownSeconds\": -3 }";
+        TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader(json));
+        assertEquals(4, cfg.churnVariantThreshold);
+        assertEquals(60, cfg.churnWindowSeconds);
+        assertEquals(300, cfg.churnCooldownSeconds);
     }
 
     @Test

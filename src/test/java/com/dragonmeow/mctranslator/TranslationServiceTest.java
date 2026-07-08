@@ -251,6 +251,38 @@ class TranslationServiceTest {
     }
 
     @Test
+    void warmNamesBatchSendsNoSurfaceContextButWarmTooltipBatchDoes() {
+        List<List<String>> seenContexts = new ArrayList<>();
+        Translator fake = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang) {
+                return new TranslationResult("T:" + text, null);
+            }
+            @Override public List<TranslationResult> translateBatch(
+                    List<String> texts, String targetLang, List<String> surfaceContext) {
+                seenContexts.add(surfaceContext == null ? null : new ArrayList<>(surfaceContext));
+                List<TranslationResult> out = new ArrayList<>();
+                for (String t : texts) out.add(new TranslationResult("T:" + t, null));
+                return out;
+            }
+        };
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        TranslationService s = service(cfg, fake, DIRECT);
+
+        // Unrelated container item names: NO tooltip surface context may reach the translator.
+        s.warmNamesBatch(List.of("Diamond Sword", "Ender Pearl"));
+        assertEquals(1, seenContexts.size(), "one batched request for the names");
+        assertEquals(null, seenContexts.get(0),
+                "warmNamesBatch must not attach any surface context");
+
+        // Contrast: a real tooltip batch DOES carry its full line list as context.
+        s.warmTooltipBatch(List.of("Iron Pickaxe", "Used in smelting"));
+        assertEquals(2, seenContexts.size());
+        assertEquals(List.of("Iron Pickaxe", "Used in smelting"), seenContexts.get(1),
+                "warmTooltipBatch keeps sending the whole tooltip as context");
+    }
+
+    @Test
     void halfTransliteratedWordIsNeitherCachedNorDisplayed() {
         // The backend (AI) returns the half-transliterated hybrid "傑cob" for "jacob".
         Translator poison = (text, target) -> {
@@ -279,5 +311,46 @@ class TranslationServiceTest {
         TranslationDecision d = s.translateItemLine("Diamond Sword");
         assertTrue(d.changed());
         assertEquals("鑽石劍", d.translated());
+    }
+
+    @Test
+    void churnGuardSuppressesFlashingDecorationOnceItChurns() {
+        // A flashing scoreboard decoration: the word is stable but a cosmetic ★ run grows
+        // every tick. The stars are letter-free, so every variant shares signature "votenow"
+        // while carrying a distinct request key — exactly the 429 request-storm pattern.
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.scoreboardMode = DisplayMode.TRANSLATION;
+        cfg.churnGuard = true;
+        cfg.churnVariantThreshold = 2; // trip on the 2nd distinct variant
+        AtomicInteger calls = new AtomicInteger();
+        TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
+
+        s.translateScoreboardLine("Vote now ★");   pump(s); // 1st variant: translated
+        s.translateScoreboardLine("Vote now ★★");  pump(s); // 2nd distinct variant: trips the guard
+        s.translateScoreboardLine("Vote now ★★★"); pump(s); // dropped (signature on cooldown)
+
+        assertEquals(1, calls.get(),
+                "once the decoration churns past the threshold, new variants must be dropped");
+        assertFalse(s.translateScoreboardLine("Vote now ★★★").changed(),
+                "a churning variant stays untranslated (original shown)");
+    }
+
+    @Test
+    void churnGuardDisabledTranslatesEveryVariant() {
+        // config.churnGuard=false is the safety valve: if the detector ever misfires on a
+        // real server, turning it off must restore translate-everything behaviour.
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.scoreboardMode = DisplayMode.TRANSLATION;
+        cfg.churnGuard = false;
+        cfg.churnVariantThreshold = 2;
+        AtomicInteger calls = new AtomicInteger();
+        TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
+
+        s.translateScoreboardLine("Vote now ★");   pump(s);
+        s.translateScoreboardLine("Vote now ★★");  pump(s);
+        s.translateScoreboardLine("Vote now ★★★"); pump(s);
+
+        assertEquals(3, calls.get(),
+                "with the guard disabled every distinct variant is translated");
     }
 }

@@ -82,6 +82,61 @@ class TemplateTextTest {
         assertTrue(restored.contains("90/100"));
     }
 
+    // ---- durations (records/countdowns: "59s" ticking every second must share ONE key) ----
+
+    @Test
+    void countdownSecondsShareOneTemplate() {
+        TemplateText.Prepared p = TemplateText.prepare("Ends in 59s");
+        assertTrue(p.changed());
+        assertFalse(p.text().contains("59"), p.text());
+        assertEquals(TemplateText.prepare("Ends in 59s").text(),
+                TemplateText.prepare("Ends in 58s").text(),
+                "each countdown tick must normalise to the same request key");
+        assertEquals("Ends in 59s", p.restore(p.text()), "restore must put the original duration back");
+    }
+
+    @Test
+    void multiSegmentDurationsCollapseToOneToken() {
+        for (String src : new String[]{"2h 30m", "1m30s", "1d 2h 3m 4s", "5 seconds", "10min"}) {
+            TemplateText.Prepared p = TemplateText.prepare("Reset in " + src);
+            assertTrue(p.changed(), src);
+            assertEquals("Reset in ⟦MT0⟧", p.text(), "whole duration run must be ONE token: " + src);
+            assertEquals("Reset in " + src, p.restore(p.text()), src);
+        }
+    }
+
+    @Test
+    void cjkDurationsCollapseToOneToken() {
+        TemplateText.Prepared p = TemplateText.prepare("剩餘時間 1天2小時3分30秒");
+        assertTrue(p.changed());
+        assertEquals("剩餘時間 ⟦MT0⟧", p.text(), p.text());
+        // restore also tightens CJK↔digit spacing (uniform 「剩餘時間1天…」 typography).
+        assertEquals("剩餘時間1天2小時3分30秒", p.restore(p.text()));
+        assertEquals(TemplateText.prepare("剩餘 30秒").text(), TemplateText.prepare("剩餘 29秒").text(),
+                "CJK countdown ticks must share one request key");
+    }
+
+    @Test
+    void durationUnitsDoNotEatOrdinaryWords() {
+        // "may" starts with the m unit letter but continues with letters -> not a duration;
+        // if the pattern had eaten "5 m", the word would come out shredded as "ay".
+        assertTrue(TemplateText.prepare("5 may").text().contains("may"),
+                TemplateText.prepare("5 may").text());
+        // Ordinals and plain labels keep their words (numbers still template as NUMBER).
+        assertTrue(TemplateText.prepare("3rd place").text().contains("rd place"));
+        assertTrue(TemplateText.prepare("Room 5").text().startsWith("Room"));
+        // A unit-free English sentence is untouched.
+        TemplateText.Prepared plain = TemplateText.prepare("Seconds matter most");
+        assertFalse(plain.changed(), plain.text());
+    }
+
+    @Test
+    void clockTimesStillWinOverDurations() {
+        TemplateText.Prepared p = TemplateText.prepare("Vote before 12:30");
+        assertFalse(p.text().contains("12:30"), p.text());
+        assertTrue(p.restore(p.text()).contains("12:30"));
+    }
+
     @Test
     void prepareIsMemoised() {
         assertSame(TemplateText.prepare("You got 5 coins"), TemplateText.prepare("You got 5 coins"),

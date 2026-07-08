@@ -27,6 +27,18 @@ public final class TemplateText {
     private static final Pattern BAR = Pattern.compile("[─━—=\\-]{4,}");
     private static final Pattern UUID = Pattern.compile("(?i)\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b");
     private static final Pattern TIME = Pattern.compile("\\b\\d{1,2}:\\d{2}(?::\\d{2})?\\b");
+    // Countdown / duration runs ("59s", "10min", "2h 30m", "1m30s", "1天2小時3分30秒"):
+    // scoreboards tick these every second, so an untemplated duration mints a brand-new
+    // request key each tick — the single worst request-storm (429) driver. The whole run
+    // collapses into ONE token; the trailing (?![A-Za-z]) keeps ordinary words safe
+    // ("5 may" / "3rd" never match: the unit letter must not be followed by a letter).
+    private static final String DURATION_UNIT_EN =
+            "(?:d|days?|h|hrs?|hours?|m|mins?|minutes?|s|secs?|seconds?)";
+    private static final Pattern DURATION_EN = Pattern.compile(
+            "(?i)(?<![A-Za-z_⟦])\\d+(?:[.,]\\d+)?\\s*" + DURATION_UNIT_EN + "(?![A-Za-z])"
+                    + "(?:\\s*\\d+(?:[.,]\\d+)?\\s*" + DURATION_UNIT_EN + "(?![A-Za-z]))*");
+    private static final Pattern DURATION_CJK = Pattern.compile(
+            "(?<![A-Za-z_⟦])(?:\\d+(?:[.,]\\d+)?\\s*(?:天|日|小時|時|分鐘|分|秒))+");
     // Digits adjacent to ⟦…⟧ are inside a NameMasker/TemplateText token — never re-template those.
     private static final Pattern NUMBER = Pattern.compile("(?<![A-Za-z_⟦])[-+]?\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB])?(?![A-Za-z_⟧])");
     private static final Pattern LEADING_PLAYER = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_]{2,16})(?=\\s+(?:joined|left|quit|was|has|is|died|fell|burned|drowned|suffocated|blew|tried|hit|lost|won|teleported|moved|voted|claimed|unclaimed|entered|exited|discovered|found|picked|dropped|sold|bought|paid|received|earned|made|completed|reached|killed|slain|shot|whispered|says|said)\\b)", Pattern.CASE_INSENSITIVE);
@@ -90,12 +102,17 @@ public final class TemplateText {
         addPattern(source, spans, URL, 0, false);
         addPattern(source, spans, UUID, 0, false);
         addPattern(source, spans, TIME, 0, false);
+        addPattern(source, spans, DURATION_EN, 0, false);
+        addPattern(source, spans, DURATION_CJK, 0, false);
         addPattern(source, spans, LEADING_PLAYER, 1, false);
         addPattern(source, spans, TARGET_PLAYER, 1, true);
         addPattern(source, spans, NUMBER, 0, false);
         if (spans.isEmpty()) return new Prepared(source, List.of());
-        // Earlier patterns win on overlap (URL beats the numbers inside it, etc.).
-        spans.sort(Comparator.comparingInt((Span s) -> s.start).thenComparingInt(s -> s.end));
+        // Earlier patterns win on overlap (URL beats the numbers inside it, a duration
+        // run beats the bare number at its head, etc.): spans are already collected in
+        // pattern order, so accepting them in INSERTION order is the priority rule —
+        // sorting by position first would let a shorter same-start NUMBER match beat
+        // the DURATION/UUID span that contains it.
         List<Span> accepted = new ArrayList<>();
         for (Span span : spans) {
             boolean overlaps = false;

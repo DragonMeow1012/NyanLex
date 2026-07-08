@@ -878,7 +878,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 newNames.add(name);
             }
         }
-        if (!newNames.isEmpty()) service.warmTooltipBatch(newNames);
+        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
     }
 
     private void retranslateItem(ItemStack stack) {

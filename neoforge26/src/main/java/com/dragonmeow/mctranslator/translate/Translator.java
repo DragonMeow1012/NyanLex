@@ -25,4 +25,18 @@ public interface Translator {
         }
         return out;
     }
+
+    /**
+     * Batch translation with optional shared surface context: {@code surfaceContext} is the
+     * COMPLETE line list of the surface the batch came from (e.g. a whole item tooltip,
+     * first line = title), including lines that are already cached and therefore absent
+     * from {@code texts}. Context-aware backends use it so partial batches still translate
+     * coherently with the whole surface; the default simply ignores it and delegates to
+     * {@link #translateBatch(List, String)}, so existing implementations keep working.
+     * {@code surfaceContext} may be {@code null} (no context).
+     */
+    default List<TranslationResult> translateBatch(List<String> texts, String targetLang,
+                                                   List<String> surfaceContext) throws TranslationException {
+        return translateBatch(texts, targetLang);
+    }
 }

@@ -43,4 +43,19 @@ public final class DispatchingTranslator implements Translator {
         }
         return fallback.translateBatch(texts, targetLang);
     }
+
+    /** Forwards the surface context so a context-aware primary (the AI backend) can use it;
+     *  the fallback's default implementation simply ignores it. */
+    @Override
+    public List<TranslationResult> translateBatch(List<String> texts, String targetLang,
+                                                  List<String> surfaceContext) throws TranslationException {
+        if (usePrimary.getAsBoolean()) {
+            try {
+                return primary.translateBatch(texts, targetLang, surfaceContext);
+            } catch (RuntimeException | TranslationException ignored) {
+                // fall back to the secondary backend
+            }
+        }
+        return fallback.translateBatch(texts, targetLang, surfaceContext);
+    }
 }

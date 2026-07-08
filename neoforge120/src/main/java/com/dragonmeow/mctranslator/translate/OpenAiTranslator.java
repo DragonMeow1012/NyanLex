@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -36,10 +37,28 @@ public final class OpenAiTranslator implements Translator {
     private final HttpTransport transport;
     private final Supplier<AiSettings> settings;
     private final AtomicInteger keyCursor = new AtomicInteger();
+    private final LongSupplier clock;
+
+    // ---- global 429 backoff gate ----
+    // When EVERY key in one rotation comes back 429, the account/model quota itself is
+    // exhausted — rotating keys just burns more quota. The gate fails every request fast
+    // (DispatchingTranslator then falls back to Google) until the penalty expires;
+    // consecutive trips double the penalty, any success resets it.
+    private static final long RATE_LIMIT_BASE_PENALTY_MS = 60_000L;
+    private static final long RATE_LIMIT_MAX_PENALTY_MS = 600_000L;
+    private final Object gateLock = new Object();
+    private volatile long rateLimitedUntil;
+    private long penaltyMs; // guarded by gateLock
 
     public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings) {
+        this(transport, settings, System::currentTimeMillis);
+    }
+
+    /** Clock-injecting constructor so the 429 gate is unit-testable with a fake clock. */
+    public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings, LongSupplier clock) {
         this.transport = transport;
         this.settings = settings;
+        this.clock = clock;
     }
 
     public boolean isConfigured() {
@@ -54,13 +73,24 @@ public final class OpenAiTranslator implements Translator {
 
     @Override
     public List<TranslationResult> translateBatch(List<String> texts, String targetLang) throws TranslationException {
+        return translateBatch(texts, targetLang, null);
+    }
+
+    @Override
+    public List<TranslationResult> translateBatch(List<String> texts, String targetLang,
+                                                  List<String> surfaceContext) throws TranslationException {
         if (texts.isEmpty()) return List.of();
         AiSettings s = settings.get();
         if (s == null || !s.isConfigured()) {
             throw new TranslationException("AI translator not configured (model / API key missing)");
         }
+        long gateUntil = rateLimitedUntil;
+        if (clock.getAsLong() < gateUntil) {
+            // Fail fast without HTTP: the caller's DispatchingTranslator falls back to Google.
+            throw new TranslationException("AI rate-limited (429 on all keys): backing off");
+        }
 
-        String numbered = buildPrompt(texts, targetLang);
+        String numbered = buildSurfaceContextBlock(surfaceContext) + buildPrompt(texts, targetLang);
         String requestBody = buildRequestBody(s, targetLang, numbered, true);
         // If the endpoint rejects the reasoning override (HTTP 400), retry without it.
         String plainBody = wantsNoReasoning(s.model()) ? buildRequestBody(s, targetLang, numbered, false) : null;
@@ -110,6 +140,29 @@ public final class OpenAiTranslator implements Translator {
 
     // ---- prompt / request building ----
 
+    /**
+     * Prefix for the user message when the numbered batch comes from ONE surface (an item
+     * tooltip): shows the model the WHOLE tooltip — title included — so lines missing from
+     * the batch (already cached, e.g. the title) still shape the translation. This is what
+     * makes "Recipes" under a recipe list translate as 配方 instead of 食譜. Returns "" when
+     * there is no context, so context-less batches produce exactly the same request as before.
+     */
+    static String buildSurfaceContextBlock(List<String> surfaceContext) {
+        if (surfaceContext == null || surfaceContext.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        sb.append("Context: the numbered lines to translate below ALL come from one single ")
+                .append("Minecraft item tooltip; the tooltip's first line is the item's name/title. ")
+                .append("Here is the complete original tooltip, for reference ONLY:\n");
+        for (int i = 0; i < surfaceContext.size(); i++) {
+            if (i == 0) sb.append("[TITLE] ");
+            sb.append(surfaceContext.get(i).replace("\n", " ")).append('\n');
+        }
+        sb.append("Translate each numbered line so it reads coherently and consistently with the ")
+                .append("whole tooltip above. Do NOT translate the context block itself — ")
+                .append("reply with ONLY the numbered lines.\n\n");
+        return sb.toString();
+    }
+
     String buildPrompt(List<String> texts, String targetLang) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < texts.size(); i++) {
@@ -154,7 +207,8 @@ public final class OpenAiTranslator implements Translator {
             "Enchant / Enchanting / Enchantment → 附魔",
             "Enchanting Table → 附魔台",
             "Skill Book → 技能書",
-            "Recipe Book → 食譜",
+            "Recipe / Recipes → 配方",
+            "Recipe Book → 配方書",
             "Creeper → 苦力怕",
             "Enderman → 終界使者",
             "The End → 終界",
@@ -275,18 +329,29 @@ public final class OpenAiTranslator implements Translator {
         List<String> keys = s.apiKeys();
         String url = chatCompletionsUrl(s.baseUrl());
         IOException last = null;
+        int usableKeys = 0;
+        int rateLimitedKeys = 0;
         // Start at a rotating offset so load spreads across keys.
         int start = Math.floorMod(keyCursor.getAndIncrement(), keys.size());
         for (int n = 0; n < keys.size(); n++) {
             String key = keys.get((start + n) % keys.size());
             if (key == null || key.isBlank()) continue;
+            usableKeys++;
             Map<String, String> headers = new HashMap<>();
             headers.put("Authorization", "Bearer " + key.trim());
             for (int attempt = 0; attempt <= RETRIES_PER_KEY; attempt++) {
                 try {
-                    return parseContent(transport.post(url, body, headers));
+                    String content = parseContent(transport.post(url, body, headers));
+                    resetRateLimitGate(); // any success proves the quota is back
+                    return content;
                 } catch (IOException e) {
                     last = e;
+                    // 429: this key's quota is gone RIGHT NOW — retrying it only digs the
+                    // hole deeper. Move straight to the next key.
+                    if (isRateLimited(e)) {
+                        rateLimitedKeys++;
+                        break;
+                    }
                     // A 400 most likely means this endpoint rejects an optional field
                     // (e.g. reasoning_effort): drop to the plain body and retry once.
                     if (fallbackBody != null && isBadRequest(e)) {
@@ -303,13 +368,39 @@ public final class OpenAiTranslator implements Translator {
                 }
             }
         }
+        // A FULL rotation of 429s means the whole quota is exhausted: trip the gate.
+        if (usableKeys > 0 && rateLimitedKeys == usableKeys) {
+            tripRateLimitGate();
+        }
         throw new TranslationException("AI request failed (all keys): "
                 + (last == null ? "no usable key" : last.getMessage()), last);
+    }
+
+    private void tripRateLimitGate() {
+        synchronized (gateLock) {
+            penaltyMs = (penaltyMs == 0)
+                    ? RATE_LIMIT_BASE_PENALTY_MS
+                    : Math.min(penaltyMs * 2, RATE_LIMIT_MAX_PENALTY_MS);
+            rateLimitedUntil = clock.getAsLong() + penaltyMs;
+        }
+    }
+
+    private void resetRateLimitGate() {
+        if (rateLimitedUntil == 0) return; // fast path: gate never tripped
+        synchronized (gateLock) {
+            penaltyMs = 0;
+            rateLimitedUntil = 0;
+        }
     }
 
     private static boolean isBadRequest(IOException e) {
         String m = e.getMessage();
         return m != null && m.contains("HTTP 400");
+    }
+
+    private static boolean isRateLimited(IOException e) {
+        String m = e.getMessage();
+        return m != null && m.contains("HTTP 429");
     }
 
     private static boolean isTransient(IOException e) {

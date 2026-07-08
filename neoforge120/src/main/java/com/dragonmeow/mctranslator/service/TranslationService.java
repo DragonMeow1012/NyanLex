@@ -3,6 +3,7 @@ package com.dragonmeow.mctranslator.service;
 import com.dragonmeow.mctranslator.cache.TranslationCache;
 import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
+import com.dragonmeow.mctranslator.translate.ChurnGuard;
 import com.dragonmeow.mctranslator.translate.LayoutPreserver;
 import com.dragonmeow.mctranslator.translate.NameMasker;
 import com.dragonmeow.mctranslator.translate.TextFilter;
@@ -52,6 +53,18 @@ public final class TranslationService {
         if (cache != null && aiCache != null && cache != aiCache) {
             cache.setFallback(aiCache);
         }
+        // Make the in-game 特效字防護 (churn) toggle & thresholds actually live: without this
+        // the caches keep their built-in-default guard and config.churnGuard=false could not
+        // turn it off. Both engine caches share ONE guard — a churning surface routes to
+        // exactly one of them, and ChurnGuard is thread-safe. null = detection disabled.
+        ChurnGuard guard = config.churnGuard
+                ? new ChurnGuard(config.churnVariantThreshold,
+                        config.churnWindowSeconds * 1000L,
+                        config.churnCooldownSeconds * 1000L,
+                        System::currentTimeMillis)
+                : null;
+        if (cache != null) cache.setChurnGuard(guard);
+        if (aiCache != null) aiCache.setChurnGuard(guard);
     }
 
     private TranslationCache cacheFor(boolean useAi) {
@@ -377,6 +390,23 @@ public final class TranslationService {
      * the per-line render then picks up the cached results.
      */
     public void warmTooltipBatch(List<String> sources) {
+        if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY) return;
+        List<String> todo = new java.util.ArrayList<>();
+        for (String s : sources) {
+            if (s != null && TextFilter.shouldTranslate(s, config.targetLang)) todo.add(s);
+        }
+        // The FULL tooltip (title included, cached lines included) rides along as surface
+        // context, so lines translated later still agree with the title's wording.
+        if (!todo.isEmpty()) cacheFor(config.aiTooltip).warmBatchAsync(todo, sources);
+    }
+
+    /**
+     * Warm a batch of UNRELATED names (e.g. the item names inside an open container)
+     * in one background request. Unlike {@link #warmTooltipBatch(List)} this attaches
+     * NO tooltip surface context — the lines do not come from one tooltip and have no
+     * shared title, so telling the AI otherwise would be a false premise.
+     */
+    public void warmNamesBatch(List<String> sources) {
         if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY) return;
         List<String> todo = new java.util.ArrayList<>();
         for (String s : sources) {

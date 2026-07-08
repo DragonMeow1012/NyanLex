@@ -35,6 +35,61 @@ class TranslationCacheTest {
     }
 
     @Test
+    void warmBatchAsyncSendsFullSurfaceContextButOnlyUncachedTodoLines() {
+        List<List<String>> seenTexts = new ArrayList<>();
+        List<List<String>> seenContexts = new ArrayList<>();
+        Translator fake = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang) {
+                return new TranslationResult("T:" + text, null);
+            }
+            @Override public List<TranslationResult> translateBatch(
+                    List<String> texts, String targetLang, List<String> surfaceContext) {
+                seenTexts.add(new ArrayList<>(texts));
+                seenContexts.add(surfaceContext == null ? null : new ArrayList<>(surfaceContext));
+                List<TranslationResult> out = new ArrayList<>();
+                for (String t : texts) out.add(new TranslationResult("T:" + t, null));
+                return out;
+            }
+        };
+        TranslationCache cache = new TranslationCache(fake, "zh-TW", DIRECT, 100);
+
+        // The tooltip TITLE got translated on its own earlier and is already cached.
+        cache.requestAsync("Iron Pickaxe");
+        assertEquals("T:Iron Pickaxe", cache.getCached("Iron Pickaxe"));
+
+        List<String> tooltip = List.of("Iron Pickaxe", "Recipes", "Used in smelting");
+        cache.warmBatchAsync(tooltip, tooltip);
+
+        assertEquals(1, seenTexts.size(), "one batched request for the tooltip");
+        assertEquals(List.of("Recipes", "Used in smelting"), seenTexts.get(0),
+                "the already-cached title must not be re-requested");
+        assertEquals(List.of("Iron Pickaxe", "Recipes", "Used in smelting"), seenContexts.get(0),
+                "surface context must still carry the WHOLE tooltip, cached title included");
+        assertEquals("T:Recipes", cache.getCached("Recipes"));
+    }
+
+    @Test
+    void warmBatchAsyncWithoutSurfaceLinesPassesNullContext() {
+        List<List<String>> seenContexts = new ArrayList<>();
+        Translator fake = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang) {
+                return new TranslationResult("T:" + text, null);
+            }
+            @Override public List<TranslationResult> translateBatch(
+                    List<String> texts, String targetLang, List<String> surfaceContext) {
+                seenContexts.add(surfaceContext);
+                List<TranslationResult> out = new ArrayList<>();
+                for (String t : texts) out.add(new TranslationResult("T:" + t, null));
+                return out;
+            }
+        };
+        TranslationCache cache = new TranslationCache(fake, "zh-TW", DIRECT, 100);
+        cache.warmBatchAsync(List.of("Hello"));
+        assertEquals(1, seenContexts.size());
+        assertNull(seenContexts.get(0), "the old signature must keep sending NO context");
+    }
+
+    @Test
     void blockingTranslatesThenCaches() {
         AtomicInteger calls = new AtomicInteger();
         TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);

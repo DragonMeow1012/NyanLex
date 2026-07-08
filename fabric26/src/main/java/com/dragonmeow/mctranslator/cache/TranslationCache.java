@@ -1,5 +1,6 @@
 package com.dragonmeow.mctranslator.cache;
 
+import com.dragonmeow.mctranslator.translate.ChurnGuard;
 import com.dragonmeow.mctranslator.translate.TranslationException;
 import com.dragonmeow.mctranslator.translate.TranslationResult;
 import com.dragonmeow.mctranslator.translate.TemplateText;
@@ -63,6 +64,11 @@ public final class TranslationCache {
     private final Map<String, PendingSingle> pendingSingles = new ConcurrentHashMap<>();
 
     private final Map<String, Long> failedUntil = new ConcurrentHashMap<>();
+
+    /** Animated/flashing-text detector consulted at every request-enqueue throat; a key
+     *  on cooldown is silently dropped (the surface keeps showing the original text).
+     *  Enabled with built-in defaults; replaceable via {@link #setChurnGuard} (null = off). */
+    private volatile ChurnGuard churnGuard = new ChurnGuard();
 
     /** A callback plus the exact raw text it was registered for (needed to restore
      *  that raw text's own placeholder values on delivery). */
@@ -139,6 +145,19 @@ public final class TranslationCache {
     /** Sibling cache consulted read-only on miss. Never set both directions. */
     public void setFallback(TranslationCache fallback) {
         this.fallback = (fallback == this) ? null : fallback;
+    }
+
+    /** Optional override of the churn guard (custom thresholds / fake clock in tests);
+     *  {@code null} disables churn detection entirely. */
+    public void setChurnGuard(ChurnGuard churnGuard) {
+        this.churnGuard = churnGuard;
+    }
+
+    /** True when the churn guard says this key is animated/flashing text on cooldown:
+     *  the request is dropped, behaving exactly like a not-yet-translated line. */
+    private boolean churnSuppressed(String key) {
+        ChurnGuard guard = churnGuard;
+        return guard != null && guard.shouldSuppress(key);
     }
 
     // ---- lookup ----
@@ -319,7 +338,7 @@ public final class TranslationCache {
             return;
         }
         String key = requestKey(source);
-        if (key.isEmpty() || isBackingOff(key)) {
+        if (key.isEmpty() || isBackingOff(key) || churnSuppressed(key)) {
             if (callback != null && always) callback.accept(null);
             return;
         }
@@ -343,28 +362,41 @@ public final class TranslationCache {
     // ---- fire-and-forget batch requests (render surfaces) ----
 
     public boolean warmBatch(List<String> sources) {
-        return warmBatch(sources, Set.of());
+        return warmBatch(sources, Set.of(), null);
+    }
+
+    /** Like {@link #warmBatch(List)} but forwards the surface's FULL line list (nullable) to
+     *  the translator as shared context — see {@link Translator#translateBatch(List, String, List)}. */
+    public boolean warmBatch(List<String> sources, List<String> surfaceLines) {
+        return warmBatch(sources, Set.of(), surfaceLines);
+    }
+
+    private boolean warmBatch(List<String> sources, Set<String> allowPendingKeys) {
+        return warmBatch(sources, allowPendingKeys, null);
     }
 
     /**
      * Synchronously translate every not-yet-cached source in one batched request.
      * {@code allowPendingKeys} lets {@link #flushBatch} include keys it has itself
-     * just registered as in-flight singles.
+     * just registered as in-flight singles. {@code surfaceLines} (nullable) is the
+     * complete surface (e.g. whole tooltip) the sources came from; it is normalised
+     * like the request lines and passed to the translator as context, so lines that
+     * are already cached (e.g. the tooltip title) still steer the translation.
      */
-    private boolean warmBatch(List<String> sources, Set<String> allowPendingKeys) {
+    private boolean warmBatch(List<String> sources, Set<String> allowPendingKeys, List<String> surfaceLines) {
         // Group raw variants by normalised request key: one key = one line in the request.
         LinkedHashMap<String, List<String>> rawByKey = new LinkedHashMap<>();
         for (String s : sources) {
             if (s == null || getCached(s) != null) continue;
             String key = requestKey(s);
-            if (key.isEmpty() || isBackingOff(key)) continue;
+            if (key.isEmpty() || isBackingOff(key) || churnSuppressed(key)) continue;
             if (!allowPendingKeys.contains(key) && pendingSingles.containsKey(key)) continue;
             rawByKey.computeIfAbsent(key, ignored -> new ArrayList<>()).add(s);
         }
         List<String> todo = new ArrayList<>(rawByKey.keySet());
         if (todo.isEmpty()) return true;
         try {
-            List<TranslationResult> results = translator.translateBatch(todo, targetLang);
+            List<TranslationResult> results = translator.translateBatch(todo, targetLang, contextKeys(surfaceLines));
             if (results.size() != todo.size()) {
                 for (String s : todo) recordFailure(s);
                 return false;
@@ -401,12 +433,19 @@ public final class TranslationCache {
     /** Async warm of a whole surface (e.g. one tooltip) in a single request, immediately —
      *  the user is hovering NOW, so this does not wait for the tick coalescer. */
     public void warmBatchAsync(List<String> sources) {
+        warmBatchAsync(sources, null);
+    }
+
+    /** Like {@link #warmBatchAsync(List)} but forwards {@code surfaceLines} (nullable) —
+     *  the surface's COMPLETE line list, cached lines included — as translator context. */
+    public void warmBatchAsync(List<String> sources, List<String> surfaceLines) {
         List<String> todo = new ArrayList<>();
         List<String> pendingKeys = new ArrayList<>();
         for (String s : sources) {
             if (s == null || getCached(s) != null) continue;
             String key = requestKey(s);
-            if (key.isEmpty() || isBackingOff(key) || pendingSingles.containsKey(key)) continue;
+            if (key.isEmpty() || isBackingOff(key) || pendingSingles.containsKey(key)
+                    || churnSuppressed(key)) continue;
             if (pending.add(key)) {
                 todo.add(s);
                 pendingKeys.add(key);
@@ -415,7 +454,7 @@ public final class TranslationCache {
         if (todo.isEmpty()) return;
         executor.execute(() -> {
             try {
-                warmBatch(todo);
+                warmBatch(todo, Set.of(), surfaceLines);
             } catch (RuntimeException ignored) {
                 // failures already recorded per key
             } finally {
@@ -470,7 +509,8 @@ public final class TranslationCache {
         String key = requestKey(source);
         if (key.isEmpty() || pending.contains(key) || pendingSingles.containsKey(key)
                 || queuedSingles.containsKey(key) || isBackingOff(key)) return;
-        if (getCached(source) != null) return;
+        if (getCached(source) != null) return; // cached churn keeps rendering: guard is enqueue-only
+        if (churnSuppressed(key)) return;
         if (batchBuffer.add(source)) batchGrew = true;
     }
 
@@ -592,6 +632,18 @@ public final class TranslationCache {
     /** Canonical request/cache key: outer whitespace stripped, volatile parts templated. */
     private String requestKey(String source) {
         return TemplateText.prepare(norm(source)).text();
+    }
+
+    /** Normalise surface-context lines exactly like request keys (order kept, empties
+     *  skipped). Null/empty in → null out, so no-context callers behave as before. */
+    private List<String> contextKeys(List<String> surfaceLines) {
+        if (surfaceLines == null || surfaceLines.isEmpty()) return null;
+        List<String> out = new ArrayList<>(surfaceLines.size());
+        for (String s : surfaceLines) {
+            String key = requestKey(s);
+            if (!key.isEmpty()) out.add(key);
+        }
+        return out.isEmpty() ? null : out;
     }
 
     private static String norm(String source) {

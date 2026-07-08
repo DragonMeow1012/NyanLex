@@ -957,7 +957,7 @@ public final class MctranslatorNeoForge26 {
                 newNames.add(name);
             }
         }
-        if (!newNames.isEmpty()) service.warmTooltipBatch(newNames);
+        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
     }
 
     

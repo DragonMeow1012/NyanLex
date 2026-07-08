@@ -944,7 +944,7 @@ public final class MctranslatorNeoForge {
                 newNames.add(name);
             }
         }
-        if (!newNames.isEmpty()) service.warmTooltipBatch(newNames);
+        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
     }
 
     /** Evict + re-translate one item's tooltip lines (the "re-translate pointed item" hotkey). */

@@ -114,6 +114,22 @@ public final class TranslatorConfig {
     /** Maximum number of cached translations in memory (LRU eviction beyond this). */
     public int cacheMaxSize = 5000;
 
+    // ---- 特效字/動畫字防護 (ChurnGuard) ----
+    // 記分板倒數、閃爍裝飾字每次微變都是新請求 key；同一「簽名」（去掉數字/符號後的字母骨架）
+    // 在視窗內累積過多相異 key 就判定為動畫字並冷卻，期間不再送出新請求（快取照常顯示）。
+
+    /** Enable churn (animated/flashing text) detection & cooldown. */
+    public boolean churnGuard = true;
+
+    /** Distinct key variants of one signature within the window that trip the cooldown. */
+    public int churnVariantThreshold = 4;
+
+    /** Sliding detection window, in seconds. */
+    public int churnWindowSeconds = 60;
+
+    /** Cooldown once tripped: no new requests for this signature, in seconds. */
+    public int churnCooldownSeconds = 300;
+
     /** Use a disk-backed second-tier cache (recovers LRU-evicted entries within a session). */
     public boolean diskCache = true;
 
@@ -170,6 +186,9 @@ public final class TranslatorConfig {
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
         if (failureBackoffMs < 0) failureBackoffMs = 10000;
         if (cacheMaxSize <= 0) cacheMaxSize = 5000;
+        if (churnVariantThreshold < 2) churnVariantThreshold = 4;
+        if (churnWindowSeconds <= 0) churnWindowSeconds = 60;
+        if (churnCooldownSeconds <= 0) churnCooldownSeconds = 300;
         if (workerThreads <= 0) workerThreads = 2;
         return this;
     }

@@ -312,9 +312,202 @@ class OpenAiTranslatorTest {
         assertEquals("在⟦MT1⟧中擊中⟦MT0⟧", r.get(0).translatedText());
     }
 
+    // ---- 429 global backoff gate ----
+
+    /** Transport that 429s every key until told otherwise; counts calls; fake clock. */
+    private static final class RateLimitRig {
+        final AtomicInteger calls = new AtomicInteger();
+        volatile boolean rateLimited = true;
+        final long[] now = {0L};
+        final OpenAiTranslator translator;
+
+        RateLimitRig(List<String> keys) {
+            HttpTransport fake = new HttpTransport() {
+                @Override public String get(String url) { throw new UnsupportedOperationException(); }
+                @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                    calls.incrementAndGet();
+                    if (rateLimited) throw new IOException("HTTP 429: quota exceeded");
+                    return chatJson("1. 嗨");
+                }
+            };
+            translator = new OpenAiTranslator(fake,
+                    () -> new AiSettings("https://x/v1", "m", keys), () -> now[0]);
+        }
+    }
+
+    @Test
+    void allKeys429TripsGateWithoutPerKeyRetries() {
+        RateLimitRig rig = new RateLimitRig(List.of("a", "b"));
+
+        assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW"));
+        assertEquals(2, rig.calls.get(), "429 must NOT be retried on the same key: one call per key");
+
+        // Gate is up: further requests fail fast without touching the transport.
+        assertThrows(TranslationException.class, () -> rig.translator.translate("Hi again", "zh-TW"));
+        assertEquals(2, rig.calls.get(), "gated requests must never reach the transport");
+    }
+
+    @Test
+    void gateExpiresAfterBasePenalty() throws Exception {
+        RateLimitRig rig = new RateLimitRig(List.of("a"));
+        assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW"));
+        assertEquals(1, rig.calls.get());
+
+        rig.now[0] = 59_999L; // still inside the 60s base penalty
+        assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW"));
+        assertEquals(1, rig.calls.get());
+
+        rig.now[0] = 60_000L; // penalty over: HTTP flows again
+        rig.rateLimited = false;
+        assertEquals("嗨", rig.translator.translate("Hi", "zh-TW").translatedText());
+        assertEquals(2, rig.calls.get());
+    }
+
+    @Test
+    void consecutive429RoundsDoubleThePenaltyUpToTheCap() {
+        RateLimitRig rig = new RateLimitRig(List.of("a"));
+        // Trip repeatedly, each time right after the previous penalty expires. Expected
+        // penalties: 60s, 120s, 240s, 480s, 600s (capped), 600s…
+        long[] expected = {60_000L, 120_000L, 240_000L, 480_000L, 600_000L, 600_000L};
+        long trippedAt = 0L;
+        for (long penalty : expected) {
+            assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW"));
+            int callsAfterTrip = rig.calls.get();
+
+            rig.now[0] = trippedAt + penalty - 1; // one ms before expiry: still gated
+            assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW"));
+            assertEquals(callsAfterTrip, rig.calls.get(), "gated at +" + (penalty - 1));
+
+            rig.now[0] = trippedAt + penalty;     // expiry: next (still-429) round re-trips
+            trippedAt = rig.now[0];
+        }
+    }
+
+    @Test
+    void anySuccessResetsThePenaltyToBase() throws Exception {
+        RateLimitRig rig = new RateLimitRig(List.of("a"));
+        assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW")); // 60s
+        rig.now[0] = 60_000L;
+        assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW")); // 120s
+        rig.now[0] = 180_000L;
+
+        rig.rateLimited = false; // quota is back: one success must reset everything
+        assertEquals("嗨", rig.translator.translate("Hi", "zh-TW").translatedText());
+
+        rig.rateLimited = true;  // next all-429 round starts from the BASE penalty again
+        assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW"));
+        int calls = rig.calls.get();
+        rig.now[0] = 180_000L + 59_999L;
+        assertThrows(TranslationException.class, () -> rig.translator.translate("Hi", "zh-TW"));
+        assertEquals(calls, rig.calls.get(), "must still be gated inside the reset 60s penalty");
+        rig.now[0] = 180_000L + 60_000L;
+        rig.rateLimited = false;
+        assertEquals("嗨", rig.translator.translate("Hi", "zh-TW").translatedText(),
+                "the reset base penalty (not a doubled one) must gate only 60s");
+    }
+
+    @Test
+    void partial429DoesNotTripTheGate() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                calls.incrementAndGet();
+                if ("Bearer limited".equals(headers.get("Authorization"))) throw new IOException("HTTP 429");
+                return chatJson("1. 嗨");
+            }
+        };
+        long[] now = {0L};
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("limited", "healthy")), () -> now[0]);
+
+        assertEquals("嗨", t.translate("Hi", "zh-TW").translatedText());
+        assertEquals(2, calls.get(), "the 429 key is skipped once (no same-key retry), the next key answers");
+
+        // A round that SUCCEEDED must not gate the following request.
+        t.translate("Hi again", "zh-TW");
+        assertTrue(calls.get() > 2, "no gate may be up after a successful round");
+    }
+
     @Test
     void parseNumberedStripsVariousNumberFormats() {
         List<String> r = OpenAiTranslator.parseNumbered("1. A\n2) B\n3、C\n\n", 3);
         assertEquals(List.of("A", "B", "C"), r);
+    }
+
+    @Test
+    void surfaceContextAddsTooltipBlockButNumbersOnlyTheTodoLines() throws Exception {
+        List<String> sentBodies = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                sentBodies.add(body);
+                return chatJson("1. 配方");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k")));
+
+        // Whole tooltip is the context; only the not-yet-cached line is sent for translation.
+        List<TranslationResult> r = t.translateBatch(List.of("Recipes"), "zh-TW",
+                List.of("Iron Pickaxe", "Recipes", "Used in smelting"));
+
+        assertEquals(1, r.size());
+        assertEquals("配方", r.get(0).translatedText());
+        String body = sentBodies.get(0);
+        assertTrue(body.contains("[TITLE] Iron Pickaxe"),
+                "context block must list the tooltip with the first line marked as TITLE: " + body);
+        assertTrue(body.contains("Used in smelting"), "context must carry the WHOLE tooltip: " + body);
+        assertTrue(body.contains("tooltip"), "prompt must say the lines share one tooltip: " + body);
+        assertTrue(body.contains("ONLY the numbered lines"),
+                "prompt must forbid translating the context block itself: " + body);
+        assertTrue(body.contains("1. Recipes"), "the todo line must still be numbered: " + body);
+        assertTrue(!body.contains("2. "), "ONLY todo lines may be numbered, never context lines: " + body);
+        assertTrue(!body.contains("1. Iron Pickaxe"), "context lines must not be numbered: " + body);
+    }
+
+    @Test
+    void nullOrEmptySurfaceContextKeepsRequestIdenticalToPlainBatch() throws Exception {
+        List<String> sentBodies = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                sentBodies.add(body);
+                return chatJson("1. 你好\n2. 世界");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k")));
+
+        t.translateBatch(List.of("Hello", "World"), "zh-TW");                 // old two-arg path
+        t.translateBatch(List.of("Hello", "World"), "zh-TW", null);           // null context
+        t.translateBatch(List.of("Hello", "World"), "zh-TW", List.of());      // empty context
+
+        assertEquals(3, sentBodies.size());
+        assertEquals(sentBodies.get(0), sentBodies.get(1), "null context must not change the request");
+        assertEquals(sentBodies.get(0), sentBodies.get(2), "empty context must not change the request");
+        assertTrue(!sentBodies.get(0).contains("[TITLE]"), sentBodies.get(0));
+    }
+
+    @Test
+    void glossarySeparatesRecipesFromSkillBook() throws Exception {
+        List<String> sentBodies = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                sentBodies.add(body);
+                return chatJson("1. 配方");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k")));
+        t.translate("Recipes", "zh-TW");
+
+        String body = sentBodies.get(0);
+        assertTrue(body.contains("Skill Book → 技能書"), body);
+        assertTrue(body.contains("Recipe / Recipes → 配方"), body);
+        assertTrue(body.contains("Recipe Book → 配方書"), body);
+        assertTrue(!body.contains("Skill Book / Recipe Book"),
+                "the old merged entry (Recipe Book → 技能書) must be gone: " + body);
     }
 }
