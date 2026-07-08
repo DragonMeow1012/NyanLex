@@ -142,4 +142,17 @@ class TemplateTextTest {
         assertSame(TemplateText.prepare("You got 5 coins"), TemplateText.prepare("You got 5 coins"),
                 "repeated prepare of the same string must return the memoised instance");
     }
+
+    @Test
+    void fullWidthNumberSeparatorIsRestoredToAscii() {
+        // A backend sometimes renders "1,950" as "1，950" (full-width comma) in CJK output;
+        // between digits that is always wrong. restore() normalises it back — this also
+        // self-heals such a value already cached from an older build.
+        TemplateText.Prepared p = TemplateText.prepare("earned 5 coins"); // any token so restore runs
+        assertEquals("1,950", p.restore("1，950"));
+        assertEquals("位：1,950", p.restore("位：1，950"));
+        assertEquals("3.5", p.restore("3．5"));
+        // A full-width comma between WORDS (correct Chinese prose) must be left alone.
+        assertEquals("你好，世界", p.restore("你好，世界"));
+    }
 }

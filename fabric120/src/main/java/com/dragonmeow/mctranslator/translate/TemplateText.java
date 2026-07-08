@@ -74,16 +74,28 @@ public final class TemplateText {
 
     private static final Pattern CJK_BEFORE_NUM = Pattern.compile("(?<=[\\u4e00-\\u9fff，。！？：])[ \\u00A0]+(?=[0-9+\\-])");
     private static final Pattern NUM_BEFORE_CJK = Pattern.compile("(?<=[0-9%％.,kKmMbB])[ \\u00A0]+(?=[\\u4e00-\\u9fff，。！？：])");
+    // A translator (esp. the AI) sometimes renders a number's ASCII separator as its
+    // full-width CJK form ("1,950" → "1，950", "3.5" → "3．5") while keeping half-width
+    // digits. BETWEEN digits that is always wrong (a full-width comma between words is
+    // correct Chinese prose), so the rewrite is digit-flanked and safe for ordinary text.
+    // It also self-heals such a value already sitting in the persistent cache.
+    private static final Pattern FW_COMMA_IN_NUMBER = Pattern.compile("(?<=[0-9])，(?=[0-9])");
+    private static final Pattern FW_DOT_IN_NUMBER = Pattern.compile("(?<=[0-9])．(?=[0-9])");
 
     /**
-     * CJK typography: no space between a number and an adjacent CJK character. The
-     * translator is inconsistent about spacing around restored tokens ("擊中了1 敵人" vs
-     * "擊中2敵人"); normalising here makes every restored message read the same way.
-     * No-op for non-CJK output (the patterns require a CJK neighbour).
+     * CJK typography clean-up applied to every restored translation: full-width number
+     * separators back to ASCII ("1，950" → "1,950"), and no space between a number and an
+     * adjacent CJK character ("擊中了1 敵人" vs "擊中2敵人") so every restored message reads
+     * the same way. No-op for output with neither a digit-flanked full-width separator nor
+     * a CJK/number space boundary.
      */
     static String tightenCjkSpacing(String text) {
-        if (text == null || text.indexOf(' ') < 0) return text;
-        return NUM_BEFORE_CJK.matcher(CJK_BEFORE_NUM.matcher(text).replaceAll("")).replaceAll("");
+        if (text == null) return text;
+        String out = text;
+        if (out.indexOf('，') >= 0) out = FW_COMMA_IN_NUMBER.matcher(out).replaceAll(",");
+        if (out.indexOf('．') >= 0) out = FW_DOT_IN_NUMBER.matcher(out).replaceAll(".");
+        if (out.indexOf(' ') < 0) return out;
+        return NUM_BEFORE_CJK.matcher(CJK_BEFORE_NUM.matcher(out).replaceAll("")).replaceAll("");
     }
 
     public static Prepared prepare(String source) {
