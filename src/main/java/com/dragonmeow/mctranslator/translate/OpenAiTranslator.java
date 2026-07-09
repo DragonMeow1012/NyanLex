@@ -66,6 +66,13 @@ public final class OpenAiTranslator implements Translator {
         return s != null && s.isConfigured();
     }
 
+    /** Whether the global 429 gate is currently CLOSED (still backing off). Consulted by the
+     *  provisional-retry gate: a GT stand-in is only re-asked of the AI once this is false. */
+    public boolean isRateLimited() {
+        long until = rateLimitedUntil;
+        return until != 0 && clock.getAsLong() < until;
+    }
+
     @Override
     public TranslationResult translate(String text, String targetLang) throws TranslationException {
         return translateBatch(List.of(text), targetLang).get(0);

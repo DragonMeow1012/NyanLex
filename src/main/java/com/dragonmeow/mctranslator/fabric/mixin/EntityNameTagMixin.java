@@ -3,10 +3,12 @@ package com.dragonmeow.mctranslator.fabric.mixin;
 import com.dragonmeow.mctranslator.fabric.FabricTextStyle;
 import com.dragonmeow.mctranslator.fabric.MctranslatorFabric;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,8 +33,12 @@ public abstract class EntityNameTagMixin {
             method = "renderNameTag(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/network/chat/Component;"
                     + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IF)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
-    private Component mctranslator$translateNameTag(Component name) {
-        return MctranslatorFabric.nameTag(name);
+    private Component mctranslator$translateNameTag(Component name, Entity entity, Component original,
+                                                    PoseStack poseStack, MultiBufferSource buffers,
+                                                    int light, float partialTick) {
+        // Target-arg capture (appended after the modified variable) hands us the ENTITY, so
+        // the glue can skip real TAB-listed players' name tags (player IDs never translate).
+        return MctranslatorFabric.nameTag(entity, name);
     }
 
     @Redirect(

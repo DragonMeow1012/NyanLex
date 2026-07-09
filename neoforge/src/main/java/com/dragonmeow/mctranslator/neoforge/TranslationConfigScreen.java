@@ -43,8 +43,7 @@ public final class TranslationConfigScreen extends Screen {
         int step = 22;
 
         y = row("聊天", x, y, step, true, () -> cfg.chatMode, m -> cfg.chatMode = m, () -> cfg.aiChat, v -> cfg.aiChat = v);
-        y = row("物品提示（名稱／說明）", x, y, step, true, () -> cfg.tooltipMode, m -> cfg.tooltipMode = m, () -> cfg.aiTooltip, v -> cfg.aiTooltip = v);
-        y = row("手持物品名稱", x, y, step, true, () -> cfg.heldMode, m -> cfg.heldMode = m, () -> cfg.aiHeld, v -> cfg.aiHeld = v);
+        y = row("物品名稱／說明（提示與手持）", x, y, step, true, () -> cfg.tooltipMode, m -> cfg.tooltipMode = m, () -> cfg.aiTooltip, v -> cfg.aiTooltip = v);
         y = row("記分板", x, y, step, true, () -> cfg.scoreboardMode, m -> cfg.scoreboardMode = m, () -> cfg.aiScoreboard, v -> cfg.aiScoreboard = v);
         y = row("名牌／全息", x, y, step, true, () -> cfg.nameMode, m -> cfg.nameMode = m, () -> cfg.aiName, v -> cfg.aiName = v);
         y = row("Boss 血條", x, y, step, true, () -> cfg.bossBarMode, m -> cfg.bossBarMode = m, () -> cfg.aiBossBar, v -> cfg.aiBossBar = v);

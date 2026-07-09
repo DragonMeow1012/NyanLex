@@ -17,12 +17,51 @@ public final class TextFilter {
 
     public static boolean shouldTranslate(String text, String targetLang) {
         if (text == null) return false;
-        String t = text.strip();
+        // Judge translatability on the CORE text: decorative icons (⚔ ✪ ☀ 🔹 …) are
+        // stripped first, so "⚔ Heroic Spirit Sceptre ✪✪✪✪✪" is judged as
+        // "Heroic Spirit Sceptre" instead of being rejected/garbled by its icons.
+        // A line that is ONLY icons still comes out empty → untranslatable, as before.
+        String t = stripDecorativeSymbols(text).strip();
         if (t.isEmpty()) return false;
         if (!hasLetters(t)) return false;
         if (looksStructuredData(t)) return false;
         if (isTargetChinese(targetLang) && isMostlyCjk(t)) return false;
         return true;
+    }
+
+    /**
+     * Decorative icon character (⚔ ✪ ☀ ⛃ ■ ➤ 🔹, modded PUA icon fonts): Unicode
+     * OTHER_SYMBOL, the private-use areas, and stray surrogates. Deliberately EXCLUDED:
+     * ordinary ASCII and CJK punctuation (、。！ — categories P*, translations use them),
+     * math signs (Sm — the '+' of "+30" must travel with its number), currency (Sc),
+     * the ⟦⟧ token brackets (Ps/Pe), and '§' (style prefix; guarded explicitly for old
+     * Unicode tables where it was still So).
+     */
+    public static boolean isDecorativeSymbol(int cp) {
+        if (cp == 0xA7 || cp == 0x27E6 || cp == 0x27E7) return false; // § ⟦ ⟧
+        if (cp == 0xFFFD) return false; // REPLACEMENT CHAR is corruption evidence, not an icon
+        int type = Character.getType(cp);
+        return type == Character.OTHER_SYMBOL
+                || type == Character.PRIVATE_USE
+                || type == Character.SURROGATE;
+    }
+
+    /** Remove decorative icon characters ({@link #isDecorativeSymbol}). Null-safe;
+     *  returns the same instance when nothing was decorative. */
+    public static String stripDecorativeSymbols(String text) {
+        if (text == null) return null;
+        StringBuilder sb = null;
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            int n = Character.charCount(cp);
+            if (isDecorativeSymbol(cp)) {
+                if (sb == null) sb = new StringBuilder(text.length()).append(text, 0, i);
+            } else if (sb != null) {
+                sb.appendCodePoint(cp);
+            }
+            i += n;
+        }
+        return sb == null ? text : sb.toString();
     }
 
     public static boolean hasLetters(String t) {
@@ -103,6 +142,18 @@ public final class TextFilter {
         return (cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z');
     }
 
+    /** A literal §-formatting sequence baked into the string by the server ('§' + the next
+     *  char, exactly as Minecraft's own parser consumes it; DOTALL so "§\n" can't survive). */
+    private static final java.util.regex.Pattern SECTION_CODE =
+            java.util.regex.Pattern.compile("§.", java.util.regex.Pattern.DOTALL);
+
+    /** Remove literal §-formatting sequences. They are STYLE, not text: any content check
+     *  that treats their code letters as letters mis-reads the string (see
+     *  {@link #isPartialTransliteration}). Null-safe. */
+    public static String stripSectionCodes(String text) {
+        return text == null ? null : SECTION_CODE.matcher(text).replaceAll("");
+    }
+
     /**
      * Detects a HALF-transliterated word: a translation that fuses a leftover fragment of an
      * original Latin word directly onto the CJK target script. Two flavours of the same bug:
@@ -139,16 +190,23 @@ public final class TextFilter {
      */
     public static boolean isPartialTransliteration(String source, String translated) {
         if (source == null || translated == null) return false;
-        String s = source.strip();
-        if (s.isEmpty() || translated.isEmpty()) return false;
+        // Judge the REAL content: literal § codes baked in by the server are style, not
+        // text. Left in, their code letters fuse into the ASCII runs — "§d§lSB年500" reads
+        // as run "lSB" glued to 年, a proper suffix of source token "§d§lSB" → a false
+        // half-transliteration verdict that discards a perfectly good cache entry every
+        // frame (the 30,892-line tab-header disk-append incident). Only § sequences are
+        // stripped here — ⟦⟧ markers and whitespace stay, the judgement needs them.
+        String s = stripSectionCodes(source).strip();
+        String t = stripSectionCodes(translated);
+        if (s.isEmpty() || t.isEmpty()) return false;
 
         // Precondition: the translation must actually contain CJK (else nothing was converted).
-        if (!containsCjk(translated)) return false;
+        if (!containsCjk(t)) return false;
 
         // Evaluate each whitespace-split source token that is ASCII-letter dominant + long enough.
         for (String token : s.split("\\s+")) {
             if (!isAsciiDominantWord(token)) continue;
-            if (hasGluedResidueOf(token, translated)) return true;
+            if (hasGluedResidueOf(token, t)) return true;
         }
         return false;
     }

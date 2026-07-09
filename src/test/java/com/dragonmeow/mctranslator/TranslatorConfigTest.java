@@ -42,7 +42,6 @@ class TranslatorConfigTest {
         cfg.chatMode = DisplayMode.BOTH;
         cfg.scoreboardMode = DisplayMode.ORIGINAL_ONLY;
         cfg.targetLang = "zh-TW";
-        cfg.blockSeparator = " | ";
 
         StringWriter out = new StringWriter();
         cfg.writeTo(out);
@@ -51,7 +50,6 @@ class TranslatorConfigTest {
         assertEquals(DisplayMode.BOTH, loaded.chatMode);
         assertEquals(DisplayMode.ORIGINAL_ONLY, loaded.scoreboardMode);
         assertEquals("zh-TW", loaded.targetLang);
-        assertEquals(" | ", loaded.blockSeparator);
     }
 
     @Test
@@ -71,5 +69,18 @@ class TranslatorConfigTest {
         TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader("{}"));
         assertEquals("zh-TW", cfg.targetLang);
         assertEquals(DisplayMode.BOTH, cfg.chatMode);
+    }
+
+    @Test
+    void legacyRemovedFieldsInOldJsonAreIgnored() {
+        // Old configs carry heldMode/aiHeld (now merged into tooltipMode/aiTooltip) and
+        // blockSeparator (dead code, removed). Loading must neither crash nor leak them.
+        String json = "{ \"heldMode\": \"ORIGINAL_ONLY\", \"aiHeld\": true,"
+                + " \"blockSeparator\": \" | \", \"tooltipMode\": \"BOTH\" }";
+        TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader(json));
+
+        assertEquals(DisplayMode.BOTH, cfg.tooltipMode, "the surviving merged field must load");
+        assertFalse(cfg.aiTooltip, "the legacy aiHeld flag must not bleed into aiTooltip");
+        assertEquals("zh-TW", cfg.targetLang, "the rest of the config normalizes as usual");
     }
 }

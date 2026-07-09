@@ -155,4 +155,56 @@ class TemplateTextTest {
         // A full-width comma between WORDS (correct Chinese prose) must be left alone.
         assertEquals("你好，世界", p.restore("你好，世界"));
     }
+
+    @Test
+    void decorativeIconRunsBecomeSlots() {
+        TemplateText.Prepared p = TemplateText.prepare("⚔ Heroic Spirit Sceptre ✪✪✪✪✪");
+        assertEquals("⟦MT0⟧ Heroic Spirit Sceptre ⟦MT1⟧", p.text(),
+                "one slot per icon RUN; the icons never reach the translator");
+        assertEquals("⚔ 英雄之靈權杖 ✪✪✪✪✪", p.restore("⟦MT0⟧ 英雄之靈權杖 ⟦MT1⟧"));
+    }
+
+    @Test
+    void starUpgradeVariantsShareOneTemplateKey() {
+        TemplateText.Prepared three = TemplateText.prepare("⚔ Foo ✪✪✪");
+        TemplateText.Prepared five = TemplateText.prepare("⚔ Foo ✪✪✪✪✪");
+        assertEquals(three.text(), five.text(), "a star upgrade must not mint a new key");
+        assertEquals("⚔ 譯 ✪✪✪", three.restore("⟦MT0⟧ 譯 ⟦MT1⟧"));
+        assertEquals("⚔ 譯 ✪✪✪✪✪", five.restore("⟦MT0⟧ 譯 ⟦MT1⟧"));
+    }
+
+    @Test
+    void rankTagsBecomeSlotsAndRestoreVerbatim() {
+        // "[MVP+]" translated as "[最有價值球員+]" was nonsense: rank badges ride as slots,
+        // never reach a translator, and come back verbatim in place.
+        TemplateText.Prepared p = TemplateText.prepare("[MVP+] hello");
+        assertEquals("⟦MT0⟧ hello", p.text());
+        assertEquals("[MVP+] 你好", p.restore("⟦MT0⟧ 你好"));
+        // The user-reported line: the badge must not reach a translator.
+        TemplateText.Prepared claim =
+                TemplateText.prepare("You claimed Day Crystal from [MVP+] Aand_'s auction!");
+        assertFalse(claim.text().contains("MVP"), claim.text());
+        // Bonus: different ranks on the same sentence share ONE key.
+        assertEquals(TemplateText.prepare("[VIP] hello").text(),
+                TemplateText.prepare("[MVP++] hello").text());
+    }
+
+    @Test
+    void lowercaseOrMixedBracketsAreNotRankTags() {
+        // [Lv5] / [dungeon] are real content, not badges — they stay translatable.
+        assertFalse(TemplateText.prepare("[Lv5] hello").changed());
+        assertFalse(TemplateText.prepare("[dungeon] hello").changed());
+        // CJK brackets in a TRANSLATION are untouched by restore.
+        assertEquals("[MVP+] 【拍賣】",
+                TemplateText.prepare("[MVP+] auction").restore("⟦MT0⟧ 【拍賣】"));
+    }
+
+    @Test
+    void bracketedIconsRestoreInPlaceAndCjkPunctuationIsUntouched() {
+        TemplateText.Prepared p = TemplateText.prepare("Gemstones: [🔹] [🔸]");
+        assertEquals("Gemstones: [⟦MT0⟧] [⟦MT1⟧]", p.text());
+        assertEquals("寶石: [🔹] [🔸]", p.restore("寶石: [⟦MT0⟧] [⟦MT1⟧]"));
+        // CJK punctuation is prose, not decoration: nothing to template in plain text.
+        assertFalse(TemplateText.prepare("好、強！").changed());
+    }
 }

@@ -357,12 +357,56 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         return found[0];
     }
 
-    
+    /**
+     * Name-tag entry (R7/R15 guard, string fallback): a REAL online player — one the TAB
+     * player list shows, i.e. in {@code getListedOnlinePlayers()} — keeps the ORIGINAL name
+     * tag (player IDs are names, not text; "最偉大的迪加" must never happen). 26.2's
+     * {@code submitNameDisplay} {@code @ModifyArg} cannot reach the entity, so the tag TEXT
+     * containing any LISTED player's name as a whole token stays verbatim — which also
+     * covers Hypixel rendering player name tags via invisible ArmorStand/TextDisplay
+     * entities (an entity check would be blind there anyway). NPCs still translate:
+     * Hypixel-style fake players are NOT listed. Only the nameTag surface is guarded —
+     * chat keeps its NameMasker, scoreboards are untouched.
+     */
     public static Component nameTag(Component c) {
+        if (c == null) return null;
+        // Real-player guard runs BEFORE any memo/cache (translateNameTag holds the memo).
+        if (nameTagMatchesListedPlayer(c.getString())) return c;
+        return translateNameTag(c);
+    }
+
+    private static Component translateNameTag(Component c) {
         TranslationService s = service;
         if (s == null || c == null) return c;
         Component t = Fabric26TextStyle.renderTranslated("nameTag", c, s::translateUi);
         return t != null ? t : c;
+    }
+
+    /** Whole-token match (name chars = [A-Za-z0-9_], so "Steve" never matches inside
+     *  "Steves") of any LISTED player name inside a name tag's plain text. */
+    private static boolean nameTagMatchesListedPlayer(String plain) {
+        if (plain == null || plain.isEmpty()) return false;
+        Minecraft mc = Minecraft.getInstance();
+        net.minecraft.client.multiplayer.ClientPacketListener conn =
+                (mc == null) ? null : mc.getConnection();
+        if (conn == null) return false;
+        for (net.minecraft.client.multiplayer.PlayerInfo info : conn.getListedOnlinePlayers()) {
+            String name = (info == null || info.getProfile() == null) ? null : info.getProfile().name();
+            if (name == null || name.isEmpty()) continue;
+            int at = plain.indexOf(name);
+            while (at >= 0) {
+                boolean leftEdge = at == 0 || !isNameTokenChar(plain.charAt(at - 1));
+                int end = at + name.length();
+                boolean rightEdge = end >= plain.length() || !isNameTokenChar(plain.charAt(end));
+                if (leftEdge && rightEdge) return true;
+                at = plain.indexOf(name, at + 1);
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNameTokenChar(char ch) {
+        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_';
     }
 
     @Override
@@ -404,6 +448,12 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
         TranslationCache aiCache = new TranslationCache(aiTranslator, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
+        // GT 暫代 → AI 補翻: provisional (fallback-produced) entries in the AI cache are
+        // re-asked of the AI on a later hit, but only when keys are configured AND the
+        // global 429 gate has reopened. Only the AI cache gets a gate — the Google cache
+        // never stores provisional values.
+        aiCache.setProvisionalRetryGate(() ->
+                config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
         service.setProtectedNames(() -> onlineNames);
 
@@ -795,6 +845,9 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         refreshOnlineNames(mc);
         expireStaleBlock();
         flushStaleChats(mc);
+        // R12 (user clarification of R10): the OPEN container is "the current page" — its
+        // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
+        // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
         warmOpenContainerItems(mc);
         if (!selfTested && mc != null && mc.player != null) {
             selfTested = true;

@@ -315,9 +315,11 @@ class TranslationServiceTest {
 
     @Test
     void churnGuardSuppressesFlashingDecorationOnceItChurns() {
-        // A flashing scoreboard decoration: the word is stable but a cosmetic ★ run grows
-        // every tick. The stars are letter-free, so every variant shares signature "votenow"
+        // A flashing scoreboard decoration: the word is stable but a cosmetic "!" run grows
+        // every tick. The bangs are letter-free, so every variant shares signature "votenow"
         // while carrying a distinct request key — exactly the 429 request-storm pattern.
+        // (★-style icon runs no longer churn at all: TemplateText slots them, so those
+        // variants share ONE key — punctuation runs are what is left for the guard.)
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.churnGuard = true;
@@ -325,13 +327,13 @@ class TranslationServiceTest {
         AtomicInteger calls = new AtomicInteger();
         TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
 
-        s.translateScoreboardLine("Vote now ★");   pump(s); // 1st variant: translated
-        s.translateScoreboardLine("Vote now ★★");  pump(s); // 2nd distinct variant: trips the guard
-        s.translateScoreboardLine("Vote now ★★★"); pump(s); // dropped (signature on cooldown)
+        s.translateScoreboardLine("Vote now !");   pump(s); // 1st variant: translated
+        s.translateScoreboardLine("Vote now !!");  pump(s); // 2nd distinct variant: trips the guard
+        s.translateScoreboardLine("Vote now !!!"); pump(s); // dropped (signature on cooldown)
 
         assertEquals(1, calls.get(),
                 "once the decoration churns past the threshold, new variants must be dropped");
-        assertFalse(s.translateScoreboardLine("Vote now ★★★").changed(),
+        assertFalse(s.translateScoreboardLine("Vote now !!!").changed(),
                 "a churning variant stays untranslated (original shown)");
     }
 
@@ -346,11 +348,217 @@ class TranslationServiceTest {
         AtomicInteger calls = new AtomicInteger();
         TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
 
-        s.translateScoreboardLine("Vote now ★");   pump(s);
-        s.translateScoreboardLine("Vote now ★★");  pump(s);
-        s.translateScoreboardLine("Vote now ★★★"); pump(s);
+        s.translateScoreboardLine("Vote now !");   pump(s);
+        s.translateScoreboardLine("Vote now !!");  pump(s);
+        s.translateScoreboardLine("Vote now !!!"); pump(s);
 
         assertEquals(3, calls.get(),
                 "with the guard disabled every distinct variant is translated");
+    }
+
+    // ---- R8: warm/render key alignment (cached tooltips must hit on the FIRST lookup) ----
+
+    @Test
+    void warmedTooltipLineWithPlayerNameIsAFirstLookupHit() {
+        // The warm path must park translations under the SAME (NameMasker-masked) key the
+        // render lookup queries — otherwise a warmed line containing a player name misses
+        // on its first frame, is bought a SECOND time, and flashes the original until the
+        // extra round trip lands.
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Translator echo = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("T:" + text, "en");
+        };
+        TranslationService s = service(cfg, echo, DIRECT);
+        s.setProtectedNames(() -> List.of("Steve"));
+
+        s.warmTooltipBatch(List.of("Sold by Steve for coins")); // DIRECT: completes inline
+        assertEquals(1, calls.get(), "the warm buys the line once");
+
+        TranslationDecision d = s.translateItemLine("Sold by Steve for coins");
+        assertTrue(d.changed(), "the very FIRST render lookup must hit what the warm stored");
+        assertTrue(d.translated().contains("Steve"), "the masked name comes back verbatim");
+        assertFalse(d.translated().contains("⟦"), "no placeholder residue reaches the screen");
+        assertEquals(1, calls.get(), "no second purchase of the same line");
+    }
+
+    @Test
+    void wholeLinePlayerNameIsNeverBoughtByTheTooltipWarm() {
+        // Preserved protection: a line that IS just a protected player name must neither
+        // be bought by the warm (money) nor translated by the render (IDs stay verbatim).
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Translator echo = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("T:" + text, "en");
+        };
+        TranslationService s = service(cfg, echo, DIRECT);
+        s.setProtectedNames(() -> List.of("DragonMeow"));
+
+        s.warmTooltipBatch(List.of("DragonMeow"));
+        assertEquals(0, calls.get(), "a line that is ONLY a protected name is never bought");
+        assertFalse(s.translateItemLine("DragonMeow").changed(), "the ID stays verbatim");
+    }
+
+    // ---- R10: hover-first — the hovered tooltip outruns background render misses ----
+
+    @Test
+    void hoveredTooltipDispatchesImmediatelyAheadOfBackgroundMisses() {
+        // A background render surface queues its miss for the TICK coalescer (settle
+        // window); the hovered tooltip's warm dispatches to the worker IMMEDIATELY. Even
+        // when the background line was enqueued FIRST, the hover line's request is the
+        // first to exist and complete.
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.scoreboardMode = DisplayMode.TRANSLATION;
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Deque<Runnable> workers = new ArrayDeque<>();
+        TranslationService s = service(cfg, inlineTranslator(calls), workers::add);
+
+        s.translateScoreboardLine("Background scoreboard line"); // queued for the coalescer
+        assertEquals(0, workers.size(), "background misses wait for the settle window");
+
+        s.warmTooltipBatch(List.of("Hovered tooltip line"));     // hover: fires NOW
+        assertEquals(1, workers.size(), "the hover batch bypasses the settle window");
+        workers.poll().run();
+        assertEquals(1, calls.get());
+        assertTrue(s.translateItemLine("Hovered tooltip line").changed(),
+                "the hovered line is translated before the background line was even sent");
+
+        pump(s);                                                  // settle window elapses
+        assertEquals(1, workers.size(), "the background batch follows afterwards");
+        workers.poll().run();
+        assertTrue(s.translateScoreboardLine("Background scoreboard line").changed());
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void repeatedHoverFramesDoNotEnqueueDuplicates() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Deque<Runnable> workers = new ArrayDeque<>();
+        TranslationService s = service(cfg, inlineTranslator(calls), workers::add);
+
+        s.warmTooltipBatch(List.of("Hovered tooltip line")); // frame 1
+        s.warmTooltipBatch(List.of("Hovered tooltip line")); // frame 2, same hover
+        assertEquals(1, workers.size(), "the in-flight guard must deduplicate hover frames");
+
+        workers.poll().run();
+        s.warmTooltipBatch(List.of("Hovered tooltip line")); // translated: nothing to enqueue
+        assertEquals(0, workers.size(), "a cached line must not be re-enqueued");
+        assertEquals(1, calls.get(), "one purchase in total");
+    }
+
+    // ---- R11: the retranslate hotkey must genuinely re-buy styled lines ----
+
+    @Test
+    void retranslateReallyRebuysAStyledLine() {
+        // User bug: R felt like a no-op. The de-styled tier-2 copy survived invalidate,
+        // kept serving the OLD value and made the re-warm skip the purchase entirely.
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Translator versioned = (text, target) ->
+                new TranslationResult("T" + calls.incrementAndGet() + ":" + text, "en");
+        TranslationService s = service(cfg, versioned, DIRECT);
+
+        s.warmTooltipBatch(List.of("§eHello §aWorld"));
+        assertEquals(1, calls.get());
+        assertEquals("T1:§eHello §aWorld", s.translateItemLine("§eHello §aWorld").translated());
+
+        s.retranslate(List.of("§eHello §aWorld")); // DIRECT: invalidate + re-warm inline
+        assertEquals(2, calls.get(), "the hotkey must actually re-buy the line");
+        assertEquals("T2:§eHello §aWorld", s.translateItemLine("§eHello §aWorld").translated(),
+                "the NEW translation is served after the hotkey");
+    }
+
+    // ---- R13: PUA-icon lines must display AND stop the endless re-buys ----
+
+    @Test
+    void puaIconTitleTranslatesOnceAndDisplays() {
+        // Hypixel bakes resource-pack icon glyphs (Unicode PRIVATE USE, e.g. U+E23A) into
+        // item titles. The mojibake heuristic used to flag the RESTORED text (icon put
+        // back), so the title never displayed its translation, never stored its raw alias,
+        // and was re-bought on every encounter — while an icon-free line worked fine.
+        String title = " Heroic Spirit Sceptre ✪✪✪✪✪";
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Translator echo = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult(text.replace("Heroic Spirit Sceptre", "英靈權杖"), "en");
+        };
+        TranslationService s = service(cfg, echo, DIRECT);
+
+        s.warmTooltipBatch(List.of(title));                    // hover: buy once
+        assertEquals(1, calls.get());
+
+        TranslationDecision d = s.translateItemLine(title);    // the very next render frame
+        assertTrue(d.changed(), "the PUA-icon title must display its translation");
+        assertTrue(d.translated().contains("英靈權杖"));
+        assertTrue(d.translated().contains(""), "the icon is restored in place");
+        assertTrue(d.translated().contains("✪✪✪✪✪"), "the stars are restored in place");
+
+        s.warmTooltipBatch(List.of(title));                    // second encounter
+        assertEquals(1, calls.get(), "cache hit: the endless re-buy loop is broken");
+    }
+
+    // ---- R17: TAB-listed player IDs override every translation channel ----
+
+    @Test
+    void mangledListedNameRevertsToOriginalAndSelfHealsOnce() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        // The backend EATS the name-mask token: unmask cannot restore the player name.
+        Translator maskEater = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("T:" + text.replace("⟦0⟧", "誰某"), "en");
+        };
+        TranslationService s = service(cfg, maskEater, DIRECT);
+        s.setProtectedNames(() -> List.of("Aand_"));
+
+        s.translateItemLine("Aand_ sells melons");
+        pump(s);                                              // buy #1 (name gets mangled)
+        assertEquals(1, calls.get());
+
+        assertFalse(s.translateItemLine("Aand_ sells melons").changed(),
+                "a translation that lost the player ID must never display");
+
+        // The gate invalidated the entry ONCE: the next encounter re-buys through the
+        // masked pipeline (still poisoned here)…
+        s.translateItemLine("Aand_ sells melons");
+        pump(s);
+        assertEquals(2, calls.get(), "one self-heal re-buy after the eviction");
+        assertFalse(s.translateItemLine("Aand_ sells melons").changed());
+
+        // …and the debounce stops any further eviction/re-buy storm.
+        s.translateItemLine("Aand_ sells melons");
+        pump(s);
+        assertEquals(2, calls.get(), "debounced: no per-frame invalidate storm");
+    }
+
+    @Test
+    void listedNameKeptVerbatimStillDisplays() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Translator good = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("T:" + text, "en"); // mask token survives
+        };
+        TranslationService s = service(cfg, good, DIRECT);
+        s.setProtectedNames(() -> List.of("Aand_"));
+
+        s.translateItemLine("Aand_ sells melons");
+        pump(s);
+        TranslationDecision d = s.translateItemLine("Aand_ sells melons");
+        assertTrue(d.changed(), "a translation that KEEPS the player ID displays normally");
+        assertTrue(d.translated().contains("Aand_"), "the ID is verbatim in the output");
+        assertEquals(1, calls.get());
     }
 }

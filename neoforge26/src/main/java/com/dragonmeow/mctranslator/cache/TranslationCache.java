@@ -153,6 +153,73 @@ public final class TranslationCache {
         this.churnGuard = churnGuard;
     }
 
+    // ---- provisional (GT 暫代) entries: fallback results awaiting an AI redo ----
+
+    /** Keys whose stored value came from the dispatcher's FALLBACK backend (GT standing in
+     *  for the AI engine while its 429 gate is closed). Shown normally, but re-asked of the
+     *  AI on a later hit once the retry gate opens. Only the AI cache's translator ever
+     *  produces fallback-marked results, so the Google cache never populates this. */
+    private final Set<String> provisional = ConcurrentHashMap.newKeySet();
+
+    /** Single-flight guard for provisional retries. */
+    private final Set<String> provisionalRetrying = ConcurrentHashMap.newKeySet();
+
+    /** Non-null only on the AI cache: true when the AI is worth re-asking (keys configured
+     *  AND its global 429 gate open). {@code null} = provisional retries disabled. */
+    private volatile java.util.function.BooleanSupplier provisionalRetryGate;
+
+    public void setProvisionalRetryGate(java.util.function.BooleanSupplier gate) {
+        this.provisionalRetryGate = gate;
+    }
+
+    private void markProvisional(String key, boolean prov) {
+        if (prov) provisional.add(key);
+        else provisional.remove(key);
+    }
+
+    /** Whether {@code key}'s stored value is a GT stand-in (memory mark or disk "g":1). */
+    private boolean isProvisionalKey(String key) {
+        if (provisional.contains(key)) return true;
+        if (store != null && store.isProvisional(key)) {
+            provisional.add(key); // promote alongside the disk-tier value
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * On a cache hit of a provisional entry: schedule ONE async AI redo when the retry gate
+     * is open and the key is neither backing off nor already in flight. No HTTP ever runs
+     * on the caller's (render) thread — the work goes to the existing executor. Success
+     * overwrites the value, clears the mark and rebuilds the de-styled copy; failure (or a
+     * result that is itself another fallback) records {@link #failedUntil} so later hits
+     * stay quiet until the backoff expires. No timers, no polling: the next HIT retries.
+     */
+    private void maybeRetryProvisional(String key) {
+        java.util.function.BooleanSupplier gate = provisionalRetryGate;
+        if (gate == null || !isProvisionalKey(key)) return;
+        if (!gate.getAsBoolean() || isBackingOff(key)) return;
+        if (!provisionalRetrying.add(key)) return; // single-flight per key
+        executor.execute(() -> {
+            try {
+                TemplateText.Prepared prepared = TemplateText.prepare(norm(key));
+                TranslationResult r = translator.translate(prepared.text(), targetLang);
+                String out = r.translatedText();
+                if (!r.fromFallback() && isUsableTranslation(prepared.text(), out)) {
+                    store(key, out, false); // the AI answered: overwrite + unmark + rebuild copies
+                    failedUntil.remove(prepared.text());
+                    failedUntil.remove(key);
+                } else {
+                    recordFailure(key); // still a GT stand-in: keep it, back this key off
+                }
+            } catch (TranslationException | RuntimeException e) {
+                recordFailure(key);
+            } finally {
+                provisionalRetrying.remove(key);
+            }
+        });
+    }
+
     /** True when the churn guard says this key is animated/flashing text on cooldown:
      *  the request is dropped, behaving exactly like a not-yet-translated line. */
     private boolean churnSuppressed(String key) {
@@ -160,16 +227,103 @@ public final class TranslationCache {
         return guard != null && guard.shouldSuppress(key);
     }
 
+    // ---- de-styled second tier (⟦CS#⟧ markers, literal § codes, centring padding) ----
+
+    /** A well-formed ⟦CS#⟧ / ⟦/CS#⟧ colour-run marker as injected by the render glue's
+     *  markChatContent (spaces tolerated, matching the glue's own MARKER pattern). Kept as a
+     *  private local so {@link TemplateText}'s placeholder grammar stays untouched. */
+    private static final java.util.regex.Pattern CS_MARKER =
+            java.util.regex.Pattern.compile("\\u27E6\\s*/?\\s*CS\\s*\\d+\\s*\\u27E7");
+
+    /** Marker residue: a "CS#" body whose ⟦/⟧ bracket(s) a translator ate (both optional).
+     *  Mirrors the glue's stripMarkerResidue detection — run AFTER removing well-formed
+     *  markers, any remaining match means the value is poisoned. */
+    private static final java.util.regex.Pattern CS_RESIDUE =
+            java.util.regex.Pattern.compile("\\u27E6?\\s*/?\\s*CS\\s*\\d+\\s*\\u27E7?");
+
+    /** A ⟦MT#⟧ placeholder token (removed before the "any letters left?" skeleton check —
+     *  its 'M'/'T' letters must not make a pure-number line look like real text). */
+    private static final java.util.regex.Pattern MT_TOKEN =
+            java.util.regex.Pattern.compile("\\u27E6MT\\d+\\u27E7");
+
+    /** A run of ASCII whitespace (Java's default non-Unicode \s) — full-width spaces are
+     *  real content and stay. Collapsed to ONE space in tier-2 keys so centring padding
+     *  ("§f                 §aHypixel…") stops minting new keys. */
+    private static final java.util.regex.Pattern WS_RUN =
+            java.util.regex.Pattern.compile("\\s+");
+
+    private static String stripCsMarkers(String text) {
+        return CS_MARKER.matcher(text).replaceAll("");
+    }
+
+    /** Canonical de-styled form of a line, used as the tier-2 key: ⟦CS#⟧ markers out →
+     *  literal § sequences out ({@link TextFilter#stripSectionCodes}, applied AFTER CS
+     *  stripping so a marker bracket is never eaten) → ASCII whitespace runs collapsed to
+     *  one space → outer whitespace stripped. Idempotent, so the copy recursion terminates. */
+    private static String styleStripped(String text) {
+        String out = TextFilter.stripSectionCodes(stripCsMarkers(text));
+        return WS_RUN.matcher(out).replaceAll(" ").strip();
+    }
+
+    /**
+     * Re-cut a translation's number slots against the DE-STYLED source's values. The value's
+     * original ⟦MT#⟧ slots were made by templating the §-laden source, where a colour code
+     * fuses with ("§65" → one slot "65") or blocks ("§b5" → no slot) the real number — so
+     * the original slots cannot be reused as-is. {@code restored} must carry the REAL
+     * numbers (original values substituted back); each de-styled value is located in order
+     * via the §-code-skipping projection of the text and replaced by its ⟦MT#⟧ token,
+     * leaving every § sequence in place ("§65" → "§6⟦MT0⟧": colour kept, number slotted).
+     * Returns {@code null} when alignment fails (reordered translation, number split by a
+     * § code) — the caller then silently skips the copy instead of force-fitting.
+     */
+    private static String retokenize(String restored, List<String> values) {
+        if (values.isEmpty()) return restored;
+        StringBuilder proj = new StringBuilder(restored.length());
+        int[] rawAt = new int[restored.length()];
+        for (int i = 0; i < restored.length(); i++) {
+            char c = restored.charAt(i);
+            if (c == '§' && i + 1 < restored.length()) {
+                i++; // skip the § pair: it is style, not text
+                continue;
+            }
+            rawAt[proj.length()] = i;
+            proj.append(c);
+        }
+        String projection = proj.toString();
+        StringBuilder out = new StringBuilder(restored);
+        int searchFrom = 0;
+        int shift = 0;
+        for (int i = 0; i < values.size(); i++) {
+            String value = values.get(i);
+            int at = projection.indexOf(value, searchFrom);
+            if (at < 0) return null;
+            int rawStart = rawAt[at];
+            int rawEnd = rawAt[at + value.length() - 1] + 1;
+            if (rawEnd - rawStart != value.length()) return null; // a § code splits the run
+            String token = "⟦MT" + i + "⟧";
+            out.replace(rawStart + shift, rawEnd + shift, token);
+            shift += token.length() - value.length();
+            searchFrom = at + value.length();
+        }
+        return out.toString();
+    }
+
     // ---- lookup ----
 
     public String getCached(String source) {
         if (source == null) return null;
         String value = getStored(source);
-        if (value != null) return value;
+        if (value != null) {
+            maybeRetryProvisional(source);
+            return value;
+        }
         String normalized = norm(source);
         if (!normalized.equals(source)) {
             value = getStored(normalized);
-            if (value != null) return value;
+            if (value != null) {
+                maybeRetryProvisional(normalized);
+                return value;
+            }
         }
         TemplateText.Prepared prepared = TemplateText.prepare(normalized);
         if (prepared.changed()) {
@@ -177,17 +331,53 @@ public final class TranslationCache {
             if (templated != null) {
                 String restored = prepared.restore(templated);
                 if (isUsableTranslation(restored)) {
-                    putStored(source, restored); // materialise so the render path hits on first get
+                    // Symmetric write gate: only materialise what the READ side (the 2-arg
+                    // check in getStored) would accept for this exact key — otherwise the
+                    // read path discards the entry and this path re-appends it on the next
+                    // frame, an unbounded disk-append loop (the 30,892-line tab-header
+                    // incident). A value failing the stricter source-aware check is still
+                    // RETURNED — the service-level decide() re-judges it — just never
+                    // written back to memory or disk.
+                    if (isUsableTranslation(source, restored)) {
+                        // The materialised alias inherits the templated key's provisional
+                        // state, so a later raw-key hit still knows to re-ask the AI.
+                        putStored(source, restored, isProvisionalKey(prepared.text()));
+                    }
+                    maybeRetryProvisional(prepared.text());
                     return restored;
                 }
             }
         }
         TranslationCache fb = fallback;
         if (fb != null) {
-            String fromSibling = fb.getCached(source);
+            String fromSibling = fb.getCached(source); // sibling schedules its own retry
             if (fromSibling != null) {
                 cache.put(source, fromSibling); // memory only: keep the sibling's disk file authoritative
                 return fromSibling;
+            }
+        }
+        String stripped = styleStripped(source);
+        if (!stripped.equals(normalized)) {
+            // Second tier: ⟦CS#⟧ markers, literal § colour codes and centring padding are
+            // STYLE, not text — servers bake them into the string, so every recolour /
+            // gradient shift / padding change mints a brand-new key for the SAME words and
+            // re-buys the translation. Look up the de-styled, templated text instead. The
+            // value keeps the FIRST translation's literal § codes (deliberate trade-off:
+            // quota over per-variant colours; CS-marked chat comes back plain and is
+            // re-coloured by the glue's marked-mode fallback). Deliberately no
+            // materialisation: one entry per style permutation would bloat the memory LRU
+            // and the disk store.
+            TemplateText.Prepared prepared2 = TemplateText.prepare(stripped);
+            String value2 = getStored(prepared2.text());
+            if (value2 != null) {
+                maybeRetryProvisional(prepared2.text());
+            } else if (fb != null) {
+                value2 = fb.getStored(prepared2.text());
+                if (value2 != null) fb.maybeRetryProvisional(prepared2.text());
+            }
+            if (value2 != null) {
+                String restored = prepared2.restore(value2);
+                if (isUsableTranslation(restored)) return restored;
             }
         }
         return null;
@@ -214,25 +404,79 @@ public final class TranslationCache {
     }
 
     private void putStored(String key, String translated) {
+        putStored(key, translated, false);
+    }
+
+    private void putStored(String key, String translated, boolean prov) {
         if (!isUsableTranslation(translated)) return;
         cache.put(key, translated);
+        markProvisional(key, prov);
         if (store != null) {
-            store.put(key, translated);
+            store.put(key, translated, prov);
         }
     }
 
     /** Store a translation under the normalised/templated key AND the raw source. */
     private void store(String source, String translated) {
+        store(source, translated, false);
+    }
+
+    /** {@link #store(String, String)} with the value's provisional (GT stand-in) state —
+     *  every key written for this value (templated, raw alias, de-styled copy) carries it. */
+    private void store(String source, String translated, boolean prov) {
         String normalized = norm(source);
         TemplateText.Prepared prepared = TemplateText.prepare(normalized);
         if (prepared.changed()) {
-            putStored(prepared.text(), translated);
+            putStored(prepared.text(), translated, prov);
             String restored = prepared.restore(translated);
-            if (isUsableTranslation(restored)) putStored(source, restored);
+            if (isUsableTranslation(restored)) putStored(source, restored, prov);
         } else {
-            putStored(normalized, translated);
-            if (!normalized.equals(source)) cache.put(source, translated); // memory alias only
+            putStored(normalized, translated, prov);
+            if (!normalized.equals(source)) {
+                cache.put(source, translated); // memory alias only
+                markProvisional(source, prov);
+            }
         }
+        storeStyleStrippedCopy(source, translated, prov);
+    }
+
+    /**
+     * After a styled line (⟦CS#⟧ markers, literal § codes, or padding runs) is stored, also
+     * store its DE-STYLED text so every restyled variant of the same words hits the
+     * second-tier lookup in {@link #getCached} instead of re-buying the translation. The
+     * copy's value keeps the literal § codes (variant hits show the first translation's
+     * colours — quota over colour fidelity) but drops the CS markers; its ⟦MT#⟧ slots are
+     * re-cut against the de-styled key via {@link #retokenize}. Silently skipped when the
+     * value carries bare "CS#" residue (a translator ate the ⟦⟧ brackets — poison), when
+     * the de-styled source has no letters left after templating (a pure number/symbol
+     * skeleton is a useless key), when the value is an untranslated identity ECHO of the
+     * source (Google's preservesTokens fallback), or when the slots cannot be aligned.
+     * The recursive {@code store} call cannot recurse again: {@link #styleStripped} is
+     * idempotent.
+     */
+    private void storeStyleStrippedCopy(String source, String translated, boolean prov) {
+        if (translated == null) return;
+        String strippedSource = styleStripped(source);
+        if (strippedSource.equals(norm(source))) return; // nothing de-styled: no copy needed
+        String strippedValue = stripCsMarkers(translated);
+        if (CS_RESIDUE.matcher(strippedValue).find()) return;
+        TemplateText.Prepared prepSrc = TemplateText.prepare(strippedSource);
+        String skeleton = MT_TOKEN.matcher(prepSrc.text()).replaceAll("");
+        if (skeleton.codePoints().noneMatch(Character::isLetter)) return;
+        TemplateText.Prepared prepOrig = TemplateText.prepare(norm(source));
+        String restoredValue = prepOrig.changed() ? prepOrig.restore(strippedValue) : strippedValue;
+        // Identity-echo guard: the Google backend's preservesTokens gate returns its INPUT
+        // on failure — an echo with pristine markers. De-styled, that echo is clean source
+        // text, so CS_RESIDUE cannot catch it, and a copy would pin "value = untranslated
+        // source" under the de-styled key: every later styled variant would hit it, never
+        // re-request, and the fake entry would spread across engines via the fallback
+        // chain. If the value equals the source once both are de-styled, nothing was
+        // translated — build no copy. (The marked key's own store is untouched: pre-existing
+        // d141b32 behaviour, out of scope here.)
+        if (styleStripped(restoredValue).equals(strippedSource)) return;
+        String copyValue = retokenize(restoredValue, prepSrc.values());
+        if (copyValue == null) return;
+        store(strippedSource, copyValue, prov);
     }
 
     // ---- blocking (pre-translate warm-up only) ----
@@ -245,7 +489,7 @@ public final class TranslationCache {
             TranslationResult r = translator.translate(prepared.text(), targetLang);
             String out = r.translatedText();
             if (isUsableTranslation(prepared.text(), out)) {
-                store(source, out);
+                store(source, out, r.fromFallback());
                 failedUntil.remove(prepared.text());
                 return prepared.restore(out);
             }
@@ -304,7 +548,7 @@ public final class TranslationCache {
                     TranslationResult r = translator.translate(key, targetLang);
                     String out = r.translatedText();
                     if (isUsableTranslation(key, out)) {
-                        store(source, out);
+                        store(source, out, r.fromFallback());
                         failedUntil.remove(key);
                     } else {
                         recordFailure(key);
@@ -402,26 +646,37 @@ public final class TranslationCache {
                 return false;
             }
             Map<String, String> toPersist = new java.util.HashMap<>();
+            Set<String> provKeys = new java.util.HashSet<>();
             for (int i = 0; i < todo.size(); i++) {
                 String key = todo.get(i);
                 String out = results.get(i).translatedText();
+                boolean prov = results.get(i).fromFallback();
                 if (isUsableTranslation(key, out)) {
                     cache.put(key, out);
+                    markProvisional(key, prov);
+                    if (prov) provKeys.add(key);
                     failedUntil.remove(key);
                     toPersist.put(key, out);
                     for (String raw : rawByKey.get(key)) {
                         String restored = TemplateText.prepare(norm(raw)).restore(out);
                         if (isUsableTranslation(restored)) {
                             cache.put(raw, restored);
+                            markProvisional(raw, prov);
+                            if (prov) provKeys.add(raw);
                             toPersist.put(raw, restored);
                         }
                     }
+                    // Batched requests bypass store(), so build the de-styled copy here too —
+                    // coalesced chat / tooltip-group lines are exactly the styled callers.
+                    // Pass a RAW variant (not the templated key: its slots already replaced
+                    // the numbers, so the § fusion repair in retokenize needs the raw form).
+                    storeStyleStrippedCopy(rawByKey.get(key).get(0), out, prov);
                 } else {
                     recordFailure(key);
                 }
             }
             if (store != null && !toPersist.isEmpty()) {
-                store.putBatch(toPersist);
+                store.putBatch(toPersist, provKeys);
             }
             return true;
         } catch (TranslationException e) {
@@ -651,7 +906,17 @@ public final class TranslationCache {
     }
 
     private boolean isUsableTranslation(String translated) {
-        return translated != null && !translated.isEmpty() && !TextFilter.isLikelyMojibake(translated);
+        // Mojibake is judged on the DECORATIVE-STRIPPED text: server resource-pack icon
+        // glyphs live in the Unicode private-use area, which the raw mojibake heuristic
+        // flags as corruption — so every PUA-icon-prefixed line ("⚔ Heroic Spirit Sceptre
+        // ✪✪✪✪✪" on SkyBlock) failed the restore gates, never stored its raw alias, never
+        // displayed, and was re-bought on every encounter. Icons are STYLE (R6): they can
+        // never poison a translation. U+FFFD stays unstripped (excluded from the decorative
+        // class) and halfwidth kana are letters — the real mojibake signals still fire.
+        // Every read/write/restore gate funnels through THIS one function, so the lookup
+        // side and the store side can never disagree again.
+        return translated != null && !translated.isEmpty()
+                && !TextFilter.isLikelyMojibake(TextFilter.stripDecorativeSymbols(translated));
     }
 
     /**
@@ -666,6 +931,7 @@ public final class TranslationCache {
     private void discardStored(String key) {
         if (key == null) return;
         cache.remove(key);
+        provisional.remove(key);
         if (store != null) store.remove(key);
     }
 
@@ -682,14 +948,25 @@ public final class TranslationCache {
     public void clear() {
         cache.clear();
         failedUntil.clear();
+        provisional.clear();
         if (store != null) store.clear();
     }
 
+    /**
+     * Evict every stored form of {@code source} (the retranslate hotkey). Besides the raw /
+     * normalised / templated keys this must ALSO evict the DE-STYLED tier-2 copy keys —
+     * otherwise {@link #getCached} keeps serving the old value through the second tier and
+     * the follow-up re-warm sees "already cached" and never re-buys: the hotkey feels like
+     * a no-op. Provisional marks go with their entries.
+     */
     public void invalidate(String source) {
         if (source == null) return;
-        for (String key : new String[]{source, norm(source), requestKey(source)}) {
+        String stripped = styleStripped(source);
+        for (String key : new String[]{source, norm(source), requestKey(source),
+                stripped, TemplateText.prepare(stripped).text()}) {
             cache.remove(key);
             failedUntil.remove(key);
+            provisional.remove(key);
             if (store != null) store.remove(key);
         }
     }

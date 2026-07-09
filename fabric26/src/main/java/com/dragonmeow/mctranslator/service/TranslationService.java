@@ -105,8 +105,10 @@ public final class TranslationService {
         return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.tooltipMode;
     }
 
+    /** 手持物品名稱 follows the tooltip surface: a held item's name and its tooltip are
+     *  always processed together, so they share ONE setting ({@code tooltipMode}/{@code aiTooltip}). */
     public DisplayMode heldMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.heldMode;
+        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.tooltipMode;
     }
 
     public DisplayMode scoreboardMode() {
@@ -297,9 +299,17 @@ public final class TranslationService {
      * pointed item" hotkey.
      */
     public void retranslate(List<String> sources) {
+        Collection<String> names = protectedNamesNow();
         for (String s : sources) {
             cache.invalidate(s);
             aiCache.invalidate(s);
+            // The render path reads (and the warm now writes) the MASKED key — evict it
+            // too, or the re-warm below would see a "cached" line and skip re-buying.
+            String masked = NameMasker.mask(s, names).text();
+            if (!masked.equals(s)) {
+                cache.invalidate(masked);
+                aiCache.invalidate(masked);
+            }
         }
         warmTooltipBatch(sources);
     }
@@ -314,7 +324,7 @@ public final class TranslationService {
     }
 
     public TranslationDecision translateHeld(String original) {
-        return lookup(original, config.heldMode, config.aiHeld);
+        return lookup(original, config.tooltipMode, config.aiTooltip);
     }
 
     public TranslationDecision translateScoreboardLine(String original) {
@@ -371,9 +381,9 @@ public final class TranslationService {
         return decide(original, NameMasker.unmask(translated, masked.names()), mode);
     }
 
-    /** Whether the item warm-up should run (any item surface is on). */
+    /** Whether the item warm-up should run (the shared tooltip/held item surface is on). */
     private boolean itemSurfacesActive() {
-        return config.tooltipMode != DisplayMode.ORIGINAL_ONLY || config.heldMode != DisplayMode.ORIGINAL_ONLY;
+        return config.tooltipMode != DisplayMode.ORIGINAL_ONLY;
     }
 
     public boolean warmUp(String source) {
@@ -391,13 +401,23 @@ public final class TranslationService {
      */
     public void warmTooltipBatch(List<String> sources) {
         if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY) return;
+        // Warm the MASKED text — the exact key the render lookup() queries. Warming the
+        // raw line parks the translation under a key the render never reads, so a line
+        // containing a protected player name misses on its first frame, is bought a
+        // SECOND time and flashes the original until that round trip lands (R8). Masking
+        // here also keeps names out of the warm request, as protectPlayerNames intends.
+        Collection<String> names = protectedNamesNow();
         List<String> todo = new java.util.ArrayList<>();
+        List<String> context = new java.util.ArrayList<>(sources.size());
         for (String s : sources) {
-            if (s != null && TextFilter.shouldTranslate(s, config.targetLang)) todo.add(s);
+            if (s == null) continue;
+            String masked = NameMasker.mask(s, names).text();
+            // The FULL tooltip (title included, cached lines included) rides along as
+            // surface context, so lines translated later still agree with the title.
+            context.add(masked);
+            if (TextFilter.shouldTranslate(masked, config.targetLang)) todo.add(masked);
         }
-        // The FULL tooltip (title included, cached lines included) rides along as surface
-        // context, so lines translated later still agree with the title's wording.
-        if (!todo.isEmpty()) cacheFor(config.aiTooltip).warmBatchAsync(todo, sources);
+        if (!todo.isEmpty()) cacheFor(config.aiTooltip).warmBatchAsync(todo, context);
     }
 
     /**
@@ -408,9 +428,13 @@ public final class TranslationService {
      */
     public void warmNamesBatch(List<String> sources) {
         if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY) return;
+        // Same warm/render key alignment as warmTooltipBatch: warm what lookup() reads.
+        Collection<String> names = protectedNamesNow();
         List<String> todo = new java.util.ArrayList<>();
         for (String s : sources) {
-            if (s != null && TextFilter.shouldTranslate(s, config.targetLang)) todo.add(s);
+            if (s == null) continue;
+            String masked = NameMasker.mask(s, names).text();
+            if (TextFilter.shouldTranslate(masked, config.targetLang)) todo.add(masked);
         }
         if (!todo.isEmpty()) cacheFor(config.aiTooltip).warmBatchAsync(todo);
     }
@@ -437,7 +461,81 @@ public final class TranslationService {
         if (TextFilter.isPartialTransliteration(original, translated)) {
             return TranslationDecision.unchanged(original);
         }
+        // R17 final safety net (user:「tab抓到玩家ID 無論哪個管道所有翻譯的ID都覆蓋回去」):
+        // every TAB-listed player name present in the ORIGINAL must survive VERBATIM in the
+        // translation. A mangled ID means the value is poisoned (a path that bypassed
+        // NameMasker, an eaten mask token, or an old cache entry) — show the original and
+        // invalidate the entry ONCE so the next encounter re-translates through the masked
+        // pipeline and self-heals. This is the LAST line of defence; NameMasker and the
+        // name-tag guard stay in front of it.
+        if (!listedNamesSurvive(original, translated)) {
+            invalidateNameMangledOnce(original);
+            return TranslationDecision.unchanged(original);
+        }
         // Keep the original line's indentation/centering on the translation.
         return TranslationDecision.of(mode, original, LayoutPreserver.matchOuterWhitespace(original, translated));
+    }
+
+    /** Keys already invalidated by the R17 name gate — one eviction per key is enough
+     *  (per-frame decide() must not hammer the store). Crude O(1) cap, refills fast. */
+    private final java.util.Set<String> nameGateInvalidated =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
+     * True when every TAB-listed player name occurring in {@code original} (whole token,
+     * boundaries = non {@code [A-Za-z0-9_]}) also occurs verbatim in {@code translated}.
+     * Cheap on the per-frame path: one linear token walk over the original with set
+     * lookups; lines without any listed name never touch the translation at all.
+     */
+    private boolean listedNamesSurvive(String original, String translated) {
+        Collection<String> namesC = protectedNamesNow();
+        if (namesC.isEmpty()) return true;
+        java.util.Set<String> names = (namesC instanceof java.util.Set<String> s)
+                ? s : new java.util.HashSet<>(namesC);
+        int i = 0;
+        int n = original.length();
+        while (i < n) {
+            if (isAsciiNameChar(original.charAt(i))) {
+                int j = i + 1;
+                while (j < n && isAsciiNameChar(original.charAt(j))) j++;
+                String token = original.substring(i, j);
+                if (names.contains(token) && !containsWholeToken(translated, token)) return false;
+                i = j;
+            } else {
+                i++;
+            }
+        }
+        return true;
+    }
+
+    /** Whole-token occurrence of {@code token} in {@code text} (Minecraft-name boundaries). */
+    private static boolean containsWholeToken(String text, String token) {
+        int at = text.indexOf(token);
+        while (at >= 0) {
+            boolean leftEdge = at == 0 || !isAsciiNameChar(text.charAt(at - 1));
+            int end = at + token.length();
+            boolean rightEdge = end >= text.length() || !isAsciiNameChar(text.charAt(end));
+            if (leftEdge && rightEdge) return true;
+            at = text.indexOf(token, at + 1);
+        }
+        return false;
+    }
+
+    private static boolean isAsciiNameChar(char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+    }
+
+    /** Evict every stored form of a name-mangled line ONCE (debounced), so the next
+     *  encounter re-buys through the masked pipeline instead of serving the poison forever. */
+    private void invalidateNameMangledOnce(String original) {
+        if (nameGateInvalidated.size() > 512) nameGateInvalidated.clear();
+        if (!nameGateInvalidated.add(original)) return;
+        cache.invalidate(original);
+        aiCache.invalidate(original);
+        String masked = NameMasker.mask(original, protectedNamesNow()).text();
+        if (!masked.equals(original)) {
+            cache.invalidate(masked);
+            aiCache.invalidate(masked);
+        }
     }
 }

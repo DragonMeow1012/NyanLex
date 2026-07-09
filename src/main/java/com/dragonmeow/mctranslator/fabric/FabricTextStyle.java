@@ -31,7 +31,11 @@ public final class FabricTextStyle {
     private FabricTextStyle() {
     }
 
-    private static final Map<String, Component> RENDER_MEMO = new ConcurrentHashMap<>();
+    /** Memo of translation DECISIONS (plain translated string + mode), NOT built Components:
+     *  the styled Component is rebuilt from the CURRENT source's colours on every call, so a
+     *  colour-cycling line (rainbow "SKYBLOCK" title) keeps animating after translation
+     *  instead of freezing on the first frame's colours. */
+    private static final Map<String, TranslationDecision> RENDER_MEMO = new ConcurrentHashMap<>();
 
     /** Per-frame memo for laid-out GUI lines (FTB quest text redraws every frame; rebuilding
      *  the styled translation + width check per frame would burn CPU). Keyed by plain text. */
@@ -54,8 +58,11 @@ public final class FabricTextStyle {
     public static final int STACK_LINE_GAP = 12;
 
     /**
-     * Per-frame render helper: memoised styled translation for {@code source}, or
-     * {@code null} to keep the original. Builds the styled component once per source.
+     * Per-frame render helper: styled translation for {@code source}, or {@code null}
+     * to keep the original. The translation DECISION is memoised per source text, but
+     * the styled component is rebuilt from the CURRENT source's {@link ColorProfile}
+     * on every call — a colour-cycling line (rainbow "SKYBLOCK" title) keeps animating
+     * after translation instead of freezing on the first frame's colours.
      *
      * <p>The memo key is prefixed with {@code surfaceId} so each surface honours its
      * own per-surface mode/engine gate — otherwise an ON surface's translation would
@@ -67,10 +74,13 @@ public final class FabricTextStyle {
         if (source == null) return null;
         String src = source.getString();
         String key = surfaceId + '\u0000' + src;
-        Component memo = RENDER_MEMO.get(key);
-        if (memo != null) return memo;
-        TranslationDecision decision = translateFn.apply(src);
-        if (decision == null || !decision.changed()) return null;
+        TranslationDecision decision = RENDER_MEMO.get(key);
+        if (decision == null) {
+            decision = translateFn.apply(src);
+            if (decision == null || !decision.changed()) return null; // untranslated: keep original
+            if (RENDER_MEMO.size() > 8192) RENDER_MEMO.clear();
+            RENDER_MEMO.put(key, decision);
+        }
         ColorProfile profile = extract(source);
         // Multi-colour lines (e.g. "SkyBlock YEAR 500 RAFFLE") map colours by verbatim
         // anchors instead of proportional stretch, so each word keeps ITS colour.
@@ -84,17 +94,12 @@ public final class FabricTextStyle {
         //    own mixin which splits on '\n') → newline genuinely stacks 原文 line / 譯文 line.
         //  - everything else (GUI single-label text e.g. Iris settings, title / action bar / held /
         //    scoreboard) is on a FIXED single row that can't gain a line, so INLINE as 原文　譯文.
-        Component built;
         if (decision.mode() == DisplayMode.BOTH && !"tooltip".equals(surfaceId)) {
-            built = STACKABLE.contains(surfaceId)
+            return STACKABLE.contains(surfaceId)
                     ? stackAligned(source, translated)
                     : source.copy().append(Component.literal("　")).append(translated);
-        } else {
-            built = translated;
         }
-        if (RENDER_MEMO.size() > 8192) RENDER_MEMO.clear();
-        RENDER_MEMO.put(key, built);
-        return built;
+        return translated;
     }
 
     /**

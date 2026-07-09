@@ -30,6 +30,9 @@ public final class FileStore implements PersistentStore {
 
     private final Path file;
     private final Map<String, String> mirror = new ConcurrentHashMap<>();
+    /** Keys whose stored value is PROVISIONAL (a GT stand-in awaiting an AI redo). On disk
+     *  this is the optional {@code "g":1} field; absent = final, so old files load as-is. */
+    private final java.util.Set<String> provisionalKeys = ConcurrentHashMap.newKeySet();
     private final Object writeLock = new Object();
 
     public FileStore(Path file, boolean clearOnStart) {
@@ -48,21 +51,42 @@ public final class FileStore implements PersistentStore {
 
     @Override
     public void put(String key, String value) {
+        put(key, value, false);
+    }
+
+    @Override
+    public void put(String key, String value, boolean provisional) {
         if (key == null || value == null) return;
         String previous = mirror.put(key, value);
-        if (value.equals(previous)) return; // unchanged: skip the disk write
-        append(key, value);
+        boolean wasProvisional = provisional ? !provisionalKeys.add(key) : provisionalKeys.remove(key);
+        // Skip the disk write only when BOTH the value and the flag are unchanged —
+        // a provisional→final transition with identical text must still be persisted.
+        if (value.equals(previous) && provisional == wasProvisional) return;
+        append(key, value, provisional);
+    }
+
+    @Override
+    public boolean isProvisional(String key) {
+        return key != null && provisionalKeys.contains(key);
     }
 
     @Override
     public void putBatch(Map<String, String> entries) {
+        putBatch(entries, java.util.Set.of());
+    }
+
+    @Override
+    public void putBatch(Map<String, String> entries, java.util.Set<String> provisional) {
         if (entries == null || entries.isEmpty()) return;
+        java.util.Set<String> prov = (provisional == null) ? java.util.Set.of() : provisional;
         // Update the in-memory mirror and collect only the genuinely-changed entries.
         Map<String, String> changed = new java.util.LinkedHashMap<>();
         for (Map.Entry<String, String> e : entries.entrySet()) {
             if (e.getKey() == null || e.getValue() == null) continue;
-            String prev = mirror.put(e.getKey(), e.getValue());
-            if (!e.getValue().equals(prev)) changed.put(e.getKey(), e.getValue());
+            boolean p = prov.contains(e.getKey());
+            String prevValue = mirror.put(e.getKey(), e.getValue());
+            boolean wasProvisional = p ? !provisionalKeys.add(e.getKey()) : provisionalKeys.remove(e.getKey());
+            if (!e.getValue().equals(prevValue) || p != wasProvisional) changed.put(e.getKey(), e.getValue());
         }
         if (changed.isEmpty()) return;
         // One file open/flush/close for the whole batch (not one per entry).
@@ -74,10 +98,7 @@ public final class FileStore implements PersistentStore {
                 try (Writer w = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
                         StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
                     for (Map.Entry<String, String> e : changed.entrySet()) {
-                        JsonObject obj = new JsonObject();
-                        obj.addProperty("k", e.getKey());
-                        obj.addProperty("v", e.getValue());
-                        w.write(obj.toString());
+                        w.write(line(e.getKey(), e.getValue(), prov.contains(e.getKey())));
                         w.write("\n");
                     }
                 }
@@ -90,6 +111,7 @@ public final class FileStore implements PersistentStore {
     @Override
     public void clear() {
         mirror.clear();
+        provisionalKeys.clear();
         synchronized (writeLock) {
             deleteQuietly();
         }
@@ -102,25 +124,35 @@ public final class FileStore implements PersistentStore {
      */
     @Override
     public void remove(String key) {
-        if (key != null) mirror.remove(key);
+        if (key != null) {
+            mirror.remove(key);
+            provisionalKeys.remove(key);
+        }
     }
 
     public int size() {
         return mirror.size();
     }
 
-    private void append(String key, String value) {
+    /** One NDJSON line; the {@code "g":1} field is emitted ONLY for provisional entries,
+     *  so files written by this build stay readable by older code (unknown field ignored). */
+    private static String line(String key, String value, boolean provisional) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("k", key);
+        obj.addProperty("v", value);
+        if (provisional) obj.addProperty("g", 1);
+        return obj.toString();
+    }
+
+    private void append(String key, String value, boolean provisional) {
         synchronized (writeLock) {
             try {
                 if (file.getParent() != null) {
                     Files.createDirectories(file.getParent());
                 }
-                JsonObject obj = new JsonObject();
-                obj.addProperty("k", key);
-                obj.addProperty("v", value);
                 try (Writer w = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
                         StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
-                    w.write(obj.toString());
+                    w.write(line(key, value, provisional));
                     w.write("\n");
                 }
             } catch (IOException ignored) {
@@ -138,7 +170,12 @@ public final class FileStore implements PersistentStore {
                 try {
                     JsonObject obj = JsonParser.parseString(line).getAsJsonObject();
                     if (obj.has("k") && obj.has("v")) {
-                        mirror.put(obj.get("k").getAsString(), obj.get("v").getAsString());
+                        String key = obj.get("k").getAsString();
+                        mirror.put(key, obj.get("v").getAsString());
+                        // Optional "g":1 marks a provisional (GT stand-in) entry; absent
+                        // (every pre-R9 line) = final. Last line wins, like the value.
+                        if (obj.has("g") && obj.get("g").getAsInt() == 1) provisionalKeys.add(key);
+                        else provisionalKeys.remove(key);
                     }
                 } catch (RuntimeException ignored) {
                     // skip a corrupt line, keep the rest

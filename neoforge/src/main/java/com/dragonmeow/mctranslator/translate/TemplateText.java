@@ -41,6 +41,19 @@ public final class TemplateText {
             "(?<![A-Za-z_⟦])(?:\\d+(?:[.,]\\d+)?\\s*(?:天|日|小時|時|分鐘|分|秒))+");
     // Digits adjacent to ⟦…⟧ are inside a NameMasker/TemplateText token — never re-template those.
     private static final Pattern NUMBER = Pattern.compile("(?<![A-Za-z_⟦])[-+]?\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB])?(?![A-Za-z_⟧])");
+    // Decorative icon runs (⚔, ✪✪✪✪✪, ☀, 🔹, modded PUA icon fonts): OTHER_SYMBOL +
+    // private-use + surrogates, MINUS the ⟦⟧ token brackets and '§' (style, not icon).
+    // One slot per RUN, so star-upgrade variants ("✪✪✪" vs "✪✪✪✪✪") share a key and each
+    // restore puts back its OWN icons — and the icons never reach a translator that could
+    // eat or shuffle them. Registered LAST in compute(): BAR keeps priority on ─-dividers
+    // (BOX DRAWINGS is also So) and URL keeps an icon glued to a link inside the link.
+    private static final Pattern SYMBOL_RUN = Pattern.compile("[\\p{So}\\p{Co}\\p{Cs}&&[^§⟦⟧]]+");
+    // Bracketed ALL-CAPS rank/title tags ([VIP] [MVP+] [MVP++] [ADMIN] [MOD] [YOUTUBE]):
+    // pure badges, never prose — a translator renders them as nonsense ("[最有價值球員+]"),
+    // so they ride as slots and come back verbatim. Deliberately strict: lowercase/mixed
+    // content ([Lv5], [dungeon]) is real text and stays translatable; digit tags ([144])
+    // are already NUMBER's. Bonus: "[VIP] x" and "[MVP+] x" share one key.
+    private static final Pattern RANK_TAG = Pattern.compile("\\[[A-Z]{2,10}\\+{0,2}\\]");
     private static final Pattern LEADING_PLAYER = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_]{2,16})(?=\\s+(?:joined|left|quit|was|has|is|died|fell|burned|drowned|suffocated|blew|tried|hit|lost|won|teleported|moved|voted|claimed|unclaimed|entered|exited|discovered|found|picked|dropped|sold|bought|paid|received|earned|made|completed|reached|killed|slain|shot|whispered|says|said)\\b)", Pattern.CASE_INSENSITIVE);
     private static final Pattern TARGET_PLAYER = Pattern.compile("\\b(?:by|from|to|with|for)\\s+([A-Za-z_][A-Za-z0-9_]{2,16})\\b");
 
@@ -119,6 +132,8 @@ public final class TemplateText {
         addPattern(source, spans, LEADING_PLAYER, 1, false);
         addPattern(source, spans, TARGET_PLAYER, 1, true);
         addPattern(source, spans, NUMBER, 0, false);
+        addPattern(source, spans, SYMBOL_RUN, 0, false);
+        addPattern(source, spans, RANK_TAG, 0, false);
         if (spans.isEmpty()) return new Prepared(source, List.of());
         // Earlier patterns win on overlap (URL beats the numbers inside it, a duration
         // run beats the bare number at its head, etc.): spans are already collected in

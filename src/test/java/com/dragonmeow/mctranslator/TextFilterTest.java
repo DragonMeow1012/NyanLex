@@ -3,6 +3,7 @@ package com.dragonmeow.mctranslator;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -144,5 +145,45 @@ class TextFilterTest {
         assertFalse(TextFilter.isPartialTransliteration("Welcome to the server", "歡迎to伺服器"));
         // Single glued letter that is NOT an affix of "apple" ("z") stays accepted.
         assertFalse(TextFilter.isPartialTransliteration("apple", "蘋果z"));
+    }
+
+    @Test
+    void literalSectionCodesAreStyleNotText() {
+        // The 30,892-line disk-append incident: judged RAW, "§d§lSB年500" holds the run
+        // "lSB" (the §l code letter fused in), a proper suffix of source token "§d§lSB"
+        // glued to 年 → false positive. Judged DE-STYLED it is "SB年500", and "SB" is no
+        // affix of any real token → the entry is usable.
+        assertFalse(TextFilter.isPartialTransliteration(
+                "§f   §d§lSB YEAR 500 §8| §b§lLOADOUTS", "§d§lSB年500 §8| §b§l裝備包"));
+        // Stripping § must NOT mask real poison: a genuinely half-transliterated word
+        // wrapped in colour codes is still rejected.
+        assertTrue(TextFilter.isPartialTransliteration("§ejacob", "§e傑cob"));
+    }
+
+    @Test
+    void decorativeIconsAreStrippedBeforeTranslatabilityJudgement() {
+        // Icon-decorated item names must be judged on their CORE text, not their icons.
+        assertTrue(TextFilter.shouldTranslate("⚔ Heroic Spirit Sceptre ✪✪✪✪✪", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("Gemstones: [🔹] [🔸]", "zh-TW"));
+        // A line that is ONLY icons stays untranslatable.
+        assertFalse(TextFilter.shouldTranslate("⚔⚔⚔", "zh-TW"));
+    }
+
+    @Test
+    void decorativeDefinitionExcludesPunctuationMathCurrencyAndGrammar() {
+        // CJK punctuation (、！ — translations use them), the math '+' ("+30" travels with
+        // its number), and currency signs are NOT decorative.
+        assertEquals("好、強！ +30 $5", TextFilter.stripDecorativeSymbols("好、強！ +30 $5"));
+        // '§' and the ⟦⟧ token brackets are pipeline grammar, never stripped here.
+        assertEquals("§e ⟦MT0⟧", TextFilter.stripDecorativeSymbols("§e☀ ⟦MT0⟧"));
+        assertEquals(" Heroic Spirit Sceptre ",
+                TextFilter.stripDecorativeSymbols("⚔ Heroic Spirit Sceptre ✪✪✪✪✪"));
+        // Resource-pack icon glyphs (private-use area) ARE decorative…
+        assertEquals(" Heroic Spirit Sceptre",
+                TextFilter.stripDecorativeSymbols(" Heroic Spirit Sceptre"));
+        // …but U+FFFD is corruption evidence, never an icon: it must SURVIVE stripping so
+        // the mojibake heuristic still fires on decorative-stripped text.
+        assertEquals("好�", TextFilter.stripDecorativeSymbols("好�"));
+        assertTrue(TextFilter.isLikelyMojibake("好�"));
     }
 }

@@ -3,10 +3,12 @@ package com.dragonmeow.mctranslator.fabric.mixin;
 import com.dragonmeow.mctranslator.fabric.FabricTextStyle;
 import com.dragonmeow.mctranslator.fabric.MctranslatorFabric;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,15 +31,21 @@ public abstract class EntityNameTagMixin {
 
     @ModifyVariable(
             method = "renderNameTag(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/network/chat/Component;"
-                    + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IF)V",
+                    + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
-    private Component mctranslator$translateNameTag(Component name) {
-        return MctranslatorFabric.nameTag(name);
+    private Component mctranslator$translateNameTag(Component name, Entity entity, Component original,
+                                                    PoseStack poseStack, MultiBufferSource buffers,
+                                                    int light) {
+        // Target-arg capture (appended after the modified variable) hands us the ENTITY, so
+        // the glue can skip real TAB-listed players' name tags (player IDs never translate).
+        // 1.20.1 renderNameTag has NO trailing float partialTick (added in 1.21) — descriptor
+        // matches the 1.20.1 five-arg method.
+        return MctranslatorFabric.nameTag(entity, name);
     }
 
     @Redirect(
             method = "renderNameTag(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/network/chat/Component;"
-                    + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IF)V",
+                    + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/gui/Font;drawInBatch(Lnet/minecraft/network/chat/Component;"
                             + "FFIZLorg/joml/Matrix4f;Lnet/minecraft/client/renderer/MultiBufferSource;"

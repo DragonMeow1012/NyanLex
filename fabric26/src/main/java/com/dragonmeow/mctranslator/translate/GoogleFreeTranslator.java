@@ -10,6 +10,11 @@ import java.util.List;
  * {@link Translator} backed by the free (unofficial) Google endpoint
  * {@code translate.googleapis.com/translate_a/single}.
  *
+ * <p>Inputs carrying ⟦…⟧ placeholder tokens are translated in WHOLE-LINE sentinel mode —
+ * see {@link #translateWholeLine}: ⟦CS#⟧ colour markers are stripped (the glue re-applies
+ * colours), ⟦MT#⟧/mask slots become numeric sentinels, and the sentence goes to Google as
+ * ONE request with full context, so grammar stays coherent ("won" is a verb, not a currency).</p>
+ *
  * <p>The HTTP layer is injected via {@link HttpTransport} so this class can be
  * unit-tested with an inline fake transport (no real network access).</p>
  */
@@ -38,16 +43,85 @@ public final class GoogleFreeTranslator implements Translator {
 
     @Override
     public TranslationResult translate(String text, String targetLang) throws TranslationException {
+        if (text != null && ANY_TOKEN.matcher(text).find()) {
+            return translateWholeLine(text, targetLang);
+        }
+        TranslationResult r = requestOnce(text, targetLang);
+        if (!preservesTokens(text, r.translatedText())) {
+            return new TranslationResult(text, r.detectedSourceLang());
+        }
+        return r;
+    }
+
+    /** One raw endpoint round-trip, no token handling (the mode-independent primitive). */
+    private TranslationResult requestOnce(String text, String targetLang) throws TranslationException {
         try {
             String body = transport.get(buildUrl(text, targetLang));
-            TranslationResult r = GoogleResponseParser.parse(body);
-            if (!preservesTokens(text, r.translatedText())) {
-                return new TranslationResult(text, r.detectedSourceLang());
-            }
-            return r;
+            return GoogleResponseParser.parse(body);
         } catch (IOException e) {
             throw new TranslationException("http error: " + e.getMessage(), e);
         }
+    }
+
+    /** First numeric sentinel value. Five plain digits: Google keeps such numbers verbatim
+     *  (no thousand separators to normalise), and a TEMPLATED line has no bare digits of its
+     *  own (numbers all live inside ⟦MT#⟧ slots), so sentinels are unambiguous. */
+    private static final int SENTINEL_BASE = 70001;
+
+    /**
+     * Whole-line mode for token-carrying lines (user decision: 「一句一句翻」— the old
+     * fragment-wise requests killed sentence coherence: an isolated "won" came back as the
+     * currency, not the verb). ⟦CS#⟧ colour markers are stripped outright — the glue's
+     * anchored fallback re-applies the colours — while every OTHER ⟦…⟧ token (⟦MT#⟧
+     * template slots, name masks) is replaced by a numeric sentinel, and the sentence goes
+     * to Google as ONE request with its full context. Every sentinel must come back exactly
+     * once; any loss or mutation reverts the WHOLE line to the source (existing failure
+     * semantics — the R9 provisional retry picks it up later). The returned value carries
+     * MT/mask tokens but NO CS markers.
+     */
+    private TranslationResult translateWholeLine(String text, String targetLang) throws TranslationException {
+        StringBuilder plain = new StringBuilder(text.length());
+        List<String> slots = new ArrayList<>(); // sentinel index -> original token, in order
+        java.util.regex.Matcher m = ANY_TOKEN.matcher(text);
+        int pos = 0;
+        while (m.find()) {
+            plain.append(text, pos, m.start());
+            String token = m.group();
+            String body = token.replace(" ", "");
+            if (!body.startsWith("⟦CS") && !body.startsWith("⟦/CS")) {
+                plain.append(SENTINEL_BASE + slots.size());
+                slots.add(token);
+            }
+            pos = m.end();
+        }
+        plain.append(text, pos, text.length());
+
+        TranslationResult r;
+        try {
+            r = requestOnce(plain.toString(), targetLang);
+        } catch (TranslationException e) {
+            return new TranslationResult(text, null); // whole-line fallback, never half done
+        }
+        String translated = (r == null) ? null : r.translatedText();
+        if (translated == null || translated.isBlank()) {
+            return new TranslationResult(text, r == null ? null : r.detectedSourceLang());
+        }
+        // Every sentinel must survive EXACTLY once, or the slot mapping would lie.
+        for (int i = 0; i < slots.size(); i++) {
+            String sentinel = Integer.toString(SENTINEL_BASE + i);
+            int first = translated.indexOf(sentinel);
+            if (first < 0 || translated.indexOf(sentinel, first + sentinel.length()) >= 0) {
+                return new TranslationResult(text, r.detectedSourceLang());
+            }
+        }
+        String out = translated;
+        for (int i = 0; i < slots.size(); i++) {
+            out = out.replace(Integer.toString(SENTINEL_BASE + i), slots.get(i));
+        }
+        if (!preservesTokens(text, out)) { // belt: the MT/mask multiset must match
+            return new TranslationResult(text, r.detectedSourceLang());
+        }
+        return new TranslationResult(out, r.detectedSourceLang());
     }
 
     /** Char budget per joined request, pre-URL-encoding (keeps the GET URL well under limits). */
@@ -84,6 +158,16 @@ public final class GoogleFreeTranslator implements Translator {
             out.add(translate(texts.get(0), targetLang));
             return;
         }
+        // Token-carrying lines must go through the whole-line sentinel path (their ⟦…⟧
+        // tokens are never allowed on the wire), so a chunk containing any is translated
+        // line by line instead of as one joined request. The batch protocol for token-free
+        // chunks is unchanged.
+        for (String t : texts) {
+            if (t != null && ANY_TOKEN.matcher(t).find()) {
+                for (String each : texts) out.add(translate(each, targetLang));
+                return;
+            }
+        }
         // Inner newlines would break the 1:1 line alignment — flatten them per item.
         List<String> lines = new ArrayList<>(texts.size());
         for (String t : texts) {
@@ -108,10 +192,10 @@ public final class GoogleFreeTranslator implements Translator {
         translateChunk(texts.subList(mid, texts.size()), targetLang, out);
     }
 
-    /** True unless the source's ⟦…⟧ tokens were lost or altered by the translation. Google
-     *  mangles the rare U+27E6/27E7 placeholder brackets used by chat colour markers (⟦CS#⟧)
-     *  and TemplateText (⟦MT#⟧); a mismatch means the marker reassembly would break, so the
-     *  caller keeps the original line instead. Order-independent, exact multiset. */
+    /** True unless the source's CONTENT tokens (⟦MT#⟧ template slots, name masks) were lost
+     *  or altered by the translation — a mismatch means slot restoration would lie, so the
+     *  caller keeps the original line. ⟦CS#⟧ colour markers are EXEMPT: whole-line mode
+     *  strips them deliberately (the glue re-applies colours). Order-independent multiset. */
     static boolean preservesTokens(String source, String translated) {
         List<String> want = tokensOf(source);
         if (want.isEmpty()) return true;              // nothing fragile to protect
@@ -125,7 +209,11 @@ public final class GoogleFreeTranslator implements Translator {
         List<String> out = new ArrayList<>();
         if (text == null) return out;
         java.util.regex.Matcher m = ANY_TOKEN.matcher(text);
-        while (m.find()) out.add(m.group().replace(" ", ""));
+        while (m.find()) {
+            String t = m.group().replace(" ", "");
+            if (t.startsWith("⟦CS") || t.startsWith("⟦/CS")) continue; // stripped by design
+            out.add(t);
+        }
         return out;
     }
 }

@@ -83,4 +83,38 @@ class FileStoreTest {
         FileStore reopened = new FileStore(file, false);
         assertEquals("v2", reopened.get("k"));
     }
+
+    @Test
+    void provisionalFlagRoundTripsAndFinalOverwriteClearsIt() throws IOException {
+        Path file = tempFile();
+        FileStore store = new FileStore(file, true);
+        store.put("Hello", "GT:你好", true);       // GT stand-in
+        assertTrue(store.isProvisional("Hello"));
+
+        // The "g":1 field survives a reopen.
+        FileStore reopened = new FileStore(file, false);
+        assertEquals("GT:你好", reopened.get("Hello"));
+        assertTrue(reopened.isProvisional("Hello"), "the provisional mark must persist");
+
+        // The AI redo overwrites as FINAL — even an identical value must persist the flip.
+        reopened.put("Hello", "GT:你好", false);
+        assertFalse(reopened.isProvisional("Hello"));
+        FileStore again = new FileStore(file, false);
+        assertEquals("GT:你好", again.get("Hello"));
+        assertFalse(again.isProvisional("Hello"), "the provisional→final flip must persist");
+    }
+
+    @Test
+    void legacyLinesWithoutTheProvisionalFieldLoadAsFinal() throws IOException {
+        Path file = tempFile();
+        // A pre-R9 cache file: plain {"k","v"} lines, no "g" field anywhere.
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "{\"k\":\"Old\",\"v\":\"舊譯文\"}\n{\"k\":\"Two\",\"v\":\"二\"}\n");
+
+        FileStore store = new FileStore(file, false);
+        assertEquals("舊譯文", store.get("Old"));
+        assertEquals("二", store.get("Two"));
+        assertFalse(store.isProvisional("Old"), "a legacy line loads as FINAL");
+        assertFalse(store.isProvisional("Two"));
+    }
 }

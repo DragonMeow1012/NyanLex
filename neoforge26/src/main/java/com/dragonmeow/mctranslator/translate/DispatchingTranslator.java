@@ -29,7 +29,7 @@ public final class DispatchingTranslator implements Translator {
                 // fall back to the secondary backend
             }
         }
-        return fallback.translate(text, targetLang);
+        return markFallback(fallback.translate(text, targetLang));
     }
 
     @Override
@@ -41,7 +41,7 @@ public final class DispatchingTranslator implements Translator {
                 // fall back to the secondary backend
             }
         }
-        return fallback.translateBatch(texts, targetLang);
+        return markFallback(fallback.translateBatch(texts, targetLang));
     }
 
     /** Forwards the surface context so a context-aware primary (the AI backend) can use it;
@@ -56,6 +56,20 @@ public final class DispatchingTranslator implements Translator {
                 // fall back to the secondary backend
             }
         }
-        return fallback.translateBatch(texts, targetLang, surfaceContext);
+        return markFallback(fallback.translateBatch(texts, targetLang, surfaceContext));
+    }
+
+    /** Tag a fallback-produced result so the cache stores it as PROVISIONAL (GT standing in
+     *  for the AI engine) and re-asks the AI once its 429 gate reopens. */
+    private static TranslationResult markFallback(TranslationResult r) {
+        if (r == null || r.fromFallback()) return r;
+        return new TranslationResult(r.translatedText(), r.detectedSourceLang(), true);
+    }
+
+    private static List<TranslationResult> markFallback(List<TranslationResult> results) {
+        if (results == null) return null;
+        List<TranslationResult> out = new java.util.ArrayList<>(results.size());
+        for (TranslationResult r : results) out.add(markFallback(r));
+        return out;
     }
 }

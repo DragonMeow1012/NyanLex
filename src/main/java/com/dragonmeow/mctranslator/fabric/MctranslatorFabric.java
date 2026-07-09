@@ -361,11 +361,85 @@ public final class MctranslatorFabric implements ClientModInitializer {
     }
 
 
+    /**
+     * Name-tag entry with the renderer's entity: a REAL online player — one the TAB player
+     * list shows, i.e. in {@code getListedOnlinePlayers()} — keeps the ORIGINAL name tag
+     * (player IDs are names, not text; "最偉大的迪加" must never happen). NPCs still
+     * translate: Hypixel-style fake players have a profile but are NOT listed, so the
+     * LISTED set is the discriminator (never {@code getPlayerInfo != null}). Only the
+     * nameTag surface is guarded — chat keeps its NameMasker, scoreboards are untouched.
+     *
+     * <p>Port note (six-tree sync): where the glue cannot reach the entity (fabric26's
+     * {@code submitNameDisplay} {@code @ModifyArg}), call the one-arg {@link #nameTag(Component)}
+     * instead — it falls back to whole-token matching of listed player names in the plain text.</p>
+     */
+    public static Component nameTag(net.minecraft.world.entity.Entity entity, Component c) {
+        if (c == null) return null;
+        // Real-player guard runs BEFORE any memo/cache (translateNameTag holds the memo):
+        // (a) the entity is a TAB-listed Player, OR (b) — Hypixel renders player name tags
+        // via invisible ArmorStand/TextDisplay entities, which are NOT Player, so the
+        // entity check alone is blind there — the tag TEXT contains any listed player's
+        // name as a whole token. Either way the tag stays verbatim.
+        if (entity instanceof net.minecraft.world.entity.player.Player p
+                && isListedPlayer(p.getUUID())) {
+            return c; // real player: no cache lookup, no request, verbatim tag
+        }
+        if (nameTagMatchesListedPlayer(c.getString())) return c;
+        return translateNameTag(c);
+    }
+
+    /** Entity-less name-tag entry: string fallback — a tag containing any LISTED player's
+     *  name as a whole token is a real player's tag and stays verbatim. */
     public static Component nameTag(Component c) {
+        return nameTag(null, c);
+    }
+
+    private static Component translateNameTag(Component c) {
         TranslationService s = service;
         if (s == null || c == null) return c;
         Component t = FabricTextStyle.renderTranslated("nameTag", c, s::translateUi);
         return t != null ? t : c;
+    }
+
+    /** Whether this UUID is in the TAB-visible listed player set. */
+    private static boolean isListedPlayer(java.util.UUID id) {
+        Minecraft mc = Minecraft.getInstance();
+        net.minecraft.client.multiplayer.ClientPacketListener conn =
+                (mc == null) ? null : mc.getConnection();
+        if (conn == null || id == null) return false;
+        for (net.minecraft.client.multiplayer.PlayerInfo info : conn.getListedOnlinePlayers()) {
+            if (info != null && info.getProfile() != null && id.equals(info.getProfile().getId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whole-token match (name chars = [A-Za-z0-9_], so "Steve" never matches inside
+     *  "Steves") of any LISTED player name inside a name tag's plain text. */
+    private static boolean nameTagMatchesListedPlayer(String plain) {
+        if (plain == null || plain.isEmpty()) return false;
+        Minecraft mc = Minecraft.getInstance();
+        net.minecraft.client.multiplayer.ClientPacketListener conn =
+                (mc == null) ? null : mc.getConnection();
+        if (conn == null) return false;
+        for (net.minecraft.client.multiplayer.PlayerInfo info : conn.getListedOnlinePlayers()) {
+            String name = (info == null || info.getProfile() == null) ? null : info.getProfile().getName();
+            if (name == null || name.isEmpty()) continue;
+            int at = plain.indexOf(name);
+            while (at >= 0) {
+                boolean leftEdge = at == 0 || !isNameTokenChar(plain.charAt(at - 1));
+                int end = at + name.length();
+                boolean rightEdge = end >= plain.length() || !isNameTokenChar(plain.charAt(end));
+                if (leftEdge && rightEdge) return true;
+                at = plain.indexOf(name, at + 1);
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNameTokenChar(char ch) {
+        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_';
     }
 
     @Override
@@ -407,6 +481,12 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
         TranslationCache aiCache = new TranslationCache(aiTranslator, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
+        // GT 暫代 → AI 補翻: provisional (fallback-produced) entries in the AI cache are
+        // re-asked of the AI on a later hit, but only when keys are configured AND the
+        // global 429 gate has reopened. Only the AI cache gets a gate — the Google cache
+        // never stores provisional values.
+        aiCache.setProvisionalRetryGate(() ->
+                config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
         service.setProtectedNames(() -> onlineNames);
 
@@ -778,6 +858,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
         refreshOnlineNames(mc);
         expireStaleBlock();
         flushStaleChats(mc);
+        // R12 (user clarification of R10): the OPEN container is "the current page" — its
+        // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
+        // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
         warmOpenContainerItems(mc);
         if (!selfTested && mc != null && mc.player != null) {
             selfTested = true;

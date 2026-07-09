@@ -22,8 +22,7 @@ public final class TranslatorConfig {
     // 原文＋翻譯 (both) / 只有翻譯 (translation only). Configured via the in-game
     // 翻譯設定 screen.
     public DisplayMode chatMode = DisplayMode.BOTH;              // 聊天：原文+翻譯 stacked (3-way)
-    public DisplayMode tooltipMode = DisplayMode.TRANSLATION;    // 物品提示 名稱+lore (3-way)
-    public DisplayMode heldMode = DisplayMode.TRANSLATION;       // 手持物品名稱 (on/off)
+    public DisplayMode tooltipMode = DisplayMode.TRANSLATION;    // 物品名稱／說明（提示與手持共用）(3-way)
     public DisplayMode scoreboardMode = DisplayMode.TRANSLATION; // 記分板 (on/off)
     public DisplayMode nameMode = DisplayMode.TRANSLATION;       // 名牌 / 全息 (on/off)
     public DisplayMode bossBarMode = DisplayMode.TRANSLATION;    // Boss 血條名稱 (on/off)
@@ -46,7 +45,6 @@ public final class TranslatorConfig {
     // ---- AI fine-translation (精翻) — per-surface: each surface chooses 機翻(Google) or AI ----
     public boolean aiChat = false;
     public boolean aiTooltip = false;
-    public boolean aiHeld = false;
     public boolean aiScoreboard = false;
     public boolean aiName = false;
     public boolean aiBossBar = false;
@@ -88,9 +86,6 @@ public final class TranslatorConfig {
 
     /** Google source language. {@code auto} lets Google detect it. */
     public String sourceLang = "auto";
-
-    /** Separator line wrapped above and below the translation block in 原文＋翻譯 mode. */
-    public String blockSeparator = "----------";
 
     /**
      * Mask online player names before sending text to the translator, so names are
@@ -164,7 +159,6 @@ public final class TranslatorConfig {
         if (sourceLang == null || sourceLang.isBlank()) sourceLang = "auto";
         if (chatMode == null) chatMode = DisplayMode.BOTH;
         if (tooltipMode == null) tooltipMode = DisplayMode.TRANSLATION;
-        if (heldMode == null) heldMode = DisplayMode.TRANSLATION;
         if (scoreboardMode == null) scoreboardMode = DisplayMode.TRANSLATION;
         if (nameMode == null) nameMode = DisplayMode.TRANSLATION;
         if (bossBarMode == null) bossBarMode = DisplayMode.TRANSLATION;
@@ -180,7 +174,6 @@ public final class TranslatorConfig {
         if (aiApiKeys == null) aiApiKeys = new java.util.ArrayList<>();
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
-        if (blockSeparator == null) blockSeparator = "----------";
         if (pretranslateBatchSize <= 0) pretranslateBatchSize = 100;
         if (pretranslateDelayMs < 0) pretranslateDelayMs = 1000;
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
