@@ -67,7 +67,7 @@ class TranslationServiceLayoutLangTest {
         pump(s);
         assertEquals("鑽石劍", s.translateItemLine("Diamond Sword").translated());
 
-        s.setTargetLang("zh-CN");                   // switch + wipe caches
+        s.setTargetLang("zh-CN");                   // switch without deleting another language
         s.translateItemLine("Diamond Sword");       // queue zh-CN
         pump(s);
         assertEquals("钻石剑", s.translateItemLine("Diamond Sword").translated());

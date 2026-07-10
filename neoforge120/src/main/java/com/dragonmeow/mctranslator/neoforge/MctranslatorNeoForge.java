@@ -1,17 +1,17 @@
 package com.dragonmeow.mctranslator.neoforge;
 
-import com.dragonmeow.mctranslator.cache.FileStore;
+import com.dragonmeow.mctranslator.cache.LanguageFileStore;
 import com.dragonmeow.mctranslator.cache.PersistentStore;
 import com.dragonmeow.mctranslator.cache.TranslationCache;
 import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
-import com.dragonmeow.mctranslator.style.ColorProfile;
 import com.dragonmeow.mctranslator.translate.AiSettings;
 import com.dragonmeow.mctranslator.translate.DispatchingTranslator;
 import com.dragonmeow.mctranslator.translate.GoogleFreeTranslator;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
+import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.Translator;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
 
@@ -21,7 +21,6 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.world.inventory.Slot;
@@ -30,6 +29,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
@@ -68,17 +68,23 @@ public final class MctranslatorNeoForge {
     private static UrlHttpTransport transport;
 
     private static KeyMapping modeKey;
-    private static KeyMapping clearKey;
     private static KeyMapping retranslateKey;
     private static KeyMapping screenScanKey;
     private static KeyMapping toggleKey;
-    private boolean pretranslateStarted = false;
-    private boolean selfTested = false;
+    private long actionBarSequence;
+
+    private static final java.util.Map<Object, String> FTB_PENDING =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     // Pre-translate items in an open container screen: track the open screen and the
     // item names already warmed, so each distinct item is warmed once (not per tick).
     private net.minecraft.client.gui.screens.Screen lastContainerScreen;
     private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
+    /** Names queued from the local player's hotbar, backpack, armour and off-hand. */
+    private final java.util.Set<String> warmedOwnedItemNames = new java.util.HashSet<>();
+    /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
+    private ItemStack lastTooltipStack;
+    private List<String> lastTooltipParagraphSources;
 
     /** Online player names, refreshed once per second on the tick thread; read by the
      *  service to mask names in chat and to skip "translating" name tags / scoreboards. */
@@ -94,10 +100,16 @@ public final class MctranslatorNeoForge {
             return;
         }
         java.util.Set<String> names = new java.util.HashSet<>();
-        for (var info : mc.getConnection().getOnlinePlayers()) {
-            if (info != null && info.getProfile() != null && isRealPlayer(info.getProfile())) {
-                names.add(info.getProfile().getName());
+        if (mc.level != null) {
+            for (var player : mc.level.players()) {
+                String name = player.getGameProfile().getName();
+                if (name != null && PLAYER_NAME.matcher(name).matches()) names.add(name);
             }
+        }
+        for (var info : mc.getConnection().getListedOnlinePlayers()) {
+            String name = info == null || info.getProfile() == null
+                    ? null : info.getProfile().getName();
+            if (name != null && PLAYER_NAME.matcher(name).matches()) names.add(name);
         }
         onlineNames = names;
     }
@@ -105,16 +117,6 @@ public final class MctranslatorNeoForge {
     private static final java.util.regex.Pattern PLAYER_NAME =
             java.util.regex.Pattern.compile("[A-Za-z0-9_]{3,16}");
 
-    /** Only REAL players belong in the protected-name set. Servers like Hypixel stuff
-     *  fake tab-list entries (NPC/mob skins, info rows) whose names would otherwise be
-     *  treated as player IDs and never translated ("Seer"). Real accounts have random
-     *  (version 4) UUIDs; fake profiles are offline-style v3 or synthetic. */
-    private static boolean isRealPlayer(com.mojang.authlib.GameProfile profile) {
-        String n = profile.getName();
-        if (n == null || !PLAYER_NAME.matcher(n).matches()) return false;
-        java.util.UUID id = profile.getId();
-        return id != null && id.version() == 4;
-    }
 
     private final java.util.ArrayDeque<PendingChat> pendingChats = new java.util.ArrayDeque<>();
     private final java.util.Map<Long, PendingChat> pendingChatById = new java.util.HashMap<>();
@@ -151,14 +153,16 @@ public final class MctranslatorNeoForge {
      */
     private static final class PendingBlock {
         final PendingChat holder;                     // the queue slot keeping chat order
+        final DisplayMode mode;
         final List<Component> lines = new ArrayList<>();
         final java.util.Map<Integer, Component> translations = new java.util.HashMap<>();
         final long openedAtMs = System.currentTimeMillis();
         int awaiting;
         boolean closed;
 
-        PendingBlock(PendingChat holder) {
+        PendingBlock(PendingChat holder, DisplayMode mode) {
             this.holder = holder;
+            this.mode = mode;
         }
     }
 
@@ -175,45 +179,86 @@ public final class MctranslatorNeoForge {
             if (!isSep || !isSystem) return false; // only system messages open a frame
             PendingChat holder = queueChat(message);
             holder.mode = DisplayMode.TRANSLATION;   // builder emits the whole block verbatim
-            activeBlock = new PendingBlock(holder);
+            activeBlock = new PendingBlock(holder, mode);
             activeBlock.lines.add(message);
             return true;
         }
         PendingBlock block = activeBlock;
-        int index = block.lines.size();
         block.lines.add(message);
         if (isSep) {
             block.closed = true;
             activeBlock = null;
-            maybeFinishBlock(block);
+            translateBlockParagraphs(block);
             return true;
         }
-        int contentStart = com.dragonmeow.mctranslator.translate.ChatSegmenter.contentStart(full);
-        String content = (contentStart > 0 && contentStart < full.length()) ? full.substring(contentStart) : full;
-        if (service.wantsChatTranslation(content)) {
-            block.awaiting++;
-            ColorProfile profile = NeoTextStyle.extractFrom(message, 0);
-            NeoTextStyle.MarkedChat marked = (profile.distinctColorCount() >= 2)
-                    ? NeoTextStyle.markChatContent(message, 0) : null;
-            DisplayMode lineMode = mode;
-            service.translateChatAsync(marked != null ? marked.text() : full, translated -> {
+        return true;
+    }
+
+    /** Translate a collected frame only after its closing separator has arrived. */
+    private void translateBlockParagraphs(PendingBlock block) {
+        int first = !block.lines.isEmpty() && NeoTextStyle.isSeparatorText(block.lines.get(0).getString()) ? 1 : 0;
+        int end = block.lines.size();
+        if (end > first && NeoTextStyle.isSeparatorText(block.lines.get(end - 1).getString())) end--;
+
+        List<String> visible = new ArrayList<>(Math.max(0, end - first));
+        List<NeoTextStyle.ChatLinePlan> prepared = new ArrayList<>(Math.max(0, end - first));
+        for (int i = first; i < end; i++) {
+            NeoTextStyle.ChatLinePlan plan = NeoTextStyle.prepareChatLine(block.lines.get(i));
+            prepared.add(plan);
+            visible.add(plan.content());
+        }
+        List<Integer> starts = new ArrayList<>();
+        List<List<NeoTextStyle.ChatLinePlan>> groups = new ArrayList<>();
+        List<String> requests = new ArrayList<>();
+        for (ParagraphModel.Range range : ParagraphModel.ranges(visible)) {
+            if (range.size() == 1 && ParagraphModel.isBlank(visible.get(range.start()))) continue;
+            List<NeoTextStyle.ChatLinePlan> plans = new ArrayList<>(range.size());
+            List<String> rows = new ArrayList<>(range.size());
+            boolean wanted = false;
+            for (int row = range.start(); row <= range.end(); row++) {
+                NeoTextStyle.ChatLinePlan plan = prepared.get(row);
+                plans.add(plan);
+                rows.add(plan.request());
+                wanted |= !plan.request().isBlank() && service.wantsChatTranslation(plan.content());
+            }
+            if (!wanted) continue;
+            starts.add(first + range.start());
+            groups.add(plans);
+            requests.add(ParagraphModel.join(rows));
+        }
+
+        block.awaiting = groups.size();
+        if (groups.isEmpty()) {
+            maybeFinishBlock(block);
+            return;
+        }
+        for (int paragraph = 0; paragraph < groups.size(); paragraph++) {
+            int start = starts.get(paragraph);
+            List<NeoTextStyle.ChatLinePlan> plans = groups.get(paragraph);
+            String request = requests.get(paragraph);
+            service.translateChatAsync(request, translated -> {
                 Minecraft mc = Minecraft.getInstance();
                 if (mc == null) return;
                 mc.execute(() -> {
-                    if (translated != null) {
-                        Component line = (marked != null)
-                                ? NeoTextStyle.markedChat(message, 0, translated, marked)
-                                : NeoTextStyle.styled(translated, profile, message, 0);
-                        block.translations.put(index, lineMode == DisplayMode.BOTH
-                                ? Component.empty().append(message).append(Component.literal("\n")).append(line)
-                                : line);
+                    List<String> rows = validatedParagraphRows(translated, plans.size());
+                    if (!rows.isEmpty()) {
+                        List<Component> paragraphLines = new ArrayList<>(plans.size());
+                        for (int row = 0; row < plans.size(); row++) {
+                            Component rebuilt = NeoTextStyle.rebuildChatLine(plans.get(row), rows.get(row));
+                            Component source = block.lines.get(start + row);
+                            paragraphLines.add(block.mode == DisplayMode.BOTH
+                                    ? Component.empty().append(source).append(Component.literal("\n")).append(rebuilt)
+                                    : rebuilt);
+                        }
+                        for (int row = 0; row < paragraphLines.size(); row++) {
+                            block.translations.put(start + row, paragraphLines.get(row));
+                        }
                     }
                     block.awaiting--;
                     maybeFinishBlock(block);
                 });
             });
         }
-        return true;
     }
 
     private void maybeFinishBlock(PendingBlock block) {
@@ -238,7 +283,7 @@ public final class MctranslatorNeoForge {
             PendingBlock block = activeBlock;
             activeBlock = null;
             block.closed = true;
-            maybeFinishBlock(block);
+            translateBlockParagraphs(block);
         }
     }
 
@@ -277,20 +322,94 @@ public final class MctranslatorNeoForge {
      * (so the in-world HUD is untouched). Non-blocking + memoised. Called by GuiGraphicsTextMixin.
      */
     public static Component screenText(Component c) {
+        if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return c;
         TranslationService s = service;
         if (s == null || c == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return c;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null) return c;
+        if (mc == null || mc.screen == null
+                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return c;
         Component t = NeoTextStyle.renderTranslated("screenText", c, s::translateScreenText);
         return t != null ? t : c;
     }
 
+    /** Translate an optional FTB Library TextField before FTB measures and wraps it. */
+    public static Component ftbText(Object widget, Component source) {
+        if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return source;
+        TranslationService s = service;
+        if (widget == null || source == null || s == null
+                || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return source;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.screen == null) return source;
+        Component resolved = NeoTextStyle.resolveLegacyCodes(source);
+        Component rendered = NeoTextStyle.renderTranslated("ftb", resolved, s::translateScreenText);
+        if (rendered != null) {
+            FTB_PENDING.remove(widget);
+            return rendered;
+        }
+        List<String> requests = NeoTextStyle.requestLines(resolved).stream()
+                .filter(s::wantsScreenTextTranslation).toList();
+        if (requests.isEmpty()) return source;
+        String request = String.join("\u0000", requests);
+        boolean submit;
+        synchronized (FTB_PENDING) {
+            submit = !request.equals(FTB_PENDING.get(widget));
+            if (submit) FTB_PENDING.put(widget, request);
+        }
+        if (submit) for (String lineRequest : requests) {
+            s.requestLiveScreenTextAsync(lineRequest, translated -> {
+                synchronized (FTB_PENDING) {
+                    if (!request.equals(FTB_PENDING.get(widget))) return;
+                }
+                Component ready = NeoTextStyle.renderTranslated(
+                        "ftb", resolved, s::translateScreenText);
+                Minecraft client = Minecraft.getInstance();
+                if (ready != null && client != null) {
+                    client.execute(() -> applyFtbText(widget, ready));
+                }
+            });
+        }
+        return source;
+    }
+
+    private static void applyFtbText(Object widget, Component translated) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.screen == null
+                || !mc.screen.getClass().getName().startsWith("dev.ftb.")) return;
+        try {
+            Class<?> type = widget.getClass();
+            java.lang.reflect.Method setter = null;
+            while (type != null && setter == null) {
+                try { setter = type.getDeclaredMethod("setText", Component.class); }
+                catch (NoSuchMethodException ignored) { type = type.getSuperclass(); }
+            }
+            if (setter != null) {
+                setter.setAccessible(true);
+                com.dragonmeow.mctranslator.translate.InternalRenderGuard.enter();
+                try {
+                    setter.invoke(widget, translated);
+                } finally {
+                    com.dragonmeow.mctranslator.translate.InternalRenderGuard.exit();
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            LOGGER.debug("Unable to reflow translated FTB text field", error);
+        }
+    }
+
     /** String overload of {@link #screenText(Component)}. */
     public static String screenText(String str) {
+        if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return str;
         TranslationService s = service;
         if (s == null || str == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return str;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null) return str;
+        if (mc == null || mc.screen == null
+                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return str;
+        if (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0) {
+            String normalized = str.replace("\r\n", "\n").replace('\r', '\n');
+            Component translated = NeoTextStyle.renderTranslated(
+                    "screenText", Component.literal(normalized), s::translateScreenText);
+            return translated != null ? translated.getString() : str;
+        }
         TranslationDecision d = s.translateScreenText(str);
         return d.changed() ? d.translated() : str;
     }
@@ -302,20 +421,16 @@ public final class MctranslatorNeoForge {
      * translated by {@link #screenText(Component)} upstream, so here it is Chinese and skipped.
      */
     public static net.minecraft.util.FormattedCharSequence screenText(net.minecraft.util.FormattedCharSequence fcs) {
+        if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return fcs;
         TranslationService s = service;
         if (s == null || fcs == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return fcs;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null) return fcs;
-        String plain = NeoTextStyle.plainText(fcs);
-        if (plain.isBlank()) return fcs;
-        TranslationDecision d = s.translateScreenText(plain);
-        if (!d.changed()) return fcs;
-        // Keep the line's colours/format (FTB quest text is often coloured) and its
-        // click/hover events; and never let a wider translation overflow the widget
-        // that laid the original line out — keep the original for that line instead.
-        var styled = NeoTextStyle.withInteractive(
-                NeoTextStyle.styled(d.translated(), NeoTextStyle.extract(fcs)),
-                NeoTextStyle.interactiveStyle(fcs));
+        if (mc == null || mc.screen == null
+                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;
+        if (mc.screen.getClass().getName().startsWith("dev.ftb.")) return fcs;
+        Component source = NeoTextStyle.toComponent(fcs);
+        Component styled = NeoTextStyle.renderTranslated("screenTextFcs", source, s::translateScreenText);
+        if (styled == null) return fcs;
         Font font = mc.font;
         if (font != null) {
             int originalWidth = font.width(fcs);
@@ -332,31 +447,17 @@ public final class MctranslatorNeoForge {
      * coherent, instead of translating each already-wrapped line separately (which reads choppy).
      */
     public static net.minecraft.network.chat.FormattedText screenText(net.minecraft.network.chat.FormattedText text) {
+        if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return text;
         TranslationService s = service;
         if (s == null || text == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return text;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null) return text;
-        String plain = NeoTextStyle.plainText(text);
-        if (plain.isBlank()) return text;
-        TranslationDecision d = s.translateScreenText(plain);
-        if (!d.changed()) return text;
-        // Pre-wrap block (Font.split input): keep the block's base style so colours
-        // survive; Minecraft re-wraps the translation to the same width afterwards.
-        Style base = firstStyle(text);
-        return base == null ? Component.literal(d.translated())
-                : Component.literal(d.translated()).setStyle(base);
-    }
-
-    private static Style firstStyle(net.minecraft.network.chat.FormattedText text) {
-        Style[] found = {null};
-        text.visit((style, str) -> {
-            if (!str.isEmpty()) {
-                found[0] = style;
-                return java.util.Optional.of(true); // stop at the first styled run
-            }
-            return java.util.Optional.empty();
-        }, Style.EMPTY);
-        return found[0];
+        if (mc == null || mc.screen == null
+                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return text;
+        if (mc.screen.getClass().getName().startsWith("dev.ftb.")) return text;
+        if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;
+        Component source = NeoTextStyle.toComponent(text);
+        Component translated = NeoTextStyle.renderTranslated("screenTextBlock", source, s::translateScreenText);
+        return translated == null ? text : translated;
     }
 
     /** Persist config (used by the config screen). Also drops the render cache so a
@@ -401,12 +502,10 @@ public final class MctranslatorNeoForge {
         Translator aiTranslator = new DispatchingTranslator(ai, google,
                 () -> config.aiApiKeys != null && !config.aiApiKeys.isEmpty());
 
-        PersistentStore googleStore = config.diskCache
-                ? new FileStore(FMLPaths.CONFIGDIR.get().resolve(MOD_ID + "-cache.json"), config.clearDiskCacheOnStart)
-                : null;
-        PersistentStore aiStore = config.diskCache
-                ? new FileStore(FMLPaths.CONFIGDIR.get().resolve(MOD_ID + "-ai-cache.json"), config.clearDiskCacheOnStart)
-                : null;
+        PersistentStore googleStore = new LanguageFileStore(
+                FMLPaths.CONFIGDIR.get(), MOD_ID + "-cache", config.targetLang);
+        PersistentStore aiStore = new LanguageFileStore(
+                FMLPaths.CONFIGDIR.get(), MOD_ID + "-ai-cache", config.targetLang);
         // Separate caches per engine so a 機翻 and an AI result for the same string never collide.
         TranslationCache cache = new TranslationCache(google, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
@@ -434,10 +533,6 @@ public final class MctranslatorNeoForge {
         modeKey = new KeyMapping("key.mctranslator.mode", InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_UNKNOWN, "category.mctranslator");
         event.register(modeKey);
-        // Clear ALL cached translations and re-translate. Unbound by default.
-        clearKey = new KeyMapping("key.mctranslator.clear", InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN, "category.mctranslator");
-        event.register(clearKey);
         // Re-translate the item you are pointing at / holding. Default: R.
         retranslateKey = new KeyMapping("key.mctranslator.retranslate", InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_R, "category.mctranslator");
@@ -475,9 +570,7 @@ public final class MctranslatorNeoForge {
 
     /** Map Minecraft's language code (zh_cn / zh_tw / en_us …) to 繁/簡 target. */
     static String mapGameLang(String gameLang) {
-        String t = gameLang == null ? "" : gameLang.toLowerCase().replace('-', '_');
-        if (t.startsWith("zh_cn") || t.startsWith("zh_sg") || t.contains("hans")) return "zh-CN";
-        return "zh-TW";
+        return com.dragonmeow.mctranslator.config.TranslationLanguages.fromMinecraftCode(gameLang);
     }
 
     /** The "translate current screen" key binding (rebindable from the 翻譯設定 screen). */
@@ -514,8 +607,7 @@ public final class MctranslatorNeoForge {
         // via invisible ArmorStand/TextDisplay entities, which are NOT Player, so the
         // entity check alone is blind there — the tag TEXT contains any listed player's
         // name as a whole token. Either way the tag stays verbatim.
-        if (entity instanceof net.minecraft.world.entity.player.Player p
-                && isListedPlayer(p.getUUID())) {
+        if (entity instanceof net.minecraft.world.entity.player.Player) {
             return c; // real player: no cache lookup, no request, verbatim tag
         }
         if (nameTagMatchesListedPlayer(c.getString())) return c;
@@ -533,20 +625,6 @@ public final class MctranslatorNeoForge {
         if (s == null || c == null) return c;
         Component t = NeoTextStyle.renderTranslated("nameTag", c, s::translateUi);
         return t != null ? t : c;
-    }
-
-    /** Whether this UUID is in the TAB-visible listed player set. */
-    private static boolean isListedPlayer(java.util.UUID id) {
-        Minecraft mc = Minecraft.getInstance();
-        net.minecraft.client.multiplayer.ClientPacketListener conn =
-                (mc == null) ? null : mc.getConnection();
-        if (conn == null || id == null) return false;
-        for (net.minecraft.client.multiplayer.PlayerInfo info : conn.getListedOnlinePlayers()) {
-            if (info != null && info.getProfile() != null && id.equals(info.getProfile().getId())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** Whole-token match (name chars = [A-Za-z0-9_], so "Steve" never matches inside
@@ -576,16 +654,72 @@ public final class MctranslatorNeoForge {
         return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_';
     }
 
+    private boolean handleOverlayMessage(Component message) {
+        if (service == null || message == null) return false;
+        long sequence = ++actionBarSequence;
+        Component source = NeoTextStyle.resolveLegacyCodes(message);
+        DisplayMode mode = service.actionBarMode();
+        if (mode == DisplayMode.ORIGINAL_ONLY) return false;
+        NeoTextStyle.MarkedChat marked = NeoTextStyle.markChatContent(source, 0);
+        String request = marked.marked() ? marked.text() : source.getString();
+        if (!service.wantsActionBarTranslation(request)) return false;
+        TranslationDecision cached = service.translateActionBar(request);
+        if (cached.changed()) {
+            showActionBar(source, cached.translated(), marked, cached.mode());
+            return true;
+        }
+        service.requestActionBarAsync(request, translated -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null) return;
+            mc.execute(() -> {
+                if (sequence != actionBarSequence) return;
+                showActionBar(source, translated, marked, service.actionBarMode());
+            });
+        });
+        return false;
+    }
+
+    private static void showActionBar(Component source, String translated,
+                                      NeoTextStyle.MarkedChat marked, DisplayMode mode) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.gui == null || translated == null || mode == DisplayMode.ORIGINAL_ONLY) return;
+        Component rich = NeoTextStyle.rebuildRich(source, translated, marked);
+        Component shown = mode == DisplayMode.BOTH
+                ? source.copy().append(Component.literal("　")).append(rich)
+                : rich;
+        mc.gui.setOverlayMessage(shown, false);
+    }
+
     @SubscribeEvent
     public void onClientChat(ClientChatReceivedEvent event) {
         if (service == null) return;
-        // Overlay (action-bar) system messages are governed by actionBarMode via the
-        // renderOverlayMessage redirect — never reroute/cancel them through the chat path.
-        if (event instanceof ClientChatReceivedEvent.System sys && sys.isOverlay()) return;
+        if (event instanceof ClientChatReceivedEvent.System sys && sys.isOverlay()) {
+            if (handleOverlayMessage(event.getMessage())) event.setCanceled(true);
+            return;
+        }
         DisplayMode mode = service.chatMode();
         if (mode == DisplayMode.ORIGINAL_ONLY) return;
-        Component message = event.getMessage();
+        Component message = NeoTextStyle.resolveLegacyCodes(event.getMessage());
         if (message == null) return;
+        List<Component> hardLines = NeoTextStyle.splitStyledLines(message);
+        if (hardLines.size() > 1) {
+            boolean isSystem = event instanceof ClientChatReceivedEvent.System;
+            boolean canceled;
+            if (isSystem && (activeBlock != null || NeoTextStyle.isSeparatorText(hardLines.get(0).getString()))) {
+                List<Component> remainder = new ArrayList<>();
+                for (Component line : hardLines) {
+                    if (!handleAnnouncementBlock(line, true, mode, line.getString())) remainder.add(line);
+                }
+                canceled = true;
+                if (!remainder.isEmpty()) {
+                    translateHardLineMessage(NeoTextStyle.joinStyledLines(remainder), mode, remainder);
+                }
+            } else {
+                canceled = translateHardLineMessage(message, mode, hardLines);
+            }
+            if (canceled) event.setCanceled(true);
+            return;
+        }
         String full = message.getString();
         if (handleAnnouncementBlock(message, event instanceof ClientChatReceivedEvent.System, mode, full)) {
             event.setCanceled(true);
@@ -626,17 +760,17 @@ public final class MctranslatorNeoForge {
 
         // Colour ONLY from the message content (after any rank/name prefix), so the prefix's
         // colours are never smeared onto the translation.
-        ColorProfile contentProfile = NeoTextStyle.extractFrom(message, cs);
         PendingChat pending = queueChat(message);
+        pending.mode = mode;
         pending.framedByServer = framedByServer;
 
-        if (contentProfile.distinctColorCount() >= 2) {
+        NeoTextStyle.MarkedChat marked = NeoTextStyle.markChatContent(message, cs);
+        if (marked.marked()) {
             // Word-level colour preservation: wrap each style run in an invisible ⟦CS#⟧
             // marker, translate the WHOLE line in one request (better grammar, fewer
             // requests than per-segment), then map every marker region back to its style
             // — a red word stays red on its translated word. Click/hover ride along on
             // the segment styles.
-            NeoTextStyle.MarkedChat marked = NeoTextStyle.markChatContent(message, cs);
             service.translateChatAsync(marked.text(), translated ->
                     completeChat(pending.id, mode, translated == null ? null : () -> {
                         Font font = Minecraft.getInstance().font;
@@ -652,7 +786,94 @@ public final class MctranslatorNeoForge {
         }
         service.translateChatAsync(content, translated ->
                 completeChat(pending.id, mode, translated == null ? null
-                        : () -> chatLine(Minecraft.getInstance().font, message, prefix, cs, contentProfile, translated)));
+                        : () -> chatLine(Minecraft.getInstance().font, message, prefix, cs, translated)));
+    }
+
+    private boolean translateHardLineMessage(Component original, DisplayMode mode,
+                                             List<Component> hardLines) {
+        List<NeoTextStyle.ChatLinePlan> plans = new ArrayList<>(hardLines.size());
+        List<String> visible = new ArrayList<>(hardLines.size());
+        for (int i = 0; i < hardLines.size(); i++) {
+            NeoTextStyle.ChatLinePlan plan = NeoTextStyle.prepareChatLine(hardLines.get(i));
+            plans.add(plan);
+            visible.add(plan.content());
+        }
+        List<ParagraphModel.Range> requested = new ArrayList<>();
+        List<String> requests = new ArrayList<>();
+        for (ParagraphModel.Range range : ParagraphModel.ranges(visible)) {
+            if (range.size() == 1 && ParagraphModel.isBlank(visible.get(range.start()))) continue;
+            List<String> rows = new ArrayList<>(range.size());
+            boolean wanted = false;
+            for (int row = range.start(); row <= range.end(); row++) {
+                NeoTextStyle.ChatLinePlan plan = plans.get(row);
+                rows.add(plan.request());
+                wanted |= !plan.request().isBlank() && service.wantsChatTranslation(plan.content());
+            }
+            if (wanted) {
+                requested.add(range);
+                requests.add(ParagraphModel.join(rows));
+            }
+        }
+        if (requested.isEmpty()) {
+            if (pendingChats.isEmpty()) return false;
+            PendingChat passThrough = queueChat(original);
+            passThrough.mode = DisplayMode.ORIGINAL_ONLY;
+            passThrough.ready = true;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null && mc.gui != null) flushReadyChats(mc);
+            return true;
+        }
+        PendingChat pending = queueChat(original);
+        pending.mode = mode;
+        java.util.concurrent.atomic.AtomicReferenceArray<Component> rebuilt =
+                new java.util.concurrent.atomic.AtomicReferenceArray<>(hardLines.size());
+        for (int i = 0; i < hardLines.size(); i++) rebuilt.set(i, hardLines.get(i).copy());
+        java.util.concurrent.atomic.AtomicInteger awaiting =
+                new java.util.concurrent.atomic.AtomicInteger(requested.size());
+        for (int paragraph = 0; paragraph < requested.size(); paragraph++) {
+            ParagraphModel.Range range = requested.get(paragraph);
+            String request = requests.get(paragraph);
+            service.translateChatAsync(request, translated -> {
+                List<String> rows = validatedParagraphRows(translated, range.size());
+                if (!rows.isEmpty()) {
+                    List<Component> paragraphLines = new ArrayList<>(range.size());
+                    for (int row = range.start(); row <= range.end(); row++) {
+                        paragraphLines.add(NeoTextStyle.rebuildChatLine(
+                                plans.get(row), rows.get(row - range.start())));
+                    }
+                    for (int row = range.start(); row <= range.end(); row++) {
+                        rebuilt.set(row, paragraphLines.get(row - range.start()));
+                    }
+                }
+                if (awaiting.decrementAndGet() == 0) {
+                    completeChat(pending.id, mode, () -> {
+                        List<Component> ready = new ArrayList<>(rebuilt.length());
+                        for (int row = 0; row < rebuilt.length(); row++) ready.add(rebuilt.get(row));
+                        return NeoTextStyle.joinStyledLines(ready);
+                    });
+                }
+            });
+        }
+        return true;
+    }
+
+    /** Google/AI fallback is accepted only when every immutable PB anchor survived in order. */
+    private static List<String> validatedParagraphRows(String translated, int expectedRows) {
+        if (translated == null || expectedRows < 1) return List.of();
+        java.util.regex.Matcher matcher = ParagraphModel.BREAK_TOKEN_PATTERN.matcher(translated);
+        int token = 0;
+        while (matcher.find()) {
+            int found;
+            try {
+                found = Integer.parseInt(matcher.group(1));
+            } catch (RuntimeException malformed) {
+                return List.of();
+            }
+            if (found != token++) return List.of();
+        }
+        if (token != expectedRows - 1) return List.of();
+        List<String> rows = ParagraphModel.split(translated);
+        return rows.size() == expectedRows ? rows : List.of();
     }
 
     private PendingChat queueChat(Component message) {
@@ -675,7 +896,8 @@ public final class MctranslatorNeoForge {
                 if (builder != null && mode != DisplayMode.ORIGINAL_ONLY) {
                     Component translated = builder.get();
                     if (translated != null) {
-                        mc.gui.getChat().addMessage(translated);
+                        mc.gui.getChat().addMessage(mode == DisplayMode.BOTH
+                                ? NeoTextStyle.chatBlock(pending.message, translated) : translated);
                     }
                 }
                 return;
@@ -700,7 +922,8 @@ public final class MctranslatorNeoForge {
             if (System.currentTimeMillis() - head.queuedAtMs < CHAT_MAX_WAIT_MS) break;
             pendingChats.removeFirst();
             head.flushedOriginal = true; // stays in pendingChatById for the late translation
-            mc.gui.getChat().addMessage(head.message);
+            mc.gui.getChat().addMessage(head.mode == DisplayMode.BOTH
+                    ? NeoTextStyle.chatBlock(head.message, null) : head.message);
         }
     }
 
@@ -731,43 +954,29 @@ public final class MctranslatorNeoForge {
             mc.gui.getChat().addMessage(translatedLine != null ? translatedLine : pending.message);
             return;
         }
-        if (translatedLine == null) {
-            mc.gui.getChat().addMessage(pending.message);
+        if (pending.mode == DisplayMode.BOTH) {
+            mc.gui.getChat().addMessage(NeoTextStyle.chatBlock(pending.message, translatedLine));
             return;
         }
-        // 原文＋翻譯 as ONE message. Wrapped in magenta separator lines so each block
-        // reads as a unit — EXCEPT inside a server ────── announcement frame, which is
-        // already boxed (double frames would be noise).
-        if (pending.framedByServer) {
-            mc.gui.getChat().addMessage(Component.empty()
-                    .append(pending.message)
-                    .append(Component.literal("\n"))
-                    .append(translatedLine));
-            return;
-        }
-        int len = NeoTextStyle.maxLineLength(pending.message.getString(), translatedLine.getString());
-        mc.gui.getChat().addMessage(Component.empty()
-                .append(NeoTextStyle.separatorLine(len))
-                .append(Component.literal("\n")).append(pending.message)
-                .append(Component.literal("\n")).append(translatedLine)
-                .append(Component.literal("\n")).append(NeoTextStyle.separatorLine(len)));
+        mc.gui.getChat().addMessage(pending.message);
     }
 
     /** Builds a single-colour translated chat line: prefix kept verbatim, translation coloured
      *  from the CONTENT's profile and (when unprefixed) re-centred. */
     private static Component chatLine(Font font, Component message, boolean hasPrefix, int contentStart,
-                                      ColorProfile contentProfile, String translated) {
+                                      String translated) {
+        net.minecraft.network.chat.Style interactive =
+                NeoTextStyle.interactiveStyle(message, contentStart);
         if (hasPrefix) {
-            // styled(..., message, contentStart) inherits the content's click/hover events,
-            // so a clickable plugin message stays clickable after translation.
-            Component styled = NeoTextStyle.styled(translated, contentProfile, message, contentStart);
+            Component styled = NeoTextStyle.withInteractive(
+                    NeoTextStyle.styledChatContent(message, contentStart, translated), interactive);
             return Component.empty().append(NeoTextStyle.takePrefix(message, contentStart)).append(styled);
         }
-        // translated already carries the original's leading whitespace (LayoutPreserver).
-        return NeoTextStyle.styled(translated, contentProfile, message, contentStart);
+        return NeoTextStyle.withInteractive(
+                NeoTextStyle.styledChatContent(message, contentStart, translated), interactive);
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onItemTooltip(ItemTooltipEvent event) {
         if (service == null) return;
         DisplayMode mode = service.tooltipMode();
@@ -775,72 +984,62 @@ public final class MctranslatorNeoForge {
         List<Component> lines = event.getToolTip();
         if (lines.isEmpty()) return;
 
-        // The server pre-wraps lore text: detect sentences split across lines and treat
-        // each run as ONE translation unit (whole-sentence grammar + colours), re-wrapped
-        // to the tooltip width afterwards. groupEnd[i] = last line index of the group
-        // starting at i (== i for standalone lines).
         int n = lines.size();
-        int[] groupEnd = new int[n];
-        for (int i = 0; i < n; i++) groupEnd[i] = i;
-        String lang = config.targetLang;
-        for (int i = 0; i < n; ) {
-            int j = i;
-            while (j + 1 < n && lines.get(j) != null && lines.get(j + 1) != null
-                    && com.dragonmeow.mctranslator.translate.TextFilter.shouldTranslate(lines.get(j).getString(), lang)
-                    && com.dragonmeow.mctranslator.translate.TextFilter.shouldTranslate(lines.get(j + 1).getString(), lang)
-                    && NeoTextStyle.continuesSentence(lines.get(j).getString(), lines.get(j + 1).getString())) {
-                j++;
-            }
-            groupEnd[i] = j;
-            i = j + 1;
+        ItemStack stack = event.getItemStack();
+        TooltipParagraphPlan plan = tooltipParagraphPlan(
+                stack, lines, NeoTextStyle::paragraphRequestText);
+        lastTooltipStack = stack;
+        lastTooltipParagraphSources = plan.sources();
+        service.warmTooltipBatch(plan.sources());
+        boolean[] paragraphReady = tooltipParagraphReadiness(lines, plan);
+        if (stack != null && !stack.isEmpty()) {
+            service.reconcileItemNameWithTooltip(
+                    stack.getHoverName().getString(), plan.plainSources());
         }
-
-        // Warm the WHOLE tooltip in one batch so the AI backend gets shared context
-        // (e.g. "EV Yields" disambiguated by the rest of the tooltip). Non-blocking.
-        List<String> sources = new ArrayList<>(n);
-        for (int i = 0; i < n; i = groupEnd[i] + 1) {
-            if (lines.get(i) == null) continue;
-            sources.add(groupEnd[i] > i
-                    ? NeoTextStyle.groupRequestText(lines.subList(i, groupEnd[i] + 1))
-                    : lines.get(i).getString());
-        }
-        service.warmTooltipBatch(sources);
 
         Font font = Minecraft.getInstance().font;
         List<Component> out = new ArrayList<>(n);
-        List<Component> appended = (mode == DisplayMode.BOTH) ? new ArrayList<>() : null;
+        boolean completeBothBlock = mode == DisplayMode.BOTH
+                && tooltipTranslationRegionReady(lines, plan, paragraphReady);
+        List<Component> appended = completeBothBlock ? new ArrayList<>() : null;
+        boolean anyTranslated = false;
         int maxLen = 0;
         boolean originalEndsWithSeparator = false;
         for (int i = 0; i < n; ) {
-            int end = groupEnd[i];
+            int end = plan.groupEnd()[i];
             Component line = lines.get(i);
             if (line == null) {
                 out.add(line); // keep the list shape other mods may rely on
+                if (appended != null) appended.add(Component.empty());
                 i = end + 1;
                 continue;
             }
             if (mode == DisplayMode.BOTH) {
                 for (int k = i; k <= end; k++) {
-                    String t = lines.get(k) == null ? "" : lines.get(k).getString();
-                    maxLen = Math.max(maxLen, t.length());
-                    if (!t.isBlank()) originalEndsWithSeparator = NeoTextStyle.isSeparatorText(t);
+                    String text = lines.get(k) == null ? "" : lines.get(k).getString();
+                    maxLen = Math.max(maxLen, text.length());
+                    if (!text.isBlank()) originalEndsWithSeparator = NeoTextStyle.isSeparatorText(text);
                 }
             }
+            if (!paragraphReady[i]) {
+                out.addAll(lines.subList(i, end + 1));
+                i = end + 1;
+                continue;
+            }
+            List<Component> group = new ArrayList<>(lines.subList(i, end + 1));
             if (end > i) {
-                // Wrapped sentence: translate the whole run, re-wrap to its original width.
-                List<Component> group = new ArrayList<>(lines.subList(i, end + 1));
-                List<Component> translated = NeoTextStyle.renderTranslatedGroup(
-                        group, service::translateItemLine, font);
-                if (translated == null) {
+                List<Component> translated = NeoTextStyle.renderTranslatedParagraph(group, service::translateItemLine, font);
+                if (translated == null) out.addAll(group);
+                else if (mode == DisplayMode.BOTH) {
                     out.addAll(group);
-                } else if (mode == DisplayMode.BOTH) {
-                    out.addAll(group);
-                    for (Component t : translated) {
-                        appended.add(t);
-                        maxLen = Math.max(maxLen, t.getString().length());
+                    if (appended != null) {
+                        anyTranslated = true;
+                        appended.addAll(translated);
+                        for (Component t : translated) maxLen = Math.max(maxLen, t.getString().length());
                     }
-                } else {
-                    out.addAll(translated);
+                } else out.addAll(translated);
+                if (mode == DisplayMode.BOTH && appended != null && translated == null) {
+                    appendTooltipShape(appended, group);
                 }
                 i = end + 1;
                 continue;
@@ -848,16 +1047,20 @@ public final class MctranslatorNeoForge {
             Component translated = NeoTextStyle.renderTranslated("tooltip", line, service::translateItemLine);
             if (translated == null) {
                 out.add(line);
+                if (appended != null) appendTooltipShape(appended, group);
             } else if (mode == DisplayMode.BOTH) {
                 out.add(line);
-                appended.add(translated);
-                maxLen = Math.max(maxLen, translated.getString().length());
+                if (appended != null) {
+                    anyTranslated = true;
+                    appended.add(translated);
+                    maxLen = Math.max(maxLen, translated.getString().length());
+                }
             } else {
                 out.add(translated);
             }
             i = end + 1;
         }
-        if (appended != null && !appended.isEmpty()) {
+        if (appended != null && anyTranslated) {
             if (!originalEndsWithSeparator) {
                 out.add(NeoTextStyle.separatorLine(maxLen));   // top divider
             }
@@ -868,6 +1071,84 @@ public final class MctranslatorNeoForge {
         lines.addAll(out);
     }
 
+    private boolean[] tooltipParagraphReadiness(
+            List<Component> lines, TooltipParagraphPlan plan) {
+        int n = lines.size();
+        boolean[] readyByLine = new boolean[n];
+        for (int start = 0; start < n; ) {
+            Component first = lines.get(start);
+            int end = plan.groupEnd()[start];
+            String request = plan.requests()[start];
+            boolean ready = first == null || first.getString().isBlank()
+                    || request == null || service.isTooltipTranslationReady(request);
+            for (int i = start; i <= end; i++) readyByLine[i] = ready;
+            start = end + 1;
+        }
+        return readyByLine;
+    }
+
+    private static boolean tooltipTranslationRegionReady(
+            List<Component> lines, TooltipParagraphPlan plan, boolean[] readyByLine) {
+        for (int start = 0; start < lines.size(); start = plan.groupEnd()[start] + 1) {
+            Component first = lines.get(start);
+            if (first != null && !first.getString().isBlank() && !readyByLine[start]) return false;
+        }
+        return true;
+    }
+
+    private static void appendTooltipShape(List<Component> out, List<Component> paragraph) {
+        for (Component line : paragraph) out.add(line == null ? Component.empty() : line);
+    }
+
+    private static TooltipParagraphPlan tooltipParagraphPlan(
+            ItemStack stack, List<Component> lines,
+            java.util.function.Function<List<Component>, String> paragraphRequestText) {
+        int n = lines.size();
+        int[] groupEnd = new int[n];
+        for (int i = 0; i < n; i++) groupEnd[i] = i;
+        int bodyStart = hasVerifiedItemTitle(stack, lines) ? 1 : 0;
+        List<String> paragraphLines = new ArrayList<>(n - bodyStart);
+        for (int i = bodyStart; i < n; i++) {
+            Component line = lines.get(i);
+            paragraphLines.add(line == null ? null : line.getString());
+        }
+        for (com.dragonmeow.mctranslator.translate.ParagraphModel.Range range
+                : com.dragonmeow.mctranslator.translate.ParagraphModel.ranges(paragraphLines)) {
+            groupEnd[bodyStart + range.start()] = bodyStart + range.end();
+        }
+        String[] requests = new String[n];
+        List<String> sources = new ArrayList<>(n);
+        List<String> plainSources = new ArrayList<>(n);
+        for (Component line : lines) if (line != null) plainSources.add(line.getString());
+        for (int start = 0; start < n; start = groupEnd[start] + 1) {
+            Component first = lines.get(start);
+            if (first == null || first.getString().isBlank()) {
+                sources.add("");
+                continue;
+            }
+            String request = paragraphRequestText.apply(
+                    lines.subList(start, groupEnd[start] + 1));
+            requests[start] = request;
+            sources.add(request);
+        }
+        return new TooltipParagraphPlan(groupEnd, requests,
+                List.copyOf(sources), List.copyOf(plainSources));
+    }
+
+    private record TooltipParagraphPlan(
+            int[] groupEnd, String[] requests,
+            List<String> sources, List<String> plainSources) {
+    }
+
+    private static boolean hasVerifiedItemTitle(ItemStack stack, List<Component> lines) {
+        if (stack == null || stack.isEmpty() || lines.isEmpty() || lines.get(0) == null) return false;
+        String first = com.dragonmeow.mctranslator.translate.TextFilter
+                .stripFormatting(lines.get(0).getString()).strip();
+        String name = com.dragonmeow.mctranslator.translate.TextFilter
+                .stripFormatting(stack.getHoverName().getString()).strip();
+        return !name.isEmpty() && first.equals(name);
+    }
+
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
@@ -875,14 +1156,6 @@ public final class MctranslatorNeoForge {
             while (modeKey.consumeClick()) {
                 Minecraft mc = Minecraft.getInstance();
                 if (mc != null) mc.setScreen(new TranslationConfigScreen(mc.screen));
-            }
-        }
-        if (clearKey != null && service != null) {
-            while (clearKey.consumeClick()) {
-                service.clearTranslations();
-                NeoTextStyle.clearRenderMemo();
-                pretranslateStarted = false; // let the background pass re-run
-                status("已清除翻譯，重新翻譯中…");
             }
         }
         if (retranslateKey != null && service != null) {
@@ -897,37 +1170,17 @@ public final class MctranslatorNeoForge {
             while (toggleKey.consumeClick()) flipShowOriginal();
         }
         syncGameLanguage(Minecraft.getInstance());
-        if (!pretranslateStarted && config.pretranslateItemsOnLoad && Minecraft.getInstance() != null) {
-            pretranslateStarted = true;
-            startPretranslate();
-        }
         // Flush the coalesced per-frame translation buffer once per tick: a screen full of
         // text becomes ONE batched request rather than dozens (fewer AI / Google requests).
-        if (service != null) service.flushBatches();
         refreshOnlineNames(Minecraft.getInstance());
+        if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(Minecraft.getInstance());
         // R12 (user clarification of R10): the OPEN container is "the current page" — its
         // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
         // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
+        warmOwnedItems(Minecraft.getInstance());
         warmOpenContainerItems(Minecraft.getInstance());
-        // One-time self-test once the player is in-world: prints backend status to chat.
-        if (!selfTested && Minecraft.getInstance() != null && Minecraft.getInstance().player != null) {
-            selfTested = true;
-            Thread t = new Thread(() -> {
-                String result = service.selfTest();
-                Minecraft mc = Minecraft.getInstance();
-                if (mc != null) {
-                    mc.execute(() -> {
-                        if (mc.player != null) {
-                            mc.gui.getChat().addMessage(Component.literal("[翻譯自測] " + result));
-                        }
-                    });
-                }
-            }, "mctranslator-selftest");
-            t.setDaemon(true);
-            t.start();
-        }
     }
 
     @SubscribeEvent
@@ -964,22 +1217,26 @@ public final class MctranslatorNeoForge {
      * buttons/options); screens that draw raw text without widgets are not covered.
      */
     private void scanAndTranslateScreen(net.minecraft.client.gui.screens.Screen screen) {
-        if (screen == null || service == null) return;
+        if (screen == null || service == null
+                || screen instanceof net.minecraft.client.gui.screens.ChatScreen) return;
         List<net.minecraft.client.gui.components.AbstractWidget> widgets = new ArrayList<>();
         collectWidgets(screen.children(), widgets, 0);
         int requested = 0;
         for (net.minecraft.client.gui.components.AbstractWidget widget : widgets) {
-            Component msg = widget.getMessage();
-            if (msg == null) continue;
-            String src = msg.getString();
-            if (src == null || src.isBlank()) continue;
-            final com.dragonmeow.mctranslator.style.ColorProfile profile = NeoTextStyle.extract(msg);
-            service.requestScreenTextAsync(src, translated -> {
-                Minecraft mc = Minecraft.getInstance();
-                if (mc == null) return;
-                mc.execute(() -> widget.setMessage(NeoTextStyle.styled(translated, profile)));
-            });
-            requested++;
+            Component raw = widget.getMessage();
+            if (raw == null) continue;
+            final Component source = NeoTextStyle.resolveLegacyCodes(raw);
+            List<String> requests = NeoTextStyle.requestLines(source);
+            for (String request : requests) {
+                service.requestScreenTextAsync(request, translated -> {
+                    Minecraft mc = Minecraft.getInstance();
+                    if (mc == null) return;
+                    Component ready = NeoTextStyle.renderTranslated(
+                            "screenScan", source, service::translateScreenScanText);
+                    if (ready != null) mc.execute(() -> widget.setMessage(ready));
+                });
+            }
+            requested += requests.size();
         }
         status("擷取介面文字翻譯中…（" + requested + " 項）");
     }
@@ -1033,18 +1290,41 @@ public final class MctranslatorNeoForge {
         if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
     }
 
+    /** Warm only names of items the player actually owns; lore remains hover-driven. */
+    private void warmOwnedItems(Minecraft mc) {
+        if (mc == null || service == null) return;
+        if (mc.player == null) {
+            warmedOwnedItemNames.clear();
+            return;
+        }
+        if (service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
+        List<String> newNames = new ArrayList<>();
+        for (Slot slot : mc.player.inventoryMenu.slots) {
+            if (slot == null || !slot.hasItem()) continue;
+            String name = slot.getItem().getHoverName().getString();
+            if (name != null && !name.isBlank() && warmedOwnedItemNames.add(name)) {
+                newNames.add(name);
+            }
+        }
+        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
+    }
+
     /** Evict + re-translate one item's tooltip lines (the "re-translate pointed item" hotkey). */
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
-        List<String> sources = new ArrayList<>();
-        try {
-            for (Component c : stack.getTooltipLines(mc.player, TooltipFlag.Default.NORMAL)) {
-                if (c != null) sources.add(c.getString());
+        List<String> sources = lastTooltipStack == stack ? lastTooltipParagraphSources : null;
+        if (sources == null) {
+            List<Component> lines;
+            try {
+                lines = stack.getTooltipLines(mc.player, TooltipFlag.Default.NORMAL);
+            } catch (RuntimeException e) {
+                return;
             }
-        } catch (RuntimeException e) {
-            return;
+            TooltipParagraphPlan plan = tooltipParagraphPlan(
+                    stack, lines, NeoTextStyle::paragraphRequestText);
+            sources = plan.sources();
         }
         service.retranslate(sources);
         NeoTextStyle.clearRenderMemo();
@@ -1073,49 +1353,6 @@ public final class MctranslatorNeoForge {
         }, "mctranslator-aitest");
         t.setDaemon(true);
         t.start();
-    }
-
-    private void startPretranslate() {
-        List<String> names = new ArrayList<>();
-        for (Item item : BuiltInRegistries.ITEM) {
-            try {
-                String name = item.getDescription().getString();
-                if (name != null && !name.isBlank()) names.add(name);
-            } catch (RuntimeException ignored) {
-                // skip
-            }
-        }
-        int batch = Math.max(1, config.pretranslateBatchSize);
-        long delay = Math.max(0, config.pretranslateDelayMs);
-        Thread worker = new Thread(() -> {
-            int consecutiveFailures = 0;
-            for (int from = 0; from < names.size(); from += batch) {
-                if (Thread.currentThread().isInterrupted()) return;
-                boolean ok = true;
-                try {
-                    ok = service.warmUpBatch(names.subList(from, Math.min(from + batch, names.size())));
-                } catch (RuntimeException e) {
-                    ok = false;
-                }
-                consecutiveFailures = ok ? 0 : consecutiveFailures + 1;
-                if (consecutiveFailures > 5) {
-                    LOGGER.warn("[{}] pre-translation aborted (backend unreachable / rate-limited)", MOD_ID);
-                    return;
-                }
-                if (delay > 0) {
-                    try {
-                        Thread.sleep(delay);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                }
-            }
-            LOGGER.info("[{}] item pre-translation pass complete ({} names)", MOD_ID, names.size());
-        }, "mctranslator-pretranslate");
-        worker.setDaemon(true);
-        worker.setPriority(Thread.MIN_PRIORITY);
-        worker.start();
     }
 
     private void status(String msg) {

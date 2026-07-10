@@ -1,8 +1,9 @@
 package com.dragonmeow.mctranslator.cache;
 
 /**
- * A durable key→value store sitting behind the in-memory LRU. Keyed by the raw
- * source string; values are translations. Implementations may persist to disk.
+ * A durable key→value store sitting behind the in-memory LRU. Keys are canonical
+ * translation-template strings; values are translated templates. Implementations
+ * may persist to disk.
  *
  * <p>An interface so {@link TranslationCache} can be unit-tested with an inline
  * in-memory fake instead of touching the filesystem.</p>

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "mctranslator",
-  "version": "1.0.1",
+  "version": "${version}",
   "name": "Minecraft Translator",
   "description": "Translates in-game text into Traditional Chinese via Google / AI.",
   "authors": ["DragonMeow"],

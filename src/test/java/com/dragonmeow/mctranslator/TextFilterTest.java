@@ -10,6 +10,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TextFilterTest {
 
     @Test
+    void detectsIndentedParagraphStartsWithoutMistakingOneSpace() {
+        assertFalse(TextFilter.startsIndentedParagraph(" continuation"));
+        assertTrue(TextFilter.startsIndentedParagraph("  New paragraph"));
+        assertTrue(TextFilter.startsIndentedParagraph("\tNew paragraph"));
+        assertTrue(TextFilter.startsIndentedParagraph("　New paragraph"));
+        assertFalse(TextFilter.startsIndentedParagraph("New paragraph"));
+    }
+
+    @Test
+    void internalDebugOverlayCanNeverTranslateItself() {
+        assertFalse(TextFilter.shouldTranslate("[AI #91 …] Mana Cost: ⟦MT0⟧", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("[AI x3 #⟦MT0⟧ ✗] nested debug row", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("[Google #12 ✓] Hello", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("[GT #12 ✓] Hello → 你好", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("MT DEBUG｜實際送出 12 筆", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("MT DEBUG  最近 5 項", "zh-TW"));
+    }
+
+    @Test
     void translatesPlainEnglish() {
         assertTrue(TextFilter.shouldTranslate("Welcome to the server", "zh-TW"));
     }
@@ -30,9 +49,37 @@ class TextFilterTest {
     }
 
     @Test
+    void skipsTemplateOnlyHudRowsWithShortMachineCodeResidue() {
+        assertFalse(TextFilter.shouldTranslate(
+                "⟦MT0⟧/⟦MT1⟧/⟦MT2⟧ n6400", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("HP 100/200", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("Mana 100/200", "zh-TW"),
+                "a real stat label still needs translation");
+    }
+
+    @Test
     void skipsAlreadyChineseWhenTargetIsChinese() {
         assertFalse(TextFilter.shouldTranslate("你好世界", "zh-TW"));
         assertFalse(TextFilter.shouldTranslate("歡迎來到伺服器", "zh-TW"));
+    }
+
+    @Test
+    void internalMarkersNumbersAndBareUrlsDoNotTurnChineseBackIntoEnglish() {
+        assertFalse(TextFilter.shouldTranslate(
+                "⟦CS0⟧人氣鑽石: ⟦MT0⟧/⟦MT1⟧⟦/CS0⟧", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("前往 hypixel.net/ptl", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("前往 ⟦MT0⟧", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("Visit hypixel.net/ptl", "zh-TW"));
+    }
+
+    @Test
+    void actionBarEnglishTranslatesButAlreadyChineseStatsDoNotLoop() {
+        assertTrue(TextFilter.shouldTranslate("You received 10,518.2 coins!", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate(
+                "2,556/2,131♥ 1,042❈ 防禦 1,707/1,707✎ 魔力 200/200", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate(
+                "⟦CS0⟧2,556/2,131♥⟦/CS0⟧ ⟦CS1⟧1,042❈ 防禦⟦/CS1⟧ "
+                        + "⟦CS2⟧1,707/1,707✎ 魔力 200/200⟦/CS2⟧", "zh-TW"));
     }
 
     @Test
@@ -160,6 +207,37 @@ class TextFilterTest {
         assertTrue(TextFilter.isPartialTransliteration("§ejacob", "§e傑cob"));
     }
 
+    @Test
+    void templatedSectionCodesAreNotLiteralSectionCodes() {
+        assertEquals("§⟦MT0⟧Hello", TextFilter.stripSectionCodes("§⟦MT0⟧§aHello"));
+        assertTrue(TextFilter.isTemplatedSectionCode("§⟦MT0⟧Hello", 0));
+        assertFalse(TextFilter.isTemplatedSectionCode("§aHello", 0));
+    }
+
+    @Test
+    void rejectsTranslationThatLeavesAnAnchoredLocationInEnglish() {
+        String source = "§6⟦MT0⟧/⟦MT1⟧ §7⟦MT2⟧ §2Foraging Camp §b⟦MT3⟧ Mana";
+        assertTrue(TextFilter.hasUntranslatedAnchoredField(source,
+                "§6⟦MT0⟧/⟦MT1⟧ §7⟦MT2⟧ §2Foraging Camp §b⟦MT3⟧ 魔力"));
+        assertTrue(TextFilter.hasUntranslatedAnchoredField(
+                "⟦MT0⟧ Forest ⟦MT1⟧ Mana", "⟦MT0⟧ Forest ⟦MT1⟧ 魔力"));
+        assertFalse(TextFilter.hasUntranslatedAnchoredField(source,
+                "§6⟦MT0⟧/⟦MT1⟧ §7⟦MT2⟧ §2採集營地 §b⟦MT3⟧ 魔力"));
+    }
+
+    @Test
+    void formattingProjectionRemovesRealTooltipCsMarkers() {
+        assertEquals("Aspect of the End Damage: 100", TextFilter.stripFormatting(
+                "⟦CS0⟧Aspect of the End⟦/CS0⟧ ⟦CS1⟧Damage: 100⟦/CS1⟧"));
+    }
+
+    @Test
+    void skipsPureDynamicClockLinesWithSectionCodes() {
+        assertFalse(TextFilter.shouldTranslate(" \u00a7711:20pm \u00a7b\u263d\u00a7v", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate(" \u00a7712:00am \u00a7b\u263d\u00a7v", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("§⟦MT0⟧:⟦MT1⟧0pm §b⟦MT2⟧§v", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("Mana Cost: 99", "zh-TW"));
+    }
     @Test
     void decorativeIconsAreStrippedBeforeTranslatabilityJudgement() {
         // Icon-decorated item names must be judged on their CORE text, not their icons.

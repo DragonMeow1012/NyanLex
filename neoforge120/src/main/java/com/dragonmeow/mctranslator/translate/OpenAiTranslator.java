@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
@@ -120,54 +121,93 @@ public final class OpenAiTranslator implements Translator {
 
     private static final java.util.regex.Pattern ANY_TOKEN =
             java.util.regex.Pattern.compile("⟦[^⟦⟧]*⟧");
+    private static final java.util.regex.Pattern CS_TOKEN =
+            java.util.regex.Pattern.compile("⟦\\s*/?\\s*CS\\s*\\d+\\s*⟧");
 
-    /**
-     * A translated line may ABSORB source tokens (models often rewrite "Jun ⟦MT0⟧, ⟦MT1⟧"
-     * into a native date) — that only loses a substitution. What it must NEVER do is
-     * contain tokens that are not the source line's own: that means the model merged or
-     * shifted lines, and caching it would poison another line's key.
-     */
+    /** Every protocol token must survive exactly once. Complete pairs may move for target
+     * grammar, but a missing, duplicated, or foreign token would lose a live value or
+     * poison another template and is therefore a per-line content failure. */
     static boolean tokensMatch(String source, String translated) {
-        List<String> got = tokensOf(translated);
-        if (got.isEmpty()) return true;
-        List<String> want = tokensOf(source);
-        for (String token : got) {
-            if (!want.remove(token)) return false; // alien or over-counted token
+        // In fixed-column rows, no live value or styled phrase may cross a WS boundary.
+        // Ordinary prose without WS slots still allows complete MT/CS units to move for
+        // target-language grammar.
+        if (!TranslationTemplate.layoutSkeletonMatches(source, translated)) return false;
+        if (!TranslationTemplate.styleSlotShapeMatches(source, translated)) return false;
+        if (!sameTokenMultiset(tokensOf(source, CS_TOKEN), tokensOf(translated, CS_TOKEN))) {
+            return false;
         }
-        return true;
+        return sameTokenMultiset(tokensOf(source), tokensOf(translated));
     }
 
     private static List<String> tokensOf(String text) {
+        return tokensOf(text, ANY_TOKEN);
+    }
+
+    private static List<String> tokensOf(String text, java.util.regex.Pattern pattern) {
         List<String> out = new ArrayList<>();
         if (text == null) return out;
-        java.util.regex.Matcher m = ANY_TOKEN.matcher(text);
+        java.util.regex.Matcher m = pattern.matcher(text);
         while (m.find()) out.add(m.group().replace(" ", ""));
         return out;
+    }
+
+    private static boolean sameTokenMultiset(List<String> first, List<String> second) {
+        if (first.size() != second.size()) return false;
+        List<String> remaining = new ArrayList<>(first);
+        for (String token : second) if (!remaining.remove(token)) return false;
+        return remaining.isEmpty();
     }
 
     // ---- prompt / request building ----
 
     /**
-     * Prefix for the user message when the numbered batch comes from ONE surface (an item
-     * tooltip): shows the model the WHOLE tooltip — title included — so lines missing from
-     * the batch (already cached, e.g. the title) still shape the translation. This is what
-     * makes "Recipes" under a recipe list translate as 配方 instead of 食譜. Returns "" when
-     * there is no context, so context-less batches produce exactly the same request as before.
+     * Prefix for the user message when a numbered batch comes from one visible surface:
+     * shows the model the whole information block so cached or dynamic rows still shape
+     * terminology. No row is presumed to be a title; books, logs and HUD panels commonly
+     * begin directly with body text. Returns "" when there is no context.
      */
+    private static final int MAX_CONTEXT_LINES = 24;
+    private static final int MAX_CONTEXT_CHARS = 2_000;
+
     static String buildSurfaceContextBlock(List<String> surfaceContext) {
         if (surfaceContext == null || surfaceContext.isEmpty()) return "";
         StringBuilder sb = new StringBuilder();
-        sb.append("Context: the numbered lines to translate below ALL come from one single ")
-                .append("Minecraft item tooltip; the tooltip's first line is the item's name/title. ")
-                .append("Here is the complete original tooltip, for reference ONLY:\n");
-        for (int i = 0; i < surfaceContext.size(); i++) {
-            if (i == 0) sb.append("[TITLE] ");
-            sb.append(surfaceContext.get(i).replace("\n", " ")).append('\n');
+        sb.append("Minecraft visible block context (semantic reference for domain and terminology; layout is program-owned):\n");
+        int emitted = 0;
+        for (int i = 0; i < surfaceContext.size() && emitted < MAX_CONTEXT_LINES; i++) {
+            String line = surfaceContext.get(i);
+            if (line == null) continue;
+            line = TextFilter.stripFormatting(line).replace('\n', ' ').strip();
+            if (line.isEmpty()) {
+                sb.append("[SECTION]\n");
+                emitted++;
+                continue;
+            }
+            if (sb.length() + line.length() + 28 > MAX_CONTEXT_CHARS) break;
+            sb.append("[L").append(i).append(':')
+                    .append(contextKind(line)).append("] ")
+                    .append(line).append('\n');
+            emitted++;
         }
-        sb.append("Translate each numbered line so it reads coherently and consistently with the ")
-                .append("whole tooltip above. Do NOT translate the context block itself — ")
-                .append("reply with ONLY the numbered lines.\n\n");
+        if (emitted == 0) return "";
+        if (emitted < surfaceContext.size()) sb.append("[remaining context omitted]\n");
+        sb.append("Translate ONLY the numbered units below; do not output the visible-block context.\n\n");
         return sb.toString();
+    }
+
+    private static String contextKind(String line) {
+        String lower = line.toLowerCase(Locale.ROOT);
+        if (lower.matches(".*(?:ability|skill|mana cost|cooldown|能力|技能|魔力消耗|冷卻).*")) {
+            return "ABILITY";
+        }
+        if (lower.matches(".*(?:bin price|avg\\. price|item value|obtained|museum|售價|價格|博物館).*")) {
+            return "MARKET";
+        }
+        if (lower.matches(".*(?:gear score|damage|strength|speed|intelligence|fortune|health|defense|裝備分數|傷害|力量|速度|智力|財富|生命|防禦).*[:：].*")) {
+            return "STAT";
+        }
+        if (lower.matches(".*\\b(?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\\b.*")) return "ENCHANT";
+        return "TEXT";
     }
 
     String buildPrompt(List<String> texts, String targetLang) {
@@ -184,13 +224,13 @@ public final class OpenAiTranslator implements Translator {
         root.addProperty("model", model);
         root.addProperty("temperature", 0.3);
         if (noReasoning && wantsNoReasoning(model)) {
-            // Gemini 2.5 Flash enables dynamic thinking by default on the OpenAI-compat
-            // layer; for short translation lines it only burns output tokens.
+            // Gemini Flash models may enable dynamic thinking on the OpenAI-compatible
+            // layer; short translation lines do not benefit from those extra tokens.
             root.addProperty("reasoning_effort", "none");
         }
 
         JsonArray messages = new JsonArray();
-        messages.add(message("system", buildSystemPrompt(targetLang, s.glossary())));
+        messages.add(message("system", buildSystemPrompt(targetLang, s.glossary(), numberedLines)));
         messages.add(message("user", numberedLines));
         root.add("messages", messages);
         return GSON.toJson(root);
@@ -199,79 +239,95 @@ public final class OpenAiTranslator implements Translator {
     // ---- Minecraft-aware system prompt ----
 
     /**
-     * Curated Minecraft English → 繁體中文 glossary (official language-file /
-     * community wording). Appended to the system prompt for Traditional-Chinese targets so
-     * the model uses Minecraft's ESTABLISHED terms instead of generic dictionary
-     * translations — e.g. Melon 西瓜 (not 甜瓜), Enchant 附魔 (not 魔法), Skill Book 技能書
-     * (not 食譜書).
-     *
-     * <p>Easy to extend: add a {@code "English → 中文"} line. When several English synonyms
-     * share one Chinese term, list them on one line separated by {@code " / "}. Keep the
-     * arrow ({@code →}) so the compact prompt rendering stays consistent.</p>
-     */
-    static final List<String> MINECRAFT_GLOSSARY_ZH_TW = List.of(
-            "Melon / Watermelon → 西瓜",
-            "Enchant / Enchanting / Enchantment → 附魔",
-            "Enchanting Table → 附魔台",
-            "Skill Book → 技能書",
-            "Recipe / Recipes → 配方",
-            "Recipe Book → 配方書",
-            "Creeper → 苦力怕",
-            "Enderman → 終界使者",
-            "The End → 終界",
-            "Ender Pearl → 終界珍珠",
-            "Nether → 地獄",
-            "Redstone → 紅石",
-            "Obsidian → 黑曜石",
-            "Netherite → 獄髓",
-            "Diamond → 鑽石",
-            "Mob → 生物",
-            "Spawn → 生成",
-            "Spawner / Monster Spawner → 生怪磚",
-            "Villager → 村民",
-            "Raid → 襲擊",
-            "Trident → 三叉戟",
-            "Ghast → 惡魂",
-            "Blaze → 烈焰使者",
-            "Elytra → 鞘翅",
-            "Shulker → 界伏蚌",
-            "Slime → 史萊姆");
-
-    /**
      * Build the system message. Unconditionally frames the text as Minecraft (Java Edition
-     * and mods) in-game strings and asks for Minecraft's established terminology. For Chinese
-     * targets it then appends a glossary block: the curated 繁體 defaults (Traditional targets
-     * only, since the terms are Traditional-specific) followed by the user's own overrides.
+     * and mods) in-game strings and asks for Minecraft's established terminology. The former
+     * built-in glossary was intentionally removed: repeating dozens of unrelated terms on
+     * every request was a substantial fixed token cost. Explicit user overrides remain.
      */
     static String buildSystemPrompt(String targetLang, List<String> userGlossary) {
+        return buildSystemPrompt(targetLang, userGlossary, null);
+    }
+
+    /**
+     * Build the compact system message and include only glossary entries that occur in this
+     * request. Sending the complete glossary on every HUD change used more input tokens than
+     * the text being translated; exact request-local filtering preserves terminology without
+     * paying that fixed cost.
+     */
+    static String buildSystemPrompt(String targetLang, List<String> userGlossary,
+                                    String requestText) {
         String lang = langName(targetLang);
         StringBuilder sb = new StringBuilder();
-        sb.append("You are a professional video-game localizer for Minecraft (Java Edition) and its mods. ")
-                .append("The numbered lines below are in-game text (item and block names, tooltips/lore, GUI labels, chat, advancements). ")
-                .append("Translate each numbered line into ").append(lang).append(", keeping terminology coherent across lines. ")
-                .append("Use Minecraft's own ESTABLISHED terminology in the target language — the wording from the game's official language files and the community glossary — rather than a generic dictionary translation. ")
+        sb.append("Translate Minecraft Java/mod in-game text into ").append(lang).append(". ")
+                .append("Use official Minecraft translations as the terminology baseline for vanilla concepts, not as a rigid word-for-word template. ")
+                .append("Adapt naturally to the detected server/mod genre and keep wording coherent across lines. ")
+                .append("The source may be vanilla Minecraft or any server/mod genre, including RPG/MMO equipment, stats, abilities, quests and economy. ")
+                .append("Infer ambiguous terms from the entire visible-block context, never as isolated dictionary labels. ")
+                .append("Return exactly one numbered translation per numbered input unit, with the same numbering and no commentary. ")
+                .append("Never merge, split, add, remove or reorder numbered units; the program owns all sections, PB line breaks and blank lines. ")
                 .append("Keep numbers, symbols and formatting codes intact. ")
+                .append("Translate ordinary UI, item and location terms completely; do not leave a source-language location word unchanged while translating the rest. ")
                 .append("Translate each word as a WHOLE: NEVER mix the original script and the target script inside a single word. ")
-                .append("For a personal name or any untranslatable proper noun, either transliterate/translate it COMPLETELY into ").append(lang)
-                .append(" or keep it ENTIRELY in its original spelling — never output a partly-converted word (for example, never turn \"jacob\" into \"傑cob\"; write either \"雅各\" or \"jacob\"). ")
-                .append("Any ⟦…⟧ token (e.g. ⟦MT0⟧, ⟦0⟧, ⟦CS1⟧…⟦/CS1⟧ marker pairs) must be copied verbatim and stay attached to the words it wraps. ")
-                .append("Reply with ONLY the numbered translations, same numbering and line count, no commentary.");
+                .append("For names, translate/transliterate the WHOLE name or keep it unchanged; never turn \"jacob\" into \"傑cob\". ")
+                .append("Copy every ⟦…⟧ placeholder verbatim. Treat each ⟦CSn⟧...⟦/CSn⟧ pair like a BBCode style tag: keep the complete pair around the translation of the same semantic phrase even when target grammar reorders phrases. Never drop, nest incorrectly, or duplicate CS tags or ⟦WSn⟧ layout slots. ")
+                .append("Treat each ⟦PBn⟧ as an immutable line break inside one semantic paragraph: keep all PB tokens in the same order while translating coherently across them.");
+
+        if (isTraditionalChineseTarget(targetLang)) {
+            sb.append(" Prefer established Minecraft and Traditional-Chinese gaming wording")
+                    .append(" (for example, Enchant → 附魔). In an RPG stat or combat block,")
+                    .append(" Damage means 傷害, not 損壞; interpret equipment and character")
+                    .append(" stat labels by their gameplay meaning likewise. For server/mod-specific")
+                    .append(" content, write concise, natural Taiwan player-facing RPG/MMO/mod text")
+                    .append(" instead of stiff dictionary translations. Keep established proper names")
+                    .append(" unchanged when translating them would be awkward or ambiguous.");
+        }
 
         if (isChineseTarget(targetLang)) {
-            List<String> user = parseUserGlossary(userGlossary);
-            boolean traditional = isTraditionalChineseTarget(targetLang);
-            // Only emit the glossary block if there is actually something to put in it.
-            if (traditional || !user.isEmpty()) {
-                List<String> entries = new ArrayList<>();
-                if (traditional) entries.addAll(MINECRAFT_GLOSSARY_ZH_TW);
-                entries.addAll(user); // user entries come LAST → they override the defaults
-                sb.append("\n\nMinecraft glossary — use these exact translations")
-                        .append(" (if a term appears more than once, the LAST entry wins): ")
-                        .append(String.join("; ", entries))
+            List<String> user = relevantGlossary(parseUserGlossary(userGlossary), requestText);
+            if (!user.isEmpty()) {
+                sb.append("\nUser term overrides: ")
+                        .append(String.join("; ", user))
                         .append('.');
             }
         }
         return sb.toString();
+    }
+
+    static List<String> relevantGlossary(List<String> entries, String requestText) {
+        if (entries == null || entries.isEmpty() || requestText == null || requestText.isBlank()) {
+            return List.of();
+        }
+        String haystack = requestText.toLowerCase(Locale.ROOT);
+        List<String> out = new ArrayList<>();
+        for (String entry : entries) {
+            if (entry == null) continue;
+            int arrow = entry.indexOf('→');
+            String english = (arrow < 0 ? entry : entry.substring(0, arrow)).strip();
+            boolean found = false;
+            for (String alternative : english.split("/")) {
+                String term = alternative.strip().toLowerCase(Locale.ROOT);
+                if (!term.isEmpty() && containsTerm(haystack, term)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) out.add(entry);
+        }
+        return out;
+    }
+
+    private static boolean containsTerm(String text, String term) {
+        for (int at = text.indexOf(term); at >= 0; at = text.indexOf(term, at + 1)) {
+            int end = at + term.length();
+            boolean left = at == 0 || !asciiWord(text.charAt(at - 1));
+            boolean right = end == text.length() || !asciiWord(text.charAt(end));
+            if (left && right) return true;
+        }
+        return false;
+    }
+
+    private static boolean asciiWord(char c) {
+        return c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_';
     }
 
     /** Parse user "英文=中文" glossary lines into compact "English → 中文" prompt entries.
@@ -299,12 +355,12 @@ public final class OpenAiTranslator implements Translator {
         return langName(targetLang).contains("Chinese");
     }
 
-    /** Traditional Chinese only — the script the curated 繁體 glossary is written for. */
+    /** True only for Traditional Chinese prompt wording. */
     static boolean isTraditionalChineseTarget(String targetLang) {
         return langName(targetLang).contains("Traditional Chinese");
     }
 
-    /** Whether to disable model "thinking" for this model id (Gemini 2.5+ Flash family). */
+    /** Whether to disable model "thinking" for a Gemini Flash-family model id. */
     static boolean wantsNoReasoning(String model) {
         String m = model == null ? "" : model.toLowerCase();
         return m.contains("gemini") && m.contains("flash") && !m.contains("2.0");
@@ -461,34 +517,42 @@ public final class OpenAiTranslator implements Translator {
      * the whole batch (empty entries are treated as per-item failures downstream).
      */
     public static List<String> parseNumbered(String content, int expected) {
+        if (content == null) content = "";
         List<String> out = new ArrayList<>();
+        for (int i = 0; i < Math.max(0, expected); i++) out.add("");
+        List<String> unnumbered = new ArrayList<>();
         StringBuilder cur = null;
+        int curIndex = -1;
         boolean sawNumber = false;
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
         for (String raw : content.split("\n", -1)) {
             String line = raw.strip();
             if (line.isEmpty()) continue;
             java.util.regex.Matcher m = NUMBERED.matcher(line);
             if (m.matches()) {
                 sawNumber = true;
-                if (cur != null) out.add(cur.toString());
-                cur = new StringBuilder(m.group(2).strip());
+                if (cur != null && curIndex >= 0) out.set(curIndex, cur.toString());
+                int number;
+                try {
+                    number = Integer.parseInt(m.group(1));
+                } catch (NumberFormatException ignored) {
+                    number = -1;
+                }
+                int index = number - 1;
+                curIndex = index >= 0 && index < expected && seen.add(index) ? index : -1;
+                cur = curIndex >= 0 ? new StringBuilder(m.group(2).strip()) : null;
             } else if (cur != null) {
                 if (cur.length() > 0) cur.append(' ');
                 cur.append(line); // continuation of a wrapped translation
-            } else {
-                out.add(line); // unnumbered leading line
+            } else if (!sawNumber) {
+                unnumbered.add(line);
             }
         }
-        if (cur != null) out.add(cur.toString());
+        if (cur != null && curIndex >= 0) out.set(curIndex, cur.toString());
         // No numbering at all: fall back to one entry per non-blank line.
         if (!sawNumber) {
             out.clear();
-            for (String raw : content.split("\n", -1)) {
-                String line = raw.strip();
-                if (!line.isEmpty()) out.add(line);
-            }
-        }
-        if (expected > 0) {
+            out.addAll(unnumbered);
             while (out.size() > expected) out.remove(out.size() - 1);
             while (out.size() < expected) out.add("");
         }

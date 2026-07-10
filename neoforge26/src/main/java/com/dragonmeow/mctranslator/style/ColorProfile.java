@@ -23,7 +23,7 @@ public final class ColorProfile {
 
     public ColorProfile(int[] colors, boolean bold, boolean italic,
                         boolean underline, boolean strikethrough, boolean obfuscated) {
-        this.colors = (colors == null) ? new int[0] : colors;
+        this.colors = (colors == null) ? new int[0] : colors.clone();
         this.bold = bold;
         this.italic = italic;
         this.underline = underline;

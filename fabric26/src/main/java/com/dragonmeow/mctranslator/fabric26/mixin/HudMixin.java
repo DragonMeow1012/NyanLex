@@ -2,17 +2,34 @@ package com.dragonmeow.mctranslator.fabric26.mixin;
 
 import com.dragonmeow.mctranslator.fabric26.Fabric26TextStyle;
 import com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26;
+import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
+import com.dragonmeow.mctranslator.translate.ParagraphModel;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.numbers.NumberFormat;
+import net.minecraft.network.chat.numbers.StyledFormat;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.PlayerScoreEntry;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Scoreboard;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
 
@@ -28,6 +45,182 @@ import java.util.function.Function;
 @Mixin(Hud.class)
 public abstract class HudMixin {
 
+    @Shadow @Final
+    private static Comparator<PlayerScoreEntry> SCORE_DISPLAY_ORDER;
+
+    @Shadow
+    public abstract Font getFont();
+
+    private final ArrayDeque<Component> mctranslator$scoreboardSources = new ArrayDeque<>();
+    private final ArrayDeque<Component> mctranslator$scoreboardRendered = new ArrayDeque<>();
+
+    @Inject(method = "displayScoreboardSidebar", at = @At("HEAD"), require = 0)
+    private void mctranslator$prepareScoreboard(GuiGraphicsExtractor graphics,
+                                                Objective objective, CallbackInfo ci) {
+        mctranslator$scoreboardSources.clear();
+        mctranslator$scoreboardRendered.clear();
+        TranslationService service = MctranslatorFabric26.service();
+        if (service == null || objective == null) return;
+
+        Component title = objective.getDisplayName();
+        Scoreboard scoreboard = objective.getScoreboard();
+        NumberFormat numberFormat = objective.numberFormatOrDefault(StyledFormat.SIDEBAR_DEFAULT);
+        List<PlayerScoreEntry> entries = scoreboard.listPlayerScores(objective).stream()
+                .filter(entry -> !entry.isHidden())
+                .sorted(SCORE_DISPLAY_ORDER)
+                .limit(15L)
+                .toList();
+        List<Component> rows = entries.stream()
+                .map(entry -> (Component) PlayerTeam.formatNameForTeam(
+                        scoreboard.getPlayersTeam(entry.owner()), entry.ownerName()))
+                .toList();
+        List<Component> scores = entries.stream()
+                .map(entry -> (Component) entry.formatValue(numberFormat))
+                .toList();
+        List<String> rowStrings = rows.stream().map(Component::getString).toList();
+        List<ParagraphModel.Range> rowRanges = ParagraphModel.ranges(rowStrings);
+        service.warmScoreboardBatch(
+                mctranslator$scoreboardRequests(title, rows, rowStrings, rowRanges));
+
+        Component translatedTitle = Fabric26TextStyle.renderTranslated(
+                "scoreboard", title, service::translateScoreboardLine);
+        mctranslator$enqueueScoreboardRow(
+                title, translatedTitle == null ? title : translatedTitle);
+        List<Component> renderedRows = new ArrayList<>(rows);
+
+        Font font = getFont();
+        for (ParagraphModel.Range range : rowRanges) {
+            int start = range.start();
+            if (ParagraphModel.isBlank(rowStrings.get(start))) continue;
+            int end = range.end() + 1;
+            List<Component> paragraph = new ArrayList<>(rows.subList(start, end));
+            List<Component> translated = Fabric26TextStyle.renderTranslatedParagraph(
+                    paragraph, service::translateScoreboardLine, font);
+            if (translated != null && translated.size() == paragraph.size()) {
+                for (int i = 0; i < paragraph.size(); i++) {
+                    Component rendered = translated.get(i);
+                    if (service.scoreboardMode() == DisplayMode.BOTH) {
+                        rendered = paragraph.get(i).copy()
+                                .append(Component.literal("\u3000"))
+                                .append(rendered);
+                    }
+                    renderedRows.set(start + i, rendered);
+                }
+            }
+        }
+
+        for (int i = 0; i < entries.size(); i++) {
+            mctranslator$enqueueScoreboardRow(rows.get(i), renderedRows.get(i));
+            mctranslator$enqueueScoreboardRow(scores.get(i), scores.get(i));
+        }
+    }
+
+    @Inject(method = "displayScoreboardSidebar", at = @At("RETURN"), require = 0)
+    private void mctranslator$clearScoreboard(GuiGraphicsExtractor graphics,
+                                              Objective objective, CallbackInfo ci) {
+        mctranslator$scoreboardSources.clear();
+        mctranslator$scoreboardRendered.clear();
+    }
+
+    private void mctranslator$enqueueScoreboardRow(Component source, Component rendered) {
+        mctranslator$scoreboardSources.addLast(source);
+        mctranslator$scoreboardRendered.addLast(rendered);
+    }
+
+    private static List<String> mctranslator$scoreboardRequests(
+            Component title, List<Component> rows, List<String> rowStrings,
+            List<ParagraphModel.Range> rowRanges) {
+        List<String> requests = new ArrayList<>();
+        requests.add(Fabric26TextStyle.paragraphRequestText(List.of(title)));
+        for (ParagraphModel.Range range : rowRanges) {
+            int start = range.start();
+            if (ParagraphModel.isBlank(rowStrings.get(start))) {
+                requests.add("");
+                continue;
+            }
+            requests.add(Fabric26TextStyle.paragraphRequestText(
+                    rows.subList(start, range.end() + 1)));
+        }
+        return requests;
+    }
+
+    @Inject(method = "extractRenderState", at = @At("TAIL"), require = 0)
+    private void mctranslator$debugRequests(GuiGraphicsExtractor graphics,
+                                            DeltaTracker deltaTracker,
+                                            CallbackInfo ci) {
+        var log = MctranslatorFabric26.debugLog();
+        var config = MctranslatorFabric26.config();
+        Minecraft minecraft = Minecraft.getInstance();
+        if (log == null || config == null || !config.debugTranslationOverlay
+                || minecraft == null || minecraft.font == null) return;
+
+        MctranslatorFabric26.beginInternalOverlay();
+        try {
+            List<com.dragonmeow.mctranslator.translate.TranslationDebugLog.Entry> entries = log.snapshot(5);
+            Font font = minecraft.font;
+            int availableWidth = Math.max(160, graphics.guiWidth() - 16);
+            int maxWidth = Math.min(440,
+                    Math.min(availableWidth, Math.max(220, graphics.guiWidth() / 3)));
+            int lineHeight = 9;
+            int x = 6;
+            int y = 6;
+            int height = 14 + entries.size() * lineHeight;
+            graphics.fill(x - 3, y - 3, x + maxWidth + 3, y + height, 0xB0101010);
+
+            long waiting = entries.stream().filter(e -> e.status()
+                    == com.dragonmeow.mctranslator.translate.TranslationDebugLog.Status.IN_FLIGHT).count();
+            long failed = entries.stream().filter(e -> e.status()
+                    == com.dragonmeow.mctranslator.translate.TranslationDebugLog.Status.FAILED).count();
+            String header = "MT DEBUG  最近 " + entries.size() + " 項  …" + waiting + "  ✕" + failed;
+            graphics.text(font, Component.literal(header), x, y, 0xFFFFD060, false);
+
+            int row = y + 11;
+            for (var entry : entries) {
+                String state = switch (entry.status()) {
+                    case IN_FLIGHT -> "…";
+                    case SUCCESS -> "✓";
+                    case FALLBACK -> "↪";
+                    case KEEP_ORIGINAL -> "•";
+                    case FAILED -> "✕";
+                };
+                String provider = "AI".equalsIgnoreCase(entry.engine()) ? "AI" : "GT";
+                String prefix = "[" + provider + " #" + entry.requestId() + " " + state + "] ";
+                String translated = switch (entry.status()) {
+                    case IN_FLIGHT -> "等待中";
+                    case FAILED -> "失敗";
+                    case KEEP_ORIGINAL -> "略過";
+                    case SUCCESS, FALLBACK -> entry.translation() == null
+                            ? "無結果" : entry.translation();
+                };
+                String sourceText = com.dragonmeow.mctranslator.translate.TranslationDebugLog
+                        .compactText(entry.text());
+                String translatedText = com.dragonmeow.mctranslator.translate.TranslationDebugLog
+                        .compactText(translated);
+                int bodyBudget = Math.max(40, maxWidth - font.width(prefix + "原:  → 譯: "));
+                int sourceBudget = bodyBudget / 2;
+                int translatedBudget = bodyBudget - sourceBudget;
+                String body = "原: " + mctranslator$ellipsize(font, sourceText, sourceBudget)
+                        + " → 譯: " + mctranslator$ellipsize(font, translatedText, translatedBudget);
+                int color = switch (entry.status()) {
+                    case IN_FLIGHT -> 0xFFFFD080;
+                    case SUCCESS -> 0xFF80FF80;
+                    case FALLBACK -> 0xFF80C0FF;
+                    case KEEP_ORIGINAL -> 0xFFC0C0C0;
+                    case FAILED -> 0xFFFF8080;
+                };
+                graphics.text(font, Component.literal(prefix + body), x, row, color, false);
+                row += lineHeight;
+            }
+        } finally {
+            MctranslatorFabric26.endInternalOverlay();
+        }
+    }
+
+    private static String mctranslator$ellipsize(Font font, String text, int width) {
+        if (text == null || text.isEmpty() || font.width(text) <= width) return text == null ? "" : text;
+        return font.plainSubstrByWidth(text, Math.max(4, width - font.width("…"))) + "…";
+    }
+
     @Redirect(
             method = "displayScoreboardSidebar",
             at = @At(value = "INVOKE",
@@ -36,13 +229,15 @@ public abstract class HudMixin {
             require = 0)
     private void mctranslator$scoreboard(GuiGraphicsExtractor g, Font font, Component text,
                                          int x, int y, int color, boolean shadow) {
+        Component next = mctranslator$scoreboardSources.peekFirst();
         Component toDraw = text;
-        TranslationService service = MctranslatorFabric26.service();
-        if (service != null && text != null) {
-            Component t = Fabric26TextStyle.renderTranslated("scoreboard", text, service::translateScoreboardLine);
-            if (t != null) toDraw = t;
+        if (next != null && next.equals(text)) {
+            mctranslator$scoreboardSources.removeFirst();
+            toDraw = mctranslator$scoreboardRendered.removeFirst();
         }
-        g.text(font, toDraw, x, y, color, shadow);
+        Component rendered = toDraw;
+        com.dragonmeow.mctranslator.translate.InternalRenderGuard.run(
+                () -> g.text(font, rendered, x, y, color, shadow));
     }
 
     @Redirect(
@@ -90,7 +285,8 @@ public abstract class HudMixin {
                 List<Component> lines = Fabric26TextStyle.splitLines(translated);
                 if (lines.size() <= 1) {
                     int w = font.width(translated);
-                    g.textWithBackdrop(font, translated, center - w / 2, y, w, color);
+                    com.dragonmeow.mctranslator.translate.InternalRenderGuard.run(
+                            () -> g.textWithBackdrop(font, translated, center - w / 2, y, w, color));
                     return;
                 }
                 // 原文＋翻譯: stack lines upward (原文 on top, 譯文 at the baseline).
@@ -99,11 +295,13 @@ public abstract class HudMixin {
                     Component line = lines.get(k);
                     int w = font.width(line);
                     int ly = y - (n - 1 - k) * Fabric26TextStyle.STACK_LINE_GAP;
-                    g.textWithBackdrop(font, line, center - w / 2, ly, w, color);
+                    com.dragonmeow.mctranslator.translate.InternalRenderGuard.run(
+                            () -> g.textWithBackdrop(font, line, center - w / 2, ly, w, color));
                 }
                 return;
             }
         }
-        g.textWithBackdrop(font, text, x, y, width, color);
+        com.dragonmeow.mctranslator.translate.InternalRenderGuard.run(
+                () -> g.textWithBackdrop(font, text, x, y, width, color));
     }
 }

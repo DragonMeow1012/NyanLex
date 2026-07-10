@@ -18,9 +18,10 @@ class TranslatorConfigTest {
         TranslatorConfig cfg = new TranslatorConfig();
         assertEquals("zh-TW", cfg.targetLang);
         assertEquals("auto", cfg.sourceLang);
+        assertEquals("gemini-3.1-flash-lite", cfg.aiModel);
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
-        assertTrue(cfg.pretranslateItemsOnLoad);
+        assertFalse(cfg.debugTranslationOverlay);
         assertTrue(cfg.churnGuard, "特效字防護預設開啟");
         assertEquals(4, cfg.churnVariantThreshold);
         assertEquals(60, cfg.churnWindowSeconds);

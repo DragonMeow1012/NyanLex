@@ -36,8 +36,8 @@ public final class Neo26AiScreen extends Screen {
       this.keysBox.setValue(keysForEndpoint(cfg, cfg.aiBaseUrl));
       this.addRenderableWidget(this.keysBox);
       int pw = 102;
-      this.addPreset("Gemini（免費額度高）", x, 158, pw, "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash-lite");
-      this.addPreset("OpenAI", x + pw + 6, 158, pw, "https://api.openai.com/v1", "gpt-4o-mini");
+      this.addPreset("Gemini（免費額度高）", x, 158, pw, "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.1-flash-lite");
+      this.addPreset("OpenAI", x + pw + 6, 158, pw, "https://api.openai.com/v1", "gpt-5.4-mini");
       this.addPreset("DeepSeek", x + 2 * (pw + 6), 158, pw, "https://api.deepseek.com", "deepseek-chat");
       Button[] testBtn = new Button[1];
       testBtn[0] = Button.builder(Component.literal("測試連接"), b -> {
@@ -88,10 +88,8 @@ public final class Neo26AiScreen extends Screen {
       cfg.aiApiKeys = newKeys;
       cfg.aiKeysByEndpoint.put(endpointKey(newUrl), this.keysBox.getValue());
       MctranslatorNeoForge26.saveConfig();
-      if (changed && MctranslatorNeoForge26.service() != null) {
-         MctranslatorNeoForge26.service().clearAiTranslations();
-         Neo26TextStyle.clearRenderMemo();
-      }
+      // Editing a provider/model/key must not delete permanent translations.
+      if (changed) Neo26TextStyle.clearRenderMemo();
 
       if (this.minecraft != null) {
          this.minecraft.setScreenAndShow(this.parent);

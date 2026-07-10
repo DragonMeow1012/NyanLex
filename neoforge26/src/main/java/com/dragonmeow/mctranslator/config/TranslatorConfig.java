@@ -32,16 +32,6 @@ public final class TranslatorConfig {
     // 自訂模組介面文字（光影/模組設定等，經 GuiGraphics 繪字）。預設關閉——較廣，使用者自行開啟。
     public DisplayMode screenTextMode = DisplayMode.ORIGINAL_ONLY; // 介面文字 (on/off, 預設關)
 
-    /** On load, translate every registered item's name in the background (batched, throttled, persisted). */
-    public boolean pretranslateItemsOnLoad = true;
-
-    /** Spacing between warm-up batches in ms. Higher = gentler (less GC/CPU bursts, less stutter). */
-    public int pretranslateDelayMs = 1000;
-
-    /** How many item names to translate per batched request. The Google backend chunks
-     *  internally by character budget, so short item names pack densely into one call. */
-    public int pretranslateBatchSize = 100;
-
     // ---- AI fine-translation (精翻) — per-surface: each surface chooses 機翻(Google) or AI ----
     public boolean aiChat = false;
     public boolean aiTooltip = false;
@@ -58,8 +48,8 @@ public final class TranslatorConfig {
 
     /** OpenAI-compatible base URL (chat/completions is appended). Default: Gemini (high free quota). */
     public String aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
-    /** Model id, e.g. {@code gemini-2.5-flash-lite}, {@code gpt-4o-mini}, {@code deepseek-chat}. */
-    public String aiModel = "gemini-2.5-flash-lite";
+    /** Model id, e.g. {@code gemini-3.1-flash-lite}, {@code gpt-5.4-mini}, {@code deepseek-chat}. */
+    public String aiModel = "gemini-3.1-flash-lite";
     /** One or more API keys (for the active endpoint); rotated round-robin and on failure. */
     public java.util.List<String> aiApiKeys = new java.util.ArrayList<>();
 
@@ -68,20 +58,16 @@ public final class TranslatorConfig {
 
     /**
      * User-pinned term translations — the "訂翻譯" mechanism. Each entry is a line like
-     * {@code "Skill Book=技能書"} ({@code "英文=中文"}). These are appended to the AI system
-     * prompt AFTER the built-in Minecraft glossary, so a user entry overrides the default
-     * for the same term. Empty by default; malformed / blank lines are ignored at prompt time.
+     * {@code "Skill Book=技能書"} ({@code "英文=中文"}). Only entries present in the
+     * current request are appended to the compact Minecraft-aware prompt. Empty by default;
+     * malformed / blank lines are ignored at prompt time.
      */
     public java.util.List<String> aiGlossary = new java.util.ArrayList<>();
 
     /** Google target language. Traditional Chinese = {@code zh-TW}. */
     public String targetLang = "zh-TW";
 
-    /**
-     * Follow the game's own language for the 繁/簡 choice: when on, {@link #targetLang} is kept in
-     * sync with Minecraft's selected language ({@code zh_cn} → {@code zh-CN}, otherwise → {@code zh-TW}).
-     * Turning the in-game 翻譯語言 setting to a fixed 繁體/簡體 disables this.
-     */
+    /** Follow Minecraft's complete language selection, or use a fixed target chosen in the picker. */
     public boolean followGameLanguage = true;
 
     /** Google source language. {@code auto} lets Google detect it. */
@@ -106,7 +92,7 @@ public final class TranslatorConfig {
      */
     public int failureBackoffMs = 10000;
 
-    /** Maximum number of cached translations in memory (LRU eviction beyond this). */
+    /** Maximum hot entries in memory. Disk entries are permanent and unbounded. */
     public int cacheMaxSize = 5000;
 
     // ---- 特效字/動畫字防護 (ChurnGuard) ----
@@ -125,14 +111,8 @@ public final class TranslatorConfig {
     /** Cooldown once tripped: no new requests for this signature, in seconds. */
     public int churnCooldownSeconds = 300;
 
-    /** Use a disk-backed second-tier cache (recovers LRU-evicted entries within a session). */
-    public boolean diskCache = true;
-
-    /**
-     * Wipe the disk cache on game start. Default false = keep translations across
-     * restarts (so pre-translated item names are only ever translated once).
-     */
-    public boolean clearDiskCacheOnStart = false;
+    /** Show canonical strings that actually cross the backend request boundary. */
+    public boolean debugTranslationOverlay = false;
 
     /** Background worker thread count for async (tooltip/chat) translations. */
     public int workerThreads = 2;
@@ -174,8 +154,6 @@ public final class TranslatorConfig {
         if (aiApiKeys == null) aiApiKeys = new java.util.ArrayList<>();
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
-        if (pretranslateBatchSize <= 0) pretranslateBatchSize = 100;
-        if (pretranslateDelayMs < 0) pretranslateDelayMs = 1000;
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
         if (failureBackoffMs < 0) failureBackoffMs = 10000;
         if (cacheMaxSize <= 0) cacheMaxSize = 5000;

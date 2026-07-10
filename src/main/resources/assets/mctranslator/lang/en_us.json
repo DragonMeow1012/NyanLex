@@ -1,7 +1,6 @@
 {
   "category.mctranslator": "Minecraft Translator",
   "key.mctranslator.mode": "Open Translation Settings",
-  "key.mctranslator.clear": "Clear All & Re-translate",
   "key.mctranslator.retranslate": "Re-translate Pointed Item",
   "key.mctranslator.screenscan": "Translate Current Screen's Buttons/Options",
   "key.mctranslator.toggle": "Quick Toggle: Original / Translation"

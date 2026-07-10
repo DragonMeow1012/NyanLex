@@ -28,9 +28,10 @@ public interface Translator {
 
     /**
      * Batch translation with optional shared surface context: {@code surfaceContext} is the
-     * COMPLETE line list of the surface the batch came from (e.g. a whole item tooltip,
-     * first line = title), including lines that are already cached and therefore absent
-     * from {@code texts}. Context-aware backends use it so partial batches still translate
+     * COMPLETE paragraph list of the surface the batch came from (e.g. a whole item
+     * tooltip, book page or scoreboard), including units already cached and therefore absent
+     * from {@code texts}. No generic first-unit/title assumption is implied. Context-aware
+     * backends use it so partial batches still translate
      * coherently with the whole surface; the default simply ignores it and delegates to
      * {@link #translateBatch(List, String)}, so existing implementations keep working.
      * {@code surfaceContext} may be {@code null} (no context).

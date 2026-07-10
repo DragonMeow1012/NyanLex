@@ -94,6 +94,29 @@ class TranslationServiceTest {
     }
 
     @Test
+    void actionBarMissCompletesAsynchronouslyAndReusesNumberTemplate() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.actionBarMode = DisplayMode.TRANSLATION;
+        cfg.aiActionBar = false;
+        AtomicInteger calls = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult(text
+                    .replace("You received", "你獲得了")
+                    .replace("coins!", "硬幣！"), "en");
+        };
+        TranslationService s = service(cfg, translator, DIRECT);
+        List<String> results = new ArrayList<>();
+
+        s.requestActionBarAsync("You received 10,518.2 coins!", results::add);
+        pump(s);
+        s.requestActionBarAsync("You received 26.2 coins!", results::add);
+
+        assertEquals(List.of("你獲得了10,518.2硬幣！", "你獲得了26.2硬幣！"), results);
+        assertEquals(1, calls.get());
+    }
+
+    @Test
     void perSurfaceModesAreIndependent() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.chatMode = DisplayMode.ORIGINAL_ONLY;   // chat off
@@ -199,7 +222,7 @@ class TranslationServiceTest {
         assertEquals(1, got.size());
         assertTrue(got.get(0) != null && got.get(0).contains("Steve123"),
                 "the name must be restored verbatim: " + got.get(0));
-        assertFalse(String.join(" ", sent).contains("Steve123"),
+        assertFalse(String.join(String.valueOf((char) 0), sent).contains("Steve123"),
                 "the raw name must never be sent to the backend: " + sent);
     }
 
@@ -468,11 +491,11 @@ class TranslationServiceTest {
 
         s.warmTooltipBatch(List.of("§eHello §aWorld"));
         assertEquals(1, calls.get());
-        assertEquals("T1:§eHello §aWorld", s.translateItemLine("§eHello §aWorld").translated());
+        assertEquals("T1:Hello World", s.translateItemLine("§eHello §aWorld").translated());
 
         s.retranslate(List.of("§eHello §aWorld")); // DIRECT: invalidate + re-warm inline
         assertEquals(2, calls.get(), "the hotkey must actually re-buy the line");
-        assertEquals("T2:§eHello §aWorld", s.translateItemLine("§eHello §aWorld").translated(),
+        assertEquals("T2:Hello World", s.translateItemLine("§eHello §aWorld").translated(),
                 "the NEW translation is served after the hotkey");
     }
 
@@ -560,5 +583,65 @@ class TranslationServiceTest {
         assertTrue(d.changed(), "a translation that KEEPS the player ID displays normally");
         assertTrue(d.translated().contains("Aand_"), "the ID is verbatim in the output");
         assertEquals(1, calls.get());
+    }
+
+    @Test
+    void inconsistentHeldItemNameIsDeterministicallyDerivedFromTooltipTitle() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        cfg.aiTooltip = true;
+        AtomicInteger contextualNameCalls = new AtomicInteger();
+        Translator contextAware = new Translator() {
+            @Override
+            public TranslationResult translate(String text, String target) {
+                return new TranslationResult("T:" + text, "en");
+            }
+
+            @Override
+            public List<TranslationResult> translateBatch(List<String> texts, String target,
+                                                           List<String> context) {
+                boolean hasAbilityContext = context != null && context.stream()
+                        .anyMatch(line -> line.contains("Instant Transmission"));
+                List<TranslationResult> out = new ArrayList<>();
+                for (String text : texts) {
+                    String translated;
+                    if (text.equals("Aspect of the End")) {
+                        if (hasAbilityContext) contextualNameCalls.incrementAndGet();
+                        translated = hasAbilityContext ? "終界之刃" : "末影之視";
+                    } else if (text.contains("Aspect of the End") && text.contains("Damage:")) {
+                        translated = text.replace("Aspect of the End Damage:", "終界之刃 傷害：");
+                        translated = translated.replace("Aspect of the End", "終界之刃")
+                                .replace("Damage:", "傷害：");
+                    } else if (text.startsWith("Damage:")) {
+                        translated = text.replace("Damage:", "傷害：");
+                    } else {
+                        translated = "譯：" + text;
+                    }
+                    out.add(new TranslationResult(translated, "en"));
+                }
+                return out;
+            }
+        };
+        TranslationService s = service(cfg, contextAware, DIRECT);
+
+        s.warmNamesBatch(List.of("Aspect of the End"));
+        pump(s);
+        assertEquals("末影之視", s.translateHeld("Aspect of the End").translated());
+
+        List<String> tooltip = List.of(
+                "⟦CS0⟧Aspect of the End⟦/CS0⟧ ⟦CS1⟧Damage: +100⟦/CS1⟧",
+                "Ability: Instant Transmission RIGHT CLICK");
+        s.warmTooltipBatch(tooltip);
+        pump(s);
+        s.reconcileItemNameWithTooltip("Aspect of the End", tooltip);
+        pump(s); // translates the reusable "Damage: [n]" suffix
+        s.reconcileItemNameWithTooltip("Aspect of the End", tooltip); // extracts + stores prefix
+
+        assertEquals("終界之刃", s.translateHeld("Aspect of the End").translated());
+        assertEquals(0, contextualNameCalls.get(),
+                "deterministic prefix extraction must not re-ask AI for the item name");
+        s.reconcileItemNameWithTooltip("Aspect of the End", tooltip);
+        pump(s);
+        assertEquals(0, contextualNameCalls.get(), "matching names must not be re-bought per frame");
     }
 }

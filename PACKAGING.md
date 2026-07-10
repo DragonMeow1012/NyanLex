@@ -1,50 +1,54 @@
-# 打包流程
+# 1.0.2 建置與打包
 
-## Fabric 26.2
-
-`fabric26` 需要 Fabric Loom 1.17.x，目前解析到的 plugin 需要 Gradle plugin API `9.5.0`，所以不要用根目錄 `gradle/wrapper/gradle-wrapper.properties` 裡的 Gradle 8.10 來打包 26.2。
-
-### 環境
-
-- JDK 25: `C:\Program Files\Java\jdk-25`
-- Gradle 9.5.0: 建議放在專案根目錄的 `.gradle-local\gradle-9.5.0`
-
-### 第一次準備 Gradle 9.5.0
-
-在專案根目錄執行：
+專案包含六個獨立 loader／Minecraft 版本。任何核心修改後，先同步共用碼：
 
 ```powershell
-$distDir = Join-Path $PWD ".gradle-local"
-$version = "9.5.0"
-$zip = Join-Path $distDir "gradle-$version-bin.zip"
-New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-curl.exe -L --fail --retry 3 --output $zip "https://services.gradle.org/distributions/gradle-$version-bin.zip"
-tar -xf $zip -C $distDir
+powershell -ExecutionPolicy Bypass -File .\sync-core.ps1
 ```
 
-### 打包指令
-
-在專案根目錄執行：
+## Java 21：Minecraft 1.20.1／1.21.1
 
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-25"
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
-Set-Location .\fabric26
-..\.gradle-local\gradle-9.5.0\bin\gradle.bat clean build --no-daemon
-Set-Location ..
-Copy-Item -Force .\fabric26\build\libs\mctranslator-1.0.0-Fabric-26.2.jar .\mods-jar\fabric\mctranslator-1.0.0-Fabric-26.2.jar
+.\.gradle-local\gradle-8.10\bin\gradle.bat clean build --no-daemon
+.\.gradle-local\gradle-8.10\bin\gradle.bat -p .\fabric120 clean build --no-daemon
+.\.gradle-local\gradle-8.10\bin\gradle.bat -p .\neoforge clean build --no-daemon
+.\.gradle-local\gradle-8.13\bin\gradle.bat -p .\neoforge120 clean build --no-daemon
 ```
 
-### 輸出位置
+## Java 25：Minecraft 26.2
 
-- 建置輸出：`fabric26\build\libs\mctranslator-1.0.0-Fabric-26.2.jar`
-- 發佈用複本：`mods-jar\fabric\mctranslator-1.0.0-Fabric-26.2.jar`
-
-### 驗證
+Fabric 26.2／NeoForge 26.2 使用 Gradle 9.5.0：
 
 ```powershell
-& "C:\Program Files\Java\jdk-25\bin\jar.exe" tf .\mods-jar\fabric\mctranslator-1.0.0-Fabric-26.2.jar |
-  Select-String -Pattern "fabric.mod.json|MctranslatorFabric26|TranslationCache|TextFilter|Fabric26TextStyle"
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-25'
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p .\fabric26 clean build --no-daemon
+.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p .\neoforge26 clean build --no-daemon
 ```
 
-成功時應看到 `fabric.mod.json`、`MctranslatorFabric26.class`、`TranslationCache.class`、`TextFilter.class`、`Fabric26TextStyle.class` 等項目。
+## 發佈目錄
+
+六個正式 jar 必須放在：
+
+```text
+mods-jar/1.0.2/fabric/
+  mctranslator-1.0.2-Fabric-1.20.1.jar
+  mctranslator-1.0.2-Fabric-1.21.1.jar
+  mctranslator-1.0.2-Fabric-26.2.jar
+mods-jar/1.0.2/neoforge/
+  mctranslator-1.0.2-NeoForge-1.20.1.jar
+  mctranslator-1.0.2-NeoForge-1.21.1.jar
+  mctranslator-1.0.2-NeoForge-26.2.jar
+```
+
+Fabric 26.2 的本機安裝位置：
+
+```text
+%APPDATA%\.minecraft\mods\mctranslator-1.0.2-Fabric-26.2.jar
+```
+
+打包後應比對 SHA-256，並確認 jar 內含 loader metadata、
+`TranslationCache.class` 與 `TranslationTemplate.class`。遊戲執行期間可以覆蓋 jar，
+但新版本只會在完整重啟 Minecraft 後載入。

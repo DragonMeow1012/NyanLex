@@ -7,6 +7,7 @@
     "AbstractContainerScreenAccessor",
     "BookPageMixin",
     "BossBarMixin",
+    "ChatComponentMixin",
     "EntityNameTagMixin",
     "FontSplitMixin",
     "GuiGraphicsTextMixin",

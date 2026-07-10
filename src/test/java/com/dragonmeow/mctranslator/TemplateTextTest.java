@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator;
 
 import com.dragonmeow.mctranslator.translate.TemplateText;
+import com.dragonmeow.mctranslator.translate.TextFilter;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,6 +19,14 @@ class TemplateTextTest {
         // Restore substitutes the value AND tightens CJK spacing (uniform 「得到5硬幣」style).
         String token = p.text().substring(p.text().indexOf('⟦'), p.text().indexOf('⟧') + 1);
         assertEquals("你得到5硬幣", p.restore("你得到 " + token + " 硬幣"));
+    }
+
+    @Test
+    void sectionCodeNumbersKeepStyleCodeOutsideValue() {
+        TemplateText.Prepared p = TemplateText.prepare("§62,525/2,150 Mana");
+        assertEquals("§6⟦MT0⟧/⟦MT1⟧ Mana", p.text());
+        assertEquals(java.util.List.of("2,525", "2,150"), p.values());
+        assertEquals("§62,525/2,150魔力", p.restore("§6⟦MT0⟧/⟦MT1⟧ 魔力"));
     }
 
     @Test
@@ -51,6 +60,14 @@ class TemplateTextTest {
         String restored = p.restore(p.text());
         assertTrue(restored.contains("https://vote.example.com/x?y=1"));
         assertTrue(restored.contains("12:30"));
+    }
+
+    @Test
+    void bareDomainPathsAreProtectedAndRestoredVerbatim() {
+        TemplateText.Prepared p = TemplateText.prepare("前往 hypixel.net/ptl");
+        assertTrue(p.changed());
+        assertFalse(p.text().contains("hypixel.net"), p.text());
+        assertEquals("前往 hypixel.net/ptl", p.restore(p.text()));
     }
 
     @Test
@@ -122,8 +139,10 @@ class TemplateTextTest {
         // if the pattern had eaten "5 m", the word would come out shredded as "ay".
         assertTrue(TemplateText.prepare("5 may").text().contains("may"),
                 TemplateText.prepare("5 may").text());
-        // Ordinals and plain labels keep their words (numbers still template as NUMBER).
-        assertTrue(TemplateText.prepare("3rd place").text().contains("rd place"));
+        // Ordinals are one live slot and restore their suffix intact.
+        TemplateText.Prepared ordinal = TemplateText.prepare("3rd place");
+        assertEquals("⟦MT0⟧ place", ordinal.text());
+        assertEquals("3rd place", ordinal.restore(ordinal.text()));
         assertTrue(TemplateText.prepare("Room 5").text().startsWith("Room"));
         // A unit-free English sentence is untouched.
         TemplateText.Prepared plain = TemplateText.prepare("Seconds matter most");
@@ -190,6 +209,62 @@ class TemplateTextTest {
     }
 
     @Test
+    void scoreboardCalendarOrdinalsReuseOneKey() {
+        TemplateText.Prepared day23 = TemplateText.prepare("Late Summer 23rd");
+        TemplateText.Prepared day24 = TemplateText.prepare("Late Summer 24th");
+        assertEquals(day23.text(), day24.text());
+        assertEquals("Late Summer 23rd", day23.restore(day23.text()));
+        assertEquals("Late Summer 24th", day24.restore(day24.text()));
+    }
+
+    @Test
+    void scoreboardDateAndShardAreOneDynamicSlot() {
+        TemplateText.Prepared first = TemplateText.prepare("07/10/26 m6GA5");
+        TemplateText.Prepared second = TemplateText.prepare("07/11/26 m8BC2");
+        assertEquals("⟦MT0⟧", first.text());
+        assertEquals(first.text(), second.text());
+        assertEquals("07/10/26 m6GA5", first.restore(first.text()));
+        assertEquals("07/11/26 m8BC2", second.restore(second.text()));
+    }
+
+    @Test
+    void rankedLobbyJoinMessagesHidePlayerIdsAndShareOneTemplate() {
+        TemplateText.Prepared first = TemplateText.prepare("[MVP+] Life joined the lobby!");
+        TemplateText.Prepared second = TemplateText.prepare("[VIP] DashieBrot joined the lobby!");
+
+        assertEquals(first.text(), second.text(), "rank and username variants share one request key");
+        assertFalse(first.text().contains("Life"));
+        assertFalse(second.text().contains("DashieBrot"));
+        assertEquals("[MVP+] Life 加入了大廳！",
+                first.restore("⟦MT0⟧ 加入了大廳！"));
+        assertEquals("[VIP] DashieBrot 加入了大廳！",
+                second.restore("⟦MT0⟧ 加入了大廳！"));
+    }
+
+    @Test
+    void rainbowMvpPlusPlusJoinMessagesHideTheWholeStyledIdentity() {
+        String first = "⟦CS0⟧>⟦/CS0⟧⟦CS1⟧>⟦/CS1⟧⟦CS2⟧> ⟦/CS2⟧"
+                + "⟦CS3⟧[MVP⟦/CS3⟧⟦CS4⟧++⟦/CS4⟧⟦CS5⟧] Big_Thief_⟦/CS5⟧ "
+                + "⟦CS6⟧joined the lobby!⟦/CS6⟧";
+        String second = first.replace("Big_Thief_", "IGBLF");
+        TemplateText.Prepared a = TemplateText.prepare(first);
+        TemplateText.Prepared b = TemplateText.prepare(second);
+
+        assertEquals(a.text(), b.text(), "rainbow ranks and names must share one backend key");
+        assertFalse(a.text().contains("Big_Thief_"));
+        assertFalse(b.text().contains("IGBLF"));
+        String restored = a.restore(a.text().replace("joined the lobby!", "加入了大廳！"));
+        assertEquals(">>> [MVP++] Big_Thief_ 加入了大廳！",
+                TextFilter.stripFormatting(restored));
+    }
+
+    @Test
+    void tabMaskTimingDoesNotCreateAnotherPlayerEventFamily() {
+        assertEquals(TemplateText.prepare("[MVP++] Big_Thief_ joined the lobby!").text(),
+                TemplateText.prepare("[MVP++] ⟦0⟧ joined the lobby!").text());
+    }
+
+    @Test
     void lowercaseOrMixedBracketsAreNotRankTags() {
         // [Lv5] / [dungeon] are real content, not badges — they stay translatable.
         assertFalse(TemplateText.prepare("[Lv5] hello").changed());
@@ -206,5 +281,45 @@ class TemplateTextTest {
         assertEquals("寶石: [🔹] [🔸]", p.restore("寶石: [⟦MT0⟧] [⟦MT1⟧]"));
         // CJK punctuation is prose, not decoration: nothing to template in plain text.
         assertFalse(TemplateText.prepare("好、強！").changed());
+    }
+
+    @Test
+    void hudColumnsWithLongWhitespaceStillShareOneNumericTemplateAndRestoreExactly() {
+        String first = "2,556/2,131❤          Defense 1,042          Mana 1,707/1,707";
+        String second = "3,000/3,000❤          Defense 1,500          Mana 2,000/2,000";
+        TemplateText.Prepared prepared = TemplateText.prepare(first);
+
+        assertEquals(prepared.text(), TemplateText.prepare(second).text(),
+                "live HUD numbers must not mint a new template when wide column gaps are present");
+        assertTrue(prepared.text().contains("          "),
+                "TemplateText must not silently consume layout whitespace");
+        assertEquals(first, prepared.restore(prepared.text()));
+        assertEquals("2,556/2,131❤          防禦1,042          魔力1,707/1,707",
+                prepared.restore(prepared.text()
+                        .replace("Defense", "防禦")
+                        .replace("Mana", "魔力")));
+    }
+
+    @Test
+    void serverInstanceIdsPlayerCountsAndHubNumbersShareOneTemplate() {
+        String first = "SkyBlock Hub #11  Players: 48/60  Server: mega33A";
+        String second = "SkyBlock Hub #13  Players: 44/60  Server: mega4E";
+        TemplateText.Prepared a = TemplateText.prepare(first);
+        TemplateText.Prepared b = TemplateText.prepare(second);
+
+        assertEquals(a.text(), b.text(), "a shard change must not create another key");
+        assertFalse(a.text().contains("mega33A"));
+        assertEquals(first, a.restore(a.text()));
+        assertEquals(second, b.restore(b.text()));
+    }
+
+    @Test
+    void unknownAndDigitFreeServerInstanceIdsAreStillOneDynamicSlot() {
+        TemplateText.Prepared first = TemplateText.prepare("Server: alphaShard");
+        TemplateText.Prepared second = TemplateText.prepare("Server: xxxxx");
+
+        assertEquals(first.text(), second.text());
+        assertFalse(first.text().contains("alphaShard"));
+        assertEquals("Server: xxxxx", second.restore(second.text()));
     }
 }

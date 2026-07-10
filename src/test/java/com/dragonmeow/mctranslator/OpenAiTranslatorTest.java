@@ -225,7 +225,7 @@ class OpenAiTranslatorTest {
     }
 
     @Test
-    void systemPromptAddsMinecraftContextAndGlossaryForChinese() throws Exception {
+    void systemPromptAddsMinecraftContextAndOnlyRelevantUserTerms() throws Exception {
         List<String> sentBodies = new ArrayList<>();
         HttpTransport fake = new HttpTransport() {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
@@ -234,20 +234,35 @@ class OpenAiTranslatorTest {
                 return chatJson("1. 技能書");
             }
         };
-        // User pins a term NOT in the curated defaults, to prove the user glossary is merged.
+        // User-pinned terms are retained, but only when present in this request.
         OpenAiTranslator t = new OpenAiTranslator(fake,
                 () -> new AiSettings("https://x/v1", "m", List.of("k"), List.of("Warden=伏守者")));
-        t.translate("Skill Book", "zh-TW");
+        t.translate("Melon guarded by Warden", "zh-TW");
 
         String body = sentBodies.get(0);
         assertTrue(body.contains("Minecraft"), "prompt must state this is Minecraft text: " + body);
-        assertTrue(body.contains("西瓜"), "curated glossary term (Melon→西瓜) must be present: " + body);
+        assertTrue(body.contains("Enchant") && body.contains("附魔"),
+                "prompt should give one compact Minecraft terminology example: " + body);
+        assertTrue(body.contains("RPG/MMO") && body.contains("entire visible-block context"),
+                "prompt must disambiguate server RPG tooltips as one visible block: " + body);
+        assertTrue(body.contains("BBCode style tag") && body.contains("same semantic phrase"),
+                "colour tags must follow their translated meaning, not their old position: " + body);
+        assertTrue(body.contains("official Minecraft translations")
+                        && body.contains("not as a rigid word-for-word template")
+                        && body.contains("natural Taiwan player-facing"),
+                "official terms are a baseline while mod/RPG wording stays natural: " + body);
+        assertTrue(body.contains("Damage") && body.contains("傷害") && body.contains("損壞"),
+                "Traditional-Chinese RPG stats must distinguish damage from item damage: " + body);
+        assertTrue(body.contains("⟦PBn⟧") && body.contains("immutable line break"),
+                "paragraph line-break placeholders must be preserved in order: " + body);
+        assertTrue(!body.contains("Melon → 西瓜"),
+                "the removed built-in glossary must not be shipped with every request: " + body);
         assertTrue(body.contains("Warden") && body.contains("伏守者"),
                 "user aiGlossary entry (Warden→伏守者) must be merged into the prompt: " + body);
     }
 
     @Test
-    void curatedGlossaryIsOmittedForNonChineseTargets() throws Exception {
+    void chineseTerminologyExampleIsOmittedForNonChineseTargets() throws Exception {
         List<String> sentBodies = new ArrayList<>();
         HttpTransport fake = new HttpTransport() {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
@@ -262,7 +277,7 @@ class OpenAiTranslatorTest {
 
         String body = sentBodies.get(0);
         assertTrue(body.contains("Minecraft"), "Minecraft context is unconditional: " + body);
-        assertTrue(!body.contains("西瓜"), "the 繁體 glossary must NOT be sent for a non-Chinese target: " + body);
+        assertTrue(!body.contains("附魔"), "the 繁中 example must NOT be sent for a non-Chinese target: " + body);
     }
 
     @Test
@@ -283,9 +298,9 @@ class OpenAiTranslatorTest {
     }
 
     @Test
-    void absorbedTokensAreAcceptedNotFailed() throws Exception {
-        // "Creation Date: Jun ⟦MT0⟧, ⟦MT1⟧ ⟦MT2⟧" often comes back as a native date with
-        // fewer tokens — that must still be accepted (only ALIEN tokens are dangerous).
+    void missingDynamicTokenFailsTheLineInsteadOfDeletingLiveData() throws Exception {
+        // A fluent-looking response is still unusable if it ate MT2: otherwise the
+        // current date/value disappears and that poisoned template persists forever.
         HttpTransport fake = new HttpTransport() {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
             @Override public String post(String url, String body, Map<String, String> headers) {
@@ -295,7 +310,7 @@ class OpenAiTranslatorTest {
         OpenAiTranslator t = new OpenAiTranslator(fake,
                 () -> new AiSettings("https://x/v1", "m", List.of("k")));
         List<TranslationResult> r = t.translateBatch(List.of("Creation Date: Jun ⟦MT0⟧, ⟦MT1⟧ ⟦MT2⟧"), "zh-TW");
-        assertEquals("創建日期：⟦MT1⟧年6月⟦MT0⟧日", r.get(0).translatedText());
+        assertEquals("", r.get(0).translatedText());
     }
 
     @Test
@@ -310,6 +325,42 @@ class OpenAiTranslatorTest {
                 () -> new AiSettings("https://x/v1", "m", List.of("k")));
         List<TranslationResult> r = t.translateBatch(List.of("hit ⟦MT0⟧ in ⟦MT1⟧"), "zh-TW");
         assertEquals("在⟦MT1⟧中擊中⟦MT0⟧", r.get(0).translatedText());
+    }
+
+    @Test
+    void layoutSlotCannotCrossLiveValuesInFixedColumnRows() throws Exception {
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                return chatJson("1. 夏季商店促銷 - ⟦WS0⟧ 至⟦MT0⟧折 - ⟦MT1⟧");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k")));
+
+        List<TranslationResult> r = t.translateBatch(List.of(
+                "SUMMER STORE SALE - UP TO ⟦MT0⟧ OFF - ⟦WS0⟧ ⟦MT1⟧"), "zh-TW");
+
+        assertEquals("", r.get(0).translatedText(),
+                "moving a fixed gap across MT0 would put the sale value in the wrong HUD column");
+    }
+
+    @Test
+    void dynamicValueCannotEscapeItsColourSegment() throws Exception {
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                return chatJson("1. ⟦MT0⟧⟦CS0⟧傷害⟦/CS0⟧⟦CS1⟧⟦/CS1⟧");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k")));
+
+        List<TranslationResult> r = t.translateBatch(List.of(
+                "⟦CS0⟧Damage⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧⟦/CS1⟧"), "zh-TW");
+
+        assertEquals("", r.get(0).translatedText(),
+                "MT0 leaving CS1 would recolour the live damage value");
     }
 
     // ---- 429 global backoff gate ----
@@ -436,6 +487,13 @@ class OpenAiTranslatorTest {
     }
 
     @Test
+    void parseNumberedUsesActualIdsAndLeavesMissingSlotsEmpty() {
+        List<String> r = OpenAiTranslator.parseNumbered("3. C\n1. A", 3);
+        assertEquals(List.of("A", "", "C"), r,
+                "a missing item must not shift later translations onto the wrong cache key");
+    }
+
+    @Test
     void surfaceContextAddsTooltipBlockButNumbersOnlyTheTodoLines() throws Exception {
         List<String> sentBodies = new ArrayList<>();
         HttpTransport fake = new HttpTransport() {
@@ -450,16 +508,19 @@ class OpenAiTranslatorTest {
 
         // Whole tooltip is the context; only the not-yet-cached line is sent for translation.
         List<TranslationResult> r = t.translateBatch(List.of("Recipes"), "zh-TW",
-                List.of("Iron Pickaxe", "Recipes", "Used in smelting"));
+                List.of("Iron Pickaxe", "", "Recipes", "Gear Score: 558", "Used in smelting"));
 
         assertEquals(1, r.size());
         assertEquals("配方", r.get(0).translatedText());
         String body = sentBodies.get(0);
-        assertTrue(body.contains("[TITLE] Iron Pickaxe"),
-                "context block must list the tooltip with the first line marked as TITLE: " + body);
+        assertTrue(body.contains("[L0:TEXT] Iron Pickaxe"),
+                "context must not invent a title role for the first visible row: " + body);
         assertTrue(body.contains("Used in smelting"), "context must carry the WHOLE tooltip: " + body);
-        assertTrue(body.contains("tooltip"), "prompt must say the lines share one tooltip: " + body);
-        assertTrue(body.contains("ONLY the numbered lines"),
+        assertTrue(body.contains("[SECTION]"), "blank tooltip rows must preserve section boundaries: " + body);
+        assertTrue(body.contains("[L3:STAT] Gear Score: 558"),
+                "RPG equipment scores must be classified as stats: " + body);
+        assertTrue(body.contains("visible block"), "prompt must identify the shared visible block: " + body);
+        assertTrue(body.contains("ONLY the numbered units"),
                 "prompt must forbid translating the context block itself: " + body);
         assertTrue(body.contains("1. Recipes"), "the todo line must still be numbered: " + body);
         assertTrue(!body.contains("2. "), "ONLY todo lines may be numbered, never context lines: " + body);
@@ -490,7 +551,7 @@ class OpenAiTranslatorTest {
     }
 
     @Test
-    void glossarySeparatesRecipesFromSkillBook() throws Exception {
+    void removedBuiltInGlossaryIsNotSentForRecipeTerms() throws Exception {
         List<String> sentBodies = new ArrayList<>();
         HttpTransport fake = new HttpTransport() {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
@@ -501,13 +562,58 @@ class OpenAiTranslatorTest {
         };
         OpenAiTranslator t = new OpenAiTranslator(fake,
                 () -> new AiSettings("https://x/v1", "m", List.of("k")));
-        t.translate("Recipes", "zh-TW");
+        t.translate("Skill Book, Recipe Book, Recipes", "zh-TW");
 
         String body = sentBodies.get(0);
-        assertTrue(body.contains("Skill Book → 技能書"), body);
-        assertTrue(body.contains("Recipe / Recipes → 配方"), body);
-        assertTrue(body.contains("Recipe Book → 配方書"), body);
-        assertTrue(!body.contains("Skill Book / Recipe Book"),
-                "the old merged entry (Recipe Book → 技能書) must be gone: " + body);
+        assertTrue(body.contains("1. Skill Book, Recipe Book, Recipes"), body);
+        assertTrue(!body.contains("Skill Book → 技能書"), body);
+        assertTrue(!body.contains("Recipe / Recipes → 配方"), body);
+        assertTrue(!body.contains("Recipe Book → 配方書"), body);
+    }
+
+    @Test
+    void promptSendsOnlyGlossaryEntriesRelevantToThisRequest() throws Exception {
+        List<String> sentBodies = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                sentBodies.add(body);
+                return chatJson("1. 魔力消耗");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k"),
+                        List.of("Warden=獄卒", "Mana=魔力")));
+
+        t.translate("Mana Cost", "zh-TW");
+
+        String body = sentBodies.get(0);
+        assertTrue(body.contains("Mana → 魔力"), body);
+        assertTrue(!body.contains("Warden → 獄卒"), body);
+        assertTrue(!body.contains("Melon / Watermelon"), body);
+    }
+
+    @Test
+    void tooltipContextIsBoundedBeforeSending() throws Exception {
+        List<String> sentBodies = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                sentBodies.add(body);
+                return chatJson("1. 翻譯");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k")));
+        List<String> context = new ArrayList<>();
+        context.add("Very Long Item Title");
+        for (int i = 0; i < 80; i++) context.add("tooltip context line " + i + " xxxxxxxxxxxxxxxxxxxx");
+
+        t.translateBatch(List.of("Translate me"), "zh-TW", context);
+
+        String body = sentBodies.get(0);
+        assertTrue(body.contains("[L0:TEXT] Very Long Item Title"), body);
+        assertTrue(body.contains("[remaining context omitted]"), body);
+        assertTrue(!body.contains("tooltip context line 79"), body);
     }
 }

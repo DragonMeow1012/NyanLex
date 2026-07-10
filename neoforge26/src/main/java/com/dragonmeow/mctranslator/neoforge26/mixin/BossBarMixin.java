@@ -36,7 +36,8 @@ public abstract class BossBarMixin {
                 int center = x + font.width(text) / 2; // original name's centre
                 List<Component> lines = Neo26TextStyle.splitLines(translated);
                 if (lines.size() <= 1) {
-                    g.text(font, translated, center - font.width(translated) / 2, y, color);
+                    com.dragonmeow.mctranslator.translate.InternalRenderGuard.run(
+                            () -> g.text(font, translated, center - font.width(translated) / 2, y, color));
                     return;
                 }
                 // 原文＋翻譯: stack the lines upward above the bar (原文 on top, 譯文 at the baseline).
@@ -44,11 +45,13 @@ public abstract class BossBarMixin {
                 for (int k = 0; k < n; k++) {
                     Component line = lines.get(k);
                     int ly = y - (n - 1 - k) * Neo26TextStyle.STACK_LINE_GAP;
-                    g.text(font, line, center - font.width(line) / 2, ly, color);
+                    com.dragonmeow.mctranslator.translate.InternalRenderGuard.run(
+                            () -> g.text(font, line, center - font.width(line) / 2, ly, color));
                 }
                 return;
             }
         }
-        g.text(font, text, x, y, color);
+        com.dragonmeow.mctranslator.translate.InternalRenderGuard.run(
+                () -> g.text(font, text, x, y, color));
     }
 }

@@ -61,8 +61,8 @@ public final class AiConfigScreen extends Screen {
 
         int pw = (FIELD_W - 2 * 6) / 3;
         addPreset("Gemini（免費額度高）", x, Y_PRESETS, pw,
-                "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash-lite");
-        addPreset("OpenAI", x + pw + 6, Y_PRESETS, pw, "https://api.openai.com/v1", "gpt-4o-mini");
+                "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.1-flash-lite");
+        addPreset("OpenAI", x + pw + 6, Y_PRESETS, pw, "https://api.openai.com/v1", "gpt-5.4-mini");
         addPreset("DeepSeek", x + 2 * (pw + 6), Y_PRESETS, pw, "https://api.deepseek.com", "deepseek-chat");
 
         addRenderableWidget(Button.builder(Component.literal("測試連接"), b -> {
@@ -117,8 +117,8 @@ public final class AiConfigScreen extends Screen {
         }
 
         String[] hints = {
-                "Gemini  : https://generativelanguage.googleapis.com/v1beta/openai   gemini-2.5-flash-lite（Google AI Studio 取金鑰）",
-                "OpenAI  : https://api.openai.com/v1   gpt-4o-mini       DeepSeek: https://api.deepseek.com   deepseek-chat",
+                "Gemini  : https://generativelanguage.googleapis.com/v1beta/openai   gemini-3.1-flash-lite（Google AI Studio 取金鑰）",
+                "OpenAI  : https://api.openai.com/v1   gpt-5.4-mini       DeepSeek: https://api.deepseek.com   deepseek-chat",
                 "填好金鑰後，到「翻譯設定」把要精翻的項目右側切成「AI 精翻」即可；留空金鑰會自動退回機翻。",
         };
         g.pose().pushPose();
@@ -145,11 +145,9 @@ public final class AiConfigScreen extends Screen {
         cfg.aiApiKeys = newKeys;
         cfg.aiKeysByEndpoint.put(endpointKey(newUrl), keysBox.getValue()); // remember per provider
         MctranslatorFabric.saveConfig();
-        // Only re-translate (clear the AI cache) when the AI settings actually changed.
-        if (changed && MctranslatorFabric.service() != null) {
-            MctranslatorFabric.service().clearAiTranslations();
-            FabricTextStyle.clearRenderMemo();
-        }
+        // Provider/model/key changes affect future misses only. Cached translations are
+        // permanent; deleting them here made an innocent API-key edit look like data loss.
+        if (changed) FabricTextStyle.clearRenderMemo();
         if (this.minecraft != null) {
             this.minecraft.setScreen(parent);
         }

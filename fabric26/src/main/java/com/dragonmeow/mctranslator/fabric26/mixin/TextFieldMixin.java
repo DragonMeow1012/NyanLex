@@ -27,6 +27,6 @@ public abstract class TextFieldMixin {
             method = "setText(Lnet/minecraft/network/chat/Component;)Ldev/ftb/mods/ftblibrary/ui/TextField;",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private Component mctranslator$translateWhole(Component component) {
-        return MctranslatorFabric26.screenText(component);
+        return MctranslatorFabric26.ftbText(this, component);
     }
 }

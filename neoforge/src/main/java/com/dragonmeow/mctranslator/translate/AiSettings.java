@@ -8,11 +8,10 @@ import java.util.List;
  * package stays Minecraft-/config-agnostic and unit-testable with inline values.
  *
  * @param baseUrl  OpenAI-compatible base URL (e.g. {@code https://api.openai.com/v1})
- * @param model    model id (e.g. {@code gpt-4o-mini})
+ * @param model    model id (e.g. {@code gpt-5.4-mini})
  * @param apiKeys  one or more API keys, rotated round-robin / on failure
- * @param glossary user-pinned term overrides ("訂翻譯"), each a {@code "English=中文"} line;
- *                 merged AFTER the built-in Minecraft glossary in the AI prompt so a user
- *                 entry wins for the same term. Never {@code null} (defaults to empty).
+ * @param glossary request-local user-pinned term overrides ("訂翻譯"), each a
+ *                 {@code "English=中文"} line. Never {@code null} (defaults to empty).
  */
 public record AiSettings(String baseUrl, String model, List<String> apiKeys, List<String> glossary) {
 

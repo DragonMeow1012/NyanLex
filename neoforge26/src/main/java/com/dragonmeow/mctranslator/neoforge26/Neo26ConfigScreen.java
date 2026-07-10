@@ -15,7 +15,8 @@ import java.util.function.Supplier;
 /**
  * 翻譯設定 — per-surface translation settings (MC 26.2). Each row has a mode button
  * (原文／原文＋翻譯／只有翻譯) and an engine toggle (機翻 Google / AI 精翻); saved immediately.
- * Plus output-language (繁體／簡體), disk-cache persistence, and the screen-scan-hotkey engine.
+ * Includes the complete Minecraft language picker, permanent per-language cache controls,
+ * and the screen-scan-hotkey engine.
  * Hotkeys themselves are rebindable in vanilla 控制 (registered under the 雜項 category).
  */
 public final class Neo26ConfigScreen extends Screen {
@@ -24,6 +25,8 @@ public final class Neo26ConfigScreen extends Screen {
     private static final int AI_W = 70;
 
     private final Screen parent;
+    private int rowWidth = W;
+    private boolean confirmClear;
 
     public Neo26ConfigScreen(Screen parent) {
         super(Component.literal("翻譯設定"));
@@ -33,80 +36,70 @@ public final class Neo26ConfigScreen extends Screen {
     @Override
     protected void init() {
         TranslatorConfig cfg = MctranslatorNeoForge26.config();
-        int x = this.width / 2 - W / 2;
-        int y = 28;
-        int step = 22;
+        rowWidth = Math.min(W, Math.max(120, (this.width - 12) / 2));
+        int gap = 6;
+        int left = this.width / 2 - rowWidth - gap / 2;
+        int right = this.width / 2 + gap / 2;
+        int y = 24;
+        int step = 20;
 
-        y = row("聊天", x, y, step, () -> cfg.chatMode, m -> cfg.chatMode = m, () -> cfg.aiChat, v -> cfg.aiChat = v);
-        y = row("物品名稱／說明（提示與手持）", x, y, step, () -> cfg.tooltipMode, m -> cfg.tooltipMode = m, () -> cfg.aiTooltip, v -> cfg.aiTooltip = v);
-        y = row("記分板", x, y, step, () -> cfg.scoreboardMode, m -> cfg.scoreboardMode = m, () -> cfg.aiScoreboard, v -> cfg.aiScoreboard = v);
-        y = row("名牌／全息", x, y, step, () -> cfg.nameMode, m -> cfg.nameMode = m, () -> cfg.aiName, v -> cfg.aiName = v);
-        y = row("Boss 血條", x, y, step, () -> cfg.bossBarMode, m -> cfg.bossBarMode = m, () -> cfg.aiBossBar, v -> cfg.aiBossBar = v);
-        y = row("標題／副標題", x, y, step, () -> cfg.titleMode, m -> cfg.titleMode = m, () -> cfg.aiTitle, v -> cfg.aiTitle = v);
-        y = row("動作列訊息", x, y, step, () -> cfg.actionBarMode, m -> cfg.actionBarMode = m, () -> cfg.aiActionBar, v -> cfg.aiActionBar = v);
-        y = row("書籍／講台書頁面", x, y, step, () -> cfg.bookMode, m -> cfg.bookMode = m, () -> cfg.aiBook, v -> cfg.aiBook = v);
-        y = row("介面文字（光影／模組設定）", x, y, step, () -> cfg.screenTextMode, m -> cfg.screenTextMode = m, () -> cfg.aiScreenText, v -> cfg.aiScreenText = v);
+        row("聊天", left, y, step, () -> cfg.chatMode, m -> cfg.chatMode = m, () -> cfg.aiChat, v -> cfg.aiChat = v);
+        row("物品／提示", right, y, step, () -> cfg.tooltipMode, m -> cfg.tooltipMode = m, () -> cfg.aiTooltip, v -> cfg.aiTooltip = v);
+        y += step;
+        row("記分板", left, y, step, () -> cfg.scoreboardMode, m -> cfg.scoreboardMode = m, () -> cfg.aiScoreboard, v -> cfg.aiScoreboard = v);
+        row("名牌／全息", right, y, step, () -> cfg.nameMode, m -> cfg.nameMode = m, () -> cfg.aiName, v -> cfg.aiName = v);
+        y += step;
+        row("Boss 血條", left, y, step, () -> cfg.bossBarMode, m -> cfg.bossBarMode = m, () -> cfg.aiBossBar, v -> cfg.aiBossBar = v);
+        row("標題／副標題", right, y, step, () -> cfg.titleMode, m -> cfg.titleMode = m, () -> cfg.aiTitle, v -> cfg.aiTitle = v);
+        y += step;
+        row("動作列", left, y, step, () -> cfg.actionBarMode, m -> cfg.actionBarMode = m, () -> cfg.aiActionBar, v -> cfg.aiActionBar = v);
+        row("書籍／講台", right, y, step, () -> cfg.bookMode, m -> cfg.bookMode = m, () -> cfg.aiBook, v -> cfg.aiBook = v);
+        y += step;
+        row("介面文字", left, y, step, () -> cfg.screenTextMode, m -> cfg.screenTextMode = m, () -> cfg.aiScreenText, v -> cfg.aiScreenText = v);
 
-        y += 4;
-        // Output language: 跟隨遊戲 → 繁體中文 (zh-TW) → 簡體中文 (zh-CN). 跟隨遊戲 keeps it synced to
-        // Minecraft's own language; a fixed 繁/簡 retargets + wipes caches immediately.
-        this.addRenderableWidget(Button.builder(langLabel(cfg), b -> {
-            cycleLang(cfg);
-            if (!cfg.followGameLanguage && MctranslatorNeoForge26.service() != null) {
-                MctranslatorNeoForge26.service().setTargetLang(cfg.targetLang);
-            }
-            MctranslatorNeoForge26.saveConfig();
-            b.setMessage(langLabel(cfg));
-        }).bounds(x, y, W, 20).build());
-        y += 22;
-        this.addRenderableWidget(Button.builder(cacheLabel(cfg), b -> {
-            cfg.clearDiskCacheOnStart = !cfg.clearDiskCacheOnStart;
-            MctranslatorNeoForge26.saveConfig();
-            b.setMessage(cacheLabel(cfg));
-        }).bounds(x, y, W, 20).build());
-        y += 22;
+        y += step + 6;
+        this.addRenderableWidget(Button.builder(langLabel(cfg),
+                        b -> this.minecraft.setScreenAndShow(new Neo26LanguageScreen(this)))
+                .bounds(left, y, rowWidth * 2 + gap, 18).build());
+        y += step;
         this.addRenderableWidget(Button.builder(screenScanEngineLabel(cfg), b -> {
             cfg.aiScreenScan = !cfg.aiScreenScan;
             MctranslatorNeoForge26.saveConfig();
             b.setMessage(screenScanEngineLabel(cfg));
-        }).bounds(x, y, W, 20).build());
-        y += 24;
+        }).bounds(left, y, rowWidth, 18).build());
         this.addRenderableWidget(Button.builder(Component.literal("AI 翻譯設定（模型 / API 金鑰）..."),
                         b -> this.minecraft.setScreenAndShow(new Neo26AiScreen(this)))
-                .bounds(x, y, W, 20).build());
-        y += 22;
+                .bounds(right, y, rowWidth, 18).build());
+        y += step;
         this.addRenderableWidget(Button.builder(Component.literal("快捷鍵設定..."),
                         b -> this.minecraft.setScreenAndShow(new Neo26KeybindScreen(this)))
-                .bounds(x, y, W, 20).build());
-        y += 26;
+                .bounds(left, y, rowWidth, 18).build());
+        this.addRenderableWidget(Button.builder(clearLabel(), this::clearCurrentLanguage)
+                .bounds(right, y, rowWidth, 18).build());
+        y += 22;
         this.addRenderableWidget(Button.builder(Component.literal("完成"), b -> this.onClose())
-                .bounds(this.width / 2 - 100, y, 200, 20).build());
+                .bounds(this.width / 2 - 100, y, 200, 18).build());
     }
 
-    private static boolean isSimplified(TranslatorConfig cfg) {
-        return cfg.targetLang != null && cfg.targetLang.toLowerCase().startsWith("zh-cn");
+    private Component clearLabel() {
+        return Component.literal(confirmClear ? "§c再按一次確認清除" : "清除目前語言全部快取");
     }
 
-    /** Cycle the 翻譯語言 control: 跟隨遊戲 → 繁體 → 簡體 → 跟隨遊戲. */
-    private static void cycleLang(TranslatorConfig cfg) {
-        if (cfg.followGameLanguage) {        // 跟隨遊戲 → 繁體
-            cfg.followGameLanguage = false;
-            cfg.targetLang = "zh-TW";
-        } else if (!isSimplified(cfg)) {     // 繁體 → 簡體
-            cfg.targetLang = "zh-CN";
-        } else {                             // 簡體 → 跟隨遊戲
-            cfg.followGameLanguage = true;
+    private void clearCurrentLanguage(Button button) {
+        if (!confirmClear) {
+            confirmClear = true;
+            button.setMessage(clearLabel());
+            return;
         }
+        confirmClear = false;
+        if (MctranslatorNeoForge26.service() != null) MctranslatorNeoForge26.service().clearTranslations();
+        Neo26TextStyle.clearRenderMemo();
+        button.setMessage(Component.literal("§a已清除目前語言快取"));
     }
 
     private static Component langLabel(TranslatorConfig cfg) {
-        String s = cfg.followGameLanguage ? "跟隨遊戲（繁/簡）"
-                : (isSimplified(cfg) ? "簡體中文 (zh-CN)" : "繁體中文 (zh-TW)");
+        String s = cfg.followGameLanguage ? "跟隨遊戲（" + cfg.targetLang + "）" : cfg.targetLang;
         return Component.literal("翻譯語言：" + s);
-    }
-
-    private static Component cacheLabel(TranslatorConfig cfg) {
-        return Component.literal("翻譯快取：" + (cfg.clearDiskCacheOnStart ? "重開遊戲時清除" : "重開遊戲後保留"));
     }
 
     private static Component screenScanEngineLabel(TranslatorConfig cfg) {
@@ -116,19 +109,20 @@ public final class Neo26ConfigScreen extends Screen {
     private int row(String label, int x, int y, int step,
                     Supplier<DisplayMode> getMode, Consumer<DisplayMode> setMode,
                     BooleanSupplier getAi, Consumer<Boolean> setAi) {
-        int modeW = W - AI_W - 4;
+        int engineW = Math.min(AI_W, Math.max(52, rowWidth / 3));
+        int modeW = rowWidth - engineW - 4;
         this.addRenderableWidget(Button.builder(modeText(label, getMode.get()), b -> {
             DisplayMode next = getMode.get().next();
             setMode.accept(next);
             MctranslatorNeoForge26.saveConfig();
             b.setMessage(modeText(label, next));
-        }).bounds(x, y, modeW, 20).build());
+        }).bounds(x, y, modeW, 18).build());
         this.addRenderableWidget(Button.builder(aiText(getAi.getAsBoolean()), b -> {
             boolean next = !getAi.getAsBoolean();
             setAi.accept(next);
             MctranslatorNeoForge26.saveConfig();
             b.setMessage(aiText(next));
-        }).bounds(x + modeW + 4, y, AI_W, 20).build());
+        }).bounds(x + modeW + 4, y, engineW, 18).build());
         return y + step;
     }
 

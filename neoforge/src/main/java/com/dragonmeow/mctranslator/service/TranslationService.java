@@ -8,534 +8,518 @@ import com.dragonmeow.mctranslator.translate.LayoutPreserver;
 import com.dragonmeow.mctranslator.translate.NameMasker;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Top-level orchestrator. Each surface (chat / tooltip / held item / scoreboard /
- * name tags) has its own {@link DisplayMode} (原文 / 原文＋翻譯 / 只有翻譯), set via
- * the in-game 翻譯設定 screen. Minecraft-free so it is unit-testable with inline mocks.
+ * Minecraft-free facade for all translation surfaces. It owns policy only:
+ * surface mode/engine selection, source filtering, player-name masking, and final
+ * display validation. Request coordination and persistence belong to
+ * {@link TranslationCache}.
  */
 public final class TranslationService {
-
     private final TranslatorConfig config;
-    private final TranslationCache cache;     // 機翻 (Google) keyspace
-    private final TranslationCache aiCache;   // AI 精翻 keyspace (separate, so the two engines never collide)
-
-    // Master 原文/翻譯 override (the quick-toggle hotkey, default G). When true, EVERY auto-translated
-    // surface falls back to its original text; the configured per-surface modes resume when toggled off.
-    private volatile boolean forceShowOriginalOnly = false;
-
-    // Online player names supplied by the loader glue. When protectPlayerNames is on, chat text
-    // is masked with NameMasker before it leaves the client (names come back verbatim), and any
-    // surface whose text IS exactly a player name (name tags, scoreboards) is left untranslated.
+    private final TranslationCache google;
+    private final TranslationCache ai;
+    private volatile boolean showOriginalOnly;
     private volatile Supplier<? extends Collection<String>> protectedNames = List::of;
+    private final Set<String> invalidatedNameFailures = ConcurrentHashMap.newKeySet();
+    /** At most one context-aware correction per item name and target language in a
+     *  session. Prevents a stubborn model from creating a hover-triggered retry loop. */
+    private final Set<String> contextualItemNameRetries = ConcurrentHashMap.newKeySet();
 
-    public void setProtectedNames(Supplier<? extends Collection<String>> namesSupplier) {
-        if (namesSupplier != null) this.protectedNames = namesSupplier;
-    }
-
-    private Collection<String> protectedNamesNow() {
-        if (!config.protectPlayerNames) return List.of();
-        Collection<String> names = protectedNames.get();
-        return names == null ? List.of() : names;
-    }
-
-
-    public TranslationService(TranslatorConfig config, TranslationCache cache, TranslationCache aiCache) {
+    public TranslationService(TranslatorConfig config, TranslationCache google,
+                              TranslationCache ai) {
         this.config = config;
-        this.cache = cache;
-        this.aiCache = aiCache;
-        // A string already fine-translated by AI is at least as good as a fresh Google
-        // result: let the Google cache reuse it instead of buying it again. One-way only.
-        if (cache != null && aiCache != null && cache != aiCache) {
-            cache.setFallback(aiCache);
+        this.google = google;
+        this.ai = ai;
+        if (google != null && ai != null && google != ai) {
+            // AI is the preferred tier. A GT hit remains immediately displayable but
+            // becomes provisional in the AI cache and schedules an AI supplement.
+            ai.setFallback(google, true);
         }
-        // Make the in-game 特效字防護 (churn) toggle & thresholds actually live: without this
-        // the caches keep their built-in-default guard and config.churnGuard=false could not
-        // turn it off. Both engine caches share ONE guard — a churning surface routes to
-        // exactly one of them, and ChurnGuard is thread-safe. null = detection disabled.
+
         ChurnGuard guard = config.churnGuard
                 ? new ChurnGuard(config.churnVariantThreshold,
-                        config.churnWindowSeconds * 1000L,
-                        config.churnCooldownSeconds * 1000L,
-                        System::currentTimeMillis)
+                config.churnWindowSeconds * 1000L,
+                config.churnCooldownSeconds * 1000L,
+                System::currentTimeMillis)
                 : null;
-        if (cache != null) cache.setChurnGuard(guard);
-        if (aiCache != null) aiCache.setChurnGuard(guard);
+        if (google != null) google.setChurnGuard(guard);
+        if (ai != null) ai.setChurnGuard(guard);
     }
 
-    private TranslationCache cacheFor(boolean useAi) {
-        return useAi ? aiCache : cache;
+    public void setProtectedNames(Supplier<? extends Collection<String>> supplier) {
+        if (supplier != null) protectedNames = supplier;
     }
 
-    /** Diagnostic self-test: backend + config status. */
-    public String selfTest() {
-        String cfg = "chat=" + config.chatMode + " tooltip=" + config.tooltipMode + " target=" + config.targetLang;
-        try {
-            return "OK [" + cfg + "] Hello world -> " + cache.testTranslate("Hello world");
-        } catch (Exception e) {
-            return "FAIL [" + cfg + "] " + e.getClass().getSimpleName() + ": " + e.getMessage();
-        }
+    private Collection<String> names() {
+        if (!config.protectPlayerNames) return List.of();
+        Collection<String> current = protectedNames.get();
+        return current == null ? List.of() : current;
     }
 
-    /**
-     * Toggle the master 原文/翻譯 switch (backs the quick-toggle hotkey); returns the NEW state
-     * ({@code true} = now showing originals everywhere). The glue should clear its render memo
-     * afterwards so persistent surfaces (tooltips / HUD / name tags / book / screens) flip at once.
-     */
+    private TranslationCache cache(boolean useAi) {
+        return useAi ? ai : google;
+    }
+
     public boolean toggleShowOriginal() {
-        forceShowOriginalOnly = !forceShowOriginalOnly;
-        return forceShowOriginalOnly;
+        return showOriginalOnly = !showOriginalOnly;
     }
 
-    /** Whether the master switch is currently forcing originals on every surface. */
     public boolean isShowOriginalOnly() {
-        return forceShowOriginalOnly;
+        return showOriginalOnly;
     }
 
-    // ---- per-surface mode accessors (used by the glue + config screen) ----
-    public DisplayMode chatMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.chatMode;
+    private DisplayMode visibleMode(DisplayMode configured) {
+        return showOriginalOnly ? DisplayMode.ORIGINAL_ONLY : configured;
     }
 
-    public DisplayMode tooltipMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.tooltipMode;
-    }
+    public DisplayMode chatMode() { return visibleMode(config.chatMode); }
+    public DisplayMode tooltipMode() { return visibleMode(config.tooltipMode); }
+    public DisplayMode heldMode() { return visibleMode(config.tooltipMode); }
+    public DisplayMode scoreboardMode() { return visibleMode(config.scoreboardMode); }
+    public DisplayMode nameMode() { return visibleMode(config.nameMode); }
+    public DisplayMode bossBarMode() { return visibleMode(config.bossBarMode); }
+    public DisplayMode titleMode() { return visibleMode(config.titleMode); }
+    public DisplayMode actionBarMode() { return visibleMode(config.actionBarMode); }
+    public DisplayMode bookMode() { return visibleMode(config.bookMode); }
+    public DisplayMode screenTextMode() { return visibleMode(config.screenTextMode); }
 
-    /** 手持物品名稱 follows the tooltip surface: a held item's name and its tooltip are
-     *  always processed together, so they share ONE setting ({@code tooltipMode}/{@code aiTooltip}). */
-    public DisplayMode heldMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.tooltipMode;
-    }
-
-    public DisplayMode scoreboardMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.scoreboardMode;
-    }
-
-    public DisplayMode nameMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.nameMode;
-    }
-
-    public DisplayMode bossBarMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.bossBarMode;
-    }
-
-    public DisplayMode titleMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.titleMode;
-    }
-
-    public DisplayMode actionBarMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.actionBarMode;
-    }
-
-    public DisplayMode bookMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.bookMode;
-    }
-
-    public DisplayMode screenTextMode() {
-        return forceShowOriginalOnly ? DisplayMode.ORIGINAL_ONLY : config.screenTextMode;
-    }
-
-    /** Whether a chat line is eligible for translation right now (chat surface on + worth translating). */
-    public boolean wantsChatTranslation(String source) {
-        return !forceShowOriginalOnly
-                && config.chatMode != DisplayMode.ORIGINAL_ONLY
+    public boolean wantsScreenTextTranslation(String source) {
+        return !showOriginalOnly && config.screenTextMode != DisplayMode.ORIGINAL_ONLY
                 && TextFilter.shouldTranslate(source, config.targetLang);
     }
 
-    /**
-     * Manual one-shot used by the "translate current screen" hotkey: translate arbitrary
-     * UI text (e.g. quest-book buttons) async, ignoring the per-surface on/off toggles
-     * (it is an explicit user action). Uses the tooltip engine (機翻 / AI per
-     * {@code aiTooltip}); the callback fires only on a real translation, off-thread.
-     */
+    public boolean wantsChatTranslation(String source) {
+        return !showOriginalOnly && config.chatMode != DisplayMode.ORIGINAL_ONLY
+                && TextFilter.shouldTranslate(source, config.targetLang);
+    }
+
+    public boolean wantsActionBarTranslation(String source) {
+        return !showOriginalOnly && config.actionBarMode != DisplayMode.ORIGINAL_ONLY
+                && TextFilter.shouldTranslate(source, config.targetLang);
+    }
+
     public void requestScreenTextAsync(String source, Consumer<String> onResult) {
         if (!TextFilter.shouldTranslate(source, config.targetLang)) return;
-        // The hotkey fires once per visible string: coalesce the whole screen into
-        // the next tick's single batched request instead of one request per string.
-        cacheFor(config.aiScreenScan).requestCoalesced(source, translated -> {
-            if (translated != null && !translated.equals(source)
-                    && !translated.trim().equals(source.trim())) {
+        TranslationCache selected = cache(config.aiScreenScan);
+        Consumer<String> ready = translated -> {
+            if (meaningful(source, translated)) {
                 onResult.accept(LayoutPreserver.matchOuterWhitespace(source, translated));
+            }
+        };
+        if (config.aiScreenScan) selected.requestCoalescedFinal(source, ready);
+        else selected.requestCoalesced(source, ready, false);
+    }
+
+    /**
+     * Asynchronously completes text from the always-on custom GUI surface.
+     *
+     * <p>This is deliberately separate from {@link #requestScreenTextAsync(String, Consumer)}:
+     * that method belongs to the manual "scan this screen" action and therefore uses
+     * {@code aiScreenScan}.  FTB Library fields are live screen widgets and must use the
+     * {@code aiScreenText} engine selected for that surface.  The callback also lets an
+     * optional UI integration reflow itself as soon as the cached translation arrives.</p>
+     */
+    public void requestLiveScreenTextAsync(String source, Consumer<String> onResult) {
+        if (!wantsScreenTextTranslation(source)) return;
+        TranslationCache selected = cache(config.aiScreenText);
+        Consumer<String> ready = translated -> {
+            if (meaningful(source, translated)) {
+                onResult.accept(LayoutPreserver.matchOuterWhitespace(source, translated));
+            }
+        };
+        if (config.aiScreenText) selected.requestCoalescedFinal(source, ready);
+        else selected.requestCoalesced(source, ready, false);
+    }
+
+    /**
+     * Completes an action-bar miss immediately instead of relying only on the HUD
+     * render hook. Some server/client combinations replace the overlay component
+     * between render calls, so a render-only request can be lost entirely.
+     */
+    public void requestActionBarAsync(String source, Consumer<String> onResult) {
+        if (!wantsActionBarTranslation(source)) return;
+        NameMasker.Masked masked = NameMasker.mask(source, names());
+        cache(config.aiActionBar).requestCoalesced(masked.text(), translated -> {
+            String restored = NameMasker.unmask(translated, masked.names());
+            if (meaningful(source, restored)) {
+                onResult.accept(LayoutPreserver.matchOuterWhitespace(source, restored));
             }
         }, false);
     }
 
-    /**
-     * Translate the colour runs of a multi-colour chat line independently (one batched
-     * request) and deliver the per-run translations aligned to {@code texts}. A run that
-     * is not worth translating (numbers / punctuation / spaces) or that fails comes back
-     * unchanged, keeping its colour. The callback runs off-thread.
-     */
-    public void translateChatSegmentsAsync(java.util.List<String> texts, Consumer<java.util.List<String>> onAll) {
-        if (forceShowOriginalOnly) {
-            onAll.accept(new java.util.ArrayList<>(texts));
+    public void translateChatSegmentsAsync(List<String> texts, Consumer<List<String>> onAll) {
+        if (showOriginalOnly) {
+            onAll.accept(new ArrayList<>(texts));
             return;
         }
-        java.util.List<Integer> idx = new java.util.ArrayList<>();
+        List<Integer> indexes = new ArrayList<>();
         for (int i = 0; i < texts.size(); i++) {
-            if (TextFilter.shouldTranslate(texts.get(i), config.targetLang)) {
-                idx.add(i);
-            }
+            if (TextFilter.shouldTranslate(texts.get(i), config.targetLang)) indexes.add(i);
         }
-        if (idx.isEmpty()) {
-            onAll.accept(new java.util.ArrayList<>(texts));
+        if (indexes.isEmpty()) {
+            onAll.accept(new ArrayList<>(texts));
             return;
         }
-        // Each segment joins the shared per-tick batch (so several chat lines arriving
-        // in the same tick cost ONE request); the callback assembles the line once the
-        // last segment reports in. The last decrement's happens-before edge makes all
-        // out[] writes visible to the assembling thread.
-        String[] out = texts.toArray(new String[0]);
-        java.util.concurrent.atomic.AtomicInteger remaining =
-                new java.util.concurrent.atomic.AtomicInteger(idx.size());
-        TranslationCache c = cacheFor(config.aiChat);
-        Collection<String> names = protectedNamesNow();
-        for (int i : idx) {
-            String src = texts.get(i);
-            NameMasker.Masked masked = NameMasker.mask(src, names);
-            c.requestCoalesced(masked.text(), tr -> {
-                String restored = NameMasker.unmask(tr, masked.names());
-                if (restored != null && !restored.isEmpty() && !restored.trim().equals(src.trim())) {
-                    out[i] = LayoutPreserver.matchOuterWhitespace(src, restored);
+
+        String[] output = texts.toArray(String[]::new);
+        AtomicInteger remaining = new AtomicInteger(indexes.size());
+        Collection<String> protectedNow = names();
+        TranslationCache selected = cache(config.aiChat);
+        for (int index : indexes) {
+            String original = texts.get(index);
+            NameMasker.Masked masked = NameMasker.mask(original, protectedNow);
+            selected.requestCoalesced(masked.text(), translated -> {
+                String restored = NameMasker.unmask(translated, masked.names());
+                if (meaningful(original, restored)) {
+                    output[index] = LayoutPreserver.matchOuterWhitespace(original, restored);
                 }
-                if (remaining.decrementAndGet() == 0) {
-                    onAll.accept(java.util.Arrays.asList(out.clone()));
-                }
+                if (remaining.decrementAndGet() == 0) onAll.accept(List.of(output.clone()));
             }, true);
         }
     }
 
-    /** Live-chat path: coalesced warm + callback (immediately if cached). Callback runs off-thread. */
     public void requestChatAsync(String source, Consumer<String> onTranslated) {
-        if (forceShowOriginalOnly || !TextFilter.shouldTranslate(source, config.targetLang)) return;
-        NameMasker.Masked masked = NameMasker.mask(source, protectedNamesNow());
-        cacheFor(config.aiChat).requestCoalesced(masked.text(), translated -> {
+        if (!wantsChatTranslation(source)) return;
+        NameMasker.Masked masked = NameMasker.mask(source, names());
+        cache(config.aiChat).requestCoalesced(masked.text(), translated -> {
             String restored = NameMasker.unmask(translated, masked.names());
-            if (restored != null && !restored.equals(source)) {
-                onTranslated.accept(restored);
-            }
+            if (meaningful(source, restored)) onTranslated.accept(restored);
         }, false);
     }
 
-    /**
-     * Chat path for the loader glue: translate {@code content} off-thread and invoke
-     * {@code onResult} exactly once — with the translation, or {@code null} if it
-     * should not / could not be translated. Never blocks; never drops the callback,
-     * so a caller that hid the original (只有翻譯) can safely restore it on {@code null}.
-     */
     public void translateChatAsync(String content, Consumer<String> onResult) {
-        if (config.chatMode == DisplayMode.ORIGINAL_ONLY
-                || !TextFilter.shouldTranslate(content, config.targetLang)) {
+        if (!wantsChatTranslation(content)) {
             onResult.accept(null);
             return;
         }
-        // Mask player names so they never leave the client and come back verbatim
-        // (also makes "<Bob> gg" and "<Alice> gg" share one cache entry).
-        NameMasker.Masked masked = NameMasker.mask(content, protectedNamesNow());
-        cacheFor(config.aiChat).requestCoalesced(masked.text(), translated -> {
+        NameMasker.Masked masked = NameMasker.mask(content, names());
+        cache(config.aiChat).requestCoalesced(masked.text(), translated -> {
             String restored = NameMasker.unmask(translated, masked.names());
-            if (restored == null || restored.isEmpty()
-                    || restored.equals(content) || restored.trim().equals(content.trim())) {
-                onResult.accept(null);
-            } else {
-                // Keep the original line's indentation/centering on the translation.
-                onResult.accept(LayoutPreserver.matchOuterWhitespace(content, restored));
-            }
+            onResult.accept(meaningful(content, restored)
+                    ? LayoutPreserver.matchOuterWhitespace(content, restored) : null);
         }, true);
     }
 
-    /** Wipe all cached translations (both engines) so everything is re-fetched. */
     public void clearTranslations() {
-        cache.clear();
-        aiCache.clear();
+        google.clear();
+        ai.clear();
+        contextualItemNameRetries.clear();
+        invalidatedNameFailures.clear();
     }
 
-    /** Current target language (e.g. {@code zh-TW} / {@code zh-CN}). */
-    public String targetLang() {
-        return config.targetLang;
+    public String targetLang() { return config.targetLang; }
+
+    public void setTargetLang(String language) {
+        if (language == null || language.equals(config.targetLang)) return;
+        config.targetLang = language;
+        google.setTargetLang(language);
+        ai.setTargetLang(language);
+        contextualItemNameRetries.clear();
+        invalidatedNameFailures.clear();
     }
 
-    /**
-     * Switch the translation output language at runtime (繁體 {@code zh-TW} ↔ 簡體
-     * {@code zh-CN}): retarget both engine caches and wipe them so every surface is
-     * re-translated into the new language. No-op if the language is unchanged.
-     */
-    public void setTargetLang(String lang) {
-        if (lang == null || lang.equals(config.targetLang)) return;
-        config.targetLang = lang;
-        cache.setTargetLang(lang);
-        aiCache.setTargetLang(lang);
-        clearTranslations();
-    }
-
-    /** Flush both engines' coalesced per-frame request buffers (call once per client tick). */
     public void flushBatches() {
-        cache.flushBatch();
-        aiCache.flushBatch();
+        google.flushBatch();
+        ai.flushBatch();
     }
 
-    /** Total cached translations across both engines (for the settings-screen progress display). */
-    public int translatedCount() {
-        return cache.size() + aiCache.size();
-    }
-
-    /** Translations currently in flight across both engines (queued / being fetched). */
-    public int pendingCount() {
-        return cache.pendingCount() + aiCache.pendingCount();
-    }
-
-    /** Wipe only the AI cache (used when AI model/keys change). */
-    public void clearAiTranslations() {
-        aiCache.clear();
-    }
-
-    /**
-     * Re-translate a specific set of lines (e.g. one item's tooltip): evict them from
-     * both engine caches, then re-warm via the tooltip engine. Backs the "re-translate
-     * pointed item" hotkey.
-     */
+    public int translatedCount() { return google.size() + ai.size(); }
+    public int pendingCount() { return google.pendingCount() + ai.pendingCount(); }
     public void retranslate(List<String> sources) {
-        Collection<String> names = protectedNamesNow();
-        for (String s : sources) {
-            cache.invalidate(s);
-            aiCache.invalidate(s);
-            // The render path reads (and the warm now writes) the MASKED key — evict it
-            // too, or the re-warm below would see a "cached" line and skip re-buying.
-            String masked = NameMasker.mask(s, names).text();
-            if (!masked.equals(s)) {
-                cache.invalidate(masked);
-                aiCache.invalidate(masked);
-            }
+        Collection<String> protectedNow = names();
+        for (String source : sources) {
+            invalidateBoth(source);
+            String masked = NameMasker.mask(source, protectedNow).text();
+            if (!masked.equals(source)) invalidateBoth(masked);
         }
         warmTooltipBatch(sources);
     }
 
-    /** Chat path: non-blocking cache-or-warm using the chat surface mode. */
-    public TranslationDecision translateChat(String original) {
-        return lookup(original, config.chatMode, config.aiChat);
+    private void invalidateBoth(String source) {
+        google.invalidate(source);
+        ai.invalidate(source);
     }
 
-    public TranslationDecision translateItemLine(String original) {
-        return lookup(original, config.tooltipMode, config.aiTooltip);
+    public TranslationDecision translateChat(String text) {
+        return lookup(text, config.chatMode, config.aiChat);
+    }
+    public TranslationDecision translateItemLine(String text) {
+        return lookup(text, config.tooltipMode, config.aiTooltip, true);
+    }
+    public TranslationDecision translateHeld(String text) {
+        return lookup(text, config.tooltipMode, config.aiTooltip);
+    }
+    public TranslationDecision translateScoreboardLine(String text) {
+        return lookup(text, config.scoreboardMode, config.aiScoreboard, true);
+    }
+    public TranslationDecision translateUi(String text) {
+        return lookup(text, config.nameMode, config.aiName);
+    }
+    public TranslationDecision translateBossBar(String text) {
+        return lookup(text, config.bossBarMode, config.aiBossBar);
+    }
+    public TranslationDecision translateTitle(String text) {
+        return lookup(text, config.titleMode, config.aiTitle);
+    }
+    public TranslationDecision translateActionBar(String text) {
+        return lookup(text, config.actionBarMode, config.aiActionBar);
+    }
+    public TranslationDecision translateBook(String text) {
+        return lookup(text, config.bookMode, config.aiBook, true);
+    }
+    public TranslationDecision translateScreenText(String text) {
+        return lookup(text, config.screenTextMode, config.aiScreenText, true);
+    }
+    public TranslationDecision translateScreenScanText(String text) {
+        return lookup(text, config.screenTextMode, config.aiScreenScan, true);
     }
 
-    public TranslationDecision translateHeld(String original) {
-        return lookup(original, config.tooltipMode, config.aiTooltip);
-    }
-
-    public TranslationDecision translateScoreboardLine(String original) {
-        return lookup(original, config.scoreboardMode, config.aiScoreboard);
-    }
-
-    public TranslationDecision translateUi(String original) {
-        return lookup(original, config.nameMode, config.aiName);
-    }
-
-    public TranslationDecision translateBossBar(String original) {
-        return lookup(original, config.bossBarMode, config.aiBossBar);
-    }
-
-    public TranslationDecision translateTitle(String original) {
-        return lookup(original, config.titleMode, config.aiTitle);
-    }
-
-    public TranslationDecision translateActionBar(String original) {
-        return lookup(original, config.actionBarMode, config.aiActionBar);
-    }
-
-    /** Book / lectern page text (per-frame, non-blocking cache-or-warm). */
-    public TranslationDecision translateBook(String original) {
-        return lookup(original, config.bookMode, config.aiBook);
-    }
-
-    /** Custom-GUI text (per-draw, non-blocking) — e.g. shader-pack / mod settings screens. */
-    public TranslationDecision translateScreenText(String original) {
-        return lookup(original, config.screenTextMode, config.aiScreenText);
-    }
-
-    /** Non-blocking cache-only lookup for the per-frame render surfaces. */
     private TranslationDecision lookup(String original, DisplayMode mode, boolean useAi) {
-        if (forceShowOriginalOnly) return TranslationDecision.unchanged(original);
-        if (mode == DisplayMode.ORIGINAL_ONLY) return TranslationDecision.unchanged(original);
-        if (!TextFilter.shouldTranslate(original, config.targetLang)) return TranslationDecision.unchanged(original);
-        // 1.0.0-style: EVERYTHING translates (ground items, NPC names, holograms) — but
-        // player names are masked out first and substituted back verbatim afterwards,
-        // so they never reach the backend and never come back mangled.
-        NameMasker.Masked masked = NameMasker.mask(original, protectedNamesNow());
-        String source = masked.text();
-        if (masked.hasMasks() && !TextFilter.shouldTranslate(source, config.targetLang)) {
-            return TranslationDecision.unchanged(original); // nothing left but the name itself
+        return lookup(original, mode, useAi, false);
+    }
+
+    private TranslationDecision lookup(String original, DisplayMode mode, boolean useAi,
+                                       boolean requireFinalAi) {
+        if (showOriginalOnly || mode == DisplayMode.ORIGINAL_ONLY
+                || !TextFilter.shouldTranslate(original, config.targetLang)) {
+            return TranslationDecision.unchanged(original);
         }
-        TranslationCache c = cacheFor(useAi);
-        String translated = c.getCached(source);
+
+        NameMasker.Masked masked = NameMasker.mask(original, names());
+        if (masked.hasMasks() && !TextFilter.shouldTranslate(masked.text(), config.targetLang)) {
+            return TranslationDecision.unchanged(original);
+        }
+
+        TranslationCache selected = cache(useAi);
+        String translated = useAi && requireFinalAi
+                ? selected.getCachedFinal(masked.text()) : selected.getCached(masked.text());
         if (translated == null) {
-            // Coalesce per-frame render-surface misses into one batched request per tick
-            // (cuts request count hugely vs one request per string — matters for AI endpoints).
-            c.requestBatched(source);
+            selected.requestBatched(masked.text());
             return TranslationDecision.unchanged(original);
         }
         return decide(original, NameMasker.unmask(translated, masked.names()), mode);
     }
 
-    /** Whether the item warm-up should run (the shared tooltip/held item surface is on). */
-    private boolean itemSurfacesActive() {
-        return config.tooltipMode != DisplayMode.ORIGINAL_ONLY;
-    }
-
     public boolean warmUp(String source) {
-        if (!itemSurfacesActive()) return true;
-        if (!TextFilter.shouldTranslate(source, config.targetLang)) return true;
-        if (cache.getCached(source) != null) return true;
-        return cache.translateBlocking(source) != null;
+        if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY
+                || !TextFilter.shouldTranslate(source, config.targetLang)) return true;
+        TranslationCache selected = cache(config.aiTooltip);
+        return selected.getCached(source) != null || selected.translateBlocking(source) != null;
     }
 
-    /**
-     * Warm a whole tooltip's lines together in one background batch — so the AI
-     * backend translates them with shared context (coherent across the tooltip),
-     * and even the Google backend issues one request instead of N. Non-blocking;
-     * the per-line render then picks up the cached results.
-     */
     public void warmTooltipBatch(List<String> sources) {
-        if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY) return;
-        // Warm the MASKED text — the exact key the render lookup() queries. Warming the
-        // raw line parks the translation under a key the render never reads, so a line
-        // containing a protected player name misses on its first frame, is bought a
-        // SECOND time and flashes the original until that round trip lands (R8). Masking
-        // here also keeps names out of the warm request, as protectPlayerNames intends.
-        Collection<String> names = protectedNamesNow();
-        List<String> todo = new java.util.ArrayList<>();
-        List<String> context = new java.util.ArrayList<>(sources.size());
-        for (String s : sources) {
-            if (s == null) continue;
-            String masked = NameMasker.mask(s, names).text();
-            // The FULL tooltip (title included, cached lines included) rides along as
-            // surface context, so lines translated later still agree with the title.
-            context.add(masked);
-            if (TextFilter.shouldTranslate(masked, config.targetLang)) todo.add(masked);
+        warmMasked(sources, true, config.tooltipMode, config.aiTooltip);
+    }
+
+    /** Warm every blank-line/indent-delimited paragraph on the current book page in one
+     * context-aware request while keeping each paragraph as one translation unit. */
+    public void warmBookBatch(List<String> sources) {
+        warmMasked(sources, true, config.bookMode, config.aiBook);
+    }
+
+    /** Warm every scoreboard paragraph together so the AI can disambiguate labels,
+     * objectives and locations from the complete sidebar while live values remain MT slots. */
+    public void warmScoreboardBatch(List<String> sources) {
+        warmMasked(sources, true, config.scoreboardMode, config.aiScoreboard);
+    }
+
+    /** Whether a tooltip translation unit has reached a terminal cache state.  Used by
+     * the renderer to commit a blank-line-delimited paragraph atomically: a cached
+     * translation and a durable keep-original decision are both ready, while a miss is
+     * not. This lookup never creates a new ordinary request; {@link #warmTooltipBatch}
+     * owns submission for the complete visible tooltip. */
+    public boolean isTooltipTranslationReady(String source) {
+        if (source == null || config.tooltipMode == DisplayMode.ORIGINAL_ONLY
+                || !TextFilter.shouldTranslate(source, config.targetLang)) return true;
+        NameMasker.Masked masked = NameMasker.mask(source, names());
+        if (masked.hasMasks() && !TextFilter.shouldTranslate(masked.text(), config.targetLang)) {
+            return true;
         }
-        if (!todo.isEmpty()) cacheFor(config.aiTooltip).warmBatchAsync(todo, context);
+        TranslationCache selected = cache(config.aiTooltip);
+        return (config.aiTooltip ? selected.getCachedFinal(masked.text())
+                : selected.getCached(masked.text())) != null;
+    }
+
+    public void warmNamesBatch(List<String> sources) {
+        warmMasked(sources, false, config.tooltipMode, config.aiTooltip);
     }
 
     /**
-     * Warm a batch of UNRELATED names (e.g. the item names inside an open container)
-     * in one background request. Unlike {@link #warmTooltipBatch(List)} this attaches
-     * NO tooltip surface context — the lines do not come from one tooltip and have no
-     * shared title, so telling the AI otherwise would be a false premise.
+     * Correct an isolated AI item-name translation when a context-rich tooltip title
+     * translated the same name differently. For example, an isolated
+     * "Aspect of the End" must not remain "末影之視" while the title line is
+     * "終界之刃 傷害…". It first subtracts a separately translated, reusable suffix
+     * ("傷害…") from the contextual title and stores the remaining name as authoritative.
+     * Only if that deterministic extraction is impossible does it retry the name once
+     * with the complete tooltip as reference context.
      */
-    public void warmNamesBatch(List<String> sources) {
-        if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY) return;
-        // Same warm/render key alignment as warmTooltipBatch: warm what lookup() reads.
-        Collection<String> names = protectedNamesNow();
-        List<String> todo = new java.util.ArrayList<>();
-        for (String s : sources) {
-            if (s == null) continue;
-            String masked = NameMasker.mask(s, names).text();
-            if (TextFilter.shouldTranslate(masked, config.targetLang)) todo.add(masked);
+    public void reconcileItemNameWithTooltip(String itemName, List<String> tooltipSources) {
+        if (!config.aiTooltip || itemName == null || itemName.isBlank()
+                || tooltipSources == null || tooltipSources.isEmpty()) return;
+
+        Collection<String> protectedNow = names();
+        NameMasker.Masked maskedName = NameMasker.mask(itemName, protectedNow);
+        if (maskedName.hasMasks()) return;
+        TranslationCache selected = cache(true);
+        String nameTranslation = selected.getCachedFinal(maskedName.text());
+        if (nameTranslation == null || nameTranslation.isBlank()) return;
+
+        List<String> context = new ArrayList<>(tooltipSources.size());
+        String mismatchSource = null;
+        String mismatchTranslation = null;
+        for (String source : tooltipSources) {
+            if (source == null) continue;
+            String maskedSource = NameMasker.mask(source, protectedNow).text();
+            context.add(maskedSource);
+            String comparableSource = TextFilter.stripFormatting(source);
+            if (!startsWithItemName(comparableSource, itemName)) continue;
+            String lineTranslation = selected.getCachedFinal(maskedSource);
+            String comparableTranslation = TextFilter.stripFormatting(lineTranslation);
+            if (comparableTranslation != null
+                    && !sameTranslatedNamePrefix(comparableTranslation,
+                    TextFilter.stripFormatting(nameTranslation))) {
+                mismatchSource = comparableSource;
+                mismatchTranslation = comparableTranslation;
+                break;
+            }
         }
-        if (!todo.isEmpty()) cacheFor(config.aiTooltip).warmBatchAsync(todo);
+        if (mismatchSource == null) return;
+
+        String retryKey = config.targetLang + '\0' + maskedName.text();
+        String suffix = mismatchSource.substring(itemName.length());
+        String suffixTranslation = selected.getCachedFinal(suffix);
+        if (suffixTranslation == null) {
+            // Usually a shared template such as "Damage: [n]"; one short request can
+            // reconcile the names of every weapon using the same suffix.
+            selected.requestBatched(suffix);
+            return;
+        }
+        String authoritative = contextualPrefix(mismatchTranslation, suffixTranslation);
+        if (authoritative != null) {
+            // Remove a possible GT fallback copy, then atomically replace the AI key.
+            google.invalidate(maskedName.text());
+            if (selected.replaceFinal(maskedName.text(), authoritative)) {
+                contextualItemNameRetries.add(retryKey);
+                return;
+            }
+        }
+
+        if (!contextualItemNameRetries.add(retryKey)) return;
+        // Clear both tiers so the AI request cannot be short-circuited by a GT fallback
+        // copy of the same isolated name.
+        invalidateBoth(maskedName.text());
+        selected.warmBatchAsync(List.of(maskedName.text()), context);
     }
 
-    public boolean warmUpBatch(List<String> sources) {
-        if (!itemSurfacesActive()) return true;
-        List<String> todo = new java.util.ArrayList<>();
-        for (String s : sources) {
-            if (TextFilter.shouldTranslate(s, config.targetLang)) todo.add(s);
+    private static String contextualPrefix(String wholeTranslation, String suffixTranslation) {
+        String whole = wholeTranslation == null ? "" : wholeTranslation.strip();
+        String suffix = suffixTranslation == null ? "" : suffixTranslation.strip();
+        if (whole.isEmpty() || suffix.isEmpty() || !whole.endsWith(suffix)) return null;
+        String prefix = whole.substring(0, whole.length() - suffix.length()).strip();
+        if (prefix.isEmpty() || TextFilter.isLikelyMojibake(prefix)) return null;
+        return prefix;
+    }
+
+    private static boolean startsWithItemName(String line, String itemName) {
+        if (!line.startsWith(itemName) || line.length() <= itemName.length()) return false;
+        int next = line.codePointAt(itemName.length());
+        return !Character.isLetterOrDigit(next) && next != '_';
+    }
+
+    private static boolean sameTranslatedNamePrefix(String lineTranslation,
+                                                    String nameTranslation) {
+        String line = lineTranslation.stripLeading();
+        String name = nameTranslation.strip();
+        if (name.isEmpty() || !line.startsWith(name)) return false;
+        if (line.length() == name.length()) return true;
+        int next = line.codePointAt(name.length());
+        return !Character.isLetterOrDigit(next) && next != '_';
+    }
+
+    private void warmMasked(List<String> sources, boolean includeContext,
+                            DisplayMode mode, boolean useAi) {
+        if (mode == DisplayMode.ORIGINAL_ONLY || sources == null) return;
+        Collection<String> protectedNow = names();
+        List<String> todo = new ArrayList<>();
+        List<String> context = includeContext ? new ArrayList<>() : null;
+        for (String source : sources) {
+            if (source == null) continue;
+            String masked = NameMasker.mask(source, protectedNow).text();
+            if (context != null) context.add(masked);
+            if (TextFilter.shouldTranslate(masked, config.targetLang)) todo.add(masked);
         }
-        return todo.isEmpty() || cache.warmBatch(todo);
+        if (!todo.isEmpty()) cache(useAi).warmBatchAsync(todo, context);
     }
 
     private TranslationDecision decide(String original, String translated, DisplayMode mode) {
-        // Filter no-op translations: identical, or differing only in surrounding whitespace.
-        if (translated == null || translated.isEmpty()
-                || translated.equals(original) || translated.trim().equals(original.trim())) {
+        boolean styleFallback = TextFilter.isStyleFallback(translated);
+        String semantic = TextFilter.stripStyleFallback(translated);
+        if (!meaningful(original, semantic)
+                || TextFilter.isPartialTransliteration(original, semantic)) {
             return TranslationDecision.unchanged(original);
         }
-        // Reject a half-transliterated single word (e.g. "jacob" → "傑cob"): the AI mixed the
-        // original spelling and the target script inside one word. It is never correct, so
-        // show the original instead of the poison (belt-and-suspenders: the cache gate keeps
-        // it from ever being stored, this keeps a stray one from ever being displayed).
-        if (TextFilter.isPartialTransliteration(original, translated)) {
+        if (!protectedNamesSurvive(original, semantic)) {
+            invalidateMangledOnce(original);
             return TranslationDecision.unchanged(original);
         }
-        // R17 final safety net (user:「tab抓到玩家ID 無論哪個管道所有翻譯的ID都覆蓋回去」):
-        // every TAB-listed player name present in the ORIGINAL must survive VERBATIM in the
-        // translation. A mangled ID means the value is poisoned (a path that bypassed
-        // NameMasker, an eaten mask token, or an old cache entry) — show the original and
-        // invalidate the entry ONCE so the next encounter re-translates through the masked
-        // pipeline and self-heals. This is the LAST line of defence; NameMasker and the
-        // name-tag guard stay in front of it.
-        if (!listedNamesSurvive(original, translated)) {
-            invalidateNameMangledOnce(original);
-            return TranslationDecision.unchanged(original);
-        }
-        // Keep the original line's indentation/centering on the translation.
-        return TranslationDecision.of(mode, original, LayoutPreserver.matchOuterWhitespace(original, translated));
+        String laidOut = LayoutPreserver.matchOuterWhitespace(original, semantic);
+        return TranslationDecision.of(mode, original,
+                styleFallback ? TextFilter.markStyleFallback(laidOut) : laidOut);
     }
 
-    /** Keys already invalidated by the R17 name gate — one eviction per key is enough
-     *  (per-frame decide() must not hammer the store). Crude O(1) cap, refills fast. */
-    private final java.util.Set<String> nameGateInvalidated =
-            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static boolean meaningful(String source, String translated) {
+        return translated != null && !translated.isEmpty()
+                && !translated.equals(source)
+                && !translated.trim().equals(source == null ? "" : source.trim());
+    }
 
-    /**
-     * True when every TAB-listed player name occurring in {@code original} (whole token,
-     * boundaries = non {@code [A-Za-z0-9_]}) also occurs verbatim in {@code translated}.
-     * Cheap on the per-frame path: one linear token walk over the original with set
-     * lookups; lines without any listed name never touch the translation at all.
-     */
-    private boolean listedNamesSurvive(String original, String translated) {
-        Collection<String> namesC = protectedNamesNow();
-        if (namesC.isEmpty()) return true;
-        java.util.Set<String> names = (namesC instanceof java.util.Set<String> s)
-                ? s : new java.util.HashSet<>(namesC);
-        int i = 0;
-        int n = original.length();
-        while (i < n) {
-            if (isAsciiNameChar(original.charAt(i))) {
-                int j = i + 1;
-                while (j < n && isAsciiNameChar(original.charAt(j))) j++;
-                String token = original.substring(i, j);
-                if (names.contains(token) && !containsWholeToken(translated, token)) return false;
-                i = j;
-            } else {
+    private boolean protectedNamesSurvive(String original, String translated) {
+        Collection<String> current = names();
+        if (current.isEmpty()) return true;
+        Set<String> protectedSet = new HashSet<>(current);
+        for (int i = 0; i < original.length(); ) {
+            if (!nameCharacter(original.charAt(i))) {
                 i++;
+                continue;
             }
+            int end = i + 1;
+            while (end < original.length() && nameCharacter(original.charAt(end))) end++;
+            String token = original.substring(i, end);
+            if (protectedSet.contains(token) && !containsWholeName(translated, token)) return false;
+            i = end;
         }
         return true;
     }
 
-    /** Whole-token occurrence of {@code token} in {@code text} (Minecraft-name boundaries). */
-    private static boolean containsWholeToken(String text, String token) {
-        int at = text.indexOf(token);
-        while (at >= 0) {
-            boolean leftEdge = at == 0 || !isAsciiNameChar(text.charAt(at - 1));
-            int end = at + token.length();
-            boolean rightEdge = end >= text.length() || !isAsciiNameChar(text.charAt(end));
-            if (leftEdge && rightEdge) return true;
-            at = text.indexOf(token, at + 1);
+    private static boolean containsWholeName(String text, String name) {
+        for (int at = text.indexOf(name); at >= 0; at = text.indexOf(name, at + 1)) {
+            int end = at + name.length();
+            if ((at == 0 || !nameCharacter(text.charAt(at - 1)))
+                    && (end == text.length() || !nameCharacter(text.charAt(end)))) return true;
         }
         return false;
     }
 
-    private static boolean isAsciiNameChar(char c) {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+    private static boolean nameCharacter(char c) {
+        return c == '_' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z'
+                || c >= '0' && c <= '9';
     }
 
-    /** Evict every stored form of a name-mangled line ONCE (debounced), so the next
-     *  encounter re-buys through the masked pipeline instead of serving the poison forever. */
-    private void invalidateNameMangledOnce(String original) {
-        if (nameGateInvalidated.size() > 512) nameGateInvalidated.clear();
-        if (!nameGateInvalidated.add(original)) return;
-        cache.invalidate(original);
-        aiCache.invalidate(original);
-        String masked = NameMasker.mask(original, protectedNamesNow()).text();
-        if (!masked.equals(original)) {
-            cache.invalidate(masked);
-            aiCache.invalidate(masked);
-        }
+    private void invalidateMangledOnce(String original) {
+        if (invalidatedNameFailures.size() >= 512) invalidatedNameFailures.clear();
+        if (!invalidatedNameFailures.add(original)) return;
+        invalidateBoth(original);
+        String masked = NameMasker.mask(original, names()).text();
+        if (!masked.equals(original)) invalidateBoth(masked);
     }
 }

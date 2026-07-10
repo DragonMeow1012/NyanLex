@@ -5,6 +5,8 @@ import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.style.ColorProfile;
 import com.dragonmeow.mctranslator.style.StyleMapper;
 import com.dragonmeow.mctranslator.style.StyledRun;
+import com.dragonmeow.mctranslator.translate.ParagraphModel;
+import com.dragonmeow.mctranslator.translate.TextFilter;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
@@ -31,27 +33,65 @@ public final class FabricTextStyle {
     private FabricTextStyle() {
     }
 
-    /** Memo of translation DECISIONS (plain translated string + mode), NOT built Components:
-     *  the styled Component is rebuilt from the CURRENT source's colours on every call, so a
-     *  colour-cycling line (rainbow "SKYBLOCK" title) keeps animating after translation
-     *  instead of freezing on the first frame's colours. */
-    private static final Map<String, TranslationDecision> RENDER_MEMO = new ConcurrentHashMap<>();
-
-    /** Per-frame memo for laid-out GUI lines (FTB quest text redraws every frame; rebuilding
-     *  the styled translation + width check per frame would burn CPU). Keyed by plain text. */
-    private static final Map<String, FormattedCharSequence> FCS_MEMO = new ConcurrentHashMap<>();
-
-    public static FormattedCharSequence fcsMemoGet(String plain) {
-        return FCS_MEMO.get(plain);
+    /** Resolve literal legacy section codes into component style runs. */
+    public static Component resolveLegacyCodes(Component source) {
+        if (source == null || source.getString().indexOf('§') < 0) return source;
+        MutableComponent out = Component.empty();
+        source.visit((base, value) -> {
+            Style current = base;
+            StringBuilder chunk = new StringBuilder();
+            for (int i = 0; i < value.length(); i++) {
+                char ch = value.charAt(i);
+                if (ch != '§' || i + 1 >= value.length()) {
+                    chunk.append(ch);
+                    continue;
+                }
+                if (!chunk.isEmpty()) {
+                    out.append(Component.literal(chunk.toString()).setStyle(current));
+                    chunk.setLength(0);
+                }
+                current = applyLegacyCode(current, base,
+                        Character.toLowerCase(value.charAt(++i)));
+            }
+            if (!chunk.isEmpty()) out.append(Component.literal(chunk.toString()).setStyle(current));
+            return Optional.empty();
+        }, Style.EMPTY);
+        return out;
     }
 
-    public static void fcsMemoPut(String plain, FormattedCharSequence value) {
-        if (FCS_MEMO.size() > 4096) FCS_MEMO.clear();
-        FCS_MEMO.put(plain, value);
+    private static Style applyLegacyCode(Style current, Style base, char code) {
+        int rgb = switch (code) {
+            case '0' -> 0x000000; case '1' -> 0x0000AA; case '2' -> 0x00AA00;
+            case '3' -> 0x00AAAA; case '4' -> 0xAA0000; case '5' -> 0xAA00AA;
+            case '6' -> 0xFFAA00; case '7' -> 0xAAAAAA; case '8' -> 0x555555;
+            case '9' -> 0x5555FF; case 'a' -> 0x55FF55; case 'b' -> 0x55FFFF;
+            case 'c' -> 0xFF5555; case 'd' -> 0xFF55FF; case 'e' -> 0xFFFF55;
+            case 'f' -> 0xFFFFFF;
+            default -> -1;
+        };
+        if (rgb >= 0) return interactiveOnly(base).withColor(TextColor.fromRgb(rgb));
+        return switch (code) {
+            case 'k' -> current.withObfuscated(true);
+            case 'l' -> current.withBold(true);
+            case 'm' -> current.withStrikethrough(true);
+            case 'n' -> current.withUnderlined(true);
+            case 'o' -> current.withItalic(true);
+            case 'r' -> interactiveOnly(base);
+            default -> current;
+        };
+    }
+
+    private static Style interactiveOnly(Style base) {
+        Style out = Style.EMPTY;
+        if (base.getClickEvent() != null) out = out.withClickEvent(base.getClickEvent());
+        if (base.getHoverEvent() != null) out = out.withHoverEvent(base.getHoverEvent());
+        if (base.getInsertion() != null) out = out.withInsertion(base.getInsertion());
+        return out;
     }
 
     /** Surfaces whose 原文＋翻譯 can render as two stacked lines (they wrap, or our mixin splits '\n'). */
-    private static final java.util.Set<String> STACKABLE = java.util.Set.of("book", "nameTag", "bossBar", "actionBar");
+    private static final java.util.Set<String> STACKABLE = java.util.Set.of(
+            "book", "nameTag", "bossBar", "actionBar", "ftb");
 
     /** Vertical gap (px, in the surface's text space) between stacked 原文 / 譯文 lines — a touch
      *  wider than the ~9px font so the two lines have clear breathing room and don't touch. */
@@ -72,21 +112,10 @@ public final class FabricTextStyle {
     public static Component renderTranslated(String surfaceId, Component source,
                                              Function<String, TranslationDecision> translateFn) {
         if (source == null) return null;
-        String src = source.getString();
-        String key = surfaceId + '\u0000' + src;
-        TranslationDecision decision = RENDER_MEMO.get(key);
-        if (decision == null) {
-            decision = translateFn.apply(src);
-            if (decision == null || !decision.changed()) return null; // untranslated: keep original
-            if (RENDER_MEMO.size() > 8192) RENDER_MEMO.clear();
-            RENDER_MEMO.put(key, decision);
-        }
-        ColorProfile profile = extract(source);
-        // Multi-colour lines (e.g. "SkyBlock YEAR 500 RAFFLE") map colours by verbatim
-        // anchors instead of proportional stretch, so each word keeps ITS colour.
-        Component translated = (profile.distinctColorCount() >= 2)
-                ? withInteractive(styledAnchored(source, 0, decision.translated()), interactiveStyle(source, 0))
-                : styled(decision.translated(), profile, source, 0);
+        source = resolveLegacyCodes(source);
+        Rendered rendered = translateParagraphBlock(source, translateFn);
+        if (rendered == null) return null;
+        Component translated = rendered.component();
         // 原文＋翻譯 handling per surface:
         //  - "tooltip" (and chat): the 原文/分隔線/翻譯 BLOCK is built by the caller, so here we
         //    return TRANSLATION-ONLY (otherwise the block's translation line wrongly shows both).
@@ -94,7 +123,7 @@ public final class FabricTextStyle {
         //    own mixin which splits on '\n') → newline genuinely stacks 原文 line / 譯文 line.
         //  - everything else (GUI single-label text e.g. Iris settings, title / action bar / held /
         //    scoreboard) is on a FIXED single row that can't gain a line, so INLINE as 原文　譯文.
-        if (decision.mode() == DisplayMode.BOTH && !"tooltip".equals(surfaceId)) {
+        if (rendered.mode() == DisplayMode.BOTH && !"tooltip".equals(surfaceId)) {
             return STACKABLE.contains(surfaceId)
                     ? stackAligned(source, translated)
                     : source.copy().append(Component.literal("　")).append(translated);
@@ -102,74 +131,256 @@ public final class FabricTextStyle {
         return translated;
     }
 
-    /**
-     * Drop the per-frame render cache. Called when the config changes (a surface is
-     * turned off / mode switched) or the cache is cleared, so stale translations are
-     * not returned for memoised sources.
-     */
-    /** Memo for tooltip sentence-groups: joined source sentence → re-wrapped translated lines. */
-    private static final Map<String, List<Component>> GROUP_MEMO = new ConcurrentHashMap<>();
+    private record Rendered(Component component, DisplayMode mode) {
+    }
+
+    private static Rendered translateOne(Component source,
+                                         Function<String, TranslationDecision> translateFn) {
+        String src = source.getString();
+        if (src.isEmpty()) return null;
+        MarkedChat markers = markChatContent(source, 0);
+        String request = markers.marked() ? markers.text() : src;
+        TranslationDecision decision = translateFn.apply(request);
+        if (decision == null || !decision.changed()) return null;
+        return new Rendered(rebuildRich(source, decision.translated(), markers), decision.mode());
+    }
+
+    /** Every multi-line surface is a list of semantic paragraphs, never a list of
+     * unrelated translation rows. Blank lines and prose indentation are the only
+     * generic boundaries; a one-line surface is simply a one-row paragraph. */
+    private static Rendered translateParagraphBlock(
+            Component source, Function<String, TranslationDecision> translateFn) {
+        List<Component> lines = splitStyledLines(source);
+        if (lines.size() <= 1) return translateOne(source, translateFn);
+        MutableComponent out = Component.empty();
+        DisplayMode mode = null;
+        boolean changed = false;
+        boolean firstOutput = true;
+        for (int[] range : paragraphRanges(lines)) {
+            if (!firstOutput) out.append(Component.literal("\n"));
+            firstOutput = false;
+            Component first = lines.get(range[0]);
+            if (first == null || first.getString().isBlank()) {
+                if (first != null) out.append(first.copy());
+                continue;
+            }
+            List<Component> paragraph = lines.subList(range[0], range[1] + 1);
+            Rendered rendered = translateParagraph(paragraph, translateFn);
+            if (rendered == null) {
+                out.append(joinStyledLines(paragraph));
+            } else {
+                out.append(rendered.component());
+                if (mode == null) mode = rendered.mode();
+                changed = true;
+            }
+        }
+        return changed ? new Rendered(out, mode) : null;
+    }
+
+    private static Rendered translateParagraph(
+            List<Component> paragraph, Function<String, TranslationDecision> translateFn) {
+        if (paragraph.size() == 1) return translateOne(paragraph.get(0), translateFn);
+        Component joined = resolveLegacyCodes(joinParagraph(paragraph));
+        MarkedChat marked = markChatContent(joined, 0);
+        String request = marked.marked() ? marked.text() : joined.getString();
+        TranslationDecision decision = translateFn.apply(request);
+        if (decision == null || !decision.changed()) return null;
+        MutableComponent rebuilt = rebuildRich(joined, decision.translated(), marked);
+        return new Rendered(restoreParagraphBreaks(rebuilt), decision.mode());
+    }
 
     public static void clearRenderMemo() {
-        RENDER_MEMO.clear();
-        FCS_MEMO.clear();
-        GROUP_MEMO.clear();
+        // Kept as a compatibility hook for loader screens; render decisions are no
+        // longer duplicated outside TranslationCache.
     }
 
     // ---- wrapped-sentence tooltips: join → translate whole → re-wrap ----
 
-    /**
-     * Whether tooltip line {@code next} is the continuation of a sentence that the server
-     * wrapped across lines ("…when Diaz is" / "Mayor for special items!"). Conservative:
-     * stat rows ("+50% Skill XP") and headers never join.
-     */
+    /** True when {@code next} is a lower-case continuation of a server-wrapped lore
+     * sentence. Independent stat/enchantment rows deliberately stay separate. */
     public static boolean continuesSentence(String prev, String next) {
         if (prev == null || next == null) return false;
         String p = prev.strip();
         String n = next.strip();
-        if (p.isEmpty() || n.isEmpty()) return false;
-        if (p.split("\\s+").length < 4) return false; // too short to be a wrapped sentence
-        char last = p.charAt(p.length() - 1);
-        if (!Character.isLetter(last)) return false;  // ended with punctuation/number: complete
-        return Character.isLetter(n.charAt(0));
+        if (p.isEmpty() || n.isEmpty() || p.split("\\s+").length < 4) return false;
+        int last = p.codePointBefore(p.length());
+        int first = n.codePointAt(0);
+        return Character.isLetter(last)
+                && Character.isLetter(first) && Character.isLowerCase(first);
     }
 
-    /** Join a wrapped sentence's lines into one styled component (runs preserved, single
-     *  spaces between lines) so it can be translated and re-coloured as a whole. */
+    /** Join visual lore rows into one styled semantic sentence. */
     public static MutableComponent joinLines(List<Component> group) {
         MutableComponent out = Component.empty();
         for (int i = 0; i < group.size(); i++) {
             if (i > 0) out.append(Component.literal(" "));
-            for (Seg seg : segments(group.get(i))) {
+            Component line = group.get(i);
+            if (line == null) continue;
+            for (Seg seg : segments(line)) {
                 out.append(Component.literal(seg.text()).setStyle(seg.style()));
             }
         }
         return out;
     }
 
-    /** The plain translation key for a wrapped-sentence group (must match what is warmed). */
     public static String joinPlain(List<Component> group) {
         StringBuilder sb = new StringBuilder();
         for (Component c : group) {
+            if (c == null) continue;
             if (sb.length() > 0) sb.append(' ');
             sb.append(c.getString().strip());
         }
         return sb.toString();
     }
 
-    /** The EXACT text to translate for a wrapped-sentence group: ⟦CS#⟧-marked when the
-     *  paragraph has accent-coloured words (their colour then survives reordering),
-     *  plain otherwise. The warm-up and the render path must both use this. */
     public static String groupRequestText(List<Component> group) {
-        MutableComponent joined = joinLines(group);
-        if (extract(joined).distinctColorCount() >= 2) {
-            MarkedChat marked = markChatContent(joined, 0);
-            if (marked.marked()) return marked.text();
-        }
-        return joinPlain(group);
+        Component joined = resolveLegacyCodes(joinLines(group));
+        MarkedChat marked = markChatContent(joined, 0);
+        return marked.marked() ? marked.text() : joinPlain(group);
     }
 
-    /** Rebuild a styled {@link FormattedText} line into a Component (used after re-wrapping). */
+    public static List<Component> splitToWidth(Component styled, int width, Font font) {
+        List<Component> out = new ArrayList<>();
+        for (FormattedText line : font.getSplitter().splitLines(
+                styled, Math.max(60, width), Style.EMPTY)) {
+            out.add(toComponent(line));
+        }
+        if (out.isEmpty()) out.add(styled.copy());
+        return out;
+    }
+
+    /** Translate a visual wrap group atomically, then wrap the translated sentence back
+     * to the original tooltip width. Until the one semantic cache entry is ready, every
+     * source row remains unchanged—there is no half-translated paragraph state. */
+    public static List<Component> renderTranslatedGroup(
+            List<Component> group, Function<String, TranslationDecision> translateFn,
+            Font font) {
+        Component joined = resolveLegacyCodes(joinLines(group));
+        MarkedChat marked = markChatContent(joined, 0);
+        String request = marked.marked() ? marked.text() : joinPlain(group);
+        TranslationDecision decision = translateFn.apply(request);
+        if (decision == null || !decision.changed()) return null;
+        MutableComponent translated = rebuildRich(joined, decision.translated(), marked);
+        int width = 0;
+        for (Component c : group) if (c != null) width = Math.max(width, font.width(c));
+        return splitToWidth(translated, width, font);
+    }
+
+    private static final java.util.regex.Pattern PARAGRAPH_BREAK =
+            ParagraphModel.BREAK_TOKEN_PATTERN;
+
+    /** Join every visible row in one blank-line-delimited information paragraph while
+     * retaining explicit protected line breaks. The model receives one semantic unit. */
+    private static MutableComponent joinParagraph(List<Component> paragraph) {
+        MutableComponent out = Component.empty();
+        for (int i = 0; i < paragraph.size(); i++) {
+            if (i > 0) out.append(Component.literal(ParagraphModel.breakToken(i - 1)));
+            Component line = paragraph.get(i);
+            if (line == null) continue;
+            for (Seg seg : segments(line)) {
+                out.append(Component.literal(seg.text()).setStyle(seg.style()));
+            }
+        }
+        return out;
+    }
+
+    public static String paragraphRequestText(List<Component> paragraph) {
+        Component joined = resolveLegacyCodes(joinParagraph(paragraph));
+        MarkedChat marked = markChatContent(joined, 0);
+        return marked.marked() ? marked.text() : joined.getString();
+    }
+
+    /** Translate one information paragraph, restore its protected rows, then re-wrap any
+     * expanded Traditional-Chinese row to the original pixel width. */
+    public static List<Component> renderTranslatedParagraph(
+            List<Component> paragraph, Function<String, TranslationDecision> translateFn,
+            Font font) {
+        Component joined = resolveLegacyCodes(joinParagraph(paragraph));
+        MarkedChat marked = markChatContent(joined, 0);
+        String request = marked.marked() ? marked.text() : joined.getString();
+        TranslationDecision decision = translateFn.apply(request);
+        if (decision == null || !decision.changed()) return null;
+        MutableComponent hardLines = restoreParagraphBreaks(
+                rebuildRich(joined, decision.translated(), marked));
+        int width = 0;
+        for (Component line : paragraph) if (line != null) width = Math.max(width, font.width(line));
+        List<Component> out = new ArrayList<>();
+        for (Component line : splitStyledLines(hardLines)) {
+            out.addAll(splitToWidth(line, width, font));
+        }
+        return out;
+    }
+
+    private static MutableComponent restoreParagraphBreaks(Component styled) {
+        List<Seg> runs = segments(styled);
+        StringBuilder plain = new StringBuilder();
+        for (Seg run : runs) plain.append(run.text());
+        MutableComponent out = Component.empty();
+        java.util.regex.Matcher matcher = PARAGRAPH_BREAK.matcher(plain);
+        int cursor = 0;
+        while (matcher.find()) {
+            appendStyledRange(out, runs, cursor, matcher.start());
+            out.append(Component.literal("\n"));
+            cursor = matcher.end();
+        }
+        appendStyledRange(out, runs, cursor, plain.length());
+        return out;
+    }
+
+    /** Copy a visible character range even when a protected PB token was split across
+     * multiple colour/style runs by semantic style projection. */
+    private static void appendStyledRange(
+            MutableComponent out, List<Seg> runs, int start, int end) {
+        if (start >= end) return;
+        int offset = 0;
+        for (Seg run : runs) {
+            int runStart = offset;
+            int runEnd = offset + run.text().length();
+            offset = runEnd;
+            int from = Math.max(start, runStart);
+            int to = Math.min(end, runEnd);
+            if (from < to) {
+                out.append(Component.literal(run.text().substring(
+                        from - runStart, to - runStart)).setStyle(run.style()));
+            }
+            if (runEnd >= end) break;
+        }
+    }
+
+    /** One request per prose/information paragraph; blank rows stay in context as boundaries. */
+    public static List<String> paragraphRequests(Component source) {
+        List<Component> lines = splitStyledLines(resolveLegacyCodes(source));
+        List<String> out = new ArrayList<>();
+        for (int[] range : paragraphRanges(lines)) {
+            Component first = lines.get(range[0]);
+            if (first == null || first.getString().isBlank()) {
+                out.add("");
+            } else {
+                out.add(paragraphRequestText(lines.subList(range[0], range[1] + 1)));
+            }
+        }
+        return out;
+    }
+
+    /** Paragraph-aware page/log rendering. There is intentionally no first-line title
+     * assumption here; blank rows and two-column paragraph indentation are the only cuts. */
+    public static Component renderTranslatedParagraphPage(
+            Component source, Function<String, TranslationDecision> translateFn, Font font) {
+        Component resolved = resolveLegacyCodes(source);
+        Rendered rendered = translateParagraphBlock(resolved, translateFn);
+        return rendered == null ? null : rendered.component();
+    }
+
+    private static List<int[]> paragraphRanges(List<Component> lines) {
+        List<int[]> ranges = new ArrayList<>();
+        List<String> text = new ArrayList<>(lines.size());
+        for (Component line : lines) text.add(line == null ? null : line.getString());
+        for (ParagraphModel.Range range : ParagraphModel.ranges(text)) {
+            ranges.add(new int[] {range.start(), range.end()});
+        }
+        return ranges;
+    }
+    /** Rebuild rich formatted text without flattening its style runs. */
     public static MutableComponent toComponent(FormattedText line) {
         MutableComponent out = Component.empty();
         line.visit((style, str) -> {
@@ -179,46 +390,16 @@ public final class FabricTextStyle {
         return out;
     }
 
-    /** Wrap a styled component to {@code width} px, one Component per resulting line. */
-    public static List<Component> splitToWidth(Component styled, int width, Font font) {
-        List<Component> out = new ArrayList<>();
-        for (FormattedText line : font.getSplitter().splitLines(styled, Math.max(60, width), Style.EMPTY)) {
-            out.add(toComponent(line));
+    /** Rebuild a pre-laid-out GUI line without flattening its per-character Style. */
+    public static MutableComponent toComponent(FormattedCharSequence line) {
+        MutableComponent out = Component.empty();
+        if (line != null) {
+            line.accept((index, style, codePoint) -> {
+                out.append(Component.literal(new String(Character.toChars(codePoint))).setStyle(style));
+                return true;
+            });
         }
-        if (out.isEmpty()) out.add(styled.copy());
         return out;
-    }
-
-    /**
-     * Translate a wrapped tooltip sentence as ONE unit: colours mapped over the whole
-     * sentence (anchors survive reordering), then re-wrapped to the group's original
-     * pixel width. Returns {@code null} until the translation is cached (the lookup
-     * itself queues the request). Memoised per joined sentence.
-     */
-    public static List<Component> renderTranslatedGroup(List<Component> group,
-                                                        Function<String, TranslationDecision> translateFn,
-                                                        Font font) {
-        MutableComponent joinedComp = joinLines(group);
-        ColorProfile profile = extract(joinedComp);
-        MarkedChat marked = (profile.distinctColorCount() >= 2) ? markChatContent(joinedComp, 0) : null;
-        boolean useMarkers = marked != null && marked.marked();
-        String request = useMarkers ? marked.text() : joinPlain(group);
-        String key = "tooltipGroup " + request;
-        List<Component> memo = GROUP_MEMO.get(key);
-        if (memo != null) return memo;
-        TranslationDecision decision = translateFn.apply(request);
-        if (decision == null || !decision.changed()) return null;
-        MutableComponent styledAll = useMarkers
-                ? withInteractive(markedChat(joinedComp, 0, decision.translated(), marked), interactiveStyle(joinedComp, 0))
-                : (profile.distinctColorCount() >= 2
-                    ? withInteractive(styledAnchored(joinedComp, 0, decision.translated()), interactiveStyle(joinedComp, 0))
-                    : styled(decision.translated(), profile, joinedComp, 0));
-        int width = 0;
-        for (Component c : group) width = Math.max(width, font.width(c));
-        List<Component> outLines = splitToWidth(styledAll, width, font);
-        if (GROUP_MEMO.size() > 2048) GROUP_MEMO.clear();
-        GROUP_MEMO.put(key, outLines);
-        return outLines;
     }
 
     public static ColorProfile extract(Component text) {
@@ -266,9 +447,6 @@ public final class FabricTextStyle {
      * </ul>
      */
     public static MutableComponent styled(String translated, ColorProfile profile) {
-        if (profile != null && profile.distinctColorCount() >= 2) {
-            return styledRuns(translated, profile);
-        }
         Style style = formatStyle(profile);
         int color = (profile == null) ? ColorProfile.NO_COLOR : profile.dominantColor();
         if (color != ColorProfile.NO_COLOR) {
@@ -420,12 +598,21 @@ public final class FabricTextStyle {
         }
     }
 
-    /** Above this many merged runs the line is treated as a gradient/rainbow: markers would
-     *  shred the sentence, so colouring falls back to anchor/stretch mapping instead.
-     *  Busy server broadcasts ("RAFFLE! [VIP+] name won X in Y #1") easily hit 9-12 runs,
-     *  so this must stay comfortably above that; real gradients are dozens of runs. */
-    private static final int MAX_MARKED_SEGMENTS = 16;
+    /** Canonical backend input for one rendered component. */
+    public static String requestText(Component source) {
+        if (source == null) return "";
+        Component resolved = resolveLegacyCodes(source);
+        MarkedChat marked = markChatContent(resolved, 0);
+        return marked.marked() ? marked.text() : resolved.getString();
+    }
 
+    /** Backend units for a rich component: one request per semantic paragraph. */
+    public static List<String> requestLines(Component source) {
+        if (source == null) return List.of();
+        return paragraphRequests(source).stream().filter(s -> !s.isBlank()).toList();
+    }
+
+    /** Verified style-run marker protocol used for every multi-style line. */
     private static final java.util.regex.Pattern MARKER =
             java.util.regex.Pattern.compile("\\u27E6\\s*(/?)\\s*CS\\s*(\\d+)\\s*\\u27E7");
 
@@ -435,6 +622,10 @@ public final class FabricTextStyle {
 
     private static String closeMarker(int index) {
         return "⟦/CS" + index + "⟧";
+    }
+
+    private static boolean horizontalLayoutSpace(char ch) {
+        return ch == ' ' || ch == '\t' || ch == '\u00A0';
     }
 
     private static String stripMarkers(String text) {
@@ -449,6 +640,7 @@ public final class FabricTextStyle {
      *  Used ONLY on the marked-mode fallback, where these markers were definitely injected. */
     private static String stripMarkerResidue(String text) {
         if (text == null) return "";
+        if (text.indexOf('\u27E6') < 0 && text.indexOf('\u27E7') < 0) return text;
         return MARKER_RESIDUE.matcher(MARKER.matcher(text).replaceAll("")).replaceAll("");
     }
 
@@ -456,16 +648,17 @@ public final class FabricTextStyle {
      * Wrap each merged style run of the message content in an invisible ⟦CS#⟧…⟦/CS#⟧ marker
      * pair. The whole line is then translated in ONE request and {@link #markedChat} maps
      * every marker region back to its style — a red word stays red on the translated word,
-     * wherever the grammar moved it. Gradient-like lines (more than
-     * {@value #MAX_MARKED_SEGMENTS} runs) come back unmarked and use the stretch fallback.
+     * wherever the grammar moved it. Every multi-run line is marked; style is never
+     * inferred from character positions or translated string length.
      */
     public static MarkedChat markChatContent(Component c, int fromChar) {
         // Coalesce sub-word colour runs first, so a per-letter gradient name never gets a
         // marker pair walled INSIDE a word (the backend can't translate isolated letters).
         // After this every marker boundary lands at a whitespace/punctuation gap → whole
-        // words reach the translator. The existing size gate then runs on the coalesced list.
-        List<Seg> segs = coalesceSubWordRuns(mergeSegments(segmentsFrom(c, fromChar)));
-        if (segs.size() <= 1 || segs.size() > MAX_MARKED_SEGMENTS) {
+        // words reach the translator.
+        List<Seg> rawSegments = mergeSegments(segmentsFrom(c, fromChar));
+        List<Seg> segs = coalesceSubWordRuns(rawSegments);
+        if (rawSegments.size() <= 1) {
             StringBuilder plain = new StringBuilder();
             for (Seg seg : segs) plain.append(seg.text());
             return new MarkedChat(plain.toString(), List.of());
@@ -479,23 +672,38 @@ public final class FabricTextStyle {
                 text.append(s);
                 continue;
             }
+            int start = 0;
+            int end = s.length();
+            while (start < end && horizontalLayoutSpace(s.charAt(start))) start++;
+            while (end > start && horizontalLayoutSpace(s.charAt(end - 1))) end--;
+            if (start > 0) text.append(s, 0, start);
             int idx = styles.size();
             styles.add(seg.style());
-            text.append(openMarker(idx)).append(s).append(closeMarker(idx));
+            text.append(openMarker(idx)).append(s, start, end).append(closeMarker(idx));
+            if (end < s.length()) text.append(s, end, s.length());
         }
         return new MarkedChat(text.toString(), styles);
     }
 
     /** Rebuild a translated marked-up line: each ⟦CS#⟧ region gets its original style
-     *  (colour AND click/hover). Falls back to the stretch mapping when the translator
-     *  ate the markers. */
+     *  (colour AND click/hover). Marker loss returns the exact original; positions are
+     *  never guessed from translated character counts. */
     public static MutableComponent markedChat(Component original, int contentStart,
                                               String translated, MarkedChat marked) {
         if (translated == null || translated.isEmpty()) return Component.empty();
         if (marked == null || !marked.marked()) {
-            // No markers were used: anchor mapping survives translator word reordering
-            // (verbatim names / #1 tags pin their colours); stretch is its last resort.
-            return styledAnchored(original, contentStart, stripMarkers(translated));
+            List<Seg> raw = mergeSegments(segmentsFrom(original, contentStart));
+            if (raw.size() > 1) return copyFrom(original, contentStart);
+            Style style = raw.isEmpty() ? Style.EMPTY : raw.get(0).style();
+            return Component.literal(stripMarkers(translated)).setStyle(style);
+        }
+        if (!validMarkedResponse(marked, translated)) {
+            if (TextFilter.isStyleFallback(translated)) {
+                String semantic = TextFilter.stripStyleFallback(translated);
+                return withInteractive(styledAnchored(original, contentStart, semantic),
+                        interactiveStyle(original, contentStart));
+            }
+            return copyFrom(original, contentStart);
         }
         java.util.regex.Matcher matcher = MARKER.matcher(translated);
         MutableComponent out = Component.empty();
@@ -524,8 +732,164 @@ public final class FabricTextStyle {
             if (!chunk.isEmpty()) out.append(Component.literal(chunk).setStyle(current == Style.EMPTY ? last : current));
         }
         String plain = out.getString();
-        if (!saw || plain.isBlank()) return styledAnchored(original, contentStart, stripMarkerResidue(translated));
+        if (!saw || plain.isBlank()) return copyFrom(original, contentStart);
         return out;
+    }
+
+    private static boolean validMarkedResponse(MarkedChat marked, String translated) {
+        if (marked == null || translated == null) return false;
+        java.util.Map<String, Integer> expected = markerMultiset(marked.text());
+        java.util.Map<String, Integer> actual = markerMultiset(translated);
+        if (!expected.equals(actual)) return false;
+
+        java.util.regex.Matcher matcher = MARKER.matcher(translated);
+        Integer open = null;
+        while (matcher.find()) {
+            int index = Integer.parseInt(matcher.group(2));
+            if (index < 0 || index >= marked.styles().size()) return false;
+            boolean closing = matcher.group(1) != null && !matcher.group(1).isEmpty();
+            if (!closing) {
+                if (open != null) return false;
+                open = index;
+            } else {
+                if (open == null || open != index) return false;
+                open = null;
+            }
+        }
+        return open == null;
+    }
+
+    private static java.util.Map<String, Integer> markerMultiset(String text) {
+        java.util.Map<String, Integer> out = new java.util.TreeMap<>();
+        java.util.regex.Matcher matcher = MARKER.matcher(text == null ? "" : text);
+        while (matcher.find()) {
+            String key = (matcher.group(1) == null ? "" : matcher.group(1)) + matcher.group(2);
+            out.merge(key, 1, Integer::sum);
+        }
+        return out;
+    }
+
+    private static MutableComponent copyFrom(Component original, int fromChar) {
+        MutableComponent out = Component.empty();
+        for (Seg seg : segmentsFrom(original, fromChar)) {
+            out.append(Component.literal(seg.text()).setStyle(seg.style()));
+        }
+        return out;
+    }
+
+    /**
+     * Rebuild rich UI text from the exact source styles.  Multi-run content uses CS
+     * markers; a one-run component copies that run's complete Style object so click,
+     * hover and insertion events survive just like colour and font decorations.
+     */
+    public static MutableComponent rebuildRich(Component original, String translated,
+                                               MarkedChat marked) {
+        if (translated == null || translated.isEmpty()) return Component.empty();
+        if (marked != null && marked.marked()) return markedChat(original, 0, translated, marked);
+        String clean = stripMarkerResidue(translated);
+
+        // Project multi-line surfaces one line at a time. A whole-page proportional
+        // projection lets a short translated heading steal the body style and can move
+        // a clickable final action onto an unrelated line.
+        List<Component> originalLines = splitStyledLines(original);
+        String[] translatedLines = clean.split("\n", -1);
+        if (originalLines.size() > 1 && originalLines.size() == translatedLines.length) {
+            MutableComponent out = Component.empty();
+            for (int i = 0; i < translatedLines.length; i++) {
+                if (i > 0) out.append(Component.literal("\n"));
+                Component sourceLine = originalLines.get(i);
+                out.append(rebuildRichSingle(sourceLine, translatedLines[i],
+                        markChatContent(sourceLine, 0)));
+            }
+            return out;
+        }
+        return rebuildRichSingle(original, clean, marked);
+    }
+
+    private static MutableComponent rebuildRichSingle(Component original, String translated,
+                                                      MarkedChat marked) {
+        if (marked != null && marked.marked()) {
+            return markedChat(original, 0, translated, marked);
+        }
+        List<Seg> segs = mergeSegments(segmentsFrom(original, 0));
+        if (segs.size() == 1) {
+            return Component.literal(translated).setStyle(segs.get(0).style());
+        }
+        return copyFrom(original, 0);
+    }
+
+    /**
+     * Split only on hard {@code '\n'} boundaries while retaining every resolved run
+     * style (including click, hover, insertion and font data). Empty rows are kept.
+     * Chat ingress uses this before making backend requests, so a multi-line component
+     * can never be flattened into one translation unit.
+     */
+    public static List<Component> splitStyledLines(Component source) {
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.empty());
+        source.visit((style, value) -> {
+            int start = 0;
+            for (int i = 0; i < value.length(); i++) {
+                if (value.charAt(i) != '\n') continue;
+                if (i > start) {
+                    ((MutableComponent) lines.get(lines.size() - 1))
+                            .append(Component.literal(value.substring(start, i)).setStyle(style));
+                }
+                lines.add(Component.empty());
+                start = i + 1;
+            }
+            if (start < value.length()) {
+                ((MutableComponent) lines.get(lines.size() - 1))
+                        .append(Component.literal(value.substring(start)).setStyle(style));
+            }
+            return Optional.empty();
+        }, Style.EMPTY);
+        return lines;
+    }
+
+    /** Reassemble hard lines without changing their styles, order, or empty-row positions. */
+    public static MutableComponent joinStyledLines(List<? extends Component> lines) {
+        MutableComponent out = Component.empty();
+        if (lines == null) return out;
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) out.append(Component.literal("\n"));
+            Component line = lines.get(i);
+            if (line != null) out.append(line);
+        }
+        return out;
+    }
+
+    /** Immutable request/rebuild data for exactly one incoming chat hard line. */
+    public record ChatLinePlan(Component source, int contentStart, String content,
+                               MarkedChat marked, String request) {
+    }
+
+    public static ChatLinePlan prepareChatLine(Component source) {
+        Component resolved = resolveLegacyCodes(source == null ? Component.empty() : source);
+        String full = resolved.getString();
+        int start = com.dragonmeow.mctranslator.translate.ChatSegmenter.contentStart(full);
+        if (start < 0 || start >= full.length()) start = 0;
+        String content = start > 0 ? full.substring(start) : full;
+        MarkedChat marked = markChatContent(resolved, start);
+        return new ChatLinePlan(resolved, start, content, marked,
+                marked.marked() ? marked.text() : content);
+    }
+
+    /** Rebuild one translated hard line against only that line's exact component skeleton. */
+    public static Component rebuildChatLine(ChatLinePlan plan, String translated) {
+        if (plan == null || translated == null) {
+            return plan == null ? Component.empty() : plan.source().copy();
+        }
+        Component source = plan.source();
+        MutableComponent core;
+        if (plan.marked().marked()) {
+            core = markedChat(source, plan.contentStart(), translated, plan.marked());
+        } else {
+            Style interactive = interactiveStyle(source, plan.contentStart());
+            core = withInteractive(styledChatContent(source, plan.contentStart(), translated), interactive);
+        }
+        if (plan.contentStart() <= 0) return core;
+        return Component.empty().append(takePrefix(source, plan.contentStart())).append(core);
     }
 
     /**
@@ -597,54 +961,70 @@ public final class FabricTextStyle {
         List<Seg> segs = mergeSegments(segmentsFrom(original, fromChar));
         if (segs.size() <= 1) return styled(translated, profile);
 
-        int n = segs.size();
-        int[] anchorStart = new int[n];
-        int[] anchorEnd = new int[n];
-        java.util.Arrays.fill(anchorStart, -1);
-        int searchFrom = 0;
-        boolean anyAnchor = false;
-        for (int i = 0; i < n; i++) {
-            String probe = segs.get(i).text().strip();
-            if (probe.length() < 2) continue; // too short to anchor reliably
-            int at = translated.indexOf(probe, searchFrom);
-            if (at < 0) continue;
-            anchorStart[i] = at;
-            anchorEnd[i] = at + probe.length();
-            searchFrom = anchorEnd[i];
-            anyAnchor = true;
+        MutableComponent base = styledChatContent(original, fromChar, translated);
+        List<StyleAnchor> anchors = new ArrayList<>();
+        List<Integer> order = new ArrayList<>();
+        String[] probes = new String[segs.size()];
+        for (int i = 0; i < segs.size(); i++) {
+            probes[i] = segs.get(i).text().strip();
+            if (probes[i].length() >= 2) order.add(i);
         }
-        if (!anyAnchor) {
-            // No verbatim anchors survive translation: positional colour mapping would
-            // speckle random characters — one clean dominant colour reads far better.
-            Style flat = formatStyle(profile);
-            if (profile.dominantColor() != ColorProfile.NO_COLOR) {
-                flat = flat.withColor(TextColor.fromRgb(profile.dominantColor()));
+        order.sort((left, right) -> {
+            int length = Integer.compare(probes[right].length(), probes[left].length());
+            return length != 0 ? length : Integer.compare(left, right);
+        });
+
+        // Verbatim numbers, URLs, names and ids are matched independently of source
+        // order. Translations commonly reorder them; a forward-only search lost styles.
+        for (int index : order) {
+            String probe = probes[index];
+            int at = translated.indexOf(probe);
+            while (at >= 0 && overlapsAnchor(anchors, at, at + probe.length())) {
+                at = translated.indexOf(probe, at + 1);
             }
-            return Component.literal(translated).setStyle(flat);
+            if (at >= 0) anchors.add(new StyleAnchor(index, at, at + probe.length()));
         }
+        if (anchors.isEmpty()) return base;
+        anchors.sort(java.util.Comparator.comparingInt(StyleAnchor::start));
 
         MutableComponent out = Component.empty();
         int cursor = 0;
-        int prevAnchored = -1;
-        for (int i = 0; i <= n; i++) {
-            boolean atEnd = (i == n);
-            if (!atEnd && anchorStart[i] < 0) continue;
-            int gapEnd = atEnd ? translated.length() : anchorStart[i];
-            if (gapEnd > cursor) {
-                appendWeighted(out, translated.substring(cursor, gapEnd),
-                        segs, prevAnchored + 1, (atEnd ? n : i) - 1);
-                cursor = gapEnd;
-            }
-            if (!atEnd) {
-                if (anchorEnd[i] > cursor) {
-                    out.append(Component.literal(translated.substring(cursor, anchorEnd[i]))
-                            .setStyle(segs.get(i).style()));
-                    cursor = anchorEnd[i];
-                }
-                prevAnchored = i;
-            }
+        for (StyleAnchor anchor : anchors) {
+            if (anchor.start() > cursor) appendStyledSlice(out, base, cursor, anchor.start());
+            out.append(Component.literal(translated.substring(anchor.start(), anchor.end()))
+                    .setStyle(segs.get(anchor.segment()).style()));
+            cursor = anchor.end();
         }
+        if (cursor < translated.length()) appendStyledSlice(out, base, cursor, translated.length());
         return out;
+    }
+
+    private record StyleAnchor(int segment, int start, int end) {
+    }
+
+    private static boolean overlapsAnchor(List<StyleAnchor> anchors, int start, int end) {
+        for (StyleAnchor anchor : anchors) {
+            if (start < anchor.end() && end > anchor.start()) return true;
+        }
+        return false;
+    }
+
+    private static void appendStyledSlice(MutableComponent out, Component source,
+                                          int start, int end) {
+        if (start >= end) return;
+        int[] seen = {0};
+        source.visit((style, value) -> {
+            int runStart = seen[0];
+            int runEnd = runStart + value.length();
+            int takeStart = Math.max(start, runStart);
+            int takeEnd = Math.min(end, runEnd);
+            if (takeStart < takeEnd) {
+                out.append(Component.literal(value.substring(
+                        takeStart - runStart, takeEnd - runStart)).setStyle(style));
+            }
+            seen[0] = runEnd;
+            return Optional.empty();
+        }, Style.EMPTY);
     }
 
     /** Distribute {@code text} over runs {@code segs[from..to]} by semantic weight; a gap
@@ -1098,18 +1478,37 @@ public final class FabricTextStyle {
 
     public static Component compose(Component original, TranslationDecision decision) {
         if (decision == null || !decision.changed()) return original;
-        ColorProfile profile = extract(original);
-        MutableComponent translated = (profile.distinctColorCount() >= 2)
-                ? withInteractive(styledAnchored(original, 0, decision.translated()), interactiveStyle(original, 0))
-                : styled(decision.translated(), profile, original, 0);
+        original = resolveLegacyCodes(original);
+        MarkedChat marked = markChatContent(original, 0);
+        MutableComponent translated = rebuildRich(original, decision.translated(), marked);
         if (decision.mode() == DisplayMode.BOTH) {
-            int len = maxLineLength(original.getString(), decision.translated());
-            // Wrap the translation block top and bottom for high distinguishability.
-            return original.copy()
-                    .append(Component.literal("\n")).append(separatorLine(len))
-                    .append(Component.literal("\n")).append(translated)
-                    .append(Component.literal("\n")).append(separatorLine(len));
+            return chatBlock(original, translated);
         }
         return translated;
+    }
+
+    /** Chat-only BOTH layout. A missing/keep-original translation deliberately reuses
+     *  the original as the translation row, so success, failure and pending fallback
+     *  all keep the same four-line visual contract. Other surfaces never call this. */
+    private static final java.util.concurrent.atomic.AtomicLong CHAT_SEPARATOR_SEQUENCE =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    private static Component uniqueChatSeparator(int length) {
+        long id = CHAT_SEPARATOR_SEQUENCE.incrementAndGet();
+        // Resource-pack fonts may draw U+200B/U+200C as visible missing-glyph boxes.
+        // Trailing spaces stay blank while still defeating compact-chat deduplication.
+        int spaces = (int) ((id - 1L) & 3L) + 1;
+        return separatorLine(length).copy().append(Component.literal(" ".repeat(spaces)));
+    }
+
+    public static Component chatBlock(Component original, Component translated) {
+        Component source = original == null ? Component.empty() : resolveLegacyCodes(original);
+        Component result = translated == null ? source.copy() : translated;
+        int len = maxLineLength(source.getString(), result.getString());
+        return Component.empty()
+                .append(uniqueChatSeparator(len))
+                .append(Component.literal("\n")).append(source)
+                .append(Component.literal("\n")).append(result)
+                .append(Component.literal("\n")).append(uniqueChatSeparator(len));
     }
 }

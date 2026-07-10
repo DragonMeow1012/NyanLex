@@ -10,6 +10,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.BookViewScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -19,6 +21,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Translates opened-book and lectern page text (gated by {@code bookMode}). One mixin covers both
@@ -53,12 +56,27 @@ public abstract class BookPageMixin {
     private List<FormattedCharSequence> mctranslator$translateBookPage(Font font, FormattedText text, int width) {
         TranslationService service = MctranslatorFabric26.service();
         if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY && text != null) {
-            Component src = (text instanceof Component c) ? c : Component.literal(text.getString());
-            Component translated = Fabric26TextStyle.renderTranslated("book", src, service::translateBook);
+            Component src = preserveStyles(text);
+            service.warmBookBatch(Fabric26TextStyle.paragraphRequests(src));
+            Component translated = Fabric26TextStyle.renderTranslatedParagraphPage(
+                    src, service::translateBook, font);
             if (translated != null) {
-                return font.split(translated, width);
+                Component shown = service.bookMode() == DisplayMode.BOTH
+                        ? src.copy().append(Component.literal("\n")).append(translated)
+                        : translated;
+                return font.split(shown, width);
             }
         }
         return font.split(text, width);
+    }
+
+    private static Component preserveStyles(FormattedText text) {
+        if (text instanceof Component component) return Fabric26TextStyle.resolveLegacyCodes(component);
+        MutableComponent out = Component.empty();
+        text.visit((style, value) -> {
+            out.append(Component.literal(value).setStyle(style));
+            return Optional.empty();
+        }, Style.EMPTY);
+        return Fabric26TextStyle.resolveLegacyCodes(out);
     }
 }

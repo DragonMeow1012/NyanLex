@@ -131,6 +131,21 @@ class TranslationCacheCoalescingTest {
         assertNull(got.get(0), "always-callback must fire with null on failure");
     }
 
+    @Test
+    void clearingAQueuedRequestCompletesItsAlwaysCallback() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        TranslationCache cache = new TranslationCache(t, "zh-TW", DIRECT, 100);
+        List<String> got = new ArrayList<>();
+
+        cache.requestCoalesced("Hello", got::add, true);
+        cache.clear();
+
+        assertEquals(1, got.size());
+        assertNull(got.get(0));
+        assertEquals(0, cache.pendingCount());
+        assertEquals(0, t.requests.get());
+    }
+
     /** Outer whitespace variants share one cache entry and one request. */
     @Test
     void whitespaceVariantsShareOneRequest() {

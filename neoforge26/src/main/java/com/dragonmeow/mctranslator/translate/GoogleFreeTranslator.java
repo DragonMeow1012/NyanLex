@@ -11,8 +11,8 @@ import java.util.List;
  * {@code translate.googleapis.com/translate_a/single}.
  *
  * <p>Inputs carrying ⟦…⟧ placeholder tokens are translated in WHOLE-LINE sentinel mode —
- * see {@link #translateWholeLine}: ⟦CS#⟧ colour markers are stripped (the glue re-applies
- * colours), ⟦MT#⟧/mask slots become numeric sentinels, and the sentence goes to Google as
+ * see {@link #translateWholeLine}: ⟦CS#⟧ colour markers and ⟦MT#⟧/mask slots become
+ * numeric sentinels, and the sentence goes to Google as
  * ONE request with full context, so grammar stays coherent ("won" is a verb, not a currency).</p>
  *
  * <p>The HTTP layer is injected via {@link HttpTransport} so this class can be
@@ -71,13 +71,12 @@ public final class GoogleFreeTranslator implements Translator {
     /**
      * Whole-line mode for token-carrying lines (user decision: 「一句一句翻」— the old
      * fragment-wise requests killed sentence coherence: an isolated "won" came back as the
-     * currency, not the verb). ⟦CS#⟧ colour markers are stripped outright — the glue's
-     * anchored fallback re-applies the colours — while every OTHER ⟦…⟧ token (⟦MT#⟧
-     * template slots, name masks) is replaced by a numeric sentinel, and the sentence goes
+     * currency, not the verb). Every ⟦…⟧ token — CS style boundaries, MT template
+     * slots, and name masks — is replaced by a numeric sentinel, and the sentence goes
      * to Google as ONE request with its full context. Every sentinel must come back exactly
      * once; any loss or mutation reverts the WHOLE line to the source (existing failure
      * semantics — the R9 provisional retry picks it up later). The returned value carries
-     * MT/mask tokens but NO CS markers.
+     * the complete original token set, including balanced CS style boundaries.
      */
     private TranslationResult translateWholeLine(String text, String targetLang) throws TranslationException {
         StringBuilder plain = new StringBuilder(text.length());
@@ -87,11 +86,8 @@ public final class GoogleFreeTranslator implements Translator {
         while (m.find()) {
             plain.append(text, pos, m.start());
             String token = m.group();
-            String body = token.replace(" ", "");
-            if (!body.startsWith("⟦CS") && !body.startsWith("⟦/CS")) {
-                plain.append(SENTINEL_BASE + slots.size());
-                slots.add(token);
-            }
+            plain.append(SENTINEL_BASE + slots.size());
+            slots.add(token);
             pos = m.end();
         }
         plain.append(text, pos, text.length());
@@ -100,7 +96,10 @@ public final class GoogleFreeTranslator implements Translator {
         try {
             r = requestOnce(plain.toString(), targetLang);
         } catch (TranslationException e) {
-            return new TranslationResult(text, null); // whole-line fallback, never half done
+            // Preserve the distinction between transport failure and an unusable content
+            // response. TranslationCache backs network errors off, but only the latter is
+            // eligible for the three-strike durable keep-original rule.
+            throw e;
         }
         String translated = (r == null) ? null : r.translatedText();
         if (translated == null || translated.isBlank()) {
@@ -126,13 +125,13 @@ public final class GoogleFreeTranslator implements Translator {
 
     /** Char budget per joined request, pre-URL-encoding (keeps the GET URL well under limits). */
     static final int MAX_CHARS_PER_REQUEST = 1600;
+    private static final int BATCH_ANCHOR_OVERHEAD = 12;
 
     /**
-     * Batch translate by joining texts with newlines and splitting the result back
-     * (the endpoint preserves line breaks). Large batches are chunked by character
-     * budget rather than item count, so many short lines still share one request.
-     * If a chunk's line count comes back misaligned (rare), it is halved and retried
-     * — O(log n) extra requests around the offending line instead of one per item.
+     * Batch translate with a numeric start/end anchor around every independent cache
+     * item. Newlines alone are not a safe protocol: a provider can keep the same line
+     * count while moving content between adjacent keys. Anchors preserve batching while
+     * making reconstruction deterministic; damaged chunks are bisected and retried.
      */
     @Override
     public List<TranslationResult> translateBatch(List<String> texts, String targetLang) throws TranslationException {
@@ -141,9 +140,11 @@ public final class GoogleFreeTranslator implements Translator {
         int start = 0;
         while (start < texts.size()) {
             int end = start + 1;
-            int chars = texts.get(start).length();
-            while (end < texts.size() && chars + 1 + texts.get(end).length() <= MAX_CHARS_PER_REQUEST) {
-                chars += 1 + texts.get(end).length();
+            int chars = texts.get(start).length() + BATCH_ANCHOR_OVERHEAD;
+            while (end < texts.size()
+                    && chars + 1 + texts.get(end).length() + BATCH_ANCHOR_OVERHEAD
+                    <= MAX_CHARS_PER_REQUEST) {
+                chars += 1 + texts.get(end).length() + BATCH_ANCHOR_OVERHEAD;
                 end++;
             }
             translateChunk(texts.subList(start, end), targetLang, out);
@@ -163,28 +164,29 @@ public final class GoogleFreeTranslator implements Translator {
         // line by line instead of as one joined request. The batch protocol for token-free
         // chunks is unchanged.
         for (String t : texts) {
-            if (t != null && ANY_TOKEN.matcher(t).find()) {
+            if (t != null && (ANY_TOKEN.matcher(t).find() || t.indexOf('\n') >= 0)) {
                 for (String each : texts) out.add(translate(each, targetLang));
                 return;
             }
         }
-        // Inner newlines would break the 1:1 line alignment — flatten them per item.
-        List<String> lines = new ArrayList<>(texts.size());
-        for (String t : texts) {
-            lines.add(t.replace('\n', ' '));
+        int anchorBase = batchAnchorBase(texts);
+        StringBuilder joined = new StringBuilder();
+        for (int i = 0; i < texts.size(); i++) {
+            if (i > 0) joined.append('\n');
+            joined.append(anchorBase + i * 2)
+                    .append(texts.get(i))
+                    .append(anchorBase + i * 2 + 1);
         }
-        TranslationResult combined = translate(String.join("\n", lines), targetLang);
-        String translated = combined.translatedText();
-        if (translated != null) {
-            String[] parts = translated.split("\n", -1);
-            if (parts.length == texts.size()) {
-                for (int i = 0; i < parts.length; i++) {
-                    String src = texts.get(i);
-                    String part = preservesTokens(src, parts[i]) ? parts[i] : src;
-                    out.add(new TranslationResult(part, combined.detectedSourceLang()));
-                }
-                return;
+        TranslationResult combined = requestOnce(joined.toString(), targetLang);
+        List<String> parts = extractAnchoredBatch(
+                combined == null ? null : combined.translatedText(), texts.size(), anchorBase);
+        if (parts != null) {
+            for (int i = 0; i < parts.size(); i++) {
+                String src = texts.get(i);
+                String part = preservesTokens(src, parts.get(i)) ? parts.get(i) : src;
+                out.add(new TranslationResult(part, combined.detectedSourceLang()));
             }
+            return;
         }
         // Misaligned: bisect to isolate the line the endpoint merged/split.
         int mid = texts.size() / 2;
@@ -192,10 +194,42 @@ public final class GoogleFreeTranslator implements Translator {
         translateChunk(texts.subList(mid, texts.size()), targetLang, out);
     }
 
-    /** True unless the source's CONTENT tokens (⟦MT#⟧ template slots, name masks) were lost
-     *  or altered by the translation — a mismatch means slot restoration would lie, so the
-     *  caller keeps the original line. ⟦CS#⟧ colour markers are EXEMPT: whole-line mode
-     *  strips them deliberately (the glue re-applies colours). Order-independent multiset. */
+    private static int batchAnchorBase(List<String> texts) {
+        int base = SENTINEL_BASE;
+        outer:
+        while (true) {
+            for (String text : texts) {
+                String source = text == null ? "" : text;
+                for (int i = 0; i < texts.size() * 2; i++) {
+                    if (source.contains(Integer.toString(base + i))) {
+                        base += 2_000;
+                        continue outer;
+                    }
+                }
+            }
+            return base;
+        }
+    }
+
+    private static List<String> extractAnchoredBatch(String translated, int count, int base) {
+        if (translated == null) return null;
+        List<String> out = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            String open = Integer.toString(base + i * 2);
+            String close = Integer.toString(base + i * 2 + 1);
+            int start = translated.indexOf(open);
+            if (start < 0 || translated.indexOf(open, start + open.length()) >= 0) return null;
+            start += open.length();
+            int end = translated.indexOf(close, start);
+            if (end < start || translated.indexOf(close, end + close.length()) >= 0) return null;
+            out.add(translated.substring(start, end).strip());
+        }
+        return out;
+    }
+
+    /** True unless any source token (CS style boundary, MT slot, or name mask) was lost
+     *  or altered by the translation. A mismatch means restoration would lie, so the
+     *  caller keeps the original line. Order-independent multiset. */
     static boolean preservesTokens(String source, String translated) {
         List<String> want = tokensOf(source);
         if (want.isEmpty()) return true;              // nothing fragile to protect
@@ -210,9 +244,7 @@ public final class GoogleFreeTranslator implements Translator {
         if (text == null) return out;
         java.util.regex.Matcher m = ANY_TOKEN.matcher(text);
         while (m.find()) {
-            String t = m.group().replace(" ", "");
-            if (t.startsWith("⟦CS") || t.startsWith("⟦/CS")) continue; // stripped by design
-            out.add(t);
+            out.add(m.group().replace(" ", ""));
         }
         return out;
     }

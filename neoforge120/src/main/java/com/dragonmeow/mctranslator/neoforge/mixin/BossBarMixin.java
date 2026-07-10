@@ -34,7 +34,8 @@ public abstract class BossBarMixin {
                 int center = x + font.width(text) / 2; // original name's centre
                 java.util.List<Component> lines = NeoTextStyle.splitLines(translated);
                 if (lines.size() <= 1) {
-                    return g.drawString(font, translated, center - font.width(translated) / 2, y, color);
+                    return com.dragonmeow.mctranslator.translate.InternalRenderGuard.call(
+                            () -> g.drawString(font, translated, center - font.width(translated) / 2, y, color));
                 }
                 // 原文＋翻譯: stack the lines upward above the bar (原文 on top, 譯文 at the baseline).
                 int n = lines.size();
@@ -42,11 +43,13 @@ public abstract class BossBarMixin {
                 for (int k = 0; k < n; k++) {
                     Component line = lines.get(k);
                     int ly = y - (n - 1 - k) * NeoTextStyle.STACK_LINE_GAP;
-                    ret = g.drawString(font, line, center - font.width(line) / 2, ly, color);
+                    ret = com.dragonmeow.mctranslator.translate.InternalRenderGuard.call(
+                            () -> g.drawString(font, line, center - font.width(line) / 2, ly, color));
                 }
                 return ret;
             }
         }
-        return g.drawString(font, text, x, y, color);
+        return com.dragonmeow.mctranslator.translate.InternalRenderGuard.call(
+                () -> g.drawString(font, text, x, y, color));
     }
 }

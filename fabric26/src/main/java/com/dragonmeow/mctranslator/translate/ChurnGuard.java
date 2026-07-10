@@ -33,7 +33,7 @@ public final class ChurnGuard {
     public static final long DEFAULT_WINDOW_MS = 60_000L;
     public static final long DEFAULT_COOLDOWN_MS = 300_000L;
 
-    /** Signature-table cap, TemplateText.MEMO style: crude O(1) full clear, refills fast. */
+    /** Hard bounds for signature and per-signature variant state. */
     private static final int MAX_SIGNATURES = 512;
 
     private static final Pattern ANY_TOKEN = Pattern.compile("⟦[^⟦⟧]*⟧");
@@ -44,12 +44,14 @@ public final class ChurnGuard {
     private final LongSupplier clock;
 
     private final Map<String, Entry> bySignature = new ConcurrentHashMap<>();
+    private final Object evictionLock = new Object();
 
     /** Per-signature state: distinct keys seen inside the window (with their last-seen
      *  time, so stale ones slide out) and the cooldown deadline once tripped. */
     private static final class Entry {
         final Map<String, Long> variantSeenAt = new HashMap<>();
         long cooldownUntil;
+        long lastSeenAt;
     }
 
     public ChurnGuard() {
@@ -78,12 +80,7 @@ public final class ChurnGuard {
         String signature = signatureOf(requestKey);
         if (signature.isEmpty()) return false; // letter-free line: TextFilter's problem, not ours
         if (bySignature.size() >= MAX_SIGNATURES && !bySignature.containsKey(signature)) {
-            long nowCap = clock.getAsLong();
-            // Keep signatures still on cooldown (a live animation must not get a fresh burst
-            // just because the table filled); evict only the settled ones. Full clear only if
-            // everything is still cooling — pathological, and it refills fast.
-            bySignature.values().removeIf(e -> nowCap >= e.cooldownUntil);
-            if (bySignature.size() >= MAX_SIGNATURES) bySignature.clear();
+            evictOneSignature(clock.getAsLong());
         }
         Entry entry = bySignature.computeIfAbsent(signature, ignored -> new Entry());
         long now = clock.getAsLong();
@@ -93,12 +90,52 @@ public final class ChurnGuard {
                 if (now - it.next().getValue() > windowMs) it.remove();
             }
             entry.variantSeenAt.put(requestKey, now);
+            entry.lastSeenAt = now;
+            while (entry.variantSeenAt.size() > variantThreshold) {
+                String oldest = entry.variantSeenAt.entrySet().stream()
+                        .min(Map.Entry.comparingByValue())
+                        .map(Map.Entry::getKey)
+                        .orElse(null);
+                if (oldest == null) break;
+                entry.variantSeenAt.remove(oldest);
+            }
             if (now < entry.cooldownUntil) return true;
             if (entry.variantSeenAt.size() >= variantThreshold) {
                 entry.cooldownUntil = now + cooldownMs;
                 return true;
             }
             return false;
+        }
+    }
+
+    /** Evict one least-recent settled signature; if every entry is cooling, evict only
+     *  the least-recent one. Never clear the whole table and release every animation. */
+    private void evictOneSignature(long now) {
+        synchronized (evictionLock) {
+            if (bySignature.size() < MAX_SIGNATURES) return;
+            String candidate = null;
+            long oldest = Long.MAX_VALUE;
+            for (Map.Entry<String, Entry> item : bySignature.entrySet()) {
+                Entry entry = item.getValue();
+                synchronized (entry) {
+                    if (now >= entry.cooldownUntil && entry.lastSeenAt < oldest) {
+                        oldest = entry.lastSeenAt;
+                        candidate = item.getKey();
+                    }
+                }
+            }
+            if (candidate == null) {
+                for (Map.Entry<String, Entry> item : bySignature.entrySet()) {
+                    Entry entry = item.getValue();
+                    synchronized (entry) {
+                        if (entry.lastSeenAt < oldest) {
+                            oldest = entry.lastSeenAt;
+                            candidate = item.getKey();
+                        }
+                    }
+                }
+            }
+            if (candidate != null) bySignature.remove(candidate);
         }
     }
 

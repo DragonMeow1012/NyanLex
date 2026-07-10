@@ -18,6 +18,7 @@ public final class Fabric26KeybindScreen extends Screen {
     private static final int W = 280;
 
     private final Screen parent;
+    private int buttonWidth = W;
     private KeyMapping listening;        // the binding being rebound, or null
     private Button listeningButton;      // its button (to restore the label)
     private String listeningPrefix;      // its label prefix
@@ -29,17 +30,17 @@ public final class Fabric26KeybindScreen extends Screen {
 
     @Override
     protected void init() {
-        int x = this.width / 2 - W / 2;
+        buttonWidth = Math.max(80, Math.min(W, this.width - 20));
+        int x = this.width / 2 - buttonWidth / 2;
         int y = 44;
         int step = 24;
         y = rebind("開啟翻譯設定：", MctranslatorFabric26.modeKeyMapping(), x, y, step);
-        y = rebind("清除全部並重新翻譯：", MctranslatorFabric26.clearKeyMapping(), x, y, step);
         y = rebind("重新翻譯指向的物品：", MctranslatorFabric26.retranslateKeyMapping(), x, y, step);
         y = rebind("翻譯目前介面按鈕／選項：", MctranslatorFabric26.screenScanKeyMapping(), x, y, step);
         y = rebind("快速切換 原文／翻譯：", MctranslatorFabric26.toggleKeyMapping(), x, y, step);
         y += 8;
         this.addRenderableWidget(Button.builder(Component.literal("完成"), b -> this.onClose())
-                .bounds(this.width / 2 - 100, y, 200, 20).build());
+                .bounds(this.width / 2 - buttonWidth / 2, y, buttonWidth, 20).build());
     }
 
     private int rebind(String prefix, KeyMapping key, int x, int y, int step) {
@@ -49,7 +50,7 @@ public final class Fabric26KeybindScreen extends Screen {
             this.listeningButton = btn;
             this.listeningPrefix = prefix;
             btn.setMessage(Component.literal("§e> 按任意鍵（Esc 取消） <"));
-        }).bounds(x, y, W, 20).build();
+        }).bounds(x, y, buttonWidth, 20).build();
         this.addRenderableWidget(b);
         return y + step;
     }

@@ -69,9 +69,11 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
-    void batchSplitsNewlineJoinedResultBackToInputs() throws Exception {
-        // The endpoint preserves newlines, so a 3-line input returns a 3-line result.
-        HttpTransport inline = url -> "[[[\"甲\\n乙\\n丙\",\"a\\nb\\nc\",null,null]],null,\"en\"]";
+    void batchUsesPerLineAnchorsInsteadOfTrustingNewlinePositions() throws Exception {
+        HttpTransport inline = url -> {
+            String q = qOf(url);
+            return googleResponse(q.replace("a", "甲").replace("b", "乙").replace("c", "丙"));
+        };
         GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
 
         List<TranslationResult> out = t.translateBatch(List.of("a", "b", "c"), "zh-TW");
@@ -83,16 +85,17 @@ class GoogleFreeTranslatorTest {
 
     @Test
     void misalignedBatchIsBisectedNotSentPerItem() {
-        // The fake always returns 2 lines for any joined request: the initial 3-line
-        // batch misaligns, then bisecting isolates the problem — [a] goes alone and
-        // [b,c] re-aligns as a pair. Total 3 requests, NOT one per item plus the batch.
+        // Damage the initial three-item anchor protocol; [a] then goes alone and [b,c]
+        // succeeds as an anchored pair. Total 3 requests, not one request per item.
         AtomicReference<Integer> calls = new AtomicReference<>(0);
         HttpTransport inline = url -> {
             calls.set(calls.get() + 1);
-            if (url.contains("%0A") || url.contains("\n")) {
-                return "[[[\"甲\\n乙\",\"a\\nb\",null,null]],null,\"en\"]";
+            String q = qOf(url);
+            if (q.contains("a") && q.contains("b") && q.contains("c")) {
+                return googleResponse("壞掉錨點");
             }
-            return "[[[\"X\",\"x\",null,null]],null,\"en\"]";
+            if (q.equals("a")) return googleResponse("X");
+            return googleResponse(q.replace("b", "甲").replace("c", "乙"));
         };
         GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
         List<TranslationResult> out = assertDoesNotThrowResult(() -> t.translateBatch(List.of("a", "b", "c"), "zh-TW"));
@@ -110,16 +113,9 @@ class GoogleFreeTranslatorTest {
         List<String> urls = new java.util.ArrayList<>();
         HttpTransport inline = url -> {
             urls.add(url);
-            // Decode the q= payload's line count and answer with that many lines.
             String q = java.net.URLDecoder.decode(url.substring(url.indexOf("&q=") + 3),
                     java.nio.charset.StandardCharsets.UTF_8);
-            String[] lines = q.split("\n", -1);
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < lines.length; i++) {
-                if (i > 0) sb.append("\\n");
-                sb.append("譯").append(i);
-            }
-            return "[[[\"" + sb + "\",\"src\",null,null]],null,\"en\"]";
+            return googleResponse(q); // preserve every line's numeric anchors
         };
         GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
 
@@ -141,27 +137,39 @@ class GoogleFreeTranslatorTest {
                 java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    private static String googleResponse(String translated) {
+        String escaped = translated.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+        return "[[[\"" + escaped + "\",\"src\",null,null]],null,\"en\"]";
+    }
+
     @Test
     void tokenLineGoesAsOneRequestWithSentinelsAndNoBrackets() throws Exception {
         // R14b (user decision:「一句一句翻」): the whole sentence travels as ONE request
-        // with full context — an isolated "won" no longer reads as a currency. CS markers
-        // are stripped (the glue re-applies colours); the MT slot rides as a sentinel.
+        // with full context — an isolated "won" no longer reads as a currency. Every
+        // internal token rides as a numeric sentinel, so exact style boundaries survive.
         List<String> sent = new java.util.ArrayList<>();
         HttpTransport inline = url -> {
             String q = qOf(url);
             sent.add(q);
-            return "[[[\"你從 70001 Aand_ 的拍賣領取了日之水晶！\",\"" + q + "\",null,null]],null,\"en\"]";
+            return "[[[\"70001你領取了70002 70003日之水晶70004 70005來自70006 "
+                    + "7000770008 Aand_ 的拍賣！70009\",\"" + q + "\",null,null]],null,\"en\"]";
         };
         GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
 
         TranslationResult r = t.translate(
-                "⟦CS0⟧You claimed ⟦CS1⟧Day Crystal ⟦CS0⟧from ⟦CS2⟧⟦MT0⟧ Aand_'s auction!", "zh-TW");
+                "⟦CS0⟧You claimed⟦/CS0⟧ ⟦CS1⟧Day Crystal⟦/CS1⟧ "
+                        + "⟦CS0⟧from⟦/CS0⟧ ⟦CS2⟧⟦MT0⟧ Aand_'s auction!⟦/CS2⟧", "zh-TW");
 
         assertEquals(1, sent.size(), "the whole sentence is ONE request");
-        assertEquals("You claimed Day Crystal from 70001 Aand_'s auction!", sent.get(0),
-                "CS stripped, the MT slot rides as a numeric sentinel, no ⟦⟧ on the wire");
-        assertEquals("你從 ⟦MT0⟧ Aand_ 的拍賣領取了日之水晶！", r.translatedText(),
-                "the sentinel maps back to its token; the value carries NO CS markers");
+        assertEquals("70001You claimed70002 70003Day Crystal70004 70005from70006 "
+                        + "7000770008 Aand_'s auction!70009", sent.get(0),
+                "CS and MT become numeric sentinels; no ⟦⟧ reaches the endpoint");
+        assertEquals("⟦CS0⟧你領取了⟦/CS0⟧ ⟦CS1⟧日之水晶⟦/CS1⟧ "
+                        + "⟦CS0⟧來自⟦/CS0⟧ ⟦CS2⟧⟦MT0⟧ Aand_ 的拍賣！⟦/CS2⟧",
+                r.translatedText());
         assertEquals("en", r.detectedSourceLang());
     }
 
@@ -192,15 +200,15 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
-    void httpFailureOnTokenLineRevertsTheWholeLine() throws Exception {
+    void httpFailureOnTokenLineStaysATransportFailure() {
         HttpTransport failing = url -> {
             throw new IOException("HTTP 429");
         };
         GoogleFreeTranslator t = new GoogleFreeTranslator(failing, "auto");
 
-        TranslationResult r = t.translate("⟦CS0⟧Hello ⟦CS1⟧world⟦/CS1⟧", "zh-TW");
-        assertEquals("⟦CS0⟧Hello ⟦CS1⟧world⟦/CS1⟧", r.translatedText(),
-                "token lines keep the echo-fallback semantics on transport failure");
+        assertThrows(TranslationException.class,
+                () -> t.translate("⟦CS0⟧Hello ⟦CS1⟧world⟦/CS1⟧", "zh-TW"),
+                "network failures must back off, not count toward durable content strikes");
     }
 
     @Test
@@ -221,20 +229,23 @@ class GoogleFreeTranslatorTest {
     void batchRoutesTokenLinesPerLineAndKeepsTokensOffTheWire() throws Exception {
         // A chunk containing token lines is translated line by line through the whole-line
         // sentinel path (tokens never ride the joined newline request). CS markers are
-        // stripped from the VALUES by design — the glue re-applies colours.
+        // restored into the values so exact colours can be rebuilt.
         List<String> sent = new java.util.ArrayList<>();
         HttpTransport inline = url -> {
             String q = qOf(url);
             sent.add(q);
-            return "[[[\"譯" + q + "\",\"" + q + "\",null,null]],null,\"en\"]";
+            String translated = q.startsWith("7000")
+                    ? q.substring(0, 5) + "譯" + q.substring(5)
+                    : "譯" + q;
+            return "[[[\"" + translated + "\",\"" + q + "\",null,null]],null,\"en\"]";
         };
         GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
 
         List<TranslationResult> out = t.translateBatch(
                 List.of("⟦CS0⟧red", "⟦CS1⟧blue", "plain"), "zh-TW");
         assertEquals(3, out.size());
-        assertEquals("譯red", out.get(0).translatedText());
-        assertEquals("譯blue", out.get(1).translatedText());
+        assertEquals("⟦CS0⟧譯red", out.get(0).translatedText());
+        assertEquals("⟦CS1⟧譯blue", out.get(1).translatedText());
         assertEquals("譯plain", out.get(2).translatedText());
         for (String q : sent) {
             assertFalse(q.contains("⟦") || q.contains("⟧"), "the endpoint must never see ⟦⟧: " + q);
