@@ -1,180 +1,117 @@
 # Minecraft Translator
 
-Client-side Minecraft translation mod for Traditional/Simplified Chinese. It
-supports Google Translate and OpenAI-compatible AI endpoints, preserves Minecraft
-text styling, and never modifies server data or messages sent by the player.
+Client-side, real-time translation for Minecraft chat and interface text.
 
-## Supported builds
+Minecraft Translator can use Google Translate or an OpenAI-compatible AI endpoint,
+preserves Minecraft text styling, and never changes server data or messages sent by
+the player. The settings UI follows Minecraft's selected language and the translation
+target uses a searchable, vanilla-style language list.
 
-| Loader | Minecraft |
-| --- | --- |
-| Forge | 1.12.2, 1.13.2 |
-| Fabric | 1.14.4, 1.15.2, 1.16.5, 1.17.1, 1.18.2, 1.19.4, 1.20.1, 1.21.1, 1.21.11, 26.1.2, 26.2 |
-| NeoForge | 1.20.1, 1.21.1, 26.2 |
+> 中文：這是純客戶端即時翻譯模組。設定介面會跟隨 Minecraft 語言，翻譯目標語言使用接近原版的語言清單並支援搜尋。
 
-These are separate, version-pinned JARs rather than one universal JAR. Use the
-file whose loader and exact Minecraft release match the instance. Java 8 legacy
-ports prioritize chat and tooltip translation; newer Fabric/NeoForge ports carry
-the broader surface hooks and complete settings UI. The 1.21.11 port deliberately
-omits the boss-bar, entity-name and scoreboard render interceptors because that
-release changed those rendering APIs.
+## Download and install
 
-Each version is an independent Gradle project. The Minecraft-free core under
-`src/main/java/com/dragonmeow/mctranslator/{cache,config,service,style,translate}` is
-canonical and is mirrored into every loader tree by `sync-core.ps1`.
+1. Open the [latest GitHub Release](https://github.com/DragonMeow1012/MinecraftTranslator/releases/latest).
+2. Download the JAR whose **Minecraft version and mod loader both match** your instance.
+3. Install the required loader and, for Fabric builds, the matching Fabric API.
+4. Put the JAR in the instance's `mods` folder and start Minecraft.
+
+The files are version-pinned. Do not use a 1.21.1 JAR on 1.21.11, and do not mix
+Fabric, Forge, and NeoForge builds.
+
+## Supported versions
+
+| Minecraft | Loader | Required Java | Release file |
+| --- | --- | ---: | --- |
+| 1.12.2 | Forge | 8 | `mctranslator-1.0.2-Forge-1.12.2.jar` |
+| 1.13.2 | Forge | 8 | `mctranslator-1.0.2-Forge-1.13.2.jar` |
+| 1.14.4 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.14.4.jar` |
+| 1.15.2 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.15.2.jar` |
+| 1.16.5 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.16.5.jar` |
+| 1.17.1 | Fabric | 16 | `mctranslator-1.0.2-Fabric-1.17.1.jar` |
+| 1.18.2 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.18.2.jar` |
+| 1.19.4 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.19.4.jar` |
+| 1.20.1 | Fabric / NeoForge | 17 | matching Fabric or NeoForge JAR |
+| 1.21.1 | Fabric / NeoForge | 21 | matching Fabric or NeoForge JAR |
+| 1.21.11 | Fabric | 21 | `mctranslator-1.0.2-Fabric-1.21.11.jar` |
+| 26.1.2 | Fabric | 25 | `mctranslator-1.0.2-Fabric-26.1.2.jar` |
+| 26.2 | Fabric / NeoForge | 25 | matching Fabric or NeoForge JAR |
 
 ## Features
 
-- Per-surface modes: original, translation, or original + translation.
-- Independent Google/AI engine choice for chat, tooltips, scoreboard, name tags,
-  boss bars, titles, action bar, books, and custom GUI text.
-- Non-blocking render path with settle-window batching and global single-flight
-  request deduplication.
-- Player-name masking: listed real player IDs never leave the client and are
-  restored verbatim after translation.
-- Actual player-entity name tags bypass translation as complete components. If a
-  stale cache once mistranslated an ID, the whole vanilla tag still replaces it.
-- Verified style-run markers preserve Minecraft colours, formatting, click, hover,
-  and insertion events without character-position projection.
-- Per-line numeric/time/icon/player/server templates: changing live values reuses one
-  canonical cache key while semantic labels and locations remain independently translated.
-- Animated-text churn detection, failure backoff, AI rate-limit fallback, and
-  provisional Google results that AI can replace after recovery.
-- AI-first display policy: an existing AI translation wins; otherwise an existing
-  Google result displays immediately and is marked for one AI supplement.
-- Versioned compact disk cache with atomic replacement.
-- Fabric 26.2 request-debug HUD showing only strings that actually reached a
-  backend.
+- Translates chat, item names and tooltips without blocking the render thread.
+- Modern builds also support scoreboards, name tags, boss bars, titles, action bars,
+  books, lecterns, and custom screen text.
+- Original only, translation only, or original + translation modes per surface.
+- Google Translate and configurable OpenAI-compatible AI providers.
+- Automatic target language following the current Minecraft language.
+- Searchable translation-target language screen based on Minecraft's language UI.
+- Preserves colors, formatting, click events, hover events, icons, numbers, times,
+  URLs, player names, and layout where supported.
+- Memory and disk caches reduce duplicate requests.
+- Player-name masking prevents listed player IDs from being sent to translation providers.
+- AI rate-limit fallback and manual retranslation controls.
 
-## Request pipeline
+## Settings and controls
+
+On modern builds, open **Options → Translation Settings**. Translation settings,
+target language, AI provider/model/API keys, request cooldown, cache controls, and
+key bindings are available in-game.
+
+Default keys:
+
+| Key | Action |
+| --- | --- |
+| `G` | Toggle displayed original/translation text |
+| `R` | Retranslate the hovered item |
+| `P` | Scan and translate the current screen |
+| Unbound | Cycle translation display mode |
+
+All keys can be changed in Minecraft's Controls screen or the mod's keybind settings.
+
+## Version-specific limitations
+
+- Forge 1.12.2 and 1.13.2 are compatibility builds focused on chat and item tooltips.
+  They use the `G` hotkey and do not include the complete modern settings screen.
+- Fabric 1.14.4 through 1.16.5 focus on chat and tooltips, but include target-language
+  selection and search.
+- Fabric 1.21.11 does not hook boss-bar, entity-name, or scoreboard rendering because
+  that release changed those rendering APIs. Chat, tooltips, books, settings, target
+  language, and UI translation remain available.
+- Compilation and remapping are verified for every release JAR. In-game behavior can
+  still vary with other mods, resource packs, and server-specific interfaces.
+
+## Privacy
+
+Translation text is sent only to the provider selected in settings. The mod is
+client-side and does not alter outgoing player chat or server data. If an AI provider
+is configured, its endpoint and privacy policy apply. API keys are stored locally in
+the Minecraft configuration directory; do not share configuration files containing keys.
+
+## Building from source
+
+Each supported Minecraft version has its own Gradle project because Minecraft and
+loader APIs are not binary-compatible across these releases. See [PACKAGING.md](PACKAGING.md)
+for the project, Java, loader, and release layout matrix.
+
+Version branches use the form:
 
 ```text
-Minecraft surface
-  -> TranslationService (mode, language filter, player-name mask)
-  -> TranslationTemplate.Snapshot
-       deterministic slots: numbers, clocks, durations, icons, URLs, ranks,
-                            player event IDs, and labelled server instance IDs
-  -> TranslationCache
-       memory/disk lookup -> settle queue -> single-flight -> backend
-  -> placeholder restore -> validation -> style-independent cache copy
-  -> Minecraft style renderer
+mc/<minecraft-version>-<loader>
 ```
 
-One immutable template snapshot follows a request from enqueue through backend
-dispatch, restore, and persistence. Dynamic, layout, and style tokens must all return
-with the exact same numbered multiset; complete pairs may move for target-language
-grammar, but missing, duplicated, or foreign tokens are rejected before persistence.
+The combined release branch is `release/1.0.2-current`. Built artifacts are collected
+under `mods-jar/1.0.2`.
 
-Global and per-item retranslation are hard invalidations. They remove canonical,
-styled, and de-styled entries, detach the old single-flight request, and increment a
-per-key revision. A response started before the deletion is therefore unable to
-write the old translation back after the new request begins.
+## Reporting issues
 
-### Volatile-value behaviour
+Open a [GitHub issue](https://github.com/DragonMeow1012/MinecraftTranslator/issues)
+and include:
 
-- `Mana Cost: 99` is requested as `Mana Cost: ⟦MT0⟧`. Later values such as 124
-  restore from the same translation without another request.
-- clock/style/icon-only text such as `§711:20pm §b☽§v` contains no translatable
-  content and never reaches a backend.
-- `SkyBlock Hub #11`, `Players: 48/60`, `Server: mega33A`, and `Click` are four
-  independent line-cache entries. A later card with `#13`, `44/60`, or
-  `Server: alphaShard` restores the current values without another request. Only a
-  genuinely unseen label/format is submitted.
-- locations, boss names, skills, quest states, and statuses are semantic text. Each
-  distinct phrase is translated once and then retained permanently; the system does
-  not guess that changing words are safe verbatim slots.
-- hard newlines and blank section rows are an immutable UI skeleton. Tooltip, book,
-  FTB, and screen-scan content is translated per original row; the full item/page may
-  still be supplied as read-only AI context for coherent wording.
+- Minecraft version
+- Fabric, Forge, or NeoForge version
+- Java version
+- Other installed mods
+- Relevant client log or crash report
 
-## Cache schema
-
-Disk caches use schema 3 JSON Lines. The first physical line is the schema header;
-every following physical line is exactly one translation:
-
-```json
-{"schema":3}
-{"key":"Mana Cost: ⟦MT0⟧","translation":"魔力消耗：⟦MT0⟧"}
-{"key":"Defense: ⟦MT0⟧","translation":"防禦：⟦MT0⟧","provisional":true}
-```
-
-The file is a canonical snapshot: each key appears once, batch updates write once,
-and a temporary file is atomically moved into place. Embedded line breaks are JSON
-escaped, so they cannot split an entry. Older schemas are discarded instead of
-migrated.
-
-The old startup crawler that translated every registered item has been removed.
-Opening a container still queues the names on the currently visible page; it never
-crawls unseen pages or the complete item registry. The local player's actual hotbar,
-backpack, equipped armour, and off-hand names are also queued once and then only when
-a newly acquired name appears. Full item lore remains hover-driven to avoid buying an
-entire inventory of descriptions in the background.
-
-AI requests use a compact Minecraft/mod-localization instruction instead of sending
-a built-in glossary on every call. The prompt asks for established Minecraft wording
-(for example `Enchant → 附魔` for Traditional Chinese). User-pinned term overrides are
-included only when the current text contains that term, and tooltip reference context
-is capped at 24 lines / 2,000 characters.
-
-## Fabric 26.2 request debug HUD
-
-Open **翻譯設定** and enable **翻譯請求偵錯懸浮窗**. The overlay shows recent
-canonical strings that crossed the final backend boundary:
-
-- `…` in flight
-- `✓` completed
-- `↪` AI path used Google fallback
-- `＝` a short NPC/proper name echoed unchanged three times and is now durably kept original
-- `✗` failed
-
-Cache hits, duplicate callers, filtered clocks, and learned no-request locations do
-not appear. The trace is bounded to 80 entries; the HUD shows the newest 12 and
-completed rows expire automatically. Debug-HUD text bypasses translation completely;
-it cannot recursively create new requests from its own `[AI ...]` / `[Google ...]`
-rows. Each row pairs the exact canonical backend input and output as
-`原文: … -> 翻譯: …`; pending and failed rows explicitly say `等待中` or `失敗`.
-
-Any semantic template that produces three consecutive unusable content responses is
-stored as a durable keep-original decision. Future lookups, including after a restart,
-make no request. HTTP/429/transport failures never count toward this threshold; manual
-or global retranslation removes the decision.
-
-## Building and testing
-
-Run the canonical Minecraft-free test suite from the repository root:
-
-```powershell
-.\.gradle-local\gradle-8.10\bin\gradle.bat test --no-daemon
-```
-
-After a core edit:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\sync-core.ps1
-```
-
-See `PACKAGING.md` for all six Java/Gradle commands and the 1.0.2 output layout.
-
-## Design constraints
-
-- The render thread performs lookup/enqueue only; HTTP runs on background workers.
-- Translation output is rejected if it is empty, an identity echo, likely
-  mojibake, half-transliterated poison, or loses a protected player name.
-- Hot memory/request/debug tables are bounded. Per-language disk translations are
-  deliberately permanent and unbounded until the user explicitly clears that language.
-- GT stand-ins share one semantic AI-supplement family across player IDs, live values and
-  colour variants. A family retries at most three times per session; manual retranslation
-  resets it, and a provisional result can never overwrite a final AI translation.
-- Fixed HUD column gaps and dynamic/style tokens are validated as one protocol skeleton;
-  a provider response that moves a value across a column or colour segment is rejected.
-- Loader glue owns Minecraft API/version differences. Core packages contain no
-  Minecraft classes and are covered by inline-fake tests.
-
-## Known limitations
-
-- The free Google endpoint is unofficial and may rate-limit or change.
-- A newly encountered semantic location or proper name still needs one request;
-  subsequent appearances reuse its per-language cache entry.
-- If a provider damages a style/layout/value marker, the exact original component is
-  shown instead of guessing colours or positions.
-- API keys are stored in the local mod config; protect that file like any credential.
+Do not include API keys in logs or screenshots.
