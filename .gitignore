@@ -24,3 +24,5 @@ Thumbs.db
 
 # Local test scratch
 .localtest/
+.downloads/
+.jdks/
