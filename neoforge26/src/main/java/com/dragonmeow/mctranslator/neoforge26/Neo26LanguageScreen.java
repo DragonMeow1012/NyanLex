@@ -2,156 +2,162 @@ package com.dragonmeow.mctranslator.neoforge26;
 
 import com.dragonmeow.mctranslator.config.TranslationLanguages;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.ObjectSelectionList;
+import net.minecraft.client.gui.components.StringWidget;
+import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.options.FontOptionsScreen;
+import net.minecraft.client.gui.screens.options.OptionsSubScreen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.language.LanguageInfo;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
-/** Searchable drop-down picker backed by Minecraft's installed language list. */
-public final class Neo26LanguageScreen extends Screen {
-    private final Screen parent;
-    private List<Map.Entry<String, LanguageInfo>> languages = List.of();
-    private EditBox searchBox;
-    private String query = "";
-    private boolean expanded;
-    private int page;
+/** Vanilla 26.2 language-selection UI, redirected to the translation target. */
+public final class Neo26LanguageScreen extends OptionsSubScreen {
+    private static final Component WARNING = Component.translatable("options.languageAccuracyWarning").withColor(-4539718);
+    private static final Component SEARCH_HINT = Component.translatable("gui.language.search").withStyle(EditBox.SEARCH_HINT_STYLE);
+    private LanguageSelectionList languageList;
+    private EditBox search;
 
     public Neo26LanguageScreen(Screen parent) {
-        super(Component.translatable("screen.mctranslator.language.title"));
-        this.parent = parent;
+        super(parent, Minecraft.getInstance().options,
+                Component.translatable("screen.mctranslator.language.target_title"));
+        this.layout.setFooterHeight(53);
     }
 
-    @Override protected void init() {
-        languages = new ArrayList<>(minecraft.getLanguageManager().getLanguages().entrySet());
-        languages.sort(Comparator.comparing(e -> e.getValue().toComponent().getString(),
-                String.CASE_INSENSITIVE_ORDER));
-
-        int listWidth = Math.max(120, Math.min(340, width - 24));
-        int x = width / 2 - listWidth / 2;
-        searchBox = new EditBox(font, x, 30, listWidth, 20,
-                Component.translatable("screen.mctranslator.language.search"));
-        searchBox.setHint(Component.translatable("screen.mctranslator.language.search"));
-        searchBox.setMaxLength(80);
-        searchBox.setValue(query);
-        searchBox.setResponder(value -> {
-            query = value;
-            page = 0;
-            expanded = true;
-            rebuildWidgets();
-        });
-        addRenderableWidget(searchBox);
-
-        addRenderableWidget(Button.builder(dropdownLabel(), b -> {
-            query = searchBox.getValue();
-            expanded = !expanded;
-            page = 0;
-            rebuildWidgets();
-        }).bounds(x, 54, listWidth, 20).build());
-
-        if (expanded) addDropDownEntries(x, listWidth);
-
-        addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
-                .bounds(width / 2 - Math.min(200, listWidth) / 2, height - 24,
-                        Math.min(200, listWidth), 20).build());
-        setFocused(searchBox);
+    @Override protected void addTitle() {
+        LinearLayout header = this.layout.addToHeader(LinearLayout.vertical().spacing(4));
+        header.defaultCellSetting().alignHorizontallyCenter();
+        header.addChild(new StringWidget(this.title, this.font));
+        this.search = header.addChild(new EditBox(this.font, 0, 0, 200, 15, Component.empty()));
+        this.search.setHint(SEARCH_HINT);
+        this.search.setResponder(value -> { if (this.languageList != null) this.languageList.filterEntries(value); });
+        this.layout.setHeaderHeight(36);
     }
 
-    private void addDropDownEntries(int x, int listWidth) {
-        List<Map.Entry<String, LanguageInfo>> filtered = filteredLanguages();
-        int rows = Math.max(3, Math.min(8, (height - 142) / 22));
-        int pages = Math.max(1, (filtered.size() + rows - 1) / rows);
-        page = Math.max(0, Math.min(page, pages - 1));
-        int y = 78;
-
-        if (query.isBlank() || matchesFollow(query)) {
-            addRenderableWidget(Button.builder(
-                    Component.translatable("screen.mctranslator.language.follow"), b -> choose(null))
-                    .bounds(x, y, listWidth, 20).build());
-            y += 22;
-        }
-
-        int from = page * rows;
-        for (int i = from; i < Math.min(filtered.size(), from + rows); i++) {
-            Map.Entry<String, LanguageInfo> entry = filtered.get(i);
-            Component label = Component.empty().append(entry.getValue().toComponent())
-                    .append(Component.literal(" (" + entry.getKey() + ")"));
-            addRenderableWidget(Button.builder(label, b -> choose(entry.getKey()))
-                    .bounds(x, y, listWidth, 20).build());
-            y += 22;
-        }
-
-        if (filtered.isEmpty() && !matchesFollow(query)) {
-            addRenderableWidget(Button.builder(Component.translatable("screen.mctranslator.language.empty"), b -> {})
-                    .bounds(x, y, listWidth, 20).build()).active = false;
-            y += 22;
-        }
-
-        if (pages > 1) {
-            int navWidth = (listWidth - 12) / 3;
-            Button previous = Button.builder(Component.translatable("screen.mctranslator.language.previous"), b -> {
-                query = searchBox.getValue(); page--; rebuildWidgets();
-            }).bounds(x, y, navWidth, 20).build();
-            previous.active = page > 0;
-            addRenderableWidget(previous);
-            addRenderableWidget(Button.builder(
-                    Component.translatable("screen.mctranslator.language.page", page + 1, pages), b -> {})
-                    .bounds(x + navWidth + 6, y, navWidth, 20).build());
-            Button next = Button.builder(Component.translatable("screen.mctranslator.language.next"), b -> {
-                query = searchBox.getValue(); page++; rebuildWidgets();
-            }).bounds(x + (navWidth + 6) * 2, y, navWidth, 20).build();
-            next.active = page + 1 < pages;
-            addRenderableWidget(next);
-        }
+    @Override protected void setInitialFocus() {
+        if (this.search != null) this.setInitialFocus(this.search);
+        else super.setInitialFocus();
     }
 
-    private List<Map.Entry<String, LanguageInfo>> filteredLanguages() {
-        String needle = query.trim().toLowerCase(Locale.ROOT);
-        if (needle.isEmpty()) return languages;
-        return languages.stream().filter(entry -> entry.getKey().toLowerCase(Locale.ROOT).contains(needle)
-                || entry.getValue().toComponent().getString().toLowerCase(Locale.ROOT).contains(needle)).toList();
+    @Override protected void addContents() {
+        this.languageList = this.layout.addToContents(new LanguageSelectionList(this.minecraft));
     }
 
-    private static boolean matchesFollow(String value) {
-        String needle = value.trim().toLowerCase(Locale.ROOT);
-        return needle.isEmpty() || "minecraft".contains(needle) || "follow".contains(needle)
-                || "跟隨遊戲".contains(needle) || "跟隨 minecraft".contains(needle);
+    @Override protected void addOptions() {}
+
+    @Override protected void addFooter() {
+        LinearLayout footer = this.layout.addToFooter(LinearLayout.vertical()).spacing(8);
+        footer.defaultCellSetting().alignHorizontallyCenter();
+        footer.addChild(new StringWidget(WARNING, this.font));
+        LinearLayout buttons = footer.addChild(LinearLayout.horizontal().spacing(8));
+        buttons.addChild(Button.builder(Component.translatable("options.font"),
+                b -> this.minecraft.setScreenAndShow(new FontOptionsScreen(this, this.options))).build());
+        buttons.addChild(Button.builder(CommonComponents.GUI_DONE, b -> onDone()).build());
     }
 
-    private Component dropdownLabel() {
-        TranslatorConfig cfg = MctranslatorNeoForge26.config();
-        Component selected = cfg.followGameLanguage
-                ? Component.translatable("screen.mctranslator.language.follow")
-                : Component.literal(cfg.targetLang);
-        return Component.translatable(expanded
-                ? "screen.mctranslator.language.dropdown.open"
-                : "screen.mctranslator.language.dropdown.closed", selected);
+    @Override protected void repositionElements() {
+        super.repositionElements();
+        if (this.languageList != null) this.languageList.updateSize(this.width, this.layout);
+    }
+
+    private void onDone() {
+        LanguageSelectionList.Entry selected = this.languageList == null ? null : this.languageList.getSelected();
+        if (selected != null) choose(selected.code);
+        else this.minecraft.setScreenAndShow(this.lastScreen);
     }
 
     private void choose(String minecraftCode) {
         TranslatorConfig cfg = MctranslatorNeoForge26.config();
         cfg.followGameLanguage = minecraftCode == null;
-        String selected = minecraftCode == null
-                ? minecraft.getLanguageManager().getSelected() : minecraftCode;
-        String nextTarget = TranslationLanguages.fromMinecraftCode(selected);
-        if (MctranslatorNeoForge26.service() != null) MctranslatorNeoForge26.service().setTargetLang(nextTarget);
-        else cfg.targetLang = nextTarget;
+        String selected = minecraftCode == null ? minecraft.getLanguageManager().getSelected() : minecraftCode;
+        String target = TranslationLanguages.fromMinecraftCode(selected);
+        if (MctranslatorNeoForge26.service() != null) MctranslatorNeoForge26.service().setTargetLang(target);
+        else cfg.targetLang = target;
         Neo26TextStyle.clearRenderMemo();
         MctranslatorNeoForge26.saveConfig();
-        minecraft.setScreenAndShow(parent);
+        this.minecraft.setScreenAndShow(this.lastScreen);
     }
 
-    @Override public void onClose() { minecraft.setScreenAndShow(parent); }
+    private final class LanguageSelectionList extends ObjectSelectionList<LanguageSelectionList.Entry> {
+        private LanguageSelectionList(Minecraft minecraft) {
+            super(minecraft, Neo26LanguageScreen.this.width,
+                    Neo26LanguageScreen.this.height - 33 - 53, 33, 18);
+            filterEntries("");
+        }
 
-    @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
-        graphics.centeredText(font, title, width / 2, 10, 0xFFFFFFFF);
+        private void filterEntries(String filter) {
+            String needle = filter.toLowerCase(Locale.ROOT);
+            List<Entry> entries = Minecraft.getInstance().getLanguageManager().getLanguages().entrySet().stream()
+                    .filter(e -> needle.isEmpty()
+                            || e.getKey().toLowerCase(Locale.ROOT).contains(needle)
+                            || e.getValue().name().toLowerCase(Locale.ROOT).contains(needle)
+                            || e.getValue().region().toLowerCase(Locale.ROOT).contains(needle))
+                    .map(e -> new Entry(e.getKey(), e.getValue().toComponent()))
+                    .toList();
+            ArrayList<Entry> all = new ArrayList<>();
+            all.add(new Entry(null, Component.translatable("screen.mctranslator.language.follow")));
+            all.addAll(entries);
+            this.replaceEntries(all);
+            selectCurrent();
+            this.refreshScrollAmount();
+        }
+
+        private void selectCurrent() {
+            TranslatorConfig cfg = MctranslatorNeoForge26.config();
+            for (Entry entry : this.children()) {
+                if ((cfg.followGameLanguage && entry.code == null)
+                        || (!cfg.followGameLanguage && entry.code != null
+                        && TranslationLanguages.fromMinecraftCode(entry.code).equalsIgnoreCase(cfg.targetLang))) {
+                    this.setSelected(entry);
+                    this.centerScrollOn(entry);
+                    return;
+                }
+            }
+        }
+
+        @Override public int getRowWidth() { return super.getRowWidth() + 50; }
+
+        @Override protected void extractListBackground(GuiGraphicsExtractor graphics) {
+            super.extractListBackground(graphics);
+            graphics.fill(this.getX(), this.getY(), this.getRight(), this.getBottom(), 0x20204A60);
+        }
+
+        private final class Entry extends ObjectSelectionList.Entry<Entry> {
+            private final String code;
+            private final Component language;
+
+            private Entry(String code, Component language) { this.code = code; this.language = language; }
+
+            @Override public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY,
+                                                 boolean hovered, float delta) {
+                graphics.centeredText(Neo26LanguageScreen.this.font, this.language,
+                        LanguageSelectionList.this.width / 2, this.getContentYMiddle() - 9 / 2, -1);
+            }
+
+            @Override public boolean keyPressed(KeyEvent event) {
+                if (event.isSelection()) { select(); onDone(); return true; }
+                return super.keyPressed(event);
+            }
+
+            @Override public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+                select();
+                if (doubleClick) onDone();
+                return super.mouseClicked(event, doubleClick);
+            }
+
+            private void select() { LanguageSelectionList.this.setSelected(this); }
+            @Override public Component getNarration() { return Component.translatable("narrator.select", this.language); }
+        }
     }
 }

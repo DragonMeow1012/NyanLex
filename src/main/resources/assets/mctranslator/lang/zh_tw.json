@@ -6,6 +6,7 @@
   "key.mctranslator.toggle": "快速切換原文／翻譯",
   "screen.mctranslator.config.title": "翻譯設定",
   "screen.mctranslator.language.title": "選擇翻譯語言",
+  "screen.mctranslator.language.target_title": "翻譯目標語言",
   "screen.mctranslator.keybind.title": "翻譯快捷鍵",
   "screen.mctranslator.ai.title": "AI 翻譯設定",
   "config.mctranslator.surface.chat": "聊天：%s",
@@ -68,12 +69,12 @@
   "message.mctranslator.not_initialized": "尚未初始化",
   "message.mctranslator.success": "成功：%s",
   "message.mctranslator.failed": "失敗：%s",
-  "message.mctranslator.prefix": "[翻譯] %s"
-  ,"debug.mctranslator.header": "偵錯　最近 %s 項　等待 %s　失敗 %s"
-  ,"debug.mctranslator.waiting": "等待中"
-  ,"debug.mctranslator.failed": "失敗"
-  ,"debug.mctranslator.skipped": "略過"
-  ,"debug.mctranslator.empty": "無結果"
-  ,"debug.mctranslator.source": "原文："
-  ,"debug.mctranslator.translation": "譯文："
+  "message.mctranslator.prefix": "[翻譯] %s",
+  "debug.mctranslator.header": "偵錯　最近 %s 項　等待 %s　失敗 %s",
+  "debug.mctranslator.waiting": "等待中",
+  "debug.mctranslator.failed": "失敗",
+  "debug.mctranslator.skipped": "略過",
+  "debug.mctranslator.empty": "無結果",
+  "debug.mctranslator.source": "原文：",
+  "debug.mctranslator.translation": "譯文："
 }

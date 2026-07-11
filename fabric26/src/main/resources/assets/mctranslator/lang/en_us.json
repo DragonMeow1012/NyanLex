@@ -6,6 +6,7 @@
   "key.mctranslator.toggle": "Quick Toggle: Original / Translation",
   "screen.mctranslator.config.title": "Translation Settings",
   "screen.mctranslator.language.title": "Select Translation Language",
+  "screen.mctranslator.language.target_title": "Translation Target Language",
   "screen.mctranslator.keybind.title": "Translation Keybinds",
   "screen.mctranslator.ai.title": "AI Translation Settings",
   "config.mctranslator.surface.chat": "Chat: %s",
