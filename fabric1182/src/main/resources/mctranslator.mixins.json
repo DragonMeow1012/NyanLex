@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.dragonmeow.mctranslator.fabric.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "client": [
+    "AbstractContainerScreenAccessor",
+    "ChatComponentMixin",
+    "FontSplitMixin",
+    "OptionsScreenMixin",
+    "TextFieldMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
