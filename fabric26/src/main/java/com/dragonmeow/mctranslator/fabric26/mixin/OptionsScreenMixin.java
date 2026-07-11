@@ -21,7 +21,7 @@ public abstract class OptionsScreenMixin extends Screen {
    private void mctranslator$addButton(CallbackInfo ci) {
       if (MctranslatorFabric26.service() != null) {
          this.addRenderableWidget(
-            Button.builder(Component.literal("翻譯設定..."), b -> this.minecraft.setScreenAndShow(new Fabric26ConfigScreen((OptionsScreen)(Object)this)))
+            Button.builder(Component.translatable("screen.mctranslator.options"), b -> this.minecraft.setScreenAndShow(new Fabric26ConfigScreen((OptionsScreen)(Object)this)))
                .bounds(6, 6, 110, 20)
                .build()
          );

@@ -554,7 +554,7 @@ public final class MctranslatorNeoForge {
         boolean originalsNow = service.toggleShowOriginal();
         NeoTextStyle.clearRenderMemo();
         if (originalsNow) flushPendingChatOriginals();
-        status(originalsNow ? "顯示原文（翻譯已暫停）" : "顯示翻譯");
+        status(Component.translatable(originalsNow ? "message.mctranslator.show_original" : "message.mctranslator.show_translation").getString());
     }
 
     /** When 跟隨遊戲 is on, keep the translation target language synced to Minecraft's own (繁/簡). */
@@ -1287,7 +1287,7 @@ public final class MctranslatorNeoForge {
             }
             requested += requests.size();
         }
-        status("擷取介面文字翻譯中…（" + requested + " 項）");
+        status(Component.translatable("message.mctranslator.screen_scan", requested).getString());
     }
 
     /** Depth-bounded recursive collect of all widgets, descending into nested containers. */
@@ -1378,13 +1378,13 @@ public final class MctranslatorNeoForge {
         }
         service.retranslate(sources);
         NeoTextStyle.clearRenderMemo();
-        status("重新翻譯：" + stack.getHoverName().getString());
+        status(Component.translatable("message.mctranslator.retranslate", stack.getHoverName().getString()).getString());
     }
 
     /** Background AI connection test used by the AI settings screen; result delivered on the client thread. */
     public static void testAi(String baseUrl, String model, List<String> keys, java.util.function.Consumer<String> onResult) {
         if (transport == null) {
-            onResult.accept("§c尚未初始化");
+            onResult.accept(Component.translatable("message.mctranslator.not_initialized").getString());
             return;
         }
         Thread t = new Thread(() -> {
@@ -1392,9 +1392,9 @@ public final class MctranslatorNeoForge {
             try {
                 OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys));
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
-                msg = "§a成功：Hello, world → " + out;
+                msg = Component.translatable("message.mctranslator.success", "Hello, world → " + out).getString();
             } catch (Exception e) {
-                msg = "§c失敗：" + e.getMessage();
+                msg = Component.translatable("message.mctranslator.failed", e.getMessage()).getString();
             }
             final String result = msg;
             Minecraft mc = Minecraft.getInstance();
@@ -1408,7 +1408,7 @@ public final class MctranslatorNeoForge {
     private void status(String msg) {
         Minecraft mc = Minecraft.getInstance();
         if (mc != null && mc.player != null) {
-            mc.gui.getChat().addMessage(Component.literal("[翻譯] " + msg));
+            mc.gui.getChat().addMessage(Component.translatable("message.mctranslator.prefix", msg));
         }
     }
 }

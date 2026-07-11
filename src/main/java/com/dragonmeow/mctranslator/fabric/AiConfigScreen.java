@@ -35,7 +35,7 @@ public final class AiConfigScreen extends Screen {
     private static final int Y_DONE = 226;
 
     public AiConfigScreen(Screen parent) {
-        super(Component.literal("AI 翻譯設定"));
+        super(Component.translatable("screen.mctranslator.ai.title"));
         this.parent = parent;
     }
 
@@ -60,18 +60,18 @@ public final class AiConfigScreen extends Screen {
         addRenderableWidget(keysBox);
 
         int pw = (FIELD_W - 2 * 6) / 3;
-        addPreset("Gemini（免費額度高）", x, Y_PRESETS, pw,
+        addPreset("Gemini", x, Y_PRESETS, pw,
                 "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.1-flash-lite");
         addPreset("OpenAI", x + pw + 6, Y_PRESETS, pw, "https://api.openai.com/v1", "gpt-5.4-mini");
         addPreset("DeepSeek", x + 2 * (pw + 6), Y_PRESETS, pw, "https://api.deepseek.com", "deepseek-chat");
 
-        addRenderableWidget(Button.builder(Component.literal("測試連接"), b -> {
-            testResult = "§7測試中…";
+        addRenderableWidget(Button.builder(Component.translatable("screen.mctranslator.ai.test"), b -> {
+            testResult = Component.translatable("screen.mctranslator.ai.testing").getString();
             MctranslatorFabric.testAi(baseUrlBox.getValue().trim(), modelBox.getValue().trim(),
                     parseKeys(keysBox.getValue()), r -> this.testResult = r);
         }).bounds(x, Y_TEST, FIELD_W, 20).build());
 
-        addRenderableWidget(Button.builder(Component.literal("完成"), b -> onClose())
+        addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
                 .bounds(this.width / 2 - 100, Y_DONE, 200, 20).build());
     }
 
@@ -106,10 +106,10 @@ public final class AiConfigScreen extends Screen {
         g.drawCenteredString(this.font, this.title, this.width / 2, 14, 0xFFFFFF);
 
         int lx = this.width / 2 - FIELD_W / 2;
-        g.drawString(this.font, "API 端點（Base URL）", lx, Y_URL - 11, 0xA0A0A0);
-        g.drawString(this.font, "模型 ID", lx, Y_MODEL - 11, 0xA0A0A0);
-        g.drawString(this.font, "API 金鑰（多把以逗號分隔，會輪流使用）", lx, Y_KEYS - 11, 0xA0A0A0);
-        g.drawString(this.font, "快速套用：", lx, Y_PRESETS - 11, 0xA0A0A0);
+        g.drawString(this.font, Component.translatable("screen.mctranslator.ai.endpoint"), lx, Y_URL - 11, 0xA0A0A0);
+        g.drawString(this.font, Component.translatable("screen.mctranslator.ai.model"), lx, Y_MODEL - 11, 0xA0A0A0);
+        g.drawString(this.font, Component.translatable("screen.mctranslator.ai.keys"), lx, Y_KEYS - 11, 0xA0A0A0);
+        g.drawString(this.font, Component.translatable("screen.mctranslator.ai.presets"), lx, Y_PRESETS - 11, 0xA0A0A0);
 
         if (!testResult.isEmpty()) {
             String line = this.font.plainSubstrByWidth(testResult, FIELD_W);
@@ -117,9 +117,9 @@ public final class AiConfigScreen extends Screen {
         }
 
         String[] hints = {
-                "Gemini  : https://generativelanguage.googleapis.com/v1beta/openai   gemini-3.1-flash-lite（Google AI Studio 取金鑰）",
-                "OpenAI  : https://api.openai.com/v1   gpt-5.4-mini       DeepSeek: https://api.deepseek.com   deepseek-chat",
-                "填好金鑰後，到「翻譯設定」把要精翻的項目右側切成「AI 精翻」即可；留空金鑰會自動退回機翻。",
+                Component.translatable("screen.mctranslator.ai.hint.gemini").getString(),
+                Component.translatable("screen.mctranslator.ai.hint.providers").getString(),
+                Component.translatable("screen.mctranslator.ai.hint.enable").getString(),
         };
         g.pose().pushPose();
         g.pose().scale(0.5f, 0.5f, 1.0f);

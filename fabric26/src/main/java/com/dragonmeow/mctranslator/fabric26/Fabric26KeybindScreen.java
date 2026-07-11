@@ -8,6 +8,9 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 翻譯快捷鍵設定 (MC 26.2) — rebind the mod's hotkeys without leaving the translation settings.
  * Click a row, then press the desired key (Esc cancels). Backed by the same {@link KeyMapping}s
@@ -22,24 +25,29 @@ public final class Fabric26KeybindScreen extends Screen {
     private KeyMapping listening;        // the binding being rebound, or null
     private Button listeningButton;      // its button (to restore the label)
     private String listeningPrefix;      // its label prefix
+    private final List<BindingRow> bindingRows = new ArrayList<>();
 
     public Fabric26KeybindScreen(Screen parent) {
-        super(Component.literal("翻譯快捷鍵設定"));
+        super(Component.translatable("screen.mctranslator.keybind.title"));
         this.parent = parent;
     }
 
     @Override
     protected void init() {
+        bindingRows.clear();
         buttonWidth = Math.max(80, Math.min(W, this.width - 20));
         int x = this.width / 2 - buttonWidth / 2;
         int y = 44;
         int step = 24;
-        y = rebind("開啟翻譯設定：", MctranslatorFabric26.modeKeyMapping(), x, y, step);
-        y = rebind("重新翻譯指向的物品：", MctranslatorFabric26.retranslateKeyMapping(), x, y, step);
-        y = rebind("翻譯目前介面按鈕／選項：", MctranslatorFabric26.screenScanKeyMapping(), x, y, step);
-        y = rebind("快速切換 原文／翻譯：", MctranslatorFabric26.toggleKeyMapping(), x, y, step);
+        y = rebind("screen.mctranslator.keybind.mode", MctranslatorFabric26.modeKeyMapping(), x, y, step);
+        y = rebind("screen.mctranslator.keybind.retranslate", MctranslatorFabric26.retranslateKeyMapping(), x, y, step);
+        y = rebind("screen.mctranslator.keybind.screenscan", MctranslatorFabric26.screenScanKeyMapping(), x, y, step);
+        y = rebind("screen.mctranslator.keybind.toggle", MctranslatorFabric26.toggleKeyMapping(), x, y, step);
         y += 8;
-        this.addRenderableWidget(Button.builder(Component.literal("完成"), b -> this.onClose())
+        this.addRenderableWidget(Button.builder(Component.translatable("screen.mctranslator.keybind.reset"), b -> resetBindings())
+                .bounds(this.width / 2 - buttonWidth / 2, y, buttonWidth, 20).build());
+        y += step;
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
                 .bounds(this.width / 2 - buttonWidth / 2, y, buttonWidth, 20).build());
     }
 
@@ -49,14 +57,31 @@ public final class Fabric26KeybindScreen extends Screen {
             this.listening = key;
             this.listeningButton = btn;
             this.listeningPrefix = prefix;
-            btn.setMessage(Component.literal("§e> 按任意鍵（Esc 取消） <"));
+            btn.setMessage(Component.translatable("screen.mctranslator.keybind.listening"));
         }).bounds(x, y, buttonWidth, 20).build();
         this.addRenderableWidget(b);
+        this.bindingRows.add(new BindingRow(prefix, key, b));
         return y + step;
     }
 
+    private void resetBindings() {
+        if (this.minecraft == null) return;
+        this.listening = null;
+        this.listeningButton = null;
+        this.listeningPrefix = null;
+        for (BindingRow row : this.bindingRows) {
+            row.key().setKey(row.key().getDefaultKey());
+            row.button().setMessage(rebindLabel(row.prefix(), row.key()));
+        }
+        KeyMapping.resetMapping();
+        this.minecraft.options.save();
+    }
+
+    private record BindingRow(String prefix, KeyMapping key, Button button) {
+    }
+
     private static Component rebindLabel(String prefix, KeyMapping k) {
-        return Component.literal(prefix).append(k.getTranslatedKeyMessage());
+        return Component.translatable(prefix).append(k.getTranslatedKeyMessage());
     }
 
     @Override
@@ -81,7 +106,7 @@ public final class Fabric26KeybindScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
         super.extractRenderState(graphics, mouseX, mouseY, a);
         graphics.centeredText(this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);
-        Component hint = Component.literal("點一個按鈕，再按下想綁定的按鍵（Esc 取消）");
+        Component hint = Component.translatable("screen.mctranslator.keybind.hint");
         graphics.centeredText(this.font, hint, this.width / 2, this.height - 30, 0xFFA0A0A0);
     }
 

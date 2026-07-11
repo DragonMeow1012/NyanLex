@@ -16,7 +16,7 @@ public final class Neo26AiScreen extends Screen {
    private static final int FIELD_W = 320;
 
    public Neo26AiScreen(Screen parent) {
-      super(Component.literal("AI 翻譯設定（上：端點　中：模型　下：金鑰）"));
+      super(Component.translatable("screen.mctranslator.ai.title"));
       this.parent = parent;
    }
 
@@ -36,12 +36,12 @@ public final class Neo26AiScreen extends Screen {
       this.keysBox.setValue(keysForEndpoint(cfg, cfg.aiBaseUrl));
       this.addRenderableWidget(this.keysBox);
       int pw = 102;
-      this.addPreset("Gemini（免費額度高）", x, 158, pw, "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.1-flash-lite");
+      this.addPreset("Gemini", x, 158, pw, "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.1-flash-lite");
       this.addPreset("OpenAI", x + pw + 6, 158, pw, "https://api.openai.com/v1", "gpt-5.4-mini");
       this.addPreset("DeepSeek", x + 2 * (pw + 6), 158, pw, "https://api.deepseek.com", "deepseek-chat");
       Button[] testBtn = new Button[1];
-      testBtn[0] = Button.builder(Component.literal("測試連接"), b -> {
-         b.setMessage(Component.literal("§7測試中…"));
+      testBtn[0] = Button.builder(Component.translatable("screen.mctranslator.ai.test"), b -> {
+         b.setMessage(Component.translatable("screen.mctranslator.ai.testing"));
          MctranslatorNeoForge26.testAi(this.baseUrlBox.getValue().trim(), this.modelBox.getValue().trim(), parseKeys(this.keysBox.getValue()), r -> {
             if (testBtn[0] != null) {
                testBtn[0].setMessage(Component.literal(r));
@@ -49,7 +49,7 @@ public final class Neo26AiScreen extends Screen {
          });
       }).bounds(x, 184, 320, 20).build();
       this.addRenderableWidget(testBtn[0]);
-      this.addRenderableWidget(Button.builder(Component.literal("完成"), b -> this.onClose()).bounds(this.width / 2 - 100, 210, 200, 20).build());
+      this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose()).bounds(this.width / 2 - 100, 210, 200, 20).build());
    }
 
    private void addPreset(String label, int x, int y, int w, String url, String model) {

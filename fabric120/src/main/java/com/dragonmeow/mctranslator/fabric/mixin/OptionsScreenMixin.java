@@ -28,7 +28,7 @@ public abstract class OptionsScreenMixin extends Screen {
     private void mctranslator$addToggle(CallbackInfo ci) {
         if (MctranslatorFabric.service() == null) return;
         Button button = Button.builder(
-                Component.literal("翻譯設定..."),
+                Component.translatable("screen.mctranslator.options"),
                 b -> this.minecraft.setScreen(new TranslationConfigScreen((OptionsScreen) (Object) this))
         ).bounds(6, 6, 110, 20).build();
         this.addRenderableWidget(button);

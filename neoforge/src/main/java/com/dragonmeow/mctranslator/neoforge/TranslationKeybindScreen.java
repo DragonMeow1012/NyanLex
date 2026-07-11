@@ -8,6 +8,9 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class TranslationKeybindScreen extends Screen {
     private static final int W = 300;
     private final Screen parent;
@@ -15,28 +18,43 @@ public final class TranslationKeybindScreen extends Screen {
     private KeyMapping listening;
     private Button listeningButton;
     private String listeningPrefix;
-    public TranslationKeybindScreen(Screen parent) { super(Component.literal("翻譯快捷鍵")); this.parent = parent; }
+    private final List<BindingRow> bindingRows = new ArrayList<>();
+    public TranslationKeybindScreen(Screen parent) { super(Component.translatable("screen.mctranslator.keybind.title")); this.parent = parent; }
     @Override protected void init() {
+        bindingRows.clear();
         buttonWidth = Math.max(80, Math.min(W, width - 20));
         int x = width / 2 - buttonWidth / 2;
         int y = 46;
-        y = rebind("重新翻譯指向的物品：", MctranslatorNeoForge.retranslateKeyMapping(), x, y);
-        y = rebind("翻譯目前介面：", MctranslatorNeoForge.screenScanKeyMapping(), x, y);
-        y = rebind("切換原文／翻譯：", MctranslatorNeoForge.toggleKeyMapping(), x, y);
-        addRenderableWidget(Button.builder(Component.literal("完成"), b -> onClose())
+        y = rebind("screen.mctranslator.keybind.retranslate", MctranslatorNeoForge.retranslateKeyMapping(), x, y);
+        y = rebind("screen.mctranslator.keybind.screenscan", MctranslatorNeoForge.screenScanKeyMapping(), x, y);
+        y = rebind("screen.mctranslator.keybind.toggle", MctranslatorNeoForge.toggleKeyMapping(), x, y);
+        addRenderableWidget(Button.builder(Component.translatable("screen.mctranslator.keybind.reset"), b -> resetBindings())
                 .bounds(width / 2 - buttonWidth / 2, y + 8, buttonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
+                .bounds(width / 2 - buttonWidth / 2, y + 32, buttonWidth, 20).build());
     }
     private int rebind(String prefix, KeyMapping key, int x, int y) {
         if (key == null) return y;
         Button button = Button.builder(label(prefix, key), b -> {
             listening = key; listeningButton = b; listeningPrefix = prefix;
-            b.setMessage(Component.literal("§e按任意鍵（Esc 取消）"));
+            b.setMessage(Component.translatable("screen.mctranslator.keybind.listening"));
         }).bounds(x, y, buttonWidth, 20).build();
         addRenderableWidget(button);
+        bindingRows.add(new BindingRow(prefix, key, button));
         return y + 24;
     }
+    private void resetBindings() {
+        if (minecraft == null) return;
+        listening = null; listeningButton = null; listeningPrefix = null;
+        for (BindingRow row : bindingRows) {
+            minecraft.options.setKey(row.key(), row.key().getDefaultKey());
+            row.button().setMessage(label(row.prefix(), row.key()));
+        }
+        KeyMapping.resetMapping(); minecraft.options.save();
+    }
+    private record BindingRow(String prefix, KeyMapping key, Button button) { }
     private static Component label(String prefix, KeyMapping key) {
-        return Component.literal(prefix).append(key.getTranslatedKeyMessage());
+        return Component.translatable(prefix).append(key.getTranslatedKeyMessage());
     }
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (listening != null && minecraft != null) {
