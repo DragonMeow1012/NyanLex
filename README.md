@@ -1,27 +1,27 @@
 # Minecraft Translator
 
-Client-side, real-time translation for Minecraft chat and interface text.
+[English README](README_EN.md)
 
-Minecraft Translator can use Google Translate or an OpenAI-compatible AI endpoint,
-preserves Minecraft text styling, and never changes server data or messages sent by
-the player. The settings UI follows Minecraft's selected language and the translation
-target uses a searchable, vanilla-style language list.
+Minecraft 用戶端即時翻譯模組，可翻譯聊天訊息、物品提示與遊戲介面文字。
 
-> 中文：這是純客戶端即時翻譯模組。設定介面會跟隨 Minecraft 語言，翻譯目標語言使用接近原版的語言清單並支援搜尋。
+Minecraft Translator 支援 Google 翻譯及 OpenAI 相容的 AI API，會盡量保留
+Minecraft 原有的文字顏色、格式與互動事件，不會修改伺服器資料或玩家送出的訊息。
+設定介面會跟隨 Minecraft 目前使用的語言，翻譯目標語言則使用可搜尋、接近原版
+Minecraft 的語言清單。
 
-## Download and install
+## 下載與安裝
 
-1. Open the [latest GitHub Release](https://github.com/DragonMeow1012/MinecraftTranslator/releases/latest).
-2. Download the JAR whose **Minecraft version and mod loader both match** your instance.
-3. Install the required loader and, for Fabric builds, the matching Fabric API.
-4. Put the JAR in the instance's `mods` folder and start Minecraft.
+1. 前往[最新 GitHub Release](https://github.com/DragonMeow1012/MinecraftTranslator/releases/latest)。
+2. 下載與你的 **Minecraft 版本及模組載入器完全相符**的 JAR。
+3. 安裝對應的 Forge、Fabric 或 NeoForge；Fabric 版還需要相符版本的 Fabric API。
+4. 將 JAR 放入遊戲實例的 `mods` 資料夾，然後啟動 Minecraft。
 
-The files are version-pinned. Do not use a 1.21.1 JAR on 1.21.11, and do not mix
-Fabric, Forge, and NeoForge builds.
+每個 JAR 都只對應檔名標示的版本。請勿將 1.21.1 的 JAR 裝到 1.21.11，
+也不要混用 Fabric、Forge 與 NeoForge 版本。
 
-## Supported versions
+## 支援版本
 
-| Minecraft | Loader | Required Java | Release file |
+| Minecraft | 載入器 | Java | Release 檔案 |
 | --- | --- | ---: | --- |
 | 1.12.2 | Forge | 8 | `mctranslator-1.0.2-Forge-1.12.2.jar` |
 | 1.13.2 | Forge | 8 | `mctranslator-1.0.2-Forge-1.13.2.jar` |
@@ -31,87 +31,80 @@ Fabric, Forge, and NeoForge builds.
 | 1.17.1 | Fabric | 16 | `mctranslator-1.0.2-Fabric-1.17.1.jar` |
 | 1.18.2 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.18.2.jar` |
 | 1.19.4 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.19.4.jar` |
-| 1.20.1 | Fabric / NeoForge | 17 | matching Fabric or NeoForge JAR |
-| 1.21.1 | Fabric / NeoForge | 21 | matching Fabric or NeoForge JAR |
+| 1.20.1 | Fabric / NeoForge | 17 | 選擇相符載入器的 JAR |
+| 1.21.1 | Fabric / NeoForge | 21 | 選擇相符載入器的 JAR |
 | 1.21.11 | Fabric | 21 | `mctranslator-1.0.2-Fabric-1.21.11.jar` |
 | 26.1.2 | Fabric | 25 | `mctranslator-1.0.2-Fabric-26.1.2.jar` |
-| 26.2 | Fabric / NeoForge | 25 | matching Fabric or NeoForge JAR |
+| 26.2 | Fabric / NeoForge | 25 | 選擇相符載入器的 JAR |
 
-## Features
+## 功能
 
-- Translates chat, item names and tooltips without blocking the render thread.
-- Modern builds also support scoreboards, name tags, boss bars, titles, action bars,
-  books, lecterns, and custom screen text.
-- Original only, translation only, or original + translation modes per surface.
-- Google Translate and configurable OpenAI-compatible AI providers.
-- Automatic target language following the current Minecraft language.
-- Searchable translation-target language screen based on Minecraft's language UI.
-- Preserves colors, formatting, click events, hover events, icons, numbers, times,
-  URLs, player names, and layout where supported.
-- Memory and disk caches reduce duplicate requests.
-- Player-name masking prevents listed player IDs from being sent to translation providers.
-- AI rate-limit fallback and manual retranslation controls.
+- 非同步翻譯聊天訊息、物品名稱與物品提示，不阻塞畫面渲染。
+- 新版支援計分板、名稱標籤、Boss Bar、標題、動作列、書本、講台及自訂介面文字。
+- 各類文字可分別設定只顯示原文、只顯示翻譯或同時顯示原文與翻譯。
+- 支援 Google 翻譯及可自行設定的 OpenAI 相容 AI 服務。
+- 翻譯目標語言可自動跟隨 Minecraft 目前語言。
+- 使用接近 Minecraft 原版的翻譯目標語言介面，並支援搜尋。
+- 盡量保留顏色、格式、點擊與懸停事件、圖示、數字、時間、網址、玩家名稱及版面。
+- 記憶體與磁碟快取可減少重複翻譯請求。
+- 玩家名稱遮罩可避免將線上玩家 ID 傳給翻譯服務。
+- 支援 AI 流量限制備援及手動重新翻譯。
 
-## Settings and controls
+## 設定與按鍵
 
-On modern builds, open **Options → Translation Settings**. Translation settings,
-target language, AI provider/model/API keys, request cooldown, cache controls, and
-key bindings are available in-game.
+新版可從 **選項 → 翻譯設定** 進入模組設定。遊戲內可調整翻譯模式、
+目標語言、AI 服務、模型、API Key、請求冷卻、快取與按鍵設定。
 
-Default keys:
+預設按鍵：
 
-| Key | Action |
+| 按鍵 | 功能 |
 | --- | --- |
-| `G` | Toggle displayed original/translation text |
-| `R` | Retranslate the hovered item |
-| `P` | Scan and translate the current screen |
-| Unbound | Cycle translation display mode |
+| `G` | 切換顯示原文或翻譯 |
+| `R` | 重新翻譯滑鼠指向的物品 |
+| `P` | 掃描並翻譯目前畫面 |
+| 未綁定 | 循環切換翻譯顯示模式 |
 
-All keys can be changed in Minecraft's Controls screen or the mod's keybind settings.
+所有按鍵都可以在 Minecraft 控制設定或模組的按鍵設定中修改。
 
-## Version-specific limitations
+## 各版本限制
 
-- Forge 1.12.2 and 1.13.2 are compatibility builds focused on chat and item tooltips.
-  They use the `G` hotkey and do not include the complete modern settings screen.
-- Fabric 1.14.4 through 1.16.5 focus on chat and tooltips, but include target-language
-  selection and search.
-- Fabric 1.21.11 does not hook boss-bar, entity-name, or scoreboard rendering because
-  that release changed those rendering APIs. Chat, tooltips, books, settings, target
-  language, and UI translation remain available.
-- Compilation and remapping are verified for every release JAR. In-game behavior can
-  still vary with other mods, resource packs, and server-specific interfaces.
+- Forge 1.12.2 與 1.13.2 是以聊天和物品提示為主的相容版，使用 `G` 鍵切換，
+  不包含完整的新版設定介面。
+- Fabric 1.14.4 至 1.16.5 主要支援聊天與物品提示，但包含翻譯目標語言選擇與搜尋。
+- Fabric 1.21.11 因該版本更改渲染 API，暫不攔截 Boss Bar、實體名稱與計分板；
+  聊天、物品提示、書本、設定、目標語言與 UI 翻譯仍可使用。
+- 所有 Release JAR 都已通過編譯、重新映射、載入器 metadata、Minecraft 版本限制及
+  Java bytecode 檢查。與其他模組、資源包或伺服器自訂介面搭配時仍可能出現相容性差異。
 
-## Privacy
+## 隱私
 
-Translation text is sent only to the provider selected in settings. The mod is
-client-side and does not alter outgoing player chat or server data. If an AI provider
-is configured, its endpoint and privacy policy apply. API keys are stored locally in
-the Minecraft configuration directory; do not share configuration files containing keys.
+只有需要翻譯的文字會傳送到設定中選擇的翻譯服務。此模組完全在用戶端運作，
+不會修改玩家送出的聊天訊息或伺服器資料。若使用 AI 翻譯，資料處理方式依該 API
+服務商的隱私政策為準。API Key 儲存在本機 Minecraft 設定目錄，請勿分享含有
+API Key 的設定檔。
 
-## Building from source
+## 從原始碼建置
 
-Each supported Minecraft version has its own Gradle project because Minecraft and
-loader APIs are not binary-compatible across these releases. See [PACKAGING.md](PACKAGING.md)
-for the project, Java, loader, and release layout matrix.
+由於不同 Minecraft 與載入器版本之間不具二進位相容性，每個支援版本都是獨立的
+Gradle 專案。專案、Java、載入器與成品目錄對照請參考 [PACKAGING.md](PACKAGING.md)。
 
-Version branches use the form:
+版本分支命名格式：
 
 ```text
 mc/<minecraft-version>-<loader>
 ```
 
-The combined release branch is `release/1.0.2-current`. Built artifacts are collected
-under `mods-jar/1.0.2`.
+整合發布分支為 `release/1.0.2-current`，建置成品集中在 `mods-jar/1.0.2`。
 
-## Reporting issues
+## 回報問題
 
-Open a [GitHub issue](https://github.com/DragonMeow1012/MinecraftTranslator/issues)
-and include:
+請至 [GitHub Issues](https://github.com/DragonMeow1012/MinecraftTranslator/issues)
+回報，並附上：
 
-- Minecraft version
-- Fabric, Forge, or NeoForge version
-- Java version
-- Other installed mods
-- Relevant client log or crash report
+- Minecraft 版本
+- Fabric、Forge 或 NeoForge 版本
+- Java 版本
+- 其他已安裝模組
+- 相關用戶端日誌或崩潰報告
 
-Do not include API keys in logs or screenshots.
+請勿在日誌或截圖中公開 API Key。
