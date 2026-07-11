@@ -1,54 +1,42 @@
-# 1.0.2 建置與打包
+# Minecraft Translator 1.0.2 packaging
 
-專案包含六個獨立 loader／Minecraft 版本。任何核心修改後，先同步共用碼：
+Release JARs are under `mods-jar/1.0.2`, grouped by loader. Each JAR is pinned to
+the Minecraft version printed in its filename; it is not a universal cross-version
+binary.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\sync-core.ps1
-```
+## Version matrix
 
-## Java 21：Minecraft 1.20.1／1.21.1
+| Minecraft | Loader | Java | Project |
+| --- | --- | ---: | --- |
+| 1.12.2 | Forge | 8 | `forge1122` |
+| 1.13.2 | Forge | 8 | `forge1132` |
+| 1.14.4 | Fabric | 8 | `fabric1144` |
+| 1.15.2 | Fabric | 8 | `fabric1152` |
+| 1.16.5 | Fabric | 8 | `fabric1165` |
+| 1.17.1 | Fabric | 16 | `fabric1171` |
+| 1.18.2 | Fabric | 17 | `fabric1182` |
+| 1.19.4 | Fabric | 17 | `fabric1194` |
+| 1.20.1 | Fabric / NeoForge | 17 | `fabric120` / `neoforge120` |
+| 1.21.1 | Fabric / NeoForge | 21 | root / `neoforge` |
+| 1.21.11 | Fabric | 21 | `fabric12111` |
+| 26.1.2 | Fabric | 25 | `fabric2612` |
+| 26.2 | Fabric / NeoForge | 25 | `fabric26` / `neoforge26` |
 
-```powershell
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-.\.gradle-local\gradle-8.10\bin\gradle.bat clean build --no-daemon
-.\.gradle-local\gradle-8.10\bin\gradle.bat -p .\fabric120 clean build --no-daemon
-.\.gradle-local\gradle-8.10\bin\gradle.bat -p .\neoforge clean build --no-daemon
-.\.gradle-local\gradle-8.13\bin\gradle.bat -p .\neoforge120 clean build --no-daemon
-```
+Java 8 compatibility ports use a reduced implementation focused on chat and item
+tooltips. Fabric 1.14.4-1.16.5 also include the target-language settings list and
+search. Forge 1.12.2-1.13.2 use the G hotkey and do not have the complete modern
+settings screen. Fabric 1.21.11 omits boss-bar, entity-name and scoreboard direct
+render hooks because those rendering APIs changed in that release.
 
-## Java 25：Minecraft 26.2
-
-Fabric 26.2／NeoForge 26.2 使用 Gradle 9.5.0：
-
-```powershell
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-25'
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p .\fabric26 clean build --no-daemon
-.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p .\neoforge26 clean build --no-daemon
-```
-
-## 發佈目錄
-
-六個正式 jar 必須放在：
+## Release layout
 
 ```text
-mods-jar/1.0.2/fabric/
-  mctranslator-1.0.2-Fabric-1.20.1.jar
-  mctranslator-1.0.2-Fabric-1.21.1.jar
-  mctranslator-1.0.2-Fabric-26.2.jar
-mods-jar/1.0.2/neoforge/
-  mctranslator-1.0.2-NeoForge-1.20.1.jar
-  mctranslator-1.0.2-NeoForge-1.21.1.jar
-  mctranslator-1.0.2-NeoForge-26.2.jar
+mods-jar/1.0.2/
+  forge/
+  fabric/
+  neoforge/
 ```
 
-Fabric 26.2 的本機安裝位置：
-
-```text
-%APPDATA%\.minecraft\mods\mctranslator-1.0.2-Fabric-26.2.jar
-```
-
-打包後應比對 SHA-256，並確認 jar 內含 loader metadata、
-`TranslationCache.class` 與 `TranslationTemplate.class`。遊戲執行期間可以覆蓋 jar，
-但新版本只會在完整重啟 Minecraft 後載入。
+Before publishing, test the matching JAR in a clean client with the matching
+loader/API dependency. Compilation and remapping verify the build toolchain, but
+do not replace an in-game smoke test for every Minecraft release.

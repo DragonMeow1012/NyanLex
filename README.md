@@ -8,8 +8,16 @@ text styling, and never modifies server data or messages sent by the player.
 
 | Loader | Minecraft |
 | --- | --- |
-| Fabric | 1.20.1, 1.21.1, 26.2 |
-| NeoForge/Forge-compatible tree | 1.20.1, 1.21.1, 26.2 |
+| Forge | 1.12.2, 1.13.2 |
+| Fabric | 1.14.4, 1.15.2, 1.16.5, 1.17.1, 1.18.2, 1.19.4, 1.20.1, 1.21.1, 1.21.11, 26.1.2, 26.2 |
+| NeoForge | 1.20.1, 1.21.1, 26.2 |
+
+These are separate, version-pinned JARs rather than one universal JAR. Use the
+file whose loader and exact Minecraft release match the instance. Java 8 legacy
+ports prioritize chat and tooltip translation; newer Fabric/NeoForge ports carry
+the broader surface hooks and complete settings UI. The 1.21.11 port deliberately
+omits the boss-bar, entity-name and scoreboard render interceptors because that
+release changed those rendering APIs.
 
 Each version is an independent Gradle project. The Minecraft-free core under
 `src/main/java/com/dragonmeow/mctranslator/{cache,config,service,style,translate}` is
