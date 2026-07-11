@@ -144,6 +144,20 @@ class FabricTextStyleIntegrationTest {
     }
 
     @Test
+    void missingChatTranslationShowsOriginalExactlyOnceWithoutFakeBlock() {
+        Style style = Style.EMPTY.withColor(TextColor.fromRgb(0x55FFFF)).withBold(true);
+        Component source = Component.literal(
+                "SP00KY FESTIVAL The event starts in 1 day!").setStyle(style);
+
+        Component displayed = FabricTextStyle.chatBlock(source, null);
+
+        assertEquals(source.getString(), displayed.getString());
+        assertEquals(style, displayed.getStyle(), "the pass-through must preserve chat styling");
+        assertFalse(displayed.getString().contains("\n"),
+                "a temporary miss must not masquerade as original + identical translation");
+    }
+
+    @Test
     void literalServerSectionCodesBecomeRealChatStyleSegments() {
         Component parsed = FabricTextStyle.resolveLegacyCodes(Component.literal(
                 "§b[MVP§c+§b] DragonMeow1013 §6joined the lobby!"));
@@ -260,6 +274,17 @@ class FabricTextStyleIntegrationTest {
     }
 
     @Test
+    void scoreboardBothModeAddsTheOriginalExactlyOnce() {
+        Component source = Component.literal("Purse: 12,988");
+
+        Component rendered = FabricTextStyle.renderTranslated("scoreboard", source,
+                request -> TranslationDecision.of(
+                        DisplayMode.BOTH, request, request.replace("Purse", "錢包")));
+
+        assertEquals("Purse: 12,988　錢包: 12,988", rendered.getString());
+    }
+
+    @Test
     void markerLossFallsBackToTheOriginalInsteadOfGuessingColours() {
         Component source = FabricTextStyle.resolveLegacyCodes(
                 Component.literal("§eEnter the §bSecurity Hall"));
@@ -292,6 +317,97 @@ class FabricTextStyleIntegrationTest {
         var amount = FabricTextStyle.segments(rebuilt).stream()
                 .filter(seg -> seg.text().contains("20,105.9")).findFirst().orElseThrow();
         assertEquals(red, amount.style(), "verbatim value anchors keep their exact colour");
+    }
+
+    @Test
+    void anchoredFallbackKeepsAnchorStylesAndOneSingleStylePerGap() {
+        Style aqua = Style.EMPTY.withColor(TextColor.fromRgb(0x55FFFF));
+        Style gold = Style.EMPTY.withColor(TextColor.fromRgb(0xFFAA00));
+        Style yellow = Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF55));
+        Component source = Component.empty()
+                .append(Component.literal("Earn ").setStyle(aqua))
+                .append(Component.literal("500").setStyle(gold))
+                .append(Component.literal(" coins from the daily quest on ").setStyle(aqua))
+                .append(Component.literal("SkyBlock").setStyle(yellow));
+
+        // Reordered translation: only "SkyBlock" and "500" survive verbatim as anchors.
+        Component rebuilt = FabricTextStyle.styledAnchored(
+                source, 0, "在 SkyBlock 完成每日任務可賺取 500 枚硬幣");
+
+        assertEquals("在 SkyBlock 完成每日任務可賺取 500 枚硬幣", rebuilt.getString());
+        var segments = FabricTextStyle.segments(rebuilt);
+        for (var segment : segments) {
+            if (segment.text().equals("SkyBlock")) {
+                assertEquals(yellow, segment.style(), "verbatim anchors keep their exact style");
+            } else if (segment.text().equals("500")) {
+                assertEquals(gold, segment.style(), "verbatim anchors keep their exact style");
+            } else {
+                // Every gap takes exactly ONE style: the dominant style of the original
+                // fragment between the same anchors (aqua body text) — never a
+                // proportional / positional colour split inside the gap.
+                assertEquals(aqua, segment.style(),
+                        "gap text must carry a single semantically-derived style: " + segment.text());
+            }
+        }
+        // Each gap is emitted as one run, so no gap can ever contain two colours.
+        long anchorRuns = segments.stream()
+                .filter(s -> s.text().equals("SkyBlock") || s.text().equals("500")).count();
+        assertEquals(2, anchorRuns);
+        assertEquals(5, segments.size(), "leading gap + anchor + middle gap + anchor + trailing gap");
+    }
+
+    @Test
+    void markerlessFallbackUsesTheDominantStyleWithoutProportionalSplits() {
+        Style yellow = Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF55));
+        Style aqua = Style.EMPTY.withColor(TextColor.fromRgb(0x55FFFF));
+        Component source = Component.empty()
+                .append(Component.literal("Enter the security ").setStyle(yellow))
+                .append(Component.literal("Hall").setStyle(aqua));
+
+        Component rebuilt = FabricTextStyle.styledChatContent(source, 0, "進入保全大廳");
+
+        assertEquals("進入保全大廳", rebuilt.getString());
+        var segments = FabricTextStyle.segments(rebuilt);
+        assertEquals(1, segments.size(),
+                "no anchors -> the whole core is ONE run; never a guessed colour boundary");
+        assertEquals(yellow, segments.get(0).style(),
+                "the core takes the original's dominant (highest semantic weight) style");
+    }
+
+    @Test
+    void markerlessFallbackKeepsEdgeDecorationStylesAroundTheSingleStyledCore() {
+        Style gray = Style.EMPTY.withColor(TextColor.fromRgb(0xAAAAAA));
+        Style yellow = Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF55));
+        Component source = Component.empty()
+                .append(Component.literal("»» ").setStyle(gray))
+                .append(Component.literal("Enter the hall now").setStyle(yellow))
+                .append(Component.literal(" ««").setStyle(gray));
+
+        Component rebuilt = FabricTextStyle.styledChatContent(source, 0, " 立即進入大廳 ");
+
+        assertEquals(" 立即進入大廳 ", rebuilt.getString());
+        var segments = FabricTextStyle.segments(rebuilt);
+        assertEquals(3, segments.size());
+        assertEquals(gray, segments.get(0).style(), "leading whitespace keeps the first run's style");
+        assertEquals(yellow, segments.get(1).style(), "core takes the dominant style in one run");
+        assertEquals(gray, segments.get(2).style(), "trailing whitespace keeps the last run's style");
+    }
+
+    @Test
+    void allDecorativeMultiRunFallbackCollapsesToTheFlatDominantColour() {
+        Style red = Style.EMPTY.withColor(TextColor.fromRgb(0xFF5555));
+        Style blue = Style.EMPTY.withColor(TextColor.fromRgb(0x5555FF));
+        Component source = Component.empty()
+                .append(Component.literal("***").setStyle(red))
+                .append(Component.literal("!!").setStyle(blue));
+
+        Component rebuilt = FabricTextStyle.styledChatContent(source, 0, "★★★");
+
+        assertEquals("★★★", rebuilt.getString());
+        var segments = FabricTextStyle.segments(rebuilt);
+        assertEquals(1, segments.size(), "a purely decorative line stays one flat run");
+        assertEquals(0xFF5555, segments.get(0).style().getColor().getValue(),
+                "flat colour is the profile's dominant colour, not a per-character stretch");
     }
 
     @Test
@@ -442,6 +558,88 @@ class FabricTextStyleIntegrationTest {
                 .filter(s -> s.text().contains("BIN 拍賣已開始")).findFirst().orElseThrow();
         assertEquals(white, item.style());
         assertEquals(yellow, action.style());
+    }
+
+    @Test
+    void collectedAuctionKeepsEveryTranslatedSemanticPhraseInItsSourceStyle() {
+        Style gold = Style.EMPTY.withColor(TextColor.fromRgb(0xFFAA00));
+        Style yellow = Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF55));
+        Style white = Style.EMPTY.withColor(TextColor.fromRgb(0xFFFFFF));
+        net.minecraft.network.chat.ClickEvent click = new net.minecraft.network.chat.ClickEvent(
+                net.minecraft.network.chat.ClickEvent.Action.SUGGEST_COMMAND, "/visit Its_Lunith");
+        Style player = Style.EMPTY.withColor(TextColor.fromRgb(0x55FFFF))
+                .withClickEvent(click).withInsertion("Its_Lunith");
+        Component source = Component.empty()
+                .append(Component.literal("You collected ").setStyle(gold))
+                .append(Component.literal("2,000 coins").setStyle(yellow))
+                .append(Component.literal(" from selling ").setStyle(gold))
+                .append(Component.literal("White Gift Talisman").setStyle(white))
+                .append(Component.literal(" to ").setStyle(gold))
+                .append(Component.literal("Its_Lunith").setStyle(player))
+                .append(Component.literal(" in an auction!").setStyle(gold));
+        java.util.concurrent.atomic.AtomicReference<String> submitted =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        Component rebuilt = FabricTextStyle.renderTranslated(
+                "collected-auction-semantic-colours", source, request -> {
+                    submitted.set(request);
+                    return TranslationDecision.of(DisplayMode.TRANSLATION, request,
+                            "⟦CS0⟧你已收取⟦/CS0⟧"
+                                    + "⟦CS1⟧2,000枚金幣⟦/CS1⟧"
+                                    + "⟦CS2⟧，來源為出售⟦/CS2⟧"
+                                    + "⟦CS3⟧白色禮物護符⟦/CS3⟧"
+                                    + "⟦CS4⟧給⟦/CS4⟧"
+                                    + "⟦CS5⟧Its_Lunith⟦/CS5⟧"
+                                    + "⟦CS6⟧，於拍賣中成交！⟦/CS6⟧");
+                });
+
+        assertNotNull(submitted.get());
+        assertTrue(submitted.get().contains("⟦CS3⟧White Gift Talisman⟦/CS3⟧"));
+        assertEquals("你已收取2,000枚金幣，來源為出售白色禮物護符給Its_Lunith，於拍賣中成交！",
+                rebuilt.getString());
+        assertFalse(rebuilt.getString().contains("CS"));
+
+        var segments = FabricTextStyle.segments(rebuilt);
+        assertEquals(gold, segments.stream().filter(s -> s.text().contains("你已收取"))
+                .findFirst().orElseThrow().style());
+        assertEquals(yellow, segments.stream().filter(s -> s.text().contains("2,000枚金幣"))
+                .findFirst().orElseThrow().style());
+        assertEquals(gold, segments.stream().filter(s -> s.text().contains("來源為出售"))
+                .findFirst().orElseThrow().style());
+        assertEquals(white, segments.stream().filter(s -> s.text().contains("白色禮物護符"))
+                .findFirst().orElseThrow().style());
+        var rebuiltPlayer = segments.stream().filter(s -> s.text().contains("Its_Lunith"))
+                .findFirst().orElseThrow();
+        assertEquals(player, rebuiltPlayer.style());
+        assertEquals(click, rebuiltPlayer.style().getClickEvent());
+        assertEquals(gold, segments.stream().filter(s -> s.text().contains("於拍賣中成交"))
+                .findFirst().orElseThrow().style());
+        assertEquals("You collected 2,000 coins from selling White Gift Talisman to "
+                + "Its_Lunith in an auction!", source.getString());
+    }
+
+    @Test
+    void collectedAuctionFallbackAggregatesRepeatedStylesInsteadOfTurningTheGapWhite() {
+        Style gold = Style.EMPTY.withColor(TextColor.fromRgb(0xFFAA00));
+        Style yellow = Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF55));
+        Style white = Style.EMPTY.withColor(TextColor.fromRgb(0xFFFFFF));
+        Style player = Style.EMPTY.withColor(TextColor.fromRgb(0x55FFFF));
+        Component source = Component.empty()
+                .append(Component.literal("You collected ").setStyle(gold))
+                .append(Component.literal("2,000 coins").setStyle(yellow))
+                .append(Component.literal(" from selling ").setStyle(gold))
+                .append(Component.literal("White Gift Talisman").setStyle(white))
+                .append(Component.literal(" to ").setStyle(gold))
+                .append(Component.literal("Its_Lunith").setStyle(player))
+                .append(Component.literal(" in an auction!").setStyle(gold));
+
+        Component rebuilt = FabricTextStyle.styledAnchored(source, 0,
+                "你已收取2,000枚金幣，來源為出售白色禮物護符給Its_Lunith，於拍賣中成交！");
+
+        var leadingGap = FabricTextStyle.segments(rebuilt).stream()
+                .filter(s -> s.text().startsWith("你已收取")).findFirst().orElseThrow();
+        assertEquals(gold, leadingGap.style(),
+                "repeated gold action runs outweigh one white item run in a safe fallback");
     }
 
     @Test

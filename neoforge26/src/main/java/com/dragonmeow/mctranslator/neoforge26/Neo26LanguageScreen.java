@@ -63,8 +63,12 @@ public final class Neo26LanguageScreen extends Screen {
         cfg.followGameLanguage = minecraftCode == null;
         String selected = minecraftCode == null
                 ? minecraft.getLanguageManager().getSelected() : minecraftCode;
-        cfg.targetLang = TranslationLanguages.fromMinecraftCode(selected);
-        if (MctranslatorNeoForge26.service() != null) MctranslatorNeoForge26.service().setTargetLang(cfg.targetLang);
+        String nextTarget = TranslationLanguages.fromMinecraftCode(selected);
+        if (MctranslatorNeoForge26.service() != null) {
+            MctranslatorNeoForge26.service().setTargetLang(nextTarget);
+        } else {
+            cfg.targetLang = nextTarget;
+        }
         Neo26TextStyle.clearRenderMemo();
         MctranslatorNeoForge26.saveConfig();
         minecraft.setScreenAndShow(parent);

@@ -45,4 +45,24 @@ public interface PersistentStore {
     /** Remove a single key (best-effort). Default no-op for in-memory fakes. */
     default void remove(String key) {
     }
+
+    /** Remove many keys (implementations may persist in a single I/O op). */
+    default void removeBatch(java.util.Collection<String> keys) {
+        if (keys != null) keys.forEach(this::remove);
+    }
+
+    /** Snapshot of all provisional rows, used once to migrate mixed GT stand-ins out
+     *  of a final-translation file. Default: none (in-memory fakes, old stores). */
+    default java.util.Map<String, String> provisionalEntries() {
+        return java.util.Map.of();
+    }
+
+    /** Snapshot of every row. Failure ledgers use this to restore retry queues after restart. */
+    default java.util.Map<String, String> entries() {
+        return java.util.Map.of();
+    }
+
+    /** Switch the active target-language partition when this store supports it. */
+    default void setLanguage(String targetLanguage) {
+    }
 }

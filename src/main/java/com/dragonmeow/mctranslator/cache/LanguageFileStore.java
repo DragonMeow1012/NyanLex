@@ -30,6 +30,7 @@ public final class LanguageFileStore implements PersistentStore {
         setLanguage(initialLanguage);
     }
 
+    @Override
     public synchronized void setLanguage(String targetLanguage) {
         String next = languageTag(targetLanguage);
         if (next.equals(language) && active != null) return;
@@ -85,6 +86,13 @@ public final class LanguageFileStore implements PersistentStore {
         current().putBatch(entries, provisionalKeys);
     }
     @Override public void remove(String key) { current().remove(key); }
+    @Override public void removeBatch(java.util.Collection<String> keys) {
+        current().removeBatch(keys);
+    }
+    @Override public Map<String, String> provisionalEntries() {
+        return current().provisionalEntries();
+    }
+    @Override public Map<String, String> entries() { return current().entries(); }
 
     /** Clear only the currently selected language. Other language files are permanent. */
     @Override public void clear() { current().clear(); }

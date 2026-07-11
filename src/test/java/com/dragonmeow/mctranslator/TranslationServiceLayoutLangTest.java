@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator;
 
 import com.dragonmeow.mctranslator.cache.TranslationCache;
+import com.dragonmeow.mctranslator.cache.LanguageFileStore;
 import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
@@ -8,10 +9,15 @@ import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.TranslationResult;
 import com.dragonmeow.mctranslator.translate.Translator;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Service-level checks for whitespace preservation and runtime language switching. */
 class TranslationServiceLayoutLangTest {
@@ -72,5 +78,44 @@ class TranslationServiceLayoutLangTest {
         pump(s);
         assertEquals("钻石剑", s.translateItemLine("Diamond Sword").translated());
         assertEquals("zh-CN", s.targetLang());
+    }
+
+    @Test
+    void uiPrewriteOfSharedConfigStillSwitchesRuntimeCachesAndJapaneseStore(@TempDir Path dir) {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        cfg.aiTooltip = true;
+        AtomicInteger calls = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("[" + target + "] " + text, "en");
+        };
+        TranslationCache google = new TranslationCache(translator, cfg.targetLang, DIRECT,
+                100, 10_000L, System::currentTimeMillis,
+                new LanguageFileStore(dir, "mctranslator-cache", cfg.targetLang));
+        TranslationCache ai = new TranslationCache(translator, cfg.targetLang, DIRECT,
+                100, 10_000L, System::currentTimeMillis,
+                new LanguageFileStore(dir, "mctranslator-ai-cache", cfg.targetLang));
+        TranslationService service = new TranslationService(cfg, google, ai);
+
+        service.translateItemLine("Diamond Sword");
+        pump(service);
+        assertEquals("[zh-TW] Diamond Sword",
+                service.translateItemLine("Diamond Sword").translated());
+
+        // This is the exact order used by the broken language picker: because config is
+        // shared with the service, comparing only against config.targetLang used to turn
+        // the following setter call into a silent no-op.
+        cfg.targetLang = "ja-JP";
+        service.setTargetLang(cfg.targetLang);
+        service.translateItemLine("Diamond Sword");
+        pump(service);
+
+        assertEquals("[ja-JP] Diamond Sword",
+                service.translateItemLine("Diamond Sword").translated());
+        assertEquals("ja-JP", service.targetLang());
+        assertEquals(2, calls.get(), "the old Chinese memory entry must not survive the switch");
+        assertTrue(Files.exists(dir.resolve("mctranslator-ai-cache-ja-jp.json")),
+                "the first successful Japanese AI result creates the ja-JP partition");
     }
 }

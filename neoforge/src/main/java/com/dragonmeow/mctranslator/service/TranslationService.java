@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -28,6 +29,11 @@ public final class TranslationService {
     private final TranslatorConfig config;
     private final TranslationCache google;
     private final TranslationCache ai;
+    /** Runtime language actually installed in both caches.  This is deliberately
+     * independent from the mutable config object: UI code may edit the config before
+     * notifying the service, but that must never make a real cache switch look like a
+     * no-op. */
+    private volatile String activeTargetLang;
     private volatile boolean showOriginalOnly;
     private volatile Supplier<? extends Collection<String>> protectedNames = List::of;
     private final Set<String> invalidatedNameFailures = ConcurrentHashMap.newKeySet();
@@ -40,9 +46,11 @@ public final class TranslationService {
         this.config = config;
         this.google = google;
         this.ai = ai;
+        this.activeTargetLang = normalizedTargetLang(config.targetLang);
+        this.config.targetLang = this.activeTargetLang;
         if (google != null && ai != null && google != ai) {
-            // AI is the preferred tier. A GT hit remains immediately displayable but
-            // becomes provisional in the AI cache and schedules an AI supplement.
+            // One-way, failure-gated fallback. GT mode selects google directly and can
+            // never reach AI; AI mode may reach google only after an actual AI failure.
             ai.setFallback(google, true);
         }
 
@@ -70,6 +78,74 @@ public final class TranslationService {
         return useAi ? ai : google;
     }
 
+    /**
+     * Route one request according to the surface's engine switch.
+     *
+     * <p>GT mode is a hard GT-only path. AI mode first consults/requests AI and starts
+     * GT only when the AI cache reports a real retryable failure for the same semantic
+     * family. If AI recovers while GT is still in flight, the final AI value wins the
+     * callback and the late GT value remains only in its own cache.</p>
+     */
+    private void requestByEngine(boolean useAi, String source, boolean exactStyle,
+                                 Consumer<String> callback, boolean always) {
+        requestByEngine(useAi, source, exactStyle, callback, always, false);
+    }
+
+    private void requestByEngine(boolean useAi, String source, boolean exactStyle,
+                                 Consumer<String> callback, boolean always,
+                                 boolean followAiRecovery) {
+        if (!useAi) {
+            requestCache(google, source, exactStyle, callback, always);
+            return;
+        }
+
+        AtomicBoolean finalAiDelivered = new AtomicBoolean();
+        requestCache(ai, source, exactStyle, primary -> {
+            String finalNow = ai.getCachedFinal(source);
+            if (finalNow != null
+                    && (!exactStyle || !TextFilter.isStyleFallback(finalNow))) {
+                finalAiDelivered.set(true);
+                callback.accept(finalNow);
+                return;
+            }
+            if (!ai.mayUseFallback(source)) {
+                if (always) callback.accept(null);
+                return;
+            }
+            if (followAiRecovery) {
+                Consumer<String> recoveredFinal = recovered -> {
+                    if (recovered != null && finalAiDelivered.compareAndSet(false, true)) {
+                        callback.accept(recovered);
+                    }
+                };
+                if (exactStyle) ai.requestCoalescedExactStyleFinal(source, recoveredFinal);
+                else ai.requestCoalescedFinal(source, recoveredFinal);
+            }
+            if (primary != null) {
+                if (!finalAiDelivered.get()) callback.accept(primary);
+                return;
+            }
+            requestCache(google, source, exactStyle, lower -> {
+                String recovered = ai.getCachedFinal(source);
+                if (recovered != null
+                        && (!exactStyle || !TextFilter.isStyleFallback(recovered))) {
+                    if (finalAiDelivered.compareAndSet(false, true)) callback.accept(recovered);
+                } else if (!ai.mayUseFallback(source)) {
+                    if (always && !finalAiDelivered.get()) callback.accept(null);
+                } else if (!finalAiDelivered.get() && (lower != null || always)) {
+                    callback.accept(lower);
+                }
+            }, true);
+        }, true);
+    }
+
+    private static void requestCache(TranslationCache cache, String source,
+                                     boolean exactStyle, Consumer<String> callback,
+                                     boolean always) {
+        if (exactStyle) cache.requestCoalescedExactStyle(source, callback, always);
+        else cache.requestCoalesced(source, callback, always);
+    }
+
     public boolean toggleShowOriginal() {
         return showOriginalOnly = !showOriginalOnly;
     }
@@ -95,29 +171,27 @@ public final class TranslationService {
 
     public boolean wantsScreenTextTranslation(String source) {
         return !showOriginalOnly && config.screenTextMode != DisplayMode.ORIGINAL_ONLY
-                && TextFilter.shouldTranslate(source, config.targetLang);
+                && TextFilter.shouldTranslate(source, activeTargetLang);
     }
 
     public boolean wantsChatTranslation(String source) {
         return !showOriginalOnly && config.chatMode != DisplayMode.ORIGINAL_ONLY
-                && TextFilter.shouldTranslate(source, config.targetLang);
+                && TextFilter.shouldTranslate(source, activeTargetLang);
     }
 
     public boolean wantsActionBarTranslation(String source) {
         return !showOriginalOnly && config.actionBarMode != DisplayMode.ORIGINAL_ONLY
-                && TextFilter.shouldTranslate(source, config.targetLang);
+                && TextFilter.shouldTranslate(source, activeTargetLang);
     }
 
     public void requestScreenTextAsync(String source, Consumer<String> onResult) {
-        if (!TextFilter.shouldTranslate(source, config.targetLang)) return;
-        TranslationCache selected = cache(config.aiScreenScan);
+        if (!TextFilter.shouldTranslate(source, activeTargetLang)) return;
         Consumer<String> ready = translated -> {
-            if (meaningful(source, translated)) {
+            if (translated != null) {
                 onResult.accept(LayoutPreserver.matchOuterWhitespace(source, translated));
             }
         };
-        if (config.aiScreenScan) selected.requestCoalescedFinal(source, ready);
-        else selected.requestCoalesced(source, ready, false);
+        requestByEngine(config.aiScreenScan, source, false, ready, false, true);
     }
 
     /**
@@ -131,14 +205,12 @@ public final class TranslationService {
      */
     public void requestLiveScreenTextAsync(String source, Consumer<String> onResult) {
         if (!wantsScreenTextTranslation(source)) return;
-        TranslationCache selected = cache(config.aiScreenText);
         Consumer<String> ready = translated -> {
-            if (meaningful(source, translated)) {
+            if (translated != null) {
                 onResult.accept(LayoutPreserver.matchOuterWhitespace(source, translated));
             }
         };
-        if (config.aiScreenText) selected.requestCoalescedFinal(source, ready);
-        else selected.requestCoalesced(source, ready, false);
+        requestByEngine(config.aiScreenText, source, false, ready, false, true);
     }
 
     /**
@@ -149,22 +221,22 @@ public final class TranslationService {
     public void requestActionBarAsync(String source, Consumer<String> onResult) {
         if (!wantsActionBarTranslation(source)) return;
         NameMasker.Masked masked = NameMasker.mask(source, names());
-        cache(config.aiActionBar).requestCoalesced(masked.text(), translated -> {
+        requestByEngine(config.aiActionBar, masked.text(), false, translated -> {
             String restored = NameMasker.unmask(translated, masked.names());
-            if (meaningful(source, restored)) {
+            if (restored != null) {
                 onResult.accept(LayoutPreserver.matchOuterWhitespace(source, restored));
             }
-        }, false);
+        }, false, true);
     }
 
     public void translateChatSegmentsAsync(List<String> texts, Consumer<List<String>> onAll) {
-        if (showOriginalOnly) {
+        if (showOriginalOnly || config.chatMode == DisplayMode.ORIGINAL_ONLY) {
             onAll.accept(new ArrayList<>(texts));
             return;
         }
         List<Integer> indexes = new ArrayList<>();
         for (int i = 0; i < texts.size(); i++) {
-            if (TextFilter.shouldTranslate(texts.get(i), config.targetLang)) indexes.add(i);
+            if (TextFilter.shouldTranslate(texts.get(i), activeTargetLang)) indexes.add(i);
         }
         if (indexes.isEmpty()) {
             onAll.accept(new ArrayList<>(texts));
@@ -174,11 +246,10 @@ public final class TranslationService {
         String[] output = texts.toArray(String[]::new);
         AtomicInteger remaining = new AtomicInteger(indexes.size());
         Collection<String> protectedNow = names();
-        TranslationCache selected = cache(config.aiChat);
         for (int index : indexes) {
             String original = texts.get(index);
             NameMasker.Masked masked = NameMasker.mask(original, protectedNow);
-            selected.requestCoalesced(masked.text(), translated -> {
+            requestByEngine(config.aiChat, masked.text(), false, translated -> {
                 String restored = NameMasker.unmask(translated, masked.names());
                 if (meaningful(original, restored)) {
                     output[index] = LayoutPreserver.matchOuterWhitespace(original, restored);
@@ -191,7 +262,7 @@ public final class TranslationService {
     public void requestChatAsync(String source, Consumer<String> onTranslated) {
         if (!wantsChatTranslation(source)) return;
         NameMasker.Masked masked = NameMasker.mask(source, names());
-        cache(config.aiChat).requestCoalesced(masked.text(), translated -> {
+        requestByEngine(config.aiChat, masked.text(), false, translated -> {
             String restored = NameMasker.unmask(translated, masked.names());
             if (meaningful(source, restored)) onTranslated.accept(restored);
         }, false);
@@ -203,11 +274,14 @@ public final class TranslationService {
             return;
         }
         NameMasker.Masked masked = NameMasker.mask(content, names());
-        cache(config.aiChat).requestCoalesced(masked.text(), translated -> {
+        // Chat is inserted once and is not re-rendered after a background cache update.
+        // For CS-marked rich text, wait for the exact semantic style projection instead
+        // of permanently displaying the marker-free fallback with guessed colours.
+        requestByEngine(config.aiChat, masked.text(), true, translated -> {
             String restored = NameMasker.unmask(translated, masked.names());
             onResult.accept(meaningful(content, restored)
                     ? LayoutPreserver.matchOuterWhitespace(content, restored) : null);
-        }, true);
+        }, true, true);
     }
 
     public void clearTranslations() {
@@ -217,15 +291,30 @@ public final class TranslationService {
         invalidatedNameFailures.clear();
     }
 
-    public String targetLang() { return config.targetLang; }
+    public String targetLang() { return activeTargetLang; }
 
-    public void setTargetLang(String language) {
-        if (language == null || language.equals(config.targetLang)) return;
-        config.targetLang = language;
-        google.setTargetLang(language);
-        ai.setTargetLang(language);
+    public synchronized void setTargetLang(String language) {
+        if (language == null) return;
+        String next = normalizedTargetLang(language);
+        if (next.equals(activeTargetLang)) {
+            config.targetLang = next;
+            return;
+        }
+        // Both generations are invalidated before either cache switches the shared
+        // namespaced failure store, so an old-language worker cannot write into the
+        // new language partition during the hand-off.
+        google.beginTargetLangChange();
+        if (ai != google) ai.beginTargetLangChange();
+        google.completeTargetLangChange(next);
+        if (ai != google) ai.completeTargetLangChange(next);
+        activeTargetLang = next;
+        config.targetLang = next;
         contextualItemNameRetries.clear();
         invalidatedNameFailures.clear();
+    }
+
+    private static String normalizedTargetLang(String language) {
+        return language == null || language.isBlank() ? "zh-TW" : language.strip();
     }
 
     public void flushBatches() {
@@ -291,18 +380,17 @@ public final class TranslationService {
     private TranslationDecision lookup(String original, DisplayMode mode, boolean useAi,
                                        boolean requireFinalAi) {
         if (showOriginalOnly || mode == DisplayMode.ORIGINAL_ONLY
-                || !TextFilter.shouldTranslate(original, config.targetLang)) {
+                || !TextFilter.shouldTranslate(original, activeTargetLang)) {
             return TranslationDecision.unchanged(original);
         }
 
         NameMasker.Masked masked = NameMasker.mask(original, names());
-        if (masked.hasMasks() && !TextFilter.shouldTranslate(masked.text(), config.targetLang)) {
+        if (masked.hasMasks() && !TextFilter.shouldTranslate(masked.text(), activeTargetLang)) {
             return TranslationDecision.unchanged(original);
         }
 
         TranslationCache selected = cache(useAi);
-        String translated = useAi && requireFinalAi
-                ? selected.getCachedFinal(masked.text()) : selected.getCached(masked.text());
+        String translated = selected.getCached(masked.text());
         if (translated == null) {
             selected.requestBatched(masked.text());
             return TranslationDecision.unchanged(original);
@@ -312,7 +400,7 @@ public final class TranslationService {
 
     public boolean warmUp(String source) {
         if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY
-                || !TextFilter.shouldTranslate(source, config.targetLang)) return true;
+                || !TextFilter.shouldTranslate(source, activeTargetLang)) return true;
         TranslationCache selected = cache(config.aiTooltip);
         return selected.getCached(source) != null || selected.translateBlocking(source) != null;
     }
@@ -327,8 +415,9 @@ public final class TranslationService {
         warmMasked(sources, true, config.bookMode, config.aiBook);
     }
 
-    /** Warm every scoreboard paragraph together so the AI can disambiguate labels,
-     * objectives and locations from the complete sidebar while live values remain MT slots. */
+    /** Warm stable per-row scoreboard keys together. The complete sidebar remains AI
+     * context, while optional/animated neighbouring rows cannot change a label's cache
+     * identity or make its wording flicker. */
     public void warmScoreboardBatch(List<String> sources) {
         warmMasked(sources, true, config.scoreboardMode, config.aiScoreboard);
     }
@@ -340,14 +429,13 @@ public final class TranslationService {
      * owns submission for the complete visible tooltip. */
     public boolean isTooltipTranslationReady(String source) {
         if (source == null || config.tooltipMode == DisplayMode.ORIGINAL_ONLY
-                || !TextFilter.shouldTranslate(source, config.targetLang)) return true;
+                || !TextFilter.shouldTranslate(source, activeTargetLang)) return true;
         NameMasker.Masked masked = NameMasker.mask(source, names());
-        if (masked.hasMasks() && !TextFilter.shouldTranslate(masked.text(), config.targetLang)) {
+        if (masked.hasMasks() && !TextFilter.shouldTranslate(masked.text(), activeTargetLang)) {
             return true;
         }
         TranslationCache selected = cache(config.aiTooltip);
-        return (config.aiTooltip ? selected.getCachedFinal(masked.text())
-                : selected.getCached(masked.text())) != null;
+        return selected.getCached(masked.text()) != null;
     }
 
     public void warmNamesBatch(List<String> sources) {
@@ -395,7 +483,7 @@ public final class TranslationService {
         }
         if (mismatchSource == null) return;
 
-        String retryKey = config.targetLang + '\0' + maskedName.text();
+        String retryKey = activeTargetLang + '\0' + maskedName.text();
         String suffix = mismatchSource.substring(itemName.length());
         String suffixTranslation = selected.getCachedFinal(suffix);
         if (suffixTranslation == null) {
@@ -456,7 +544,7 @@ public final class TranslationService {
             if (source == null) continue;
             String masked = NameMasker.mask(source, protectedNow).text();
             if (context != null) context.add(masked);
-            if (TextFilter.shouldTranslate(masked, config.targetLang)) todo.add(masked);
+            if (TextFilter.shouldTranslate(masked, activeTargetLang)) todo.add(masked);
         }
         if (!todo.isEmpty()) cache(useAi).warmBatchAsync(todo, context);
     }

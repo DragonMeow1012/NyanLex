@@ -63,8 +63,12 @@ public final class Fabric26LanguageScreen extends Screen {
         cfg.followGameLanguage = minecraftCode == null;
         String selected = minecraftCode == null
                 ? minecraft.getLanguageManager().getSelected() : minecraftCode;
-        cfg.targetLang = TranslationLanguages.fromMinecraftCode(selected);
-        if (MctranslatorFabric26.service() != null) MctranslatorFabric26.service().setTargetLang(cfg.targetLang);
+        String nextTarget = TranslationLanguages.fromMinecraftCode(selected);
+        if (MctranslatorFabric26.service() != null) {
+            MctranslatorFabric26.service().setTargetLang(nextTarget);
+        } else {
+            cfg.targetLang = nextTarget;
+        }
         Fabric26TextStyle.clearRenderMemo();
         MctranslatorFabric26.saveConfig();
         minecraft.setScreenAndShow(parent);

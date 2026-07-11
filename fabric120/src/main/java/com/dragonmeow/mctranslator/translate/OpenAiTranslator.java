@@ -39,6 +39,7 @@ public final class OpenAiTranslator implements Translator {
     private final Supplier<AiSettings> settings;
     private final AtomicInteger keyCursor = new AtomicInteger();
     private final LongSupplier clock;
+    private final RequestPacer pacer;
 
     // ---- global 429 backoff gate ----
     // When EVERY key in one rotation comes back 429, the account/model quota itself is
@@ -52,14 +53,26 @@ public final class OpenAiTranslator implements Translator {
     private long penaltyMs; // guarded by gateLock
 
     public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings) {
-        this(transport, settings, System::currentTimeMillis);
+        this(transport, settings, System::currentTimeMillis, RequestPacer.disabled());
     }
 
     /** Clock-injecting constructor so the 429 gate is unit-testable with a fake clock. */
     public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings, LongSupplier clock) {
+        this(transport, settings, clock, RequestPacer.disabled());
+    }
+
+    /** Pacer-injecting constructor: {@code pacer} throttles EVERY outbound HTTP request
+     *  (including per-key rotation and transient-error retries). */
+    public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings, RequestPacer pacer) {
+        this(transport, settings, System::currentTimeMillis, pacer);
+    }
+
+    public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings,
+                            LongSupplier clock, RequestPacer pacer) {
         this.transport = transport;
         this.settings = settings;
         this.clock = clock;
+        this.pacer = pacer == null ? RequestPacer.disabled() : pacer;
     }
 
     public boolean isConfigured() {
@@ -404,6 +417,7 @@ public final class OpenAiTranslator implements Translator {
             headers.put("Authorization", "Bearer " + key.trim());
             for (int attempt = 0; attempt <= RETRIES_PER_KEY; attempt++) {
                 try {
+                    pacer.acquire(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
                     String content = parseContent(transport.post(url, body, headers));
                     resetRateLimitGate(); // any success proves the quota is back
                     return content;

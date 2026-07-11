@@ -2,8 +2,9 @@ package com.dragonmeow.mctranslator.style;
 
 /**
  * A snapshot of the colour + formatting of a piece of original text, captured
- * per visible character. This is what lets us "remember" a multi-colour / rainbow
- * ("色彩跑馬燈") original and re-apply that colour sweep onto the translated text.
+ * per visible character. Colour is only ever re-applied to a translation as ONE
+ * flat style (the dominant colour) — positions in the translated string are never
+ * guessed from character proportions.
  *
  * <p>Minecraft-free on purpose: the glue extracts the colours out of a
  * {@code Text} into the {@code int[]}, and this class owns the mapping logic so
@@ -78,20 +79,6 @@ public final class ColorProfile {
 
     public boolean hasAnyStyle() {
         return hasAnyColor() || bold || italic || underline || strikethrough || obfuscated;
-    }
-
-    /**
-     * Colour for character {@code translatedIndex} of a translated string of
-     * length {@code translatedLen}. The original colour sequence is stretched /
-     * compressed across the translation, so a gradient on a 4-char original is
-     * spread evenly over a 2-char or 10-char translation.
-     */
-    public int colorAt(int translatedIndex, int translatedLen) {
-        if (colors.length == 0 || translatedLen <= 0) return NO_COLOR;
-        int src = (int) ((long) translatedIndex * colors.length / translatedLen);
-        if (src < 0) src = 0;
-        if (src >= colors.length) src = colors.length - 1;
-        return colors[src];
     }
 
     public int originalLength() {

@@ -3,8 +3,6 @@ package com.dragonmeow.mctranslator.fabric;
 import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.style.ColorProfile;
-import com.dragonmeow.mctranslator.style.StyleMapper;
-import com.dragonmeow.mctranslator.style.StyledRun;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 
@@ -25,8 +23,8 @@ import java.util.function.Function;
 
 /**
  * Mojang-mapped counterpart of the Fabric {@code TextStyleSupport}: bridges
- * Minecraft's {@link Component} and the loader-agnostic {@link ColorProfile} /
- * {@link StyleMapper}, so the colour-preservation logic is shared with Fabric.
+ * Minecraft's {@link Component} and the loader-agnostic {@link ColorProfile},
+ * so the colour-preservation logic is shared with Fabric.
  */
 public final class FabricTextStyle {
 
@@ -494,24 +492,6 @@ public final class FabricTextStyle {
         return out.setStyle(s);
     }
 
-    /** Multi-colour rebuild: one styled sibling per colour run mapped onto the translation. */
-    private static MutableComponent styledRuns(String translated, ColorProfile profile) {
-        MutableComponent out = Component.empty();
-        for (StyledRun run : StyleMapper.toRuns(translated, profile)) {
-            Style style = Style.EMPTY
-                    .withBold(run.bold())
-                    .withItalic(run.italic())
-                    .withUnderlined(run.underline())
-                    .withStrikethrough(run.strikethrough())
-                    .withObfuscated(run.obfuscated());
-            if (run.hasColor()) {
-                style = style.withColor(TextColor.fromRgb(run.color()));
-            }
-            out.append(Component.literal(run.text()).setStyle(style));
-        }
-        return out;
-    }
-
     private static Style formatStyle(ColorProfile profile) {
         if (profile == null) return Style.EMPTY;
         return Style.EMPTY
@@ -893,9 +873,12 @@ public final class FabricTextStyle {
     }
 
     /**
-     * Colour a whole-content translation from the original's merged style runs, distributing
-     * by semantic weight (letters/digits, not raw chars) so colour boundaries land near the
-     * matching words. Used when markers are unavailable (Google ate them / gradient lines).
+     * Colour a whole-content translation when markers are unavailable (Google ate them /
+     * gradient lines). Colour positions are NEVER guessed from character counts or
+     * proportions: the whole core text takes the original content's single DOMINANT style
+     * (the merged run carrying the most semantic weight — letters/digits). Only leading /
+     * trailing whitespace decoration keeps the first / last run's style, as before. A flat
+     * single colour is preferred over a positionally mis-aligned multi-colour split.
      */
     public static MutableComponent styledChatContent(Component original, int contentStart, String translated) {
         ColorProfile profile = extractFrom(original, contentStart);
@@ -910,50 +893,48 @@ public final class FabricTextStyle {
         while (trail > lead && Character.isWhitespace(translated.charAt(trail - 1))) trail--;
         String core = translated.substring(lead, trail);
         if (core.isEmpty()) return Component.literal(translated).setStyle(segs.get(0).style());
-        int total = 0;
-        int[] weights = new int[segs.size()];
-        for (int i = 0; i < segs.size(); i++) {
-            int weight = semanticWeight(segs.get(i).text());
-            weights[i] = weight;
-            total += weight;
-        }
-        if (total <= 0) return styled(translated, profile);
+        Style dominant = dominantStyle(segs, 0, segs.size() - 1);
+        if (dominant == null) return styled(translated, profile);
         MutableComponent out = Component.empty();
         if (lead > 0) out.append(Component.literal(translated.substring(0, lead)).setStyle(segs.get(0).style()));
-        int start = 0;
-        int cumulative = 0;
-        int lastWeighted = -1;
-        for (int i = 0; i < weights.length; i++) {
-            if (weights[i] > 0) lastWeighted = i;
-        }
-        for (int i = 0; i < segs.size(); i++) {
-            if (weights[i] <= 0) continue;
-            cumulative += weights[i];
-            int end = (i == lastWeighted) ? core.length()
-                    : Math.round((float) cumulative * core.length() / (float) total);
-            end = safeBoundary(core, start, Math.max(start, Math.min(end, core.length())));
-            if (end > start) {
-                out.append(Component.literal(core.substring(start, end)).setStyle(segs.get(i).style()));
-                start = end;
-            }
-        }
-        if (start < core.length()) {
-            Style style = lastWeighted >= 0 ? segs.get(lastWeighted).style() : Style.EMPTY;
-            out.append(Component.literal(core.substring(start)).setStyle(style));
-        }
+        out.append(Component.literal(core).setStyle(dominant));
         if (trail < translated.length()) {
             out.append(Component.literal(translated.substring(trail)).setStyle(segs.get(segs.size() - 1).style()));
         }
         return out;
     }
 
+    /** The single style among {@code segs[from..to]} carrying the most semantic weight
+     *  (letters/digits; earliest run wins a tie), or {@code null} when the range is empty
+     *  or purely decorative. Never guesses positions — callers apply it to a WHOLE span. */
+    private static Style dominantStyle(List<Seg> segs, int from, int to) {
+        // One semantic style is often split into several source runs by an intervening
+        // amount or item name. Compare the TOTAL weight of each complete Style, not the
+        // largest individual run; otherwise one long white item can paint an entire gold
+        // auction sentence white when only a marker-free fallback is available.
+        Map<Style, Integer> weights = new java.util.LinkedHashMap<>();
+        for (int i = Math.max(0, from); i <= Math.min(to, segs.size() - 1); i++) {
+            int weight = semanticWeight(segs.get(i).text());
+            if (weight > 0) weights.merge(segs.get(i).style(), weight, Integer::sum);
+        }
+        Style best = null;
+        int bestWeight = 0;
+        for (Map.Entry<Style, Integer> entry : weights.entrySet()) {
+            if (entry.getValue() > bestWeight) {
+                bestWeight = entry.getValue();
+                best = entry.getKey();
+            }
+        }
+        return best;
+    }
+
     /**
      * Anchor-aligned colouring for translated single lines (tooltip titles, HUD rows).
      * Fragments the translator keeps verbatim — proper nouns, numbers ("SkyBlock", "500",
-     * "Hypixel") — are located in the translation and get EXACTLY their original run's
-     * style; the text between anchors is distributed over the intervening runs by
-     * semantic weight. Far more accurate than the proportional stretch for the common
-     * "coloured name + coloured tag" tooltip titles.
+     * "Hypixel") — are located in the translation (semantic match, never positional) and
+     * get EXACTLY their original run's style; the text between two anchors takes ONE style —
+     * the dominant style of the ORIGINAL fragment between those same anchor runs — so a gap
+     * never switches colour mid-way on a guessed boundary.
      */
     public static MutableComponent styledAnchored(Component original, int fromChar, String translated) {
         ColorProfile profile = extractFrom(original, fromChar);
@@ -961,7 +942,6 @@ public final class FabricTextStyle {
         List<Seg> segs = mergeSegments(segmentsFrom(original, fromChar));
         if (segs.size() <= 1) return styled(translated, profile);
 
-        MutableComponent base = styledChatContent(original, fromChar, translated);
         List<StyleAnchor> anchors = new ArrayList<>();
         List<Integer> order = new ArrayList<>();
         String[] probes = new String[segs.size()];
@@ -984,19 +964,46 @@ public final class FabricTextStyle {
             }
             if (at >= 0) anchors.add(new StyleAnchor(index, at, at + probe.length()));
         }
-        if (anchors.isEmpty()) return base;
+        if (anchors.isEmpty()) return styledChatContent(original, fromChar, translated);
         anchors.sort(java.util.Comparator.comparingInt(StyleAnchor::start));
 
         MutableComponent out = Component.empty();
         int cursor = 0;
+        StyleAnchor previous = null;
         for (StyleAnchor anchor : anchors) {
-            if (anchor.start() > cursor) appendStyledSlice(out, base, cursor, anchor.start());
+            if (anchor.start() > cursor) {
+                out.append(Component.literal(translated.substring(cursor, anchor.start()))
+                        .setStyle(gapStyle(segs, previous, anchor)));
+            }
             out.append(Component.literal(translated.substring(anchor.start(), anchor.end()))
                     .setStyle(segs.get(anchor.segment()).style()));
             cursor = anchor.end();
+            previous = anchor;
         }
-        if (cursor < translated.length()) appendStyledSlice(out, base, cursor, translated.length());
+        if (cursor < translated.length()) {
+            out.append(Component.literal(translated.substring(cursor))
+                    .setStyle(gapStyle(segs, previous, null)));
+        }
         return out;
+    }
+
+    /** ONE style for the whole translated gap between two anchors: the dominant style of the
+     *  ORIGINAL runs lying between the same two anchor runs (a {@code null} side means the
+     *  line start / end). When nothing semantic lies between them (adjacent anchors, purely
+     *  decorative filler), the gap borrows the nearest anchor's own style — still a single
+     *  style, never a positional split. */
+    private static Style gapStyle(List<Seg> segs, StyleAnchor before, StyleAnchor after) {
+        int lo = (before == null) ? -1 : before.segment();
+        int hi = (after == null) ? segs.size() : after.segment();
+        if (lo > hi) {
+            int swap = lo;
+            lo = hi;
+            hi = swap;
+        }
+        Style dominant = dominantStyle(segs, lo + 1, hi - 1);
+        if (dominant != null) return dominant;
+        return (before != null) ? segs.get(before.segment()).style()
+                : segs.get(after.segment()).style();
     }
 
     private record StyleAnchor(int segment, int start, int end) {
@@ -1007,65 +1014,6 @@ public final class FabricTextStyle {
             if (start < anchor.end() && end > anchor.start()) return true;
         }
         return false;
-    }
-
-    private static void appendStyledSlice(MutableComponent out, Component source,
-                                          int start, int end) {
-        if (start >= end) return;
-        int[] seen = {0};
-        source.visit((style, value) -> {
-            int runStart = seen[0];
-            int runEnd = runStart + value.length();
-            int takeStart = Math.max(start, runStart);
-            int takeEnd = Math.min(end, runEnd);
-            if (takeStart < takeEnd) {
-                out.append(Component.literal(value.substring(
-                        takeStart - runStart, takeEnd - runStart)).setStyle(style));
-            }
-            seen[0] = runEnd;
-            return Optional.empty();
-        }, Style.EMPTY);
-    }
-
-    /** Distribute {@code text} over runs {@code segs[from..to]} by semantic weight; a gap
-     *  with no run between its anchors (e.g. just a space) keeps the previous run's style. */
-    private static void appendWeighted(MutableComponent out, String text, List<Seg> segs, int from, int to) {
-        if (text.isEmpty()) return;
-        if (from > to) {
-            int idx = Math.max(0, Math.min(segs.size() - 1, from - 1));
-            out.append(Component.literal(text).setStyle(segs.get(idx).style()));
-            return;
-        }
-        int total = 0;
-        int[] weights = new int[to - from + 1];
-        for (int i = from; i <= to; i++) {
-            weights[i - from] = semanticWeight(segs.get(i).text());
-            total += weights[i - from];
-        }
-        if (total <= 0) {
-            out.append(Component.literal(text).setStyle(segs.get(from).style()));
-            return;
-        }
-        int start = 0;
-        int cumulative = 0;
-        int lastWeighted = -1;
-        for (int k = 0; k < weights.length; k++) {
-            if (weights[k] > 0) lastWeighted = k;
-        }
-        for (int k = 0; k < weights.length; k++) {
-            if (weights[k] <= 0) continue;
-            cumulative += weights[k];
-            int end = (k == lastWeighted) ? text.length()
-                    : Math.round((float) cumulative * text.length() / (float) total);
-            end = safeBoundary(text, start, Math.max(start, Math.min(end, text.length())));
-            if (end > start) {
-                out.append(Component.literal(text.substring(start, end)).setStyle(segs.get(from + k).style()));
-                start = end;
-            }
-        }
-        if (start < text.length()) {
-            out.append(Component.literal(text.substring(start)).setStyle(segs.get(to).style()));
-        }
     }
 
     /** Merge adjacent runs with identical styles so one word isn't split across markers. */
@@ -1160,15 +1108,6 @@ public final class FabricTextStyle {
         return Character.isLetterOrDigit(cp) || cp == '_';
     }
 
-    /** Word char for the proportional slicer's boundary snap ({@link #safeBoundary}): an
-     *  {@link #isWordChar} that is NOT a CJK ideograph. Latin words / underscore usernames /
-     *  ASCII proper nouns are kept whole in one colour, while each ideograph legitimately
-     *  remains its own colour unit — a translated CJK sentence must still distribute colour
-     *  across its characters, so ideographs must stay individually splittable here. */
-    private static boolean isSliceWordChar(int cp) {
-        return isWordChar(cp) && !Character.isIdeographic(cp);
-    }
-
     private static int semanticWeight(String text) {
         int weight = 0;
         for (int i = 0; i < text.length(); ) {
@@ -1177,72 +1116,6 @@ public final class FabricTextStyle {
             if (Character.isLetterOrDigit(cp)) weight++;
         }
         return weight;
-    }
-
-    /**
-     * A colour-boundary index for the proportional slicer ({@link #styledChatContent},
-     * {@link #appendWeighted}) that never falls INSIDE a maximal Latin/underscore word run —
-     * so a verbatim token the translator kept (a player name like {@code Steve}, a proper noun
-     * like {@code SkyBlock}, a number, a URL, a {@code xX_Player_Xx} handle, or a ⟦CS#⟧ /
-     * ⟦MT#⟧ placeholder body) is emitted WHOLE in one colour instead of as two adjacent
-     * differently-coloured literals.
-     *
-     * <p>Two guards, in order:</p>
-     * <ol>
-     *   <li>Never split a UTF-16 surrogate pair (the original behaviour).</li>
-     *   <li>If the (surrogate-safe) {@code index} sits mid-word — {@link #isSliceWordChar} true
-     *       on BOTH sides — snap to a word EDGE. Prefer the END of the word (the whole word
-     *       joins the earlier colour run); only if that word reaches the segment end do we snap
-     *       to the word START instead (the word joins the later run), and only when that keeps
-     *       the current run non-empty ({@code back > start}). The result is always in
-     *       {@code (start, len]} for a real snap, so no empty leading/trailing run is created.</li>
-     * </ol>
-     *
-     * <p>CJK ideographs are deliberately NOT word chars here (see {@link #isSliceWordChar}):
-     * each ideograph legitimately stays its own colour unit so a translated CJK sentence keeps
-     * distributing colour across its characters — this snap does not touch that. It therefore
-     * does NOT prevent a <em>transliterated</em> CJK name (e.g. 史蒂夫) from being colour-split;
-     * that would need name-awareness at the slicer stage.</p>
-     */
-    private static int safeBoundary(String text, int start, int index) {
-        int len = text.length();
-        if (index > 0 && index < len
-                && Character.isHighSurrogate(text.charAt(index - 1))
-                && Character.isLowSurrogate(text.charAt(index))) {
-            index++;
-        }
-        if (index <= start || index >= len) return index;
-        if (!isSliceWordChar(text.codePointBefore(index)) || !isSliceWordChar(text.codePointAt(index))) {
-            return index; // boundary is already at a word edge (or between non-word chars)
-        }
-        // Mid-word: prefer snapping FORWARD to the end of the word (word joins the earlier run).
-        int end = index;
-        while (end < len) {
-            int cp = text.codePointAt(end);
-            if (!isSliceWordChar(cp)) break;
-            end += Character.charCount(cp);
-        }
-        if (end < len) return end;
-        // The word runs to the segment end: snap BACKWARD to the word start (word joins the
-        // later run) unless that would empty the current run, in which case keep the word here.
-        int back = index;
-        while (back > start) {
-            int cp = text.codePointBefore(back);
-            if (!isSliceWordChar(cp)) break;
-            back -= Character.charCount(cp);
-        }
-        return back > start ? back : end;
-    }
-
-    /** Concatenate per-segment-coloured runs (no trimming / centering) — for prefixed lines. */
-    public static MutableComponent buildColored(List<Seg> segs, List<String> translated) {
-        MutableComponent core = Component.empty();
-        for (int i = 0; i < segs.size(); i++) {
-            String t = translated.get(i);
-            if (t == null || t.isEmpty()) continue;
-            core.append(Component.literal(t).setStyle(segs.get(i).style()));
-        }
-        return core;
     }
 
     /** Colour/format profile of a laid-out {@link FormattedCharSequence} line, so a translated
@@ -1335,39 +1208,6 @@ public final class FabricTextStyle {
             return Optional.empty();
         });
         return sb.toString();
-    }
-
-    /**
-     * Build a per-segment-coloured, re-centred translation of a multi-colour chat line.
-     * Each original run keeps its OWN colour (the runs were translated independently), so
-     * fixed colours stay on the right words. Outer whitespace is dropped and the line is
-     * re-centred by pixel width so a centred original yields a centred translation.
-     *
-     * @param translated translation of each run (same indices as {@code segs})
-     * @param original   the original line string (its leading whitespace marks centering)
-     */
-    public static MutableComponent buildColoredCentered(Font font, List<Seg> segs,
-                                                        List<String> translated, String original) {
-        int first = 0;
-        int last = segs.size() - 1;
-        while (first <= last && (translated.get(first) == null || translated.get(first).isBlank())) first++;
-        while (last >= first && (translated.get(last) == null || translated.get(last).isBlank())) last--;
-
-        MutableComponent core = Component.empty();
-        int coreWidth = 0;
-        for (int i = first; i <= last; i++) {
-            String t = translated.get(i);
-            if (t == null) continue;
-            if (i == first) t = t.stripLeading();
-            if (i == last) t = t.stripTrailing();
-            if (t.isEmpty()) continue;
-            MutableComponent run = Component.literal(t).setStyle(segs.get(i).style());
-            coreWidth += font.width(run);
-            core.append(run);
-        }
-
-        int spaces = leadSpacesToCenter(font, original, coreWidth);
-        return spaces > 0 ? Component.literal(" ".repeat(spaces)).append(core) : core;
     }
 
     /**
@@ -1487,9 +1327,9 @@ public final class FabricTextStyle {
         return translated;
     }
 
-    /** Chat-only BOTH layout. A missing/keep-original translation deliberately reuses
-     *  the original as the translation row, so success, failure and pending fallback
-     *  all keep the same four-line visual contract. Other surfaces never call this. */
+    /** Chat-only BOTH layout. A missing translation is shown once as the original;
+     *  manufacturing a second identical "translation" row makes a temporary timeout or
+     *  marker mismatch look like an input-filter decision. Other surfaces never call this. */
     private static final java.util.concurrent.atomic.AtomicLong CHAT_SEPARATOR_SEQUENCE =
             new java.util.concurrent.atomic.AtomicLong();
 
@@ -1503,7 +1343,8 @@ public final class FabricTextStyle {
 
     public static Component chatBlock(Component original, Component translated) {
         Component source = original == null ? Component.empty() : resolveLegacyCodes(original);
-        Component result = translated == null ? source.copy() : translated;
+        if (translated == null) return source.copy();
+        Component result = translated;
         int len = maxLineLength(source.getString(), result.getString());
         return Component.empty()
                 .append(uniqueChatSeparator(len))

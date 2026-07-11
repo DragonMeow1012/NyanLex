@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator.fabric;
 
 import com.dragonmeow.mctranslator.cache.LanguageFileStore;
+import com.dragonmeow.mctranslator.cache.NamespacedStore;
 import com.dragonmeow.mctranslator.cache.PersistentStore;
 import com.dragonmeow.mctranslator.cache.TranslationCache;
 import com.dragonmeow.mctranslator.config.DisplayMode;
@@ -8,14 +9,13 @@ import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.AiSettings;
-import com.dragonmeow.mctranslator.translate.DispatchingTranslator;
 import com.dragonmeow.mctranslator.translate.GoogleFreeTranslator;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
-import com.dragonmeow.mctranslator.translate.Translator;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
 
 import com.dragonmeow.mctranslator.fabric.mixin.AbstractContainerScreenAccessor;
+import com.dragonmeow.mctranslator.fabric.mixin.ChatComponentMixin;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -111,7 +111,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
             java.util.regex.Pattern.compile("[A-Za-z0-9_]{3,16}");
 
     private final java.util.ArrayDeque<PendingChat> pendingChats = new java.util.ArrayDeque<>();
-    private final java.util.Map<Long, PendingChat> pendingChatById = new java.util.HashMap<>();
+    private final java.util.Map<Long, PendingChat> pendingChatById = new java.util.LinkedHashMap<>();
     private long nextChatId = 1L;
 
     private static final class PendingChat {
@@ -124,6 +124,8 @@ public final class MctranslatorFabric implements ClientModInitializer {
         boolean ready;
         boolean flushedOriginal; // original already shown (slow translation); append it alone later
         boolean framedByServer;  // inside a server ────── announcement frame: skip our magenta wrap
+        Component displayedMessage;
+        int translationCompletions;
 
         PendingChat(long id, Component message, net.minecraft.network.chat.ChatType.Bound params) {
             this.id = id;
@@ -367,8 +369,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 Component ready = FabricTextStyle.renderTranslated(
                         "ftb", resolved, s::translateScreenText);
                 Minecraft client = Minecraft.getInstance();
-                if (ready != null && client != null) {
-                    client.execute(() -> applyFtbText(widget, ready));
+                if (client != null) {
+                    Component display = ready != null ? ready : resolved;
+                    client.execute(() -> applyFtbText(widget, display));
                 }
             });
         }
@@ -539,21 +542,19 @@ public final class MctranslatorFabric implements ClientModInitializer {
         GoogleFreeTranslator google = new GoogleFreeTranslator(transport, config.sourceLang);
         OpenAiTranslator ai = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary));
-        Translator aiTranslator = new DispatchingTranslator(ai, google,
-                () -> config.aiApiKeys != null && !config.aiApiKeys.isEmpty());
-
         PersistentStore googleStore = new LanguageFileStore(
                 FabricLoader.getInstance().getConfigDir(), MOD_ID + "-cache", config.targetLang);
         PersistentStore aiStore = new LanguageFileStore(
                 FabricLoader.getInstance().getConfigDir(), MOD_ID + "-ai-cache", config.targetLang);
+        PersistentStore failureStore = new LanguageFileStore(
+                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-failures", config.targetLang);
         TranslationCache cache = new TranslationCache(google, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
-        TranslationCache aiCache = new TranslationCache(aiTranslator, config.targetLang, executor,
+        TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
-        // GT 暫代 → AI 補翻: provisional (fallback-produced) entries in the AI cache are
-        // re-asked of the AI on a later hit, but only when keys are configured AND the
-        // global 429 gate has reopened. Only the AI cache gets a gate — the Google cache
-        // never stores provisional values.
+        cache.setFailureStore(new NamespacedStore(failureStore, "gt"));
+        aiCache.setFailureStore(new NamespacedStore(failureStore, "ai"));
+        aiCache.setProvisionalStore(googleStore); // migrate legacy dispatcher stand-ins once
         aiCache.setProvisionalRetryGate(() ->
                 config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
@@ -836,6 +837,15 @@ public final class MctranslatorFabric implements ClientModInitializer {
     }
 
     private PendingChat queueChat(Component message, net.minecraft.network.chat.ChatType.Bound params) {
+        if (pendingChatById.size() >= 512) {
+            java.util.Iterator<PendingChat> old = pendingChatById.values().iterator();
+            while (old.hasNext()) {
+                if (old.next().displayedMessage != null) {
+                    old.remove();
+                    break;
+                }
+            }
+        }
         PendingChat pending = new PendingChat(nextChatId++, message, params);
         pendingChats.addLast(pending);
         pendingChatById.put(pending.id, pending);
@@ -849,23 +859,20 @@ public final class MctranslatorFabric implements ClientModInitializer {
             if (mc.gui == null) return;
             PendingChat pending = pendingChatById.get(id);
             if (pending == null) return;
-            if (pending.flushedOriginal) {
-                // The original was already shown by the timeout: append just the translation.
-                pendingChatById.remove(id);
-                if (builder != null && mode != DisplayMode.ORIGINAL_ONLY) {
-                    Component translated = builder.get();
-                    if (translated != null) {
-                        Component shown = mode == DisplayMode.BOTH
-                                ? FabricTextStyle.chatBlock(pending.message, translated)
-                                : translated;
-                        mc.gui.getChat().addMessage(decorate(pending.params, shown));
-                    }
+            if (pending.displayedMessage != null) {
+                Component shown = pendingChatDisplay(pending, mode, builder);
+                Component decorated = decorate(pending.params, shown);
+                if (replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, decorated)) {
+                    pending.displayedMessage = decorated;
                 }
+                pending.translationCompletions++;
+                if (pending.translationCompletions >= 2 || !config.aiChat) pendingChatById.remove(id);
                 return;
             }
             pending.mode = mode;
             pending.builder = builder;
             pending.ready = true;
+            pending.translationCompletions++;
             flushReadyChats(mc);
         });
     }
@@ -874,6 +881,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
      *  translation (when it eventually lands) is appended as its own line. */
     private void flushStaleChats(Minecraft mc) {
         if (mc == null || mc.gui == null) return;
+        long now = System.currentTimeMillis();
+        pendingChatById.values().removeIf(p -> p.displayedMessage != null
+                && now - p.queuedAtMs > 5 * 60_000L);
         while (!pendingChats.isEmpty()) {
             PendingChat head = pendingChats.peekFirst();
             if (head.ready) {
@@ -885,15 +895,17 @@ public final class MctranslatorFabric implements ClientModInitializer {
             head.flushedOriginal = true; // stays in pendingChatById for the late translation
             Component shown = head.mode == DisplayMode.BOTH
                     ? FabricTextStyle.chatBlock(head.message, null) : head.message;
-            mc.gui.getChat().addMessage(decorate(head.params, shown));
+            Component decorated = decorate(head.params, shown);
+            head.displayedMessage = decorated;
+            mc.gui.getChat().addMessage(decorated);
         }
     }
 
     private void flushReadyChats(Minecraft mc) {
         while (!pendingChats.isEmpty() && pendingChats.peekFirst().ready) {
             PendingChat pending = pendingChats.removeFirst();
-            pendingChatById.remove(pending.id);
             addPendingChat(mc, pending);
+            if (!config.aiChat) pendingChatById.remove(pending.id);
         }
     }
 
@@ -907,22 +919,42 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 pendingChatById.remove(pending.id);
                 mc.gui.getChat().addMessage(decorate(pending.params, pending.message));
             }
+            pendingChatById.clear();
         });
     }
 
     private void addPendingChat(Minecraft mc, PendingChat pending) {
-        Component translatedLine = (pending.builder != null) ? pending.builder.get() : null;
-        if (pending.mode == DisplayMode.TRANSLATION) {
-            mc.gui.getChat().addMessage(decorate(pending.params,
-                    translatedLine != null ? translatedLine : pending.message));
-            return;
+        Component decorated = decorate(pending.params,
+                pendingChatDisplay(pending, pending.mode, pending.builder));
+        pending.displayedMessage = decorated;
+        mc.gui.getChat().addMessage(decorated);
+    }
+
+    private static Component pendingChatDisplay(PendingChat pending, DisplayMode mode,
+                                                java.util.function.Supplier<Component> builder) {
+        Component translated = builder == null ? null : builder.get();
+        if (mode == DisplayMode.TRANSLATION) return translated != null ? translated : pending.message;
+        if (mode == DisplayMode.BOTH) return FabricTextStyle.chatBlock(pending.message, translated);
+        return pending.message;
+    }
+
+    private static boolean replaceChatMessage(
+            net.minecraft.client.gui.components.ChatComponent chat,
+            Component previous, Component replacement) {
+        try {
+            java.util.List<net.minecraft.client.GuiMessage> messages =
+                    ((ChatComponentMixin) (Object) chat).mctranslator$getAllMessages();
+            for (int i = 0; i < messages.size(); i++) {
+                net.minecraft.client.GuiMessage old = messages.get(i);
+                if (old.content() != previous && !old.content().equals(previous)) continue;
+                messages.set(i, new net.minecraft.client.GuiMessage(old.addedTime(), replacement,
+                        old.signature(), old.tag()));
+                chat.rescaleChat();
+                return true;
+            }
+        } catch (RuntimeException ignored) {
         }
-        if (pending.mode == DisplayMode.BOTH) {
-            mc.gui.getChat().addMessage(decorate(pending.params,
-                    FabricTextStyle.chatBlock(pending.message, translatedLine)));
-            return;
-        }
-        mc.gui.getChat().addMessage(decorate(pending.params, pending.message));
+        return false;
     }
 
     /** Re-apply the signed-chat sender decoration (e.g. {@code <name> ...}); no-op for game messages. */
@@ -1177,7 +1209,8 @@ public final class MctranslatorFabric implements ClientModInitializer {
                     if (mc == null) return;
                     Component ready = FabricTextStyle.renderTranslated(
                             "screenScan", source, service::translateScreenScanText);
-                    if (ready != null) mc.execute(() -> widget.setMessage(ready));
+                    Component display = ready != null ? ready : source;
+                    mc.execute(() -> widget.setMessage(display));
                 });
             }
             requested += requests.size();

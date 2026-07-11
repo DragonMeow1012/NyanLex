@@ -39,10 +39,28 @@ public final class TranslationCache {
     private static final int MAX_BATCH = 64;
     private static final int MAX_SETTLE_TICKS = 3;
     private static final int CONTENT_FAILURE_LIMIT = 3;
-    private static final int MAX_PROVISIONAL_RETRIES = 3;
     private static final int MAX_FINAL_WAITER_FAMILIES = 512;
     /** Durable negative-cache value. It is never shown; reads return the original key. */
-    private static final String KEEP_ORIGINAL = "\u0000MT_KEEP_ORIGINAL";
+    private static final String KEEP_ORIGINAL = "\u0000MT_KEEP_ORIGINAL2";
+    /** Pre-1.0.3 sentinel. Old builds also learned it from genuine provider failures
+     *  (empty/mojibake/damaged-marker responses), permanently poisoning those lines.
+     *  Every read path treats it as a miss and deletes it on sight, so legacy poison
+     *  unlocks exactly once; a legitimate echo then relearns the v2 value. */
+    private static final String LEGACY_KEEP_ORIGINAL = "\u0000MT_KEEP_ORIGINAL";
+
+    /** Failure-ledger value: the provider really answered with the original text.
+     *  Permanent; hits refill the original and never issue another request. */
+    private static final String FAILURE_ECHO = "echo";
+    /** Failure-ledger value prefix: {@code temporary:<attempt>:<untilMs>}. A damaged,
+     *  empty or rate-limited response that must heal; retried once the backoff expires. */
+    private static final String FAILURE_TEMPORARY_PREFIX = "temporary:";
+    /** Pending identity confirmation: {@code identity:<count>:<untilMs>}. */
+    private static final String FAILURE_IDENTITY_PREFIX = "identity:";
+    /** Presentation-only retry key. It can never enable GT or poison semantic identity. */
+    private static final String STYLE_FAILURE_PREFIX = "\u0000MT_STYLE_FAILURE:";
+    /** Ceiling for exponential retry backoff. 429/5xx storms usually clear quickly;
+     *  a user hovering a tooltip must never wait unbounded multiples of the base. */
+    private static final long MAX_FAILURE_BACKOFF_MS = 5 * 60_000L;
 
     private static final Pattern CS_MARKER =
             Pattern.compile("\\u27E6\\s*/?\\s*CS\\s*\\d+\\s*\\u27E7");
@@ -61,6 +79,12 @@ public final class TranslationCache {
     private final LongSupplier clock;
     private final long failureBackoffMs;
     private final PersistentStore store;
+    /** Sibling GT file: provisional (fallback-produced) rows are persisted here so the
+     *  primary store carries only final primary-engine wording. */
+    private volatile PersistentStore provisionalStore;
+    /** Durable failure ledger (third file): permanent echo marks and temporary retry
+     *  marks carrying their attempt count and backoff expiry across restarts. */
+    private volatile PersistentStore failureStore;
     private final TranslationTemplate templates = new TranslationTemplate();
     private final Map<String, String> memory;
 
@@ -69,9 +93,16 @@ public final class TranslationCache {
     private volatile ChurnGuard churnGuard = new ChurnGuard();
 
     private final Map<String, Long> failedUntil = new ConcurrentHashMap<>();
-    /** Consecutive provider responses that are unusable for this semantic template.
-     *  Transport failures are intentionally excluded: an outage must not poison text. */
+    /** Consecutive identity echoes for this semantic template; only these may become
+     *  a durable keep-original decision. Transport failures are intentionally
+     *  excluded: an outage must not poison text. */
     private final Map<String, Integer> contentFailures = new ConcurrentHashMap<>();
+    /** Consecutive damaged/empty (non-echo) responses per semantic family. These are
+     *  provider bugs that must heal, so they only grow an exponential retry backoff
+     *  and can never write the durable keep-original sentinel. */
+    private final Map<String, Integer> contentRetryAttempts = new ConcurrentHashMap<>();
+    /** Failed requests remain scheduled (with backoff) until success or confirmed identity. */
+    private final Map<String, TranslationTemplate.Snapshot> retrySnapshots = new ConcurrentHashMap<>();
     private final Map<String, Flight> flights = new ConcurrentHashMap<>();
 
     private final Object queueLock = new Object();
@@ -129,12 +160,14 @@ public final class TranslationCache {
 
     /**
      * Configure a one-way lower-priority cache. When {@code asProvisional} is true,
-     * a sibling hit is displayed immediately but marked only in this cache as awaiting
-     * replacement; the provisional retry gate then schedules one primary translation.
+     * the sibling is a failure-only fallback: a cold primary miss never consults it.
+     * Only after this cache records an actual provider/content failure may a sibling
+     * hit be displayed provisionally while the primary keeps retrying.
      */
     public void setFallback(TranslationCache fallback, boolean asProvisional) {
         this.fallback = fallback == this ? null : fallback;
         this.fallbackHitsProvisional = fallback != null && fallback != this && asProvisional;
+        resumeFailureFallbacks();
     }
 
     public void setChurnGuard(ChurnGuard churnGuard) {
@@ -143,6 +176,58 @@ public final class TranslationCache {
 
     public void setProvisionalRetryGate(BooleanSupplier gate) {
         this.provisionalRetryGate = gate;
+    }
+
+    /**
+     * Route provisional (fallback-produced GT) rows into the sibling GT file so the
+     * primary store keeps only final primary-engine wording. Legacy provisional rows
+     * that older builds mixed into the primary file are moved over once on wiring
+     * (and again after a language switch opens another language's file).
+     */
+    public void setProvisionalStore(PersistentStore provisionalStore) {
+        this.provisionalStore = provisionalStore == store ? null : provisionalStore;
+        migrateProvisionalRows();
+    }
+
+    /**
+     * Durable failure ledger (third file). Pending identity confirmations and temporary
+     * failures carry retry state across restarts. A confirmed identity is moved into this
+     * engine's own translation store, so AI and GT can never suppress each other.
+     */
+    public void setFailureStore(PersistentStore failureStore) {
+        this.failureStore = failureStore == store ? null : failureStore;
+        hydrateFailureStore();
+    }
+
+    private void hydrateFailureStore() {
+        PersistentStore failures = this.failureStore;
+        if (failures == null) return;
+        for (Map.Entry<String, String> entry : failures.entries().entrySet()) {
+            if (FAILURE_ECHO.equals(entry.getValue())) {
+                keepsOriginal(entry.getKey()); // migrate the old terminal row into this engine cache
+            } else {
+                restoreTemporaryFailure(entry.getKey());
+            }
+        }
+        resumeFailureFallbacks();
+    }
+
+    private void resumeFailureFallbacks() {
+        if (!fallbackHitsProvisional || fallback == null) return;
+        for (Map.Entry<String, TranslationTemplate.Snapshot> entry : retrySnapshots.entrySet()) {
+            if (!entry.getKey().startsWith(STYLE_FAILURE_PREFIX)) {
+                requestFallback(entry.getValue());
+            }
+        }
+    }
+
+    private void migrateProvisionalRows() {
+        PersistentStore target = provisionalStore;
+        if (store == null || target == null) return;
+        Map<String, String> rows = store.provisionalEntries();
+        if (rows.isEmpty()) return;
+        target.putBatch(rows, java.util.Set.of());
+        store.removeBatch(rows.keySet());
     }
 
     public void setDebugLog(String engine, TranslationDebugLog log) {
@@ -155,6 +240,49 @@ public final class TranslationCache {
     // -------------------------------------------------------------------------
 
     public String getCached(String source) {
+        return getCached(source, true);
+    }
+
+    /** Whether this engine has actually failed for the semantic family. UI policy uses
+     * this to start the lower-priority engine only after a real primary failure. */
+    public boolean hasFailureState(String source) {
+        if (source == null) return false;
+        String key = provisionalSemanticKey(source);
+        if (retrySnapshots.containsKey(key) || failedUntil.containsKey(key)
+                || contentFailures.containsKey(key) || contentRetryAttempts.containsKey(key)
+                || provisional(key)) {
+            return true;
+        }
+        PersistentStore failures = failureStore;
+        if (failures == null) return false;
+        String row = failures.get(key);
+        return startsWithTemporary(row) || row != null && row.startsWith(FAILURE_IDENTITY_PREFIX);
+    }
+
+    /** True only when this engine failed and has no final semantic wording of its own. */
+    public boolean mayUseFallback(String source) {
+        if (!hasFailureState(source)) return false;
+        TranslationTemplate.Snapshot plain = templates.prepare(stripStyle(source));
+        String ownSemantic = lookupSnapshot(plain, this);
+        return ownSemantic == null || provisional(plain.key());
+    }
+
+    /**
+     * Lookup used by one-shot rich surfaces such as chat.  A semantic (marker-free)
+     * translation is useful to a widget that will render again next frame, but it is not
+     * sufficient for a chat component that is inserted only once: without the CS projection
+     * there is no reliable source-to-target style alignment.
+     */
+    private String getCachedExactStyle(String source) {
+        return getCached(source, false);
+    }
+
+    private String getCached(String source, boolean allowStyleFallback) {
+        return getCached(source, allowStyleFallback, true);
+    }
+
+    private String getCached(String source, boolean allowStyleFallback,
+                             boolean includeLowerFallback) {
         if (source == null) return null;
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
         TranslationCache sibling = fallback;
@@ -184,19 +312,28 @@ public final class TranslationCache {
                 }
                 if (styleHit != null && plainHit != null
                         && provisional(styleProjectionKey(snapshot))) {
-                    // The final semantic AI wording is already usable.  Do not keep showing
-                    // an older GT style projection (or the source text) while a cosmetic CS
-                    // topology supplement runs in the background.
-                    if (!provisional(plainSnapshot.key())) retryStyleProjection(snapshot);
+                    if (!allowStyleFallback) {
+                        removeStored(styleProjectionKey(snapshot));
+                        return null;
+                    }
+                    // The final semantic wording is already usable. A live HUD may mint a
+                    // different CS topology every frame, so generic render lookups must not
+                    // buy cosmetic topology supplements in the background.
                     return TextFilter.markStyleFallback(plainHit);
                 }
                 if (styleHit != null) removeStored(styleProjectionKey(snapshot));
                 // Meaning must not wait for presentation.  The renderer can safely project
                 // a semantic hit onto the current component (keeping verbatim numeric/value
                 // anchors in their exact colours) while an exact CS topology is unavailable.
-                // This also prevents the same visible tooltip line from spawning one request
-                // for its words and another request merely for its colour boundaries.
-                if (plainHit != null) return TextFilter.markStyleFallback(plainHit);
+                // Do not launch a background request here. Animated scoreboards can change
+                // their CS indices continuously; treating every presentation topology as
+                // AI work caused an unbounded request stream and let its varying wording
+                // overwrite the stable semantic cache. One-shot consumers that truly need
+                // exact marker alignment explicitly use requestCoalescedExactStyle().
+                if (plainHit != null) {
+                    if (!allowStyleFallback) return null;
+                    return TextFilter.markStyleFallback(plainHit);
+                }
             } else if (plainHit != null) {
                 return plainHit;
             }
@@ -205,10 +342,11 @@ public final class TranslationCache {
         String hit = marked ? null : lookupSnapshot(snapshot, this);
         if (hit != null) return hit;
 
-        if (sibling != null) {
-            hit = sibling.getCached(source);
+        if (includeLowerFallback && sibling != null && fallbackAllowed(source)) {
+            hit = allowStyleFallback ? sibling.getCached(source)
+                    : sibling.getCachedExactStyle(source);
             if (hit != null) {
-                return acceptFallbackHit(source, hit);
+                return acceptFallbackHit(source, hit, allowStyleFallback);
             }
         }
 
@@ -222,7 +360,13 @@ public final class TranslationCache {
      * Calling this still triggers the normal provisional retry path in {@link #getCached}.
      */
     public String getCachedFinal(String source) {
-        String hit = getCached(source);
+        return getCachedFinal(source, false);
+    }
+
+    private String getCachedFinal(String source, boolean exactStyle) {
+        // Final means this engine's own value, never a result merely read through from
+        // its lower-priority sibling.
+        String hit = getCached(source, !exactStyle, false);
         if (hit == null) return null;
         String semanticKey = provisionalSemanticKey(source);
         if (provisional(semanticKey)) return null;
@@ -247,20 +391,13 @@ public final class TranslationCache {
         return restored;
     }
 
-    private String acceptFallbackHit(String source, String hit) {
-        // Read-through aliases stay session-only; the lower-priority cache owns its
-        // durable entry. In AI mode the alias is provisional and immediately queues
-        // an AI supplement without delaying the GT text already on screen. Retry state
-        // belongs to the de-styled semantic template, never to each player/number/style
-        // variant, or ten lobby joins would each start a fresh three-attempt family.
-        memory.put(source, hit);
-        if (fallbackHitsProvisional) {
-            String semanticKey = provisionalSemanticKey(source);
-            // Migration consults this canonical family bit as well as an exact alias,
-            // so volatile raw number/time variants never need their own provisional marks.
-            markProvisional(semanticKey, true);
-            retryProvisional(semanticKey);
-        }
+    private String acceptFallbackHit(String source, String hit, boolean allowStyleFallback) {
+        // Never copy GT wording into AI memory: a late read-through must be physically
+        // incapable of overwriting a concurrently landed AI final. Recheck the own tier
+        // at the linearisation point; if AI completed first, it wins this very lookup.
+        String own = getCached(source, allowStyleFallback, false);
+        if (own != null) return own;
+        if (fallbackHitsProvisional && !mayUseFallback(source)) return null;
         return hit;
     }
 
@@ -341,6 +478,12 @@ public final class TranslationCache {
         String value = memory.get(key);
         if (value != null) {
             if (KEEP_ORIGINAL.equals(value)) return key;
+            if (LEGACY_KEEP_ORIGINAL.equals(value)) {
+                // v1 sentinels also encoded genuine failures. Miss + delete unlocks
+                // the line once; a legitimate echo relearns the v2 decision later.
+                removeStored(key);
+                return null;
+            }
             if (usable(key, value)) return value;
             removeStored(key);
         }
@@ -350,6 +493,10 @@ public final class TranslationCache {
         if (KEEP_ORIGINAL.equals(value)) {
             memory.put(key, value);
             return key;
+        }
+        if (LEGACY_KEEP_ORIGINAL.equals(value)) {
+            removeStored(key);
+            return null;
         }
         if (!usable(key, value)) {
             removeStored(key);
@@ -363,11 +510,28 @@ public final class TranslationCache {
         if (key == null) return false;
         String value = memory.get(key);
         if (KEEP_ORIGINAL.equals(value)) return true;
+        if (LEGACY_KEEP_ORIGINAL.equals(value)) {
+            removeStored(key);
+            return false;
+        }
+        PersistentStore failures = failureStore;
+        if (failures != null && FAILURE_ECHO.equals(failures.get(key))) {
+            // Legacy policy stored confirmed identity in the failure ledger. Move it
+            // into this engine's own cache; namespaced production stores ensure the
+            // verdict can never suppress the other engine.
+            failures.remove(key);
+            if (store != null) store.put(key, KEEP_ORIGINAL, false);
+            memory.put(key, KEEP_ORIGINAL);
+            return true;
+        }
         if (store == null) return false;
         value = store.get(key);
-        if (!KEEP_ORIGINAL.equals(value)) return false;
-        memory.put(key, value);
-        return true;
+        if (KEEP_ORIGINAL.equals(value)) {
+            memory.put(key, KEEP_ORIGINAL);
+            return true;
+        }
+        if (LEGACY_KEEP_ORIGINAL.equals(value)) removeStored(key);
+        return false;
     }
 
     // -------------------------------------------------------------------------
@@ -388,8 +552,8 @@ public final class TranslationCache {
         try {
             TranslationResult result = translator.translate(snapshot.key(), targetLang);
             if (!usable(snapshot.key(), result.translatedText())) {
-                boolean kept = learnKeepOriginal(snapshot, result.translatedText());
-                if (!kept) fail(snapshot.key());
+                boolean kept = current(snapshot.key(), expectedGeneration, expectedRevision)
+                        && handleUnusableContent(snapshot, result.translatedText());
                 debugCompleted(debugId, result.translatedText(), kept
                         ? TranslationDebugLog.Status.KEEP_ORIGINAL
                         : TranslationDebugLog.Status.FAILED);
@@ -403,7 +567,7 @@ public final class TranslationCache {
                     ? TranslationDebugLog.Status.FALLBACK : TranslationDebugLog.Status.SUCCESS);
             return snapshot.restore(result.translatedText());
         } catch (TranslationException | RuntimeException e) {
-            fail(snapshot.key());
+            if (current(snapshot.key(), expectedGeneration, expectedRevision)) fail(snapshot.key());
             debugCompleted(debugId, false);
             return null;
         }
@@ -424,12 +588,12 @@ public final class TranslationCache {
     private void requestImmediate(String source, Consumer<String> callback, boolean always) {
         String cached = getCached(source);
         if (cached != null) {
-            deliver(new Callback(null, callback, always), cached);
+            deliver(new Callback(null, callback, always, false), cached);
             return;
         }
 
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
-        Callback cb = new Callback(snapshot, callback, always);
+        Callback cb = new Callback(snapshot, callback, always, false);
         if (!snapshot.hasTranslatableContent() || backingOff(snapshot.key())
                 || suppressed(snapshot.key())) {
             deliver(cb, null);
@@ -457,14 +621,12 @@ public final class TranslationCache {
                     debugId = debugSubmitted(List.of(key));
                     TranslationResult result = translator.translate(key, targetLang);
                     boolean usableResult = usable(key, result.translatedText());
-                    boolean kept = !usableResult && learnKeepOriginal(snapshot, result.translatedText());
-                    if (usableResult) {
-                        if (current(key, expectedGeneration, expectedRevision)) {
-                            store(snapshot, result.translatedText(), result.fromFallback());
-                            failedUntil.remove(key);
-                        }
-                    } else if (!kept) {
-                        fail(key);
+                    boolean kept = !usableResult
+                            && current(key, expectedGeneration, expectedRevision)
+                            && handleUnusableContent(snapshot, result.translatedText());
+                    if (usableResult && current(key, expectedGeneration, expectedRevision)) {
+                        store(snapshot, result.translatedText(), result.fromFallback());
+                        failedUntil.remove(key);
                     }
                     debugCompleted(debugId, usableResult || kept ? result.translatedText() : null,
                             kept ? TranslationDebugLog.Status.KEEP_ORIGINAL
@@ -473,7 +635,7 @@ public final class TranslationCache {
                                     : TranslationDebugLog.Status.SUCCESS);
                 }
             } catch (TranslationException | RuntimeException e) {
-                fail(key);
+                if (current(key, expectedGeneration, expectedRevision)) fail(key);
                 debugCompleted(debugId, false);
             } finally {
                 finishFlight(key, ours);
@@ -493,14 +655,32 @@ public final class TranslationCache {
     }
 
     public void requestCoalesced(String source, Consumer<String> callback, boolean always) {
-        String cached = getCached(source);
+        requestCoalesced(source, callback, always, false);
+    }
+
+    /**
+     * Coalesced request that treats a marker-free semantic cache hit as a miss when the
+     * source carries CS style markers.  This is for one-shot chat insertion: it waits for
+     * the marked translation instead of permanently rendering an approximate colour guess.
+     * Marker-free input behaves exactly like {@link #requestCoalesced}.
+     */
+    public void requestCoalescedExactStyle(String source, Consumer<String> callback,
+                                           boolean always) {
+        requestCoalesced(source, callback, always, true);
+    }
+
+    private void requestCoalesced(String source, Consumer<String> callback, boolean always,
+                                  boolean exactStyle) {
+        String cached = exactStyle ? getCachedExactStyle(source) : getCached(source);
         if (cached != null) {
-            deliver(new Callback(null, callback, always), cached);
+            deliver(new Callback(null, callback, always, exactStyle), cached);
             return;
         }
 
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
-        Callback cb = new Callback(snapshot, callback, always);
+        // Requiring an exact style projection has no effect on plain text.
+        exactStyle &= hasCsMarkers(snapshot.key());
+        Callback cb = new Callback(snapshot, callback, always, exactStyle);
         if (!eligible(snapshot)) {
             deliver(cb, null);
             return;
@@ -510,7 +690,7 @@ public final class TranslationCache {
             Flight flight = flights.get(snapshot.key());
             if (flight == null) break;
             if (flight.add(cb)) return;
-            cached = lookupSnapshot(snapshot, this);
+            cached = exactStyle ? getCachedExactStyle(source) : lookupSnapshot(snapshot, this);
             if (cached != null) {
                 deliver(cb, cached);
                 return;
@@ -525,15 +705,25 @@ public final class TranslationCache {
      * never delivered to a widget that would otherwise permanently replace its source.
      */
     public void requestCoalescedFinal(String source, Consumer<String> callback) {
+        requestCoalescedFinal(source, callback, false);
+    }
+
+    /** Final-primary waiter that additionally requires the exact CS span projection. */
+    public void requestCoalescedExactStyleFinal(String source, Consumer<String> callback) {
+        requestCoalescedFinal(source, callback, true);
+    }
+
+    private void requestCoalescedFinal(String source, Consumer<String> callback,
+                                       boolean exactStyle) {
         if (source == null || callback == null) return;
-        String ready = getCachedFinal(source);
+        String ready = getCachedFinal(source, exactStyle);
         if (ready != null) {
             callback.accept(ready);
             return;
         }
 
         String family = provisionalSemanticKey(source);
-        FinalWaiter waiter = new FinalWaiter(source, callback);
+        FinalWaiter waiter = new FinalWaiter(source, callback, exactStyle);
         if (!finalWaiters.containsKey(family)
                 && finalWaiters.size() >= MAX_FINAL_WAITER_FAMILIES) {
             java.util.Iterator<String> oldest = finalWaiters.keySet().iterator();
@@ -543,16 +733,18 @@ public final class TranslationCache {
                 ignored -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(waiter);
 
         // Close the registration race with a final store on another worker.
-        ready = getCachedFinal(source);
+        ready = getCachedFinal(source, exactStyle);
         if (ready != null) {
             notifyFinalWaiters(family);
             return;
         }
 
-        requestCoalesced(source, ignored -> {
-            if (getCachedFinal(source) != null) notifyFinalWaiters(family);
+        Consumer<String> completed = ignored -> {
+            if (getCachedFinal(source, exactStyle) != null) notifyFinalWaiters(family);
             else retryProvisional(family);
-        }, true);
+        };
+        if (exactStyle) requestCoalescedExactStyle(source, completed, true);
+        else requestCoalesced(source, completed, true);
     }
 
     private boolean eligible(TranslationTemplate.Snapshot snapshot) {
@@ -573,8 +765,15 @@ public final class TranslationCache {
         }
     }
 
+    private boolean queued(String key) {
+        synchronized (queueLock) {
+            return queue.containsKey(key);
+        }
+    }
+
     /** Called once per client tick. */
     public void flushBatch() {
+        enqueueDueRetries();
         // A provisional result may have arrived while the AI's 429 gate was closed.
         // Final-only widget callbacks remain registered, so re-check their bounded
         // semantic families each tick and start the supplement once the gate reopens.
@@ -731,7 +930,12 @@ public final class TranslationCache {
             List<TranslationResult> results =
                     translator.translateBatch(keys, targetLang, surfaceContext);
             if (results.size() != todo.size()) {
-                keys.forEach(this::fail);
+                for (TranslationTemplate.Snapshot snapshot : todo) {
+                    if (current(snapshot.key(), expectedGeneration,
+                            expectedRevisions.getOrDefault(snapshot.key(), 0L))) {
+                        fail(snapshot.key());
+                    }
+                }
                 debugCompleted(debugId, false);
                 return false;
             }
@@ -740,7 +944,10 @@ public final class TranslationCache {
                 TranslationTemplate.Snapshot snapshot = todo.get(i);
                 TranslationResult result = results.get(i);
                 boolean usableResult = usable(snapshot.key(), result.translatedText());
-                boolean kept = !usableResult && learnKeepOriginal(snapshot, result.translatedText());
+                boolean kept = !usableResult
+                        && current(snapshot.key(), expectedGeneration,
+                        expectedRevisions.getOrDefault(snapshot.key(), 0L))
+                        && handleUnusableContent(snapshot, result.translatedText());
                 keptOriginal.add(kept);
                 if (usableResult) {
                     if (current(snapshot.key(), expectedGeneration,
@@ -750,7 +957,6 @@ public final class TranslationCache {
                         failedUntil.remove(snapshot.key());
                     }
                 } else if (!kept) {
-                    fail(snapshot.key());
                     allSucceeded = false;
                 }
             }
@@ -782,7 +988,12 @@ public final class TranslationCache {
             debugCompleted(debugId, debugTranslations, debugStatuses);
             return true;
         } catch (TranslationException | RuntimeException e) {
-            keys.forEach(this::fail);
+            for (TranslationTemplate.Snapshot snapshot : todo) {
+                if (current(snapshot.key(), expectedGeneration,
+                        expectedRevisions.getOrDefault(snapshot.key(), 0L))) {
+                    fail(snapshot.key());
+                }
+            }
             debugCompleted(debugId, false);
             return false;
         }
@@ -831,7 +1042,7 @@ public final class TranslationCache {
 
     private void store(TranslationTemplate.Snapshot snapshot, String translated,
                        boolean isProvisional, WriteBatch writes) {
-        contentFailures.remove(snapshot.key());
+        clearFailureState(snapshot);
         // Styled variants all converge on one durable semantic row. Keep a raw styled
         // row only when the backend damaged its markers so a safe plain projection is
         // impossible; this prevents colour permutations from disagreeing forever.
@@ -858,7 +1069,7 @@ public final class TranslationCache {
         java.util.concurrent.CopyOnWriteArrayList<FinalWaiter> waiters = finalWaiters.remove(family);
         if (waiters == null || waiters.isEmpty()) return;
         for (FinalWaiter waiter : waiters) {
-            String ready = getCachedFinal(waiter.source());
+            String ready = getCachedFinal(waiter.source(), waiter.exactStyle());
             if (ready != null) {
                 try {
                     waiter.callback().accept(ready);
@@ -872,7 +1083,7 @@ public final class TranslationCache {
         }
     }
 
-    private record FinalWaiter(String source, Consumer<String> callback) {
+    private record FinalWaiter(String source, Consumer<String> callback, boolean exactStyle) {
     }
 
     private void write(String key, String value, boolean isProvisional) {
@@ -881,13 +1092,23 @@ public final class TranslationCache {
 
     private void write(String key, String value, boolean isProvisional, WriteBatch writes) {
         if (!usable(key, value)) return;
-        // A lower-priority GT/fallback result may add a missing style topology, but it
-        // must never downgrade an existing final AI semantic row (or final style row).
-        if (isProvisional && hasFinalValue(key, writes)) return;
+        // First final semantic wording wins until explicit invalidation. A response for a
+        // new CS presentation topology may translate the same term differently; it may add
+        // its own style row, but can never rewrite an existing final semantic row. A final
+        // primary answer still replaces a provisional fallback because provisional rows do
+        // not satisfy hasFinalValue().
+        if (hasFinalValue(key, writes)) return;
         memory.put(key, value);
         markProvisional(key, isProvisional);
         if (writes != null) writes.add(key, value, isProvisional);
-        else if (store != null) store.put(key, value, isProvisional);
+        else if (isProvisional && provisionalStore != null) {
+            // In the GT file a stand-in is simply a final GT translation; the
+            // "awaiting AI" state lives in this cache's session set, and after a
+            // restart in the fact that only the GT file carries the row.
+            provisionalStore.put(key, value, false);
+        } else if (store != null) {
+            store.put(key, value, isProvisional);
+        }
     }
 
     private boolean hasFinalValue(String key, WriteBatch writes) {
@@ -956,7 +1177,19 @@ public final class TranslationCache {
         }
 
         void flush() {
-            if (store != null && !values.isEmpty()) store.putBatch(values, provisionalKeys);
+            if (values.isEmpty()) return;
+            PersistentStore gtStore = provisionalStore;
+            if (gtStore != null && !provisionalKeys.isEmpty()) {
+                Map<String, String> standIns = new LinkedHashMap<>();
+                for (String key : provisionalKeys) {
+                    String value = values.remove(key);
+                    if (value != null) standIns.put(key, value);
+                }
+                if (!standIns.isEmpty()) gtStore.putBatch(standIns, Set.of());
+                if (store != null && !values.isEmpty()) store.putBatch(values, Set.of());
+                return;
+            }
+            if (store != null) store.putBatch(values, provisionalKeys);
         }
     }
 
@@ -1015,13 +1248,17 @@ public final class TranslationCache {
             pending = true;
         }
         BooleanSupplier gate = provisionalRetryGate;
+        // There is deliberately no attempt ceiling: the exponential (capped) backoff
+        // throttles supplements, and a provisional row always keeps its chance to be
+        // upgraded to a final primary-engine translation.
         if (gate == null || !pending || !gate.getAsBoolean()
                 || backingOff(semanticKey)
-                || provisionalRetryAttempts.getOrDefault(semanticKey, 0) >= MAX_PROVISIONAL_RETRIES
+                || flights.containsKey(semanticKey)
+                || queued(semanticKey)
                 || !provisionalRetrying.add(semanticKey)) {
             return;
         }
-        int attempt = provisionalRetryAttempts.merge(semanticKey, 1, Integer::sum);
+        provisionalRetryAttempts.merge(semanticKey, 1, Integer::sum);
 
         TranslationTemplate.Snapshot snapshot = templates.prepare(semanticKey);
         long expectedGeneration = generation.get();
@@ -1031,17 +1268,21 @@ public final class TranslationCache {
             try {
                 TranslationResult result = translator.translate(snapshot.key(), targetLang);
                 boolean usableResult = usable(snapshot.key(), result.translatedText());
-                boolean kept = !usableResult && learnKeepOriginal(snapshot, result.translatedText());
+                boolean isCurrent = current(snapshot.key(), expectedGeneration, expectedRevision);
+                boolean identity = !usableResult
+                        && isIdentityEcho(snapshot.key(), result.translatedText());
+                boolean kept = isCurrent && identity
+                        && learnKeepOriginal(snapshot, result.translatedText());
                 if (!result.fromFallback() && usableResult) {
-                    if (current(snapshot.key(), expectedGeneration, expectedRevision)) {
+                    if (isCurrent) {
                         store(snapshot, result.translatedText(), false);
                         failedUntil.remove(semanticKey);
                         failedUntil.remove(snapshot.key());
                         provisionalRetryAttempts.remove(semanticKey);
                         provisionalRetryAttempts.remove(snapshot.key());
                     }
-                } else if (!kept) {
-                    failProvisional(semanticKey, attempt);
+                } else if (isCurrent && !kept && !identity) {
+                    fail(snapshot.key());
                 }
                 debugCompleted(debugId, usableResult || kept ? result.translatedText() : null,
                         kept ? TranslationDebugLog.Status.KEEP_ORIGINAL
@@ -1049,48 +1290,7 @@ public final class TranslationCache {
                                 : result.fromFallback() ? TranslationDebugLog.Status.FALLBACK
                                 : TranslationDebugLog.Status.SUCCESS);
             } catch (TranslationException | RuntimeException e) {
-                failProvisional(semanticKey, attempt);
-                debugCompleted(debugId, false);
-            } finally {
-                provisionalRetrying.remove(semanticKey);
-            }
-        });
-    }
-
-    /** Retry a provisional CS topology while a final semantic AI row already exists. */
-    private void retryStyleProjection(TranslationTemplate.Snapshot snapshot) {
-        if (snapshot == null || !hasCsMarkers(snapshot.key())) return;
-        String projectionKey = styleProjectionKey(snapshot);
-        String semanticKey = provisionalSemanticKey(snapshot.key());
-        BooleanSupplier gate = provisionalRetryGate;
-        if (gate == null || !provisional(projectionKey) || !gate.getAsBoolean()
-                || backingOff(semanticKey)
-                || provisionalRetryAttempts.getOrDefault(semanticKey, 0) >= MAX_PROVISIONAL_RETRIES
-                || !provisionalRetrying.add(semanticKey)) {
-            return;
-        }
-        int attempt = provisionalRetryAttempts.merge(semanticKey, 1, Integer::sum);
-        long expectedGeneration = generation.get();
-        long expectedRevision = keyRevision(semanticKey);
-        executor.execute(() -> {
-            long debugId = debugSubmitted(List.of(snapshot.key()));
-            try {
-                TranslationResult result = translator.translate(snapshot.key(), targetLang);
-                boolean usableResult = usable(snapshot.key(), result.translatedText());
-                if (!result.fromFallback() && usableResult
-                        && current(semanticKey, expectedGeneration, expectedRevision)) {
-                    store(snapshot, result.translatedText(), false);
-                    failedUntil.remove(semanticKey);
-                    provisionalRetryAttempts.remove(semanticKey);
-                } else {
-                    failProvisional(semanticKey, attempt);
-                }
-                debugCompleted(debugId, usableResult ? result.translatedText() : null,
-                        !usableResult ? TranslationDebugLog.Status.FAILED
-                                : result.fromFallback() ? TranslationDebugLog.Status.FALLBACK
-                                : TranslationDebugLog.Status.SUCCESS);
-            } catch (TranslationException | RuntimeException error) {
-                failProvisional(semanticKey, attempt);
+                if (current(snapshot.key(), expectedGeneration, expectedRevision)) fail(snapshot.key());
                 debugCompleted(debugId, false);
             } finally {
                 provisionalRetrying.remove(semanticKey);
@@ -1099,11 +1299,51 @@ public final class TranslationCache {
     }
 
     private void fail(String key) {
-        if (failureBackoffMs > 0L) failedUntil.put(key, clock.getAsLong() + failureBackoffMs);
+        if (key == null) return;
+        TranslationTemplate.Snapshot snapshot = templates.prepare(key);
+        if (hasFinalSemantic(snapshot)) {
+            if (hasCsMarkers(snapshot.key())) failStyleProjection(snapshot);
+            return;
+        }
+        String stateKey = provisionalSemanticKey(snapshot.key());
+        // Identity confirmation means consecutive successful echoes. Any transport or
+        // malformed-content failure breaks that streak.
+        contentFailures.remove(stateKey);
+        int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
+        failTemporarily(stateKey, attempt);
+        retrySnapshots.put(stateKey, snapshot);
+        requestFallback(snapshot);
     }
 
-    private void failProvisional(String key, int attempt) {
-        if (failureBackoffMs <= 0L) return;
+    private void failStyleProjection(TranslationTemplate.Snapshot snapshot) {
+        String stateKey = styleFailureKey(snapshot);
+        contentFailures.remove(stateKey);
+        int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
+        failTemporarilyState(stateKey, attempt);
+        retrySnapshots.put(stateKey, snapshot);
+    }
+
+    /**
+     * Exponential retry backoff for temporary failures (damaged shapes, empty answers,
+     * fallback-only supplements, transport errors on retry paths). The delay doubles
+     * per attempt but is clamped to {@link #MAX_FAILURE_BACKOFF_MS}: 429/5xx windows
+     * usually clear quickly, so a few hovers later the line must translate. When a
+     * failure ledger is configured the mark is persisted with its attempt and expiry.
+     */
+    private void failTemporarily(String key, int attempt) {
+        failTemporarilyState(provisionalSemanticKey(key), attempt);
+    }
+
+    private void failTemporarilyState(String stateKey, int attempt) {
+        long now = clock.getAsLong();
+        if (failureBackoffMs <= 0L) {
+            failedUntil.remove(stateKey);
+            PersistentStore failures = failureStore;
+            if (failures != null) {
+                failures.put(stateKey, FAILURE_TEMPORARY_PREFIX + attempt + ":" + now);
+            }
+            return;
+        }
         long multiplier = 1L << Math.min(6, Math.max(0, attempt - 1));
         long delay;
         try {
@@ -1111,26 +1351,119 @@ public final class TranslationCache {
         } catch (ArithmeticException overflow) {
             delay = Long.MAX_VALUE;
         }
-        long now = clock.getAsLong();
-        failedUntil.put(key, delay >= Long.MAX_VALUE - now ? Long.MAX_VALUE : now + delay);
+        delay = Math.min(delay, Math.max(failureBackoffMs, MAX_FAILURE_BACKOFF_MS));
+        long until = delay >= Long.MAX_VALUE - now ? Long.MAX_VALUE : now + delay;
+        failedUntil.put(stateKey, until);
+        PersistentStore failures = failureStore;
+        if (failures != null) {
+            failures.put(stateKey, FAILURE_TEMPORARY_PREFIX + attempt + ":" + until);
+        }
     }
 
     /**
-     * Three consecutive content responses that cannot be used become a durable
-     * keep-original decision. This covers identity echoes, empty model answers and
-     * damaged placeholder shapes without retrying forever. Transport exceptions never
-     * call this method, so a temporary 429/outage cannot poison the negative cache.
-     * Individual/global retranslation removes the sentinel through invalidate/clear.
+     * Split failure ledger. Only an identity echo (the provider answered, unchanged:
+     * a proper noun that legitimately needs no translation) may count toward a durable
+     * keep-original decision. Every other unusable response — empty, mojibake, damaged
+     * CS/MT/PB markers, layout or transliteration mismatches — is a provider bug that
+     * must heal, so it earns only an exponentially growing, capped retry backoff and
+     * can never poison the line permanently.
+     *
+     * @return whether a durable keep-original decision was learned
+     */
+    private boolean handleUnusableContent(TranslationTemplate.Snapshot snapshot, String translated) {
+        // The semantic AI wording may already be final while a presentation-only CS
+        // projection keeps losing its markers. Such an identity can never mean the
+        // sentence itself should be kept original; retry the projection as temporary.
+        if (hasFinalSemantic(snapshot)) {
+            if (hasCsMarkers(snapshot.key())) failStyleProjection(snapshot);
+            return false;
+        }
+        if (isIdentityEcho(snapshot.key(), translated)) {
+            if (learnKeepOriginal(snapshot, translated)) return true;
+            return false;
+        }
+        String stateKey = contentFailureKey(snapshot);
+        contentFailures.remove(stateKey);
+        int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
+        failTemporarily(stateKey, attempt);
+        retrySnapshots.put(stateKey, snapshot);
+        requestFallback(snapshot);
+        return false;
+    }
+
+    /** A legitimate untranslatable echo: a real answer whose text equals the request. */
+    private static boolean isIdentityEcho(String source, String translated) {
+        return usable(translated)
+                && translated.trim().equals(source == null ? "" : source.trim());
+    }
+
+    /** Failure decisions are shared by the whole de-styled semantic family. */
+    private String contentFailureKey(TranslationTemplate.Snapshot snapshot) {
+        String plainSource = stripStyle(snapshot.source());
+        TranslationTemplate.Snapshot plain = templates.prepare(plainSource);
+        return plain.key().isEmpty() ? snapshot.key() : plain.key();
+    }
+
+    /** A stored translation is proof the provider works for this text again. */
+    private void clearFailureState(TranslationTemplate.Snapshot snapshot) {
+        String failureKey = contentFailureKey(snapshot);
+        String styleFailure = hasCsMarkers(snapshot.key()) ? styleFailureKey(snapshot) : null;
+        contentFailures.remove(snapshot.key());
+        contentFailures.remove(failureKey);
+        contentRetryAttempts.remove(snapshot.key());
+        contentRetryAttempts.remove(failureKey);
+        provisionalRetryAttempts.remove(failureKey);
+        failedUntil.remove(snapshot.key());
+        failedUntil.remove(failureKey);
+        retrySnapshots.remove(snapshot.key());
+        retrySnapshots.remove(failureKey);
+        if (styleFailure != null) {
+            contentFailures.remove(styleFailure);
+            contentRetryAttempts.remove(styleFailure);
+            failedUntil.remove(styleFailure);
+            retrySnapshots.remove(styleFailure);
+        }
+        PersistentStore failures = failureStore;
+        if (failures != null) {
+            failures.remove(snapshot.key());
+            failures.remove(failureKey);
+            if (styleFailure != null) failures.remove(styleFailure);
+        }
+    }
+
+    /**
+     * Three consecutive identity echoes become a durable keep-original decision:
+     * the provider is answering, and its answer is that this text needs no
+     * translation. Genuine failures never reach this method (see
+     * {@link #handleUnusableContent}), and transport exceptions never call it either,
+     * so a temporary 429/outage cannot poison the negative cache. Individual/global
+     * retranslation removes the decision through invalidate/clear.
      */
     private boolean learnKeepOriginal(TranslationTemplate.Snapshot snapshot, String translated) {
         if (snapshot == null) return false;
-        String plainSource = stripStyle(snapshot.source());
-        TranslationTemplate.Snapshot plain = templates.prepare(plainSource);
-        String failureKey = plain.key().isEmpty() ? snapshot.key() : plain.key();
+        String failureKey = contentFailureKey(snapshot);
+        // A valid provider response breaks the malformed/transport-failure streak even
+        // when its identity still needs two more confirmations.
+        contentRetryAttempts.remove(failureKey);
         int count = contentFailures.merge(failureKey, 1, Integer::sum);
-        if (count < CONTENT_FAILURE_LIMIT) return false;
+        if (count < CONTENT_FAILURE_LIMIT) {
+            long delay = failureBackoffMs <= 0L ? 0L : Math.min(
+                    MAX_FAILURE_BACKOFF_MS, failureBackoffMs * (1L << Math.min(6, count - 1)));
+            long now = clock.getAsLong();
+            long until = delay >= Long.MAX_VALUE - now ? Long.MAX_VALUE : now + delay;
+            if (delay > 0L) failedUntil.put(failureKey, until);
+            PersistentStore failures = failureStore;
+            if (failures != null) {
+                failures.put(failureKey, FAILURE_IDENTITY_PREFIX + count + ":" + until);
+            }
+            retrySnapshots.put(failureKey, snapshot);
+            requestFallback(snapshot);
+            return false;
+        }
 
         contentFailures.remove(failureKey);
+        contentRetryAttempts.remove(snapshot.key());
+        contentRetryAttempts.remove(failureKey);
         failedUntil.remove(snapshot.key());
         provisional.remove(snapshot.key());
         removeStored(snapshot.key());
@@ -1139,16 +1472,136 @@ public final class TranslationCache {
         provisional.remove(failureKey);
         removeStored(failureKey);
         memory.put(failureKey, KEEP_ORIGINAL);
+        PersistentStore failures = failureStore;
         if (store != null) store.put(failureKey, KEEP_ORIGINAL, false);
+        if (failures != null) failures.remove(failureKey);
+        retrySnapshots.remove(failureKey);
+        notifyFinalWaiters(failureKey);
         return true;
     }
 
     private boolean backingOff(String key) {
-        Long until = failedUntil.get(key);
-        if (until == null) return false;
+        return backingOffState(provisionalSemanticKey(key));
+    }
+
+    private boolean backingOffState(String stateKey) {
+        Long until = failedUntil.get(stateKey);
+        if (until == null) {
+            until = restoreTemporaryFailure(stateKey);
+            if (until == null) return false;
+        }
         if (clock.getAsLong() < until) return true;
-        failedUntil.remove(key, until);
+        failedUntil.remove(stateKey, until);
+        // Keep the durable row until the retry commits a success/new failure. If the
+        // process exits between expiry and the HTTP result, the attempt is not forgotten.
         return false;
+    }
+
+    /**
+     * Rehydrate a persisted temporary-failure mark into the session maps, so retry
+     * spacing and attempt escalation survive a restart. Damaged rows are deleted.
+     */
+    private Long restoreTemporaryFailure(String key) {
+        PersistentStore failures = failureStore;
+        if (failures == null || key == null) return null;
+        String row = failures.get(key);
+        boolean identity = row != null && row.startsWith(FAILURE_IDENTITY_PREFIX);
+        if (!identity && !startsWithTemporary(row)) return null;
+        String prefix = identity ? FAILURE_IDENTITY_PREFIX : FAILURE_TEMPORARY_PREFIX;
+        String[] parts = row.substring(prefix.length()).split(":", 2);
+        try {
+            int attempt = Integer.parseInt(parts[0]);
+            long until = Long.parseLong(parts[1]);
+            if (identity) {
+                contentFailures.putIfAbsent(key, attempt);
+            } else {
+                contentRetryAttempts.putIfAbsent(key, attempt);
+                provisionalRetryAttempts.putIfAbsent(key, attempt);
+            }
+            failedUntil.putIfAbsent(key, until);
+            String retrySource = key.startsWith(STYLE_FAILURE_PREFIX)
+                    ? key.substring(STYLE_FAILURE_PREFIX.length()) : key;
+            retrySnapshots.putIfAbsent(key, templates.prepare(retrySource));
+            return until;
+        } catch (RuntimeException damaged) {
+            failures.remove(key);
+            return null;
+        }
+    }
+
+    private static boolean startsWithTemporary(String row) {
+        return row != null && row.startsWith(FAILURE_TEMPORARY_PREFIX);
+    }
+
+    /**
+     * A provisional fallback is deliberately invisible on a cold primary miss. It
+     * becomes eligible only after this engine has failed for the same semantic family,
+     * including a failure restored from the shared, engine-namespaced ledger.
+     */
+    private boolean fallbackAllowed(String source) {
+        if (!fallbackHitsProvisional) return true;
+        return mayUseFallback(source);
+    }
+
+    /** Start the lower-priority engine only after this engine actually failed. */
+    private void requestFallback(TranslationTemplate.Snapshot snapshot) {
+        TranslationCache lower = fallback;
+        if (!fallbackHitsProvisional || lower == null || snapshot == null) return;
+        // A CS projection is presentation only. If the AI semantic wording already
+        // succeeded, a marker-topology failure must retry AI but must not buy GT.
+        if (hasFinalSemantic(snapshot)) return;
+        if (hasCsMarkers(snapshot.key())) {
+            lower.requestCoalescedExactStyle(snapshot.source(), ignored -> { }, false);
+        } else {
+            lower.requestBatched(snapshot.source());
+        }
+    }
+
+    private boolean hasFinalSemantic(TranslationTemplate.Snapshot snapshot) {
+        if (snapshot == null) return false;
+        TranslationTemplate.Snapshot plain = templates.prepare(stripStyle(snapshot.source()));
+        String ownSemantic = lookupSnapshot(plain, this);
+        return ownSemantic != null && !provisional(plain.key());
+    }
+
+    private static String styleFailureKey(TranslationTemplate.Snapshot snapshot) {
+        return STYLE_FAILURE_PREFIX + (snapshot == null ? "" : snapshot.key());
+    }
+
+    /** Re-enqueue durable failures once their backoff expires, even if the surface vanished. */
+    private void enqueueDueRetries() {
+        for (Map.Entry<String, TranslationTemplate.Snapshot> entry : retrySnapshots.entrySet()) {
+            String stateKey = entry.getKey();
+            TranslationTemplate.Snapshot snapshot = entry.getValue();
+            if (snapshot == null || keepsOriginal(stateKey)) {
+                discardRetryState(stateKey, snapshot);
+                continue;
+            }
+            String hit = lookupSnapshot(snapshot, this);
+            boolean pendingPrimary = provisional(stateKey) || provisional(snapshot.key());
+            if (hit != null && !pendingPrimary) {
+                discardRetryState(stateKey, snapshot);
+                continue;
+            }
+            if (pendingPrimary) {
+                retryProvisional(stateKey);
+                continue;
+            }
+            if (backingOffState(stateKey) || flights.containsKey(snapshot.key())
+                    || provisionalRetrying.contains(stateKey)) continue;
+            synchronized (queueLock) {
+                if (!queue.containsKey(snapshot.key())) enqueue(snapshot, null);
+            }
+        }
+    }
+
+    private void discardRetryState(String stateKey, TranslationTemplate.Snapshot snapshot) {
+        retrySnapshots.remove(stateKey, snapshot);
+        contentFailures.remove(stateKey);
+        contentRetryAttempts.remove(stateKey);
+        failedUntil.remove(stateKey);
+        PersistentStore failures = failureStore;
+        if (failures != null) failures.remove(stateKey);
     }
 
     private boolean suppressed(String key) {
@@ -1197,7 +1650,10 @@ public final class TranslationCache {
 
     private String cachedFor(Callback callback) {
         if (callback == null || callback.snapshot == null) return null;
-        String hit = getCached(callback.snapshot.source());
+        String hit = callback.exactStyle
+                ? getCachedExactStyle(callback.snapshot.source())
+                : getCached(callback.snapshot.source());
+        if (callback.exactStyle) return hit;
         return hit != null ? hit : lookupSnapshot(callback.snapshot, this);
     }
 
@@ -1213,7 +1669,8 @@ public final class TranslationCache {
 
     private record Callback(TranslationTemplate.Snapshot snapshot,
                             Consumer<String> consumer,
-                            boolean always) {
+                            boolean always,
+                            boolean exactStyle) {
     }
 
     private static final class Flight {
@@ -1367,20 +1824,34 @@ public final class TranslationCache {
         memory.remove(key);
         provisional.remove(key);
         if (store != null) store.remove(key);
+        // provisionalStore is the independently owned GT backup, not scratch space.
+        // TranslationService.invalidateBoth asks the GT cache owner to remove it when
+        // the user explicitly retranslates; an AI cleanup must never delete valid GT data.
     }
 
     public void setTargetLang(String targetLang) {
         String next = targetLang == null || targetLang.isBlank() ? "zh-TW" : targetLang;
         if (next.equals(this.targetLang)) return;
-        // First boundary invalidates work belonging to the old language. The second
-        // invalidates any request that raced into the tiny store/target swap window,
-        // so an HTTP response can never land in a different language's active file.
+        beginTargetLangChange();
+        completeTargetLangChange(next);
+    }
+
+    /** Phase one used by TranslationService for two caches sharing one failure file. */
+    public void beginTargetLangChange() {
         reset(false);
-        if (store instanceof LanguageFileStore languageStore) {
-            languageStore.setLanguage(next);
-        }
+    }
+
+    /** Phase two: every participating cache must finish phase one before any calls this. */
+    public void completeTargetLangChange(String targetLang) {
+        String next = targetLang == null || targetLang.isBlank() ? "zh-TW" : targetLang;
+        if (store != null) store.setLanguage(next);
+        if (provisionalStore != null) provisionalStore.setLanguage(next);
+        if (failureStore != null) failureStore.setLanguage(next);
         this.targetLang = next;
         reset(false);
+        // The newly opened language file may still mix in legacy provisional rows.
+        migrateProvisionalRows();
+        hydrateFailureStore();
     }
 
     public void clear() {
@@ -1394,9 +1865,11 @@ public final class TranslationCache {
         memory.clear();
         failedUntil.clear();
         contentFailures.clear();
+        contentRetryAttempts.clear();
         provisional.clear();
         provisionalRetrying.clear();
         provisionalRetryAttempts.clear();
+        retrySnapshots.clear();
         finalWaiters.clear();
         List<Callback> cancelled = new ArrayList<>();
         for (Flight flight : flights.values()) cancelled.addAll(flight.close());
@@ -1408,7 +1881,14 @@ public final class TranslationCache {
             settleTicks = 0;
         }
         cancelled.forEach(callback -> deliver(callback, null));
-        if (clearStore && store != null) store.clear();
+        if (clearStore) {
+            if (store != null) store.clear();
+            // A full clear is an explicit retranslate-everything request, so learned
+            // failure decisions go too. The GT file belongs to the sibling cache and
+            // is cleared by its own owner.
+            PersistentStore failures = failureStore;
+            if (failures != null) failures.clear();
+        }
     }
 
     public void invalidate(String source) {
@@ -1421,7 +1901,10 @@ public final class TranslationCache {
         Collections.addAll(keys, snapshot.source(), snapshot.normalized(),
                 snapshot.key(), stripped,
                 plain.normalized(), plain.key());
-        if (hasCsMarkers(snapshot.key())) keys.add(styleProjectionKey(snapshot));
+        if (hasCsMarkers(snapshot.key())) {
+            keys.add(styleProjectionKey(snapshot));
+            keys.add(styleFailureKey(snapshot));
+        }
 
         // Bump request revisions before detaching work. Any old HTTP response that
         // races this deletion is rejected even if it completes after the new request.
@@ -1430,10 +1913,17 @@ public final class TranslationCache {
         }
 
         List<Callback> cancelled = new ArrayList<>();
+        PersistentStore failures = failureStore;
         for (String key : keys) {
             if (key == null) continue;
             contentFailures.remove(key);
+            contentRetryAttempts.remove(key);
             provisionalRetryAttempts.remove(key);
+            retrySnapshots.remove(key);
+            // Manual retranslation is the designated unlock for every learned failure:
+            // echo decisions, temporary marks and their in-session backoff all go.
+            failedUntil.remove(key);
+            if (failures != null) failures.remove(key);
             Flight flight = flights.remove(key);
             if (flight != null) cancelled.addAll(flight.close());
             removeStored(key);

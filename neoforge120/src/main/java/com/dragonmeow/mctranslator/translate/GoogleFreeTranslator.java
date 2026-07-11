@@ -27,10 +27,19 @@ public final class GoogleFreeTranslator implements Translator {
 
     private final HttpTransport transport;
     private final String sourceLang;
+    private final RequestPacer pacer;
 
     public GoogleFreeTranslator(HttpTransport transport, String sourceLang) {
+        this(transport, sourceLang, RequestPacer.disabled());
+    }
+
+    /** Pacer-injecting constructor: {@code pacer} throttles EVERY outbound HTTP request
+     *  (whole-line, per-segment and batch calls alike — they all funnel through
+     *  {@link #requestOnce}). */
+    public GoogleFreeTranslator(HttpTransport transport, String sourceLang, RequestPacer pacer) {
         this.transport = transport;
         this.sourceLang = (sourceLang == null || sourceLang.isBlank()) ? "auto" : sourceLang;
+        this.pacer = pacer == null ? RequestPacer.disabled() : pacer;
     }
 
     /** Build the GET URL for the given text and target language (visible for testing). */
@@ -48,7 +57,9 @@ public final class GoogleFreeTranslator implements Translator {
         }
         TranslationResult r = requestOnce(text, targetLang);
         if (!preservesTokens(text, r.translatedText())) {
-            return new TranslationResult(text, r.detectedSourceLang());
+            // Protocol damage is a retryable provider failure, never evidence that the
+            // source legitimately needs no translation.
+            return new TranslationResult("", r.detectedSourceLang());
         }
         return r;
     }
@@ -56,6 +67,7 @@ public final class GoogleFreeTranslator implements Translator {
     /** One raw endpoint round-trip, no token handling (the mode-independent primitive). */
     private TranslationResult requestOnce(String text, String targetLang) throws TranslationException {
         try {
+            pacer.acquire(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
             String body = transport.get(buildUrl(text, targetLang));
             return GoogleResponseParser.parse(body);
         } catch (IOException e) {
@@ -74,8 +86,8 @@ public final class GoogleFreeTranslator implements Translator {
      * currency, not the verb). Every ⟦…⟧ token — CS style boundaries, MT template
      * slots, and name masks — is replaced by a numeric sentinel, and the sentence goes
      * to Google as ONE request with its full context. Every sentinel must come back exactly
-     * once; any loss or mutation reverts the WHOLE line to the source (existing failure
-     * semantics — the R9 provisional retry picks it up later). The returned value carries
+     * once; any loss or mutation fails the WHOLE line so the retry ledger picks it up later.
+     * The returned value carries
      * the complete original token set, including balanced CS style boundaries.
      */
     private TranslationResult translateWholeLine(String text, String targetLang) throws TranslationException {
@@ -103,14 +115,14 @@ public final class GoogleFreeTranslator implements Translator {
         }
         String translated = (r == null) ? null : r.translatedText();
         if (translated == null || translated.isBlank()) {
-            return new TranslationResult(text, r == null ? null : r.detectedSourceLang());
+            return new TranslationResult("", r == null ? null : r.detectedSourceLang());
         }
         // Every sentinel must survive EXACTLY once, or the slot mapping would lie.
         for (int i = 0; i < slots.size(); i++) {
             String sentinel = Integer.toString(SENTINEL_BASE + i);
             int first = translated.indexOf(sentinel);
             if (first < 0 || translated.indexOf(sentinel, first + sentinel.length()) >= 0) {
-                return new TranslationResult(text, r.detectedSourceLang());
+                return new TranslationResult("", r.detectedSourceLang());
             }
         }
         String out = translated;
@@ -118,7 +130,7 @@ public final class GoogleFreeTranslator implements Translator {
             out = out.replace(Integer.toString(SENTINEL_BASE + i), slots.get(i));
         }
         if (!preservesTokens(text, out)) { // belt: the MT/mask multiset must match
-            return new TranslationResult(text, r.detectedSourceLang());
+            return new TranslationResult("", r.detectedSourceLang());
         }
         return new TranslationResult(out, r.detectedSourceLang());
     }
@@ -183,7 +195,7 @@ public final class GoogleFreeTranslator implements Translator {
         if (parts != null) {
             for (int i = 0; i < parts.size(); i++) {
                 String src = texts.get(i);
-                String part = preservesTokens(src, parts.get(i)) ? parts.get(i) : src;
+                String part = preservesTokens(src, parts.get(i)) ? parts.get(i) : "";
                 out.add(new TranslationResult(part, combined.detectedSourceLang()));
             }
             return;

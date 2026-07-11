@@ -3,8 +3,6 @@ package com.dragonmeow.mctranslator.neoforge;
 import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.style.ColorProfile;
-import com.dragonmeow.mctranslator.style.StyleMapper;
-import com.dragonmeow.mctranslator.style.StyledRun;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 
@@ -26,7 +24,7 @@ import java.util.function.Function;
 /**
  * Mojang-mapped counterpart of the Fabric {@code TextStyleSupport}: bridges
  * Minecraft's {@link Component} and the loader-agnostic {@link ColorProfile} /
- * {@link StyleMapper}, so the colour-preservation logic is shared with Fabric.
+ * semantic span markers, so target-language word order never detaches colour from meaning.
  */
 public final class NeoTextStyle {
 
@@ -501,24 +499,6 @@ public final class NeoTextStyle {
         return out.setStyle(s);
     }
 
-    /** Multi-colour rebuild: one styled sibling per colour run mapped onto the translation. */
-    private static MutableComponent styledRuns(String translated, ColorProfile profile) {
-        MutableComponent out = Component.empty();
-        for (StyledRun run : StyleMapper.toRuns(translated, profile)) {
-            Style style = Style.EMPTY
-                    .withBold(run.bold())
-                    .withItalic(run.italic())
-                    .withUnderlined(run.underline())
-                    .withStrikethrough(run.strikethrough())
-                    .withObfuscated(run.obfuscated());
-            if (run.hasColor()) {
-                style = style.withColor(TextColor.fromRgb(run.color()));
-            }
-            out.append(Component.literal(run.text()).setStyle(style));
-        }
-        return out;
-    }
-
     private static Style formatStyle(ColorProfile profile) {
         if (profile == null) return Style.EMPTY;
         return Style.EMPTY
@@ -895,41 +875,32 @@ public final class NeoTextStyle {
         while (trail > lead && Character.isWhitespace(translated.charAt(trail - 1))) trail--;
         String core = translated.substring(lead, trail);
         if (core.isEmpty()) return Component.literal(translated).setStyle(segs.get(0).style());
-        int total = 0;
-        int[] weights = new int[segs.size()];
-        for (int i = 0; i < segs.size(); i++) {
-            int weight = semanticWeight(segs.get(i).text());
-            weights[i] = weight;
-            total += weight;
-        }
-        if (total <= 0) return styled(translated, profile);
+        Style dominant = dominantStyle(segs, 0, segs.size() - 1);
+        if (dominant == null) return styled(translated, profile);
         MutableComponent out = Component.empty();
         if (lead > 0) out.append(Component.literal(translated.substring(0, lead)).setStyle(segs.get(0).style()));
-        int start = 0;
-        int cumulative = 0;
-        int lastWeighted = -1;
-        for (int i = 0; i < weights.length; i++) {
-            if (weights[i] > 0) lastWeighted = i;
-        }
-        for (int i = 0; i < segs.size(); i++) {
-            if (weights[i] <= 0) continue;
-            cumulative += weights[i];
-            int end = (i == lastWeighted) ? core.length()
-                    : Math.round((float) cumulative * core.length() / (float) total);
-            end = safeBoundary(core, start, Math.max(start, Math.min(end, core.length())));
-            if (end > start) {
-                out.append(Component.literal(core.substring(start, end)).setStyle(segs.get(i).style()));
-                start = end;
-            }
-        }
-        if (start < core.length()) {
-            Style style = lastWeighted >= 0 ? segs.get(lastWeighted).style() : Style.EMPTY;
-            out.append(Component.literal(core.substring(start)).setStyle(style));
-        }
+        out.append(Component.literal(core).setStyle(dominant));
         if (trail < translated.length()) {
             out.append(Component.literal(translated.substring(trail)).setStyle(segs.get(segs.size() - 1).style()));
         }
         return out;
+    }
+
+    private static Style dominantStyle(List<Seg> segs, int from, int to) {
+        Map<Style, Integer> weights = new java.util.LinkedHashMap<>();
+        for (int i = Math.max(0, from); i <= Math.min(to, segs.size() - 1); i++) {
+            int weight = semanticWeight(segs.get(i).text());
+            if (weight > 0) weights.merge(segs.get(i).style(), weight, Integer::sum);
+        }
+        Style best = null;
+        int bestWeight = 0;
+        for (Map.Entry<Style, Integer> entry : weights.entrySet()) {
+            if (entry.getValue() > bestWeight) {
+                bestWeight = entry.getValue();
+                best = entry.getKey();
+            }
+        }
+        return best;
     }
 
     /**
@@ -946,7 +917,6 @@ public final class NeoTextStyle {
         List<Seg> segs = mergeSegments(segmentsFrom(original, fromChar));
         if (segs.size() <= 1) return styled(translated, profile);
 
-        MutableComponent base = styledChatContent(original, fromChar, translated);
         List<StyleAnchor> anchors = new ArrayList<>();
         List<Integer> order = new ArrayList<>();
         String[] probes = new String[segs.size()];
@@ -966,19 +936,37 @@ public final class NeoTextStyle {
             }
             if (at >= 0) anchors.add(new StyleAnchor(index, at, at + probe.length()));
         }
-        if (anchors.isEmpty()) return base;
+        if (anchors.isEmpty()) return styledChatContent(original, fromChar, translated);
         anchors.sort(java.util.Comparator.comparingInt(StyleAnchor::start));
 
         MutableComponent out = Component.empty();
         int cursor = 0;
+        StyleAnchor previous = null;
         for (StyleAnchor anchor : anchors) {
-            if (anchor.start() > cursor) appendStyledSlice(out, base, cursor, anchor.start());
+            if (anchor.start() > cursor) {
+                out.append(Component.literal(translated.substring(cursor, anchor.start()))
+                        .setStyle(gapStyle(segs, previous, anchor)));
+            }
             out.append(Component.literal(translated.substring(anchor.start(), anchor.end()))
                     .setStyle(segs.get(anchor.segment()).style()));
             cursor = anchor.end();
+            previous = anchor;
         }
-        if (cursor < translated.length()) appendStyledSlice(out, base, cursor, translated.length());
+        if (cursor < translated.length()) {
+            out.append(Component.literal(translated.substring(cursor))
+                    .setStyle(gapStyle(segs, previous, null)));
+        }
         return out;
+    }
+
+    private static Style gapStyle(List<Seg> segs, StyleAnchor before, StyleAnchor after) {
+        int lo = before == null ? -1 : before.segment();
+        int hi = after == null ? segs.size() : after.segment();
+        if (lo > hi) { int swap = lo; lo = hi; hi = swap; }
+        Style dominant = dominantStyle(segs, lo + 1, hi - 1);
+        if (dominant != null) return dominant;
+        return before != null ? segs.get(before.segment()).style()
+                : segs.get(after.segment()).style();
     }
 
     private record StyleAnchor(int segment, int start, int end) {
@@ -1481,7 +1469,8 @@ public final class NeoTextStyle {
 
     public static Component chatBlock(Component original, Component translated) {
         Component source = original == null ? Component.empty() : resolveLegacyCodes(original);
-        Component result = translated == null ? source.copy() : translated;
+        if (translated == null) return source.copy();
+        Component result = translated;
         int len = maxLineLength(source.getString(), result.getString());
         return Component.empty()
                 .append(uniqueChatSeparator(len))

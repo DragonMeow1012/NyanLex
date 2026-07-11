@@ -2,10 +2,8 @@ package com.dragonmeow.mctranslator.fabric.mixin;
 
 import com.dragonmeow.mctranslator.fabric.MctranslatorFabric;
 import com.dragonmeow.mctranslator.fabric.FabricTextStyle;
-import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
-import com.dragonmeow.mctranslator.translate.ParagraphModel;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.Gui;
@@ -90,10 +88,10 @@ public abstract class GuiScoreboardMixin {
         List<Component> scores = entries.stream()
                 .map(entry -> (Component) entry.formatValue(numberFormat))
                 .toList();
-        List<String> rowStrings = rows.stream().map(Component::getString).toList();
-        List<ParagraphModel.Range> rowRanges = ParagraphModel.ranges(rowStrings);
-        service.warmScoreboardBatch(
-                mctranslator$scoreboardRequests(title, rows, rowStrings, rowRanges));
+        // Each scoreboard row owns one stable semantic key. The complete sidebar is
+        // still supplied as AI context by warmScoreboardBatch, but optional/animated
+        // neighbouring rows can no longer rename or re-request Purse/Bits/Gems.
+        service.warmScoreboardBatch(mctranslator$scoreboardRequests(title, rows));
 
         Component translatedTitle = FabricTextStyle.renderTranslated(
                 "scoreboard", title, service::translateScoreboardLine);
@@ -101,31 +99,11 @@ public abstract class GuiScoreboardMixin {
                 title, translatedTitle == null ? title : translatedTitle);
         List<Component> renderedRows = new ArrayList<>(rows);
 
-        Font font = getFont();
-        for (ParagraphModel.Range range : rowRanges) {
-            int start = range.start();
-            if (ParagraphModel.isBlank(rowStrings.get(start))) {
-                // A blank scoreboard entry is layout, not a translation unit.
-                continue;
-            }
-            int end = range.end() + 1;
-
-            List<Component> paragraph = new ArrayList<>(rows.subList(start, end));
-            List<Component> translated = FabricTextStyle.renderTranslatedParagraph(
-                    paragraph, service::translateScoreboardLine, font);
-            // PB markers are required to round-trip one-for-one.  Never partially fill
-            // a paragraph if a backend damaged a boundary or wrapping changed row count.
-            if (translated != null && translated.size() == paragraph.size()) {
-                for (int i = 0; i < paragraph.size(); i++) {
-                    Component rendered = translated.get(i);
-                    if (service.scoreboardMode() == DisplayMode.BOTH) {
-                        rendered = paragraph.get(i).copy()
-                                .append(Component.literal("\u3000"))
-                                .append(rendered);
-                    }
-                    renderedRows.set(start + i, rendered);
-                }
-            }
+        for (int i = 0; i < rows.size(); i++) {
+            Component row = rows.get(i);
+            Component translated = FabricTextStyle.renderTranslated(
+                    "scoreboard", row, service::translateScoreboardLine);
+            if (translated != null) renderedRows.set(i, translated);
         }
 
         for (int i = 0; i < entries.size(); i++) {
@@ -149,18 +127,12 @@ public abstract class GuiScoreboardMixin {
     }
 
     private static List<String> mctranslator$scoreboardRequests(
-            Component title, List<Component> rows, List<String> rowStrings,
-            List<ParagraphModel.Range> rowRanges) {
+            Component title, List<Component> rows) {
         List<String> requests = new ArrayList<>();
         requests.add(FabricTextStyle.paragraphRequestText(List.of(title)));
-        for (ParagraphModel.Range range : rowRanges) {
-            int start = range.start();
-            if (ParagraphModel.isBlank(rowStrings.get(start))) {
-                requests.add("");
-                continue;
-            }
-            requests.add(FabricTextStyle.paragraphRequestText(
-                    rows.subList(start, range.end() + 1)));
+        for (Component row : rows) {
+            requests.add(row == null || row.getString().isBlank() ? ""
+                    : FabricTextStyle.paragraphRequestText(List.of(row)));
         }
         return requests;
     }

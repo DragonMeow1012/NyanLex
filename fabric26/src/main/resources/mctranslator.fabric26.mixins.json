@@ -6,6 +6,7 @@
   "client": [
     "OptionsScreenMixin",
     "AbstractContainerScreenAccessor",
+    "ChatComponentAccessor",
     "FontSplitMixin",
     "TextFieldMixin",
     "GuiGraphicsTextMixin",

@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator.neoforge26;
 
 import com.dragonmeow.mctranslator.cache.LanguageFileStore;
+import com.dragonmeow.mctranslator.cache.NamespacedStore;
 import com.dragonmeow.mctranslator.cache.PersistentStore;
 import com.dragonmeow.mctranslator.cache.TranslationCache;
 import com.dragonmeow.mctranslator.config.DisplayMode;
@@ -8,14 +9,13 @@ import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.AiSettings;
-import com.dragonmeow.mctranslator.translate.DispatchingTranslator;
 import com.dragonmeow.mctranslator.translate.GoogleFreeTranslator;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
-import com.dragonmeow.mctranslator.translate.Translator;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
 
 import com.dragonmeow.mctranslator.neoforge26.mixin.AbstractContainerScreenAccessor;
+import com.dragonmeow.mctranslator.neoforge26.mixin.ChatComponentAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -115,7 +115,7 @@ public final class MctranslatorNeoForge26 {
             java.util.regex.Pattern.compile("[A-Za-z0-9_]{3,16}");
 
     private final java.util.ArrayDeque<PendingChat> pendingChats = new java.util.ArrayDeque<>();
-    private final java.util.Map<Long, PendingChat> pendingChatById = new java.util.HashMap<>();
+    private final java.util.Map<Long, PendingChat> pendingChatById = new java.util.LinkedHashMap<>();
     private long nextChatId = 1L;
 
     private static final class PendingChat {
@@ -127,6 +127,8 @@ public final class MctranslatorNeoForge26 {
         boolean ready;
         boolean flushedOriginal; // original already shown (slow translation); append it alone later
         boolean framedByServer;  // inside a server ────── announcement frame: skip our magenta wrap
+        Component displayedMessage;
+        int translationCompletions;
 
         PendingChat(long id, Component message) {
             this.id = id;
@@ -359,8 +361,9 @@ public final class MctranslatorNeoForge26 {
                 Component ready = Neo26TextStyle.renderTranslated(
                         "ftb", resolved, s::translateScreenText);
                 Minecraft client = Minecraft.getInstance();
-                if (ready != null && client != null) {
-                    client.execute(() -> applyFtbText(widget, ready));
+                if (client != null) {
+                    Component display = ready != null ? ready : resolved;
+                    client.execute(() -> applyFtbText(widget, display));
                 }
             });
         }
@@ -494,22 +497,20 @@ public final class MctranslatorNeoForge26 {
         OpenAiTranslator ai = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary));
         
-        Translator aiTranslator = new DispatchingTranslator(ai, google,
-                () -> config.aiApiKeys != null && !config.aiApiKeys.isEmpty());
-
         PersistentStore googleStore = new LanguageFileStore(
                 FMLPaths.CONFIGDIR.get(), MOD_ID + "-cache", config.targetLang);
         PersistentStore aiStore = new LanguageFileStore(
                 FMLPaths.CONFIGDIR.get(), MOD_ID + "-ai-cache", config.targetLang);
+        PersistentStore failureStore = new LanguageFileStore(
+                FMLPaths.CONFIGDIR.get(), MOD_ID + "-failures", config.targetLang);
         
         TranslationCache cache = new TranslationCache(google, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
-        TranslationCache aiCache = new TranslationCache(aiTranslator, config.targetLang, executor,
+        TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
-        // GT 暫代 → AI 補翻: provisional (fallback-produced) entries in the AI cache are
-        // re-asked of the AI on a later hit, but only when keys are configured AND the
-        // global 429 gate has reopened. Only the AI cache gets a gate — the Google cache
-        // never stores provisional values.
+        cache.setFailureStore(new NamespacedStore(failureStore, "gt"));
+        aiCache.setFailureStore(new NamespacedStore(failureStore, "ai"));
+        aiCache.setProvisionalStore(googleStore);
         aiCache.setProvisionalRetryGate(() ->
                 config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
@@ -869,6 +870,12 @@ public final class MctranslatorNeoForge26 {
     }
 
     private PendingChat queueChat(Component message) {
+        if (pendingChatById.size() >= 512) {
+            java.util.Iterator<PendingChat> old = pendingChatById.values().iterator();
+            while (old.hasNext()) {
+                if (old.next().displayedMessage != null) { old.remove(); break; }
+            }
+        }
         PendingChat pending = new PendingChat(nextChatId++, message);
         pendingChats.addLast(pending);
         pendingChatById.put(pending.id, pending);
@@ -882,21 +889,19 @@ public final class MctranslatorNeoForge26 {
             if (mc.gui == null) return;
             PendingChat pending = pendingChatById.get(id);
             if (pending == null) return;
-            if (pending.flushedOriginal) {
-                // The original was already shown by the timeout: append just the translation.
-                pendingChatById.remove(id);
-                if (builder != null && mode != DisplayMode.ORIGINAL_ONLY) {
-                    Component translated = builder.get();
-                    if (translated != null) {
-                        mc.gui.hud.getChat().addClientSystemMessage(mode == DisplayMode.BOTH
-                                ? Neo26TextStyle.chatBlock(pending.message, translated) : translated);
-                    }
+            if (pending.displayedMessage != null) {
+                Component replacement = pendingChatDisplay(pending, mode, builder);
+                if (replaceChatMessage(mc.gui.hud.getChat(), pending.displayedMessage, replacement)) {
+                    pending.displayedMessage = replacement;
                 }
+                pending.translationCompletions++;
+                if (pending.translationCompletions >= 2 || !config.aiChat) pendingChatById.remove(id);
                 return;
             }
             pending.mode = mode;
             pending.builder = builder;
             pending.ready = true;
+            pending.translationCompletions++;
             flushReadyChats(mc);
         });
     }
@@ -905,6 +910,9 @@ public final class MctranslatorNeoForge26 {
      *  translation (when it eventually lands) is appended as its own line. */
     private void flushStaleChats(Minecraft mc) {
         if (mc == null || mc.gui == null) return;
+        long now = System.currentTimeMillis();
+        pendingChatById.values().removeIf(p -> p.displayedMessage != null
+                && now - p.queuedAtMs > 5 * 60_000L);
         while (!pendingChats.isEmpty()) {
             PendingChat head = pendingChats.peekFirst();
             if (head.ready) {
@@ -914,16 +922,18 @@ public final class MctranslatorNeoForge26 {
             if (System.currentTimeMillis() - head.queuedAtMs < CHAT_MAX_WAIT_MS) break;
             pendingChats.removeFirst();
             head.flushedOriginal = true; // stays in pendingChatById for the late translation
-            mc.gui.hud.getChat().addClientSystemMessage(head.mode == DisplayMode.BOTH
-                    ? Neo26TextStyle.chatBlock(head.message, null) : head.message);
+            Component shown = head.mode == DisplayMode.BOTH
+                    ? Neo26TextStyle.chatBlock(head.message, null) : head.message;
+            head.displayedMessage = shown;
+            mc.gui.hud.getChat().addClientSystemMessage(shown);
         }
     }
 
     private void flushReadyChats(Minecraft mc) {
         while (!pendingChats.isEmpty() && pendingChats.peekFirst().ready) {
             PendingChat pending = pendingChats.removeFirst();
-            pendingChatById.remove(pending.id);
             addPendingChat(mc, pending);
+            if (!config.aiChat) pendingChatById.remove(pending.id);
         }
     }
 
@@ -937,21 +947,40 @@ public final class MctranslatorNeoForge26 {
                 pendingChatById.remove(pending.id);
                 mc.gui.hud.getChat().addClientSystemMessage(pending.message);
             }
+            pendingChatById.clear();
         });
     }
 
     private void addPendingChat(Minecraft mc, PendingChat pending) {
-        Component translatedLine = (pending.builder != null) ? pending.builder.get() : null;
-        if (pending.mode == DisplayMode.TRANSLATION) {
-            mc.gui.hud.getChat().addClientSystemMessage(translatedLine != null ? translatedLine : pending.message);
-            return;
+        Component shown = pendingChatDisplay(pending, pending.mode, pending.builder);
+        pending.displayedMessage = shown;
+        mc.gui.hud.getChat().addClientSystemMessage(shown);
+    }
+
+    private static Component pendingChatDisplay(PendingChat pending, DisplayMode mode,
+                                                java.util.function.Supplier<Component> builder) {
+        Component translated = builder == null ? null : builder.get();
+        if (mode == DisplayMode.TRANSLATION) return translated != null ? translated : pending.message;
+        if (mode == DisplayMode.BOTH) return Neo26TextStyle.chatBlock(pending.message, translated);
+        return pending.message;
+    }
+
+    private static boolean replaceChatMessage(net.minecraft.client.gui.components.ChatComponent chat,
+                                              Component previous, Component replacement) {
+        try {
+            java.util.List<net.minecraft.client.multiplayer.chat.GuiMessage> messages =
+                    ((ChatComponentAccessor) (Object) chat).mctranslator$getAllMessages();
+            for (int i = 0; i < messages.size(); i++) {
+                net.minecraft.client.multiplayer.chat.GuiMessage old = messages.get(i);
+                if (old.content() != previous && !old.content().equals(previous)) continue;
+                messages.set(i, new net.minecraft.client.multiplayer.chat.GuiMessage(
+                        old.addedTime(), replacement, old.signature(), old.source(), old.tag()));
+                chat.rescaleChat();
+                return true;
+            }
+        } catch (RuntimeException ignored) {
         }
-        if (pending.mode == DisplayMode.BOTH) {
-            mc.gui.hud.getChat().addClientSystemMessage(
-                    Neo26TextStyle.chatBlock(pending.message, translatedLine));
-            return;
-        }
-        mc.gui.hud.getChat().addClientSystemMessage(pending.message);
+        return false;
     }
     
 
@@ -1234,7 +1263,8 @@ public final class MctranslatorNeoForge26 {
                     if (mc == null) return;
                     Component ready = Neo26TextStyle.renderTranslated(
                             "screenScan", source, service::translateScreenScanText);
-                    if (ready != null) mc.execute(() -> widget.setMessage(ready));
+                    Component display = ready != null ? ready : source;
+                    mc.execute(() -> widget.setMessage(display));
                 });
             }
             requested += requests.size();

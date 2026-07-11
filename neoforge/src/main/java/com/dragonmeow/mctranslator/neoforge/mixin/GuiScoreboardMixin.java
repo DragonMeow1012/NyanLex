@@ -2,10 +2,8 @@ package com.dragonmeow.mctranslator.neoforge.mixin;
 
 import com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge;
 import com.dragonmeow.mctranslator.neoforge.NeoTextStyle;
-import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
-import com.dragonmeow.mctranslator.translate.ParagraphModel;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.Gui;
@@ -80,10 +78,7 @@ public abstract class GuiScoreboardMixin {
         List<Component> scores = entries.stream()
                 .map(entry -> (Component) entry.formatValue(numberFormat))
                 .toList();
-        List<String> rowStrings = rows.stream().map(Component::getString).toList();
-        List<ParagraphModel.Range> rowRanges = ParagraphModel.ranges(rowStrings);
-        service.warmScoreboardBatch(
-                mctranslator$scoreboardRequests(title, rows, rowStrings, rowRanges));
+        service.warmScoreboardBatch(mctranslator$scoreboardRequests(title, rows));
 
         Component translatedTitle = NeoTextStyle.renderTranslated(
                 "scoreboard", title, service::translateScoreboardLine);
@@ -91,25 +86,11 @@ public abstract class GuiScoreboardMixin {
                 title, translatedTitle == null ? title : translatedTitle);
         List<Component> renderedRows = new ArrayList<>(rows);
 
-        Font font = getFont();
-        for (ParagraphModel.Range range : rowRanges) {
-            int start = range.start();
-            if (ParagraphModel.isBlank(rowStrings.get(start))) continue;
-            int end = range.end() + 1;
-            List<Component> paragraph = new ArrayList<>(rows.subList(start, end));
-            List<Component> translated = NeoTextStyle.renderTranslatedParagraph(
-                    paragraph, service::translateScoreboardLine, font);
-            if (translated != null && translated.size() == paragraph.size()) {
-                for (int i = 0; i < paragraph.size(); i++) {
-                    Component rendered = translated.get(i);
-                    if (service.scoreboardMode() == DisplayMode.BOTH) {
-                        rendered = paragraph.get(i).copy()
-                                .append(Component.literal("\u3000"))
-                                .append(rendered);
-                    }
-                    renderedRows.set(start + i, rendered);
-                }
-            }
+        for (int i = 0; i < rows.size(); i++) {
+            Component row = rows.get(i);
+            Component translated = NeoTextStyle.renderTranslated(
+                    "scoreboard", row, service::translateScoreboardLine);
+            if (translated != null) renderedRows.set(i, translated);
         }
 
         for (int i = 0; i < entries.size(); i++) {
@@ -131,18 +112,12 @@ public abstract class GuiScoreboardMixin {
     }
 
     private static List<String> mctranslator$scoreboardRequests(
-            Component title, List<Component> rows, List<String> rowStrings,
-            List<ParagraphModel.Range> rowRanges) {
+            Component title, List<Component> rows) {
         List<String> requests = new ArrayList<>();
         requests.add(NeoTextStyle.paragraphRequestText(List.of(title)));
-        for (ParagraphModel.Range range : rowRanges) {
-            int start = range.start();
-            if (ParagraphModel.isBlank(rowStrings.get(start))) {
-                requests.add("");
-                continue;
-            }
-            requests.add(NeoTextStyle.paragraphRequestText(
-                    rows.subList(start, range.end() + 1)));
+        for (Component row : rows) {
+            requests.add(row == null || row.getString().isBlank() ? ""
+                    : NeoTextStyle.paragraphRequestText(List.of(row)));
         }
         return requests;
     }

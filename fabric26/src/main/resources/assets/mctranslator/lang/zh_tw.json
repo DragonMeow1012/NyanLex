@@ -1,4 +1,6 @@
 {
+  "config.mctranslator.request_cooldown": "翻譯請求冷卻：%s",
+  "config.mctranslator.request_cooldown.off": "關閉",
   "key.mctranslator.mode": "開啟翻譯設定",
   "key.mctranslator.retranslate": "重新翻譯指向的物品",
   "key.mctranslator.screenscan": "翻譯目前介面的按鈕／選項",

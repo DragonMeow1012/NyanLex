@@ -2,9 +2,7 @@ package com.dragonmeow.mctranslator.fabric.mixin;
 
 import com.dragonmeow.mctranslator.fabric.FabricTextStyle;
 import com.dragonmeow.mctranslator.fabric.MctranslatorFabric;
-import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.service.TranslationService;
-import com.dragonmeow.mctranslator.translate.ParagraphModel;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.Gui;
@@ -65,31 +63,14 @@ public abstract class GuiScoreboardMixin {
                         Component.literal(score.getOwner())))
                 .toList();
         Component title = objective.getDisplayName();
-        List<String> rowStrings = rows.stream().map(Component::getString).toList();
-        List<ParagraphModel.Range> rowRanges = ParagraphModel.ranges(rowStrings);
-        service.warmScoreboardBatch(
-                mctranslator$scoreboardRequests(title, rows, rowStrings, rowRanges));
+        service.warmScoreboardBatch(mctranslator$scoreboardRequests(title, rows));
         List<Component> renderedRows = new ArrayList<>(rows);
 
-        Font font = getFont();
-        for (ParagraphModel.Range range : rowRanges) {
-            int start = range.start();
-            if (ParagraphModel.isBlank(rowStrings.get(start))) continue;
-            int end = range.end() + 1;
-            List<Component> paragraph = new ArrayList<>(rows.subList(start, end));
-            List<Component> translated = FabricTextStyle.renderTranslatedParagraph(
-                    paragraph, service::translateScoreboardLine, font);
-            if (translated != null && translated.size() == paragraph.size()) {
-                for (int i = 0; i < paragraph.size(); i++) {
-                    Component rendered = translated.get(i);
-                    if (service.scoreboardMode() == DisplayMode.BOTH) {
-                        rendered = paragraph.get(i).copy()
-                                .append(Component.literal("\u3000"))
-                                .append(rendered);
-                    }
-                    renderedRows.set(start + i, rendered);
-                }
-            }
+        for (int i = 0; i < rows.size(); i++) {
+            Component row = rows.get(i);
+            Component translated = FabricTextStyle.renderTranslated(
+                    "scoreboard", row, service::translateScoreboardLine);
+            if (translated != null) renderedRows.set(i, translated);
         }
 
         for (int i = 0; i < rows.size(); i++) {
@@ -116,18 +97,12 @@ public abstract class GuiScoreboardMixin {
     }
 
     private static List<String> mctranslator$scoreboardRequests(
-            Component title, List<Component> rows, List<String> rowStrings,
-            List<ParagraphModel.Range> rowRanges) {
+            Component title, List<Component> rows) {
         List<String> requests = new ArrayList<>();
         requests.add(FabricTextStyle.paragraphRequestText(List.of(title)));
-        for (ParagraphModel.Range range : rowRanges) {
-            int start = range.start();
-            if (ParagraphModel.isBlank(rowStrings.get(start))) {
-                requests.add("");
-                continue;
-            }
-            requests.add(FabricTextStyle.paragraphRequestText(
-                    rows.subList(start, range.end() + 1)));
+        for (Component row : rows) {
+            requests.add(row == null || row.getString().isBlank() ? ""
+                    : FabricTextStyle.paragraphRequestText(List.of(row)));
         }
         return requests;
     }

@@ -11,13 +11,14 @@ class ColorProfileTest {
 
     private static final int RED = 0xFF0000;
     private static final int BLUE = 0x0000FF;
+    private static final int N = ColorProfile.NO_COLOR;
 
     @Test
     void emptyHasNoColourOrStyle() {
         ColorProfile p = ColorProfile.empty();
         assertFalse(p.hasAnyColor());
         assertFalse(p.hasAnyStyle());
-        assertEquals(ColorProfile.NO_COLOR, p.colorAt(0, 5));
+        assertEquals(ColorProfile.NO_COLOR, p.dominantColor());
     }
 
     @Test
@@ -39,20 +40,15 @@ class ColorProfileTest {
     }
 
     @Test
-    void colorAtMapsIndexProportionally() {
-        ColorProfile p = new ColorProfile(new int[]{RED, BLUE}, false, false, false, false, false);
-        // translatedLen 4: indices 0,1 -> first half (RED), 2,3 -> second half (BLUE)
-        assertEquals(RED, p.colorAt(0, 4));
-        assertEquals(RED, p.colorAt(1, 4));
-        assertEquals(BLUE, p.colorAt(2, 4));
-        assertEquals(BLUE, p.colorAt(3, 4));
+    void dominantColourIsTheMostCommonExplicitColour() {
+        ColorProfile p = new ColorProfile(new int[]{RED, RED, BLUE, N}, false, false, false, false, false);
+        assertEquals(RED, p.dominantColor());
     }
 
     @Test
-    void colorAtClampsOutOfRange() {
-        ColorProfile p = new ColorProfile(new int[]{RED, BLUE}, false, false, false, false, false);
-        // Defensive: index beyond translatedLen must not throw.
-        assertEquals(BLUE, p.colorAt(99, 4));
-        assertEquals(ColorProfile.NO_COLOR, p.colorAt(0, 0));
+    void distinctColorCountCountsExplicitColoursOnly() {
+        assertEquals(0, new ColorProfile(new int[]{N, N}, false, false, false, false, false).distinctColorCount());
+        assertEquals(1, new ColorProfile(new int[]{RED, RED, N}, false, false, false, false, false).distinctColorCount());
+        assertEquals(2, new ColorProfile(new int[]{RED, BLUE, N}, false, false, false, false, false).distinctColorCount());
     }
 }

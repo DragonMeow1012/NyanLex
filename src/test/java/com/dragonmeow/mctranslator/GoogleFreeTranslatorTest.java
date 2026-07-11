@@ -174,6 +174,27 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
+    void semanticStyleSpansMayReorderWhileTheWholeSentenceUsesOneGtRequest() throws Exception {
+        List<String> sent = new java.util.ArrayList<>();
+        HttpTransport inline = url -> {
+            sent.add(qOf(url));
+            // Target grammar moves the item span before the action span. The boundary
+            // sentinels move with their semantic phrase instead of being split by length.
+            return googleResponse("70003白色禮物護符70004，70001已出售70002");
+        };
+        GoogleFreeTranslator gt = new GoogleFreeTranslator(inline, "auto");
+
+        TranslationResult result = gt.translate(
+                "⟦CS0⟧sold⟦/CS0⟧ ⟦CS1⟧White Gift Talisman⟦/CS1⟧", "zh-TW");
+
+        assertEquals(List.of("70001sold70002 70003White Gift Talisman70004"), sent,
+                "GT receives one complete sentence, never one request per colour run");
+        assertEquals("⟦CS1⟧白色禮物護符⟦/CS1⟧，⟦CS0⟧已出售⟦/CS0⟧",
+                result.translatedText(),
+                "the same semantic span IDs survive target-language word-order changes");
+    }
+
+    @Test
     void numberSlotRestoresIntoWholeSentenceTranslation() throws Exception {
         List<String> sent = new java.util.ArrayList<>();
         HttpTransport inline = url -> {
@@ -188,15 +209,15 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
-    void lostOrMutatedSentinelRevertsTheWholeLine() throws Exception {
+    void lostOrMutatedSentinelReturnsAnExplicitFailureInsteadOfAnIdentityEcho() throws Exception {
         // Google added a thousands separator to the sentinel: slot mapping would lie, so
-        // the WHOLE line reverts to the source (existing failure semantics; the R9
-        // provisional retry picks the line up later).
+        // the whole line is rejected. Returning the source here would be indistinguishable
+        // from a legitimate provider echo and could poison the durable identity cache.
         HttpTransport inline = url -> "[[[\"你贏得了 70,001 金幣\",\"src\",null,null]],null,\"en\"]";
         GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
 
         TranslationResult r = t.translate("You won ⟦MT0⟧ coins", "zh-TW");
-        assertEquals("You won ⟦MT0⟧ coins", r.translatedText());
+        assertEquals("", r.translatedText());
     }
 
     @Test

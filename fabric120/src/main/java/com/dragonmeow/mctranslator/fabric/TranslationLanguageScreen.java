@@ -63,8 +63,12 @@ public final class TranslationLanguageScreen extends Screen {
         cfg.followGameLanguage = minecraftCode == null;
         String selected = minecraftCode == null
                 ? minecraft.getLanguageManager().getSelected() : minecraftCode;
-        cfg.targetLang = TranslationLanguages.fromMinecraftCode(selected);
-        if (MctranslatorFabric.service() != null) MctranslatorFabric.service().setTargetLang(cfg.targetLang);
+        String nextTarget = TranslationLanguages.fromMinecraftCode(selected);
+        if (MctranslatorFabric.service() != null) {
+            MctranslatorFabric.service().setTargetLang(nextTarget);
+        } else {
+            cfg.targetLang = nextTarget;
+        }
         FabricTextStyle.clearRenderMemo();
         MctranslatorFabric.saveConfig();
         minecraft.setScreen(parent);

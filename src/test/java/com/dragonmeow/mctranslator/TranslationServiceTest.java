@@ -5,6 +5,7 @@ import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
+import com.dragonmeow.mctranslator.translate.TranslationException;
 import com.dragonmeow.mctranslator.translate.TranslationResult;
 import com.dragonmeow.mctranslator.translate.Translator;
 import org.junit.jupiter.api.Test;
@@ -193,6 +194,32 @@ class TranslationServiceTest {
     }
 
     @Test
+    void oneShotMarkedChatWaitsForExactStyleProjectionAfterPlainCacheHit() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        List<String> sent = new ArrayList<>();
+        Translator translator = (text, target) -> {
+            sent.add(text);
+            return new TranslationResult(text
+                    .replace("Hello", "你好")
+                    .replace("World", "世界"), "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, cfg.targetLang, DIRECT, 100);
+        assertEquals("你好 世界", cache.translateBlocking("Hello World"));
+        sent.clear();
+        TranslationService service = new TranslationService(cfg, cache, cache);
+        String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
+        List<String> got = new ArrayList<>();
+
+        service.translateChatAsync(marked, got::add);
+
+        assertTrue(got.isEmpty(), "the plain semantic hit must not finish immutable chat");
+        pump(service);
+        assertEquals(List.of(marked), sent);
+        assertEquals(List.of("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧"), got);
+    }
+
+    @Test
     void wantsChatTranslationRespectsTogglesAndFilter() {
         TranslatorConfig cfg = new TranslatorConfig();
         TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
@@ -303,6 +330,47 @@ class TranslationServiceTest {
         assertEquals(2, seenContexts.size());
         assertEquals(List.of("Iron Pickaxe", "Used in smelting"), seenContexts.get(1),
                 "warmTooltipBatch keeps sending the whole tooltip as context");
+    }
+
+    @Test
+    void scoreboardRowsKeepStableKeysWhileWholeSidebarRemainsContext() {
+        List<List<String>> seenBatches = new ArrayList<>();
+        List<List<String>> seenContexts = new ArrayList<>();
+        Translator fake = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang) {
+                return translated(text);
+            }
+
+            @Override public List<TranslationResult> translateBatch(
+                    List<String> texts, String targetLang, List<String> surfaceContext) {
+                seenBatches.add(new ArrayList<>(texts));
+                seenContexts.add(surfaceContext == null ? null : new ArrayList<>(surfaceContext));
+                return texts.stream().map(this::translated).toList();
+            }
+
+            private TranslationResult translated(String text) {
+                return new TranslationResult(text.replace("Purse", "錢包")
+                        .replace("Bits", "比特").replace("Gems", "寶石"), "en");
+            }
+        };
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.scoreboardMode = DisplayMode.TRANSLATION;
+        TranslationService service = service(cfg, fake, DIRECT);
+
+        service.warmScoreboardBatch(List.of("Purse: 100", "Bits: 20"));
+        assertEquals(1, seenBatches.size());
+        assertEquals(2, seenBatches.get(0).size());
+        assertEquals(2, seenContexts.get(0).size(),
+                "both independent rows are still supplied as one sidebar context");
+
+        service.warmScoreboardBatch(List.of("Gems: 3", "Purse: 999", "Bits: 21"));
+        assertEquals(2, seenBatches.size());
+        assertEquals(1, seenBatches.get(1).size(),
+                "adding Gems must not re-request the cached Purse/Bits rows");
+        assertTrue(seenBatches.get(1).get(0).contains("Gems"));
+        assertEquals(3, seenContexts.get(1).size(),
+                "the new full sidebar is still available to disambiguate the one miss");
+        assertEquals("比特: 21", service.translateScoreboardLine("Bits: 21").translated());
     }
 
     @Test
@@ -643,5 +711,167 @@ class TranslationServiceTest {
         s.reconcileItemNameWithTooltip("Aspect of the End", tooltip);
         pump(s);
         assertEquals(0, contextualNameCalls.get(), "matching names must not be re-bought per frame");
+    }
+
+    @Test
+    void aiAndGtSurfaceSettingsUseDifferentEnginePaths() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = true;
+        AtomicInteger aiCalls = new AtomicInteger();
+        AtomicInteger gtCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            return new TranslationResult("機器譯文", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            aiCalls.incrementAndGet();
+            return new TranslationResult("人工譯文", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        TranslationService service = new TranslationService(cfg, gt, ai);
+
+        service.translateChat("Hello world");
+        pump(service);
+        assertEquals("人工譯文", service.translateChat("Hello world").translated());
+        assertEquals(1, aiCalls.get());
+        assertEquals(0, gtCalls.get(), "healthy AI mode must never buy GT");
+
+        cfg.aiChat = false;
+        service.translateChat("Welcome to the server");
+        pump(service);
+        assertEquals("機器譯文", service.translateChat("Welcome to the server").translated());
+        assertEquals(1, aiCalls.get(), "GT mode must never consult AI");
+        assertEquals(1, gtCalls.get());
+    }
+
+    @Test
+    void existingGtCacheStaysHiddenUntilAiActuallyFailsThenAiRecoveryWins() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = true;
+        long[] now = {0L};
+        boolean[] aiUp = {false};
+        AtomicInteger aiCalls = new AtomicInteger();
+        AtomicInteger gtCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            return new TranslationResult("機器候補", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        assertEquals("機器候補", gt.translateBlocking("Hello world"));
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            aiCalls.incrementAndGet();
+            if (!aiUp[0]) throw new TranslationException("AI offline");
+            return new TranslationResult("人工精翻", "en");
+        }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        ai.setProvisionalRetryGate(() -> true);
+        TranslationService service = new TranslationService(cfg, gt, ai);
+
+        assertFalse(service.translateChat("Hello world").changed(),
+                "pre-cached GT must stay hidden before the first AI attempt");
+        assertFalse(service.translateChat("Hello world").changed());
+        pump(service);
+        assertEquals(1, aiCalls.get());
+        assertEquals("機器候補", service.translateChat("Hello world").translated(),
+                "GT becomes displayable only after AI records failure");
+        assertEquals(1, gtCalls.get(), "the existing GT row is reused without another request");
+
+        aiUp[0] = true;
+        now[0] = 1_000L;
+        pump(service);
+        assertEquals("人工精翻", service.translateChat("Hello world").translated(),
+                "AI is always the final display priority after recovery");
+        assertEquals(1, gtCalls.get(), "AI recovery must not rebuy GT");
+    }
+
+    @Test
+    void gtModeFailureNeverStartsAi() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = false;
+        AtomicInteger aiCalls = new AtomicInteger();
+        AtomicInteger gtCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            throw new TranslationException("GT offline");
+        }, cfg.targetLang, DIRECT, 100, 10_000L, () -> 0L);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            aiCalls.incrementAndGet();
+            return new TranslationResult("不應呼叫", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        TranslationService service = new TranslationService(cfg, gt, ai);
+
+        service.translateChat("Hello world");
+        pump(service);
+        assertEquals(1, gtCalls.get());
+        assertEquals(0, aiCalls.get(), "GT mode owns its own retries and never falls upward to AI");
+    }
+
+    @Test
+    void afterBothFailGtMayDisplayFirstButAiStillBecomesFinal() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = true;
+        long[] now = {0L};
+        boolean[] aiUp = {false};
+        boolean[] gtUp = {false};
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            if (!gtUp[0]) throw new TranslationException("GT offline");
+            return new TranslationResult("機器先到", "en");
+        }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            if (!aiUp[0]) throw new TranslationException("AI offline");
+            return new TranslationResult("人工最終", "en");
+        }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        ai.setProvisionalRetryGate(() -> true);
+        TranslationService service = new TranslationService(cfg, gt, ai);
+
+        service.translateChat("Hello world");
+        pump(service); // AI attempt fails and starts GT
+        pump(service); // GT attempt also fails
+
+        gtUp[0] = true;
+        now[0] = 1_000L;
+        pump(service);
+        assertEquals("機器先到", service.translateChat("Hello world").translated());
+
+        aiUp[0] = true;
+        now[0] = 3_000L;
+        pump(service);
+        assertEquals("人工最終", service.translateChat("Hello world").translated(),
+                "a later AI retry overrides GT; GT never overrides a landed AI final");
+    }
+
+    @Test
+    void exactStyleChatCallbackUpgradesGtToRecoveredAiSpanResult() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = true;
+        long[] now = {0L};
+        boolean[] aiUp = {false};
+        String source = "⟦CS0⟧sold⟦/CS0⟧ ⟦CS1⟧White Gift Talisman⟦/CS1⟧";
+        TranslationCache gt = new TranslationCache((text, target) -> new TranslationResult(
+                "⟦CS1⟧白色禮物護符⟦/CS1⟧，⟦CS0⟧機翻出售⟦/CS0⟧", "en"),
+                cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            if (!aiUp[0]) throw new TranslationException("AI offline");
+            return new TranslationResult(
+                    "⟦CS1⟧白色禮物護符⟦/CS1⟧，⟦CS0⟧精翻售出⟦/CS0⟧", "en");
+        }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        ai.setProvisionalRetryGate(() -> true);
+        TranslationService service = new TranslationService(cfg, gt, ai);
+        List<String> delivered = new ArrayList<>();
+
+        service.translateChatAsync(source, delivered::add);
+        pump(service); // AI fails, GT is queued
+        pump(service); // GT exact spans display first
+        assertEquals(List.of("⟦CS1⟧白色禮物護符⟦/CS1⟧，⟦CS0⟧機翻出售⟦/CS0⟧"), delivered);
+
+        aiUp[0] = true;
+        now[0] = 1_000L;
+        pump(service);
+        assertEquals(List.of(
+                "⟦CS1⟧白色禮物護符⟦/CS1⟧，⟦CS0⟧機翻出售⟦/CS0⟧",
+                "⟦CS1⟧白色禮物護符⟦/CS1⟧，⟦CS0⟧精翻售出⟦/CS0⟧"), delivered,
+                "the second callback lets the loader replace the same displayed chat row");
     }
 }

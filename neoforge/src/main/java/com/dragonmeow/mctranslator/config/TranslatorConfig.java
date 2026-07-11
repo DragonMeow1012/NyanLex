@@ -86,6 +86,13 @@ public final class TranslatorConfig {
     public int httpTimeoutMs = 4000;
 
     /**
+     * 事前冷卻節流：minimum interval, in milliseconds, between two outbound translation
+     * requests of the SAME engine (Google and AI each pace independently). Proactive
+     * spacing so the free endpoints don't see request bursts; 0 disables pacing.
+     */
+    public int requestCooldownMs = 400;
+
+    /**
      * After a failed translation, suppress retries of the same string for this
      * many milliseconds. Prevents a per-frame request storm (and 429 bans) when
      * a hovered item's translation keeps failing.
@@ -155,6 +162,7 @@ public final class TranslatorConfig {
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
+        if (requestCooldownMs < 0) requestCooldownMs = 400; // 0 is valid: pacing off
         if (failureBackoffMs < 0) failureBackoffMs = 10000;
         if (cacheMaxSize <= 0) cacheMaxSize = 5000;
         if (churnVariantThreshold < 2) churnVariantThreshold = 4;

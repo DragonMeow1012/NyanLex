@@ -1,4 +1,6 @@
 {
+  "config.mctranslator.request_cooldown": "Request cooldown: %s",
+  "config.mctranslator.request_cooldown.off": "Off",
   "key.mctranslator.mode": "Open Translation Settings",
   "key.mctranslator.retranslate": "Re-translate Pointed Item",
   "key.mctranslator.screenscan": "Translate Current Screen's Buttons/Options",

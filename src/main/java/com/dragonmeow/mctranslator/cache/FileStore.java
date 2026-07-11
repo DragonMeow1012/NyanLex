@@ -98,6 +98,39 @@ public final class FileStore implements PersistentStore {
     }
 
     @Override
+    public void removeBatch(java.util.Collection<String> keys) {
+        if (keys == null || keys.isEmpty()) return;
+        synchronized (lock) {
+            boolean changed = false;
+            for (String key : keys) {
+                if (key == null) continue;
+                changed |= values.remove(key) != null;
+                changed |= provisional.remove(key);
+            }
+            if (changed) persist();
+        }
+    }
+
+    @Override
+    public Map<String, String> provisionalEntries() {
+        Map<String, String> out = new LinkedHashMap<>();
+        synchronized (lock) {
+            for (String key : provisional) {
+                String value = values.get(key);
+                if (value != null) out.put(key, value);
+            }
+        }
+        return out;
+    }
+
+    @Override
+    public Map<String, String> entries() {
+        synchronized (lock) {
+            return new LinkedHashMap<>(values);
+        }
+    }
+
+    @Override
     public void clear() {
         synchronized (lock) {
             values.clear();

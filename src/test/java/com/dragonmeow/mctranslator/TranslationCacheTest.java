@@ -204,7 +204,7 @@ class TranslationCacheTest {
     }
 
     @Test
-    void aiTierShowsExistingGtImmediatelyThenReplacesItWithAi() {
+    void aiTierDoesNotReadExistingGtBeforeItsFirstAiAttempt() {
         TranslationCache gt = new TranslationCache(
                 (text, target) -> new TranslationResult("GT譯文", "en"),
                 "zh-TW", DIRECT, 100);
@@ -219,11 +219,12 @@ class TranslationCacheTest {
         ai.setFallback(gt, true);
         ai.setProvisionalRetryGate(() -> true);
 
-        assertEquals("GT譯文", ai.getCached("Hello"),
-                "GT is an immediate display fallback while AI is missing");
-        assertEquals(1, tasks.size(), "one AI supplement should be queued");
-        assertEquals("GT譯文", ai.getCached("Hello"));
-        assertEquals(1, tasks.size(), "repeated frames must not duplicate the AI supplement");
+        assertNull(ai.getCached("Hello"),
+                "a cold AI miss must not expose even an already-cached GT value");
+        assertEquals(0, tasks.size());
+        ai.requestAsync("Hello");
+        assertEquals(1, tasks.size(), "the first request belongs to AI, not GT");
+        assertNull(ai.getCached("Hello"));
 
         tasks.removeFirst().run();
         assertEquals("AI精翻", ai.getCached("Hello"), "AI replaces the provisional GT value");
@@ -919,6 +920,60 @@ class TranslationCacheTest {
     }
 
     @Test
+    void alternatingScoreboardStyleTopologiesNeitherRequestAgainNorRewriteBitsWording() {
+        AtomicInteger calls = new AtomicInteger();
+        TranslationCache cache = new TranslationCache((text, target) -> {
+            int call = calls.incrementAndGet();
+            String bits = call == 1 ? "比特" : call % 2 == 0 ? "碎幣" : "點數";
+            return new TranslationResult(text.replace("Purse", "錢包").replace("Bits", bits), "en");
+        }, "zh-TW", DIRECT, 100);
+        // Production AI caches have this gate. Before the regression fix it made every
+        // missing CS topology launch a presentation-only request that bypassed ChurnGuard.
+        cache.setProvisionalRetryGate(() -> true);
+
+        String plain = "Purse: 12,988 ⟦PB0⟧ Bits: 450";
+        assertEquals("錢包: 12,988 ⟦PB0⟧ 比特: 450", cache.translateBlocking(plain));
+
+        String first = "⟦CS0⟧Purse: ⟦/CS0⟧⟦CS1⟧12,988⟦/CS1⟧"
+                + " ⟦PB0⟧ ⟦CS2⟧Bits: ⟦/CS2⟧⟦CS3⟧450⟦/CS3⟧";
+        String second = "⟦CS4⟧Purse: 12,988⟦/CS4⟧"
+                + " ⟦PB0⟧ ⟦CS5⟧Bits: 450⟦/CS5⟧";
+        for (int i = 0; i < 20; i++) {
+            String source = i % 2 == 0 ? first : second;
+            String rendered = cache.getCached(source);
+            assertTrue(TextFilter.isStyleFallback(rendered));
+            assertEquals("錢包: 12,988 ⟦PB0⟧ 比特: 450",
+                    TextFilter.stripFormatting(rendered));
+        }
+
+        assertEquals(1, calls.get(),
+                "animated colour topology is presentation state, not new AI work");
+        assertEquals("錢包: 99 ⟦PB0⟧ 比特: 7",
+                cache.getCached("Purse: 99 ⟦PB0⟧ Bits: 7"),
+                "presentation variants must never overwrite the canonical semantic wording");
+    }
+
+    @Test
+    void explicitStyleResponseCannotOverwriteAnExistingFinalSemanticTranslation() {
+        AtomicInteger calls = new AtomicInteger();
+        TranslationCache cache = new TranslationCache((text, target) -> {
+            int call = calls.incrementAndGet();
+            return new TranslationResult(text.replace("Bits", call == 1 ? "比特" : "點數"), "en");
+        }, "zh-TW", DIRECT, 100);
+        cache.setProvisionalRetryGate(() -> true);
+
+        assertEquals("比特: 450", cache.translateBlocking("Bits: 450"));
+        String marked = "⟦CS0⟧Bits: ⟦/CS0⟧⟦CS1⟧450⟦/CS1⟧";
+        cache.requestCoalescedExactStyle(marked, ignored -> { }, true);
+        cache.flushBatch();
+        cache.flushBatch();
+
+        assertEquals(2, calls.get(), "the explicit exact-style request did reach the backend");
+        assertEquals("比特: 99", cache.getCached("Bits: 99"),
+                "a style-only answer with different wording cannot replace final meaning");
+    }
+
+    @Test
     void colourStrippedTierSubstitutesCurrentNumbers() {
         AtomicInteger calls = new AtomicInteger();
         TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);
@@ -1151,27 +1206,55 @@ class TranslationCacheTest {
     }
 
     @Test
-    void markedContentFailuresShareOneSemanticSentinelAndPlainRetranslateUnlocksIt() {
+    void damagedResponsesNeverLearnKeepOriginalAndRetryAfterExponentialBackoff() {
+        AtomicInteger calls = new AtomicInteger();
+        Translator broken = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("傷害 CS0 十", "en"); // markers eaten: damaged CS shape
+        };
+        long[] now = {0L};
+        TranslationCache cache = new TranslationCache(
+                broken, "zh-TW", DIRECT, 100, 1_000L, () -> now[0], null);
+        String marked = "⟦CS0⟧Damage 10⟦/CS0⟧";
+
+        cache.requestAsync(marked);                    // attempt 1 → 1s backoff
+        cache.requestAsync(marked);                    // inside backoff: suppressed
+        assertEquals(1, calls.get());
+        now[0] = 1_000L;
+        cache.requestAsync(marked);                    // attempt 2 → 2s backoff
+        now[0] = 3_000L;
+        cache.requestAsync(marked);                    // attempt 3 → 4s backoff
+        assertEquals(3, calls.get());
+        assertNull(cache.getCached(marked),
+                "three damaged responses must NOT become a durable keep-original");
+
+        now[0] = 7_000L;
+        cache.requestAsync(marked);                    // attempt 4: never permanently poisoned
+        assertEquals(4, calls.get(), "an expired backoff must buy a fresh retry forever");
+        now[0] = 8_000L;                               // attempt-4 backoff (8s) still active
+        cache.requestAsync(marked);
+        assertEquals(4, calls.get(), "retries stay exponentially spaced, not per-frame");
+    }
+
+    @Test
+    void emptyResponsesAreTrueFailuresAndKeepRetryingWithoutSentinel() {
         AtomicInteger calls = new AtomicInteger();
         Translator broken = (text, target) -> {
             calls.incrementAndGet();
             return new TranslationResult("", "en");
         };
+        long[] now = {0L};
+        Map<String, String> disk = new java.util.HashMap<>();
         TranslationCache cache = new TranslationCache(
-                broken, "zh-TW", DIRECT, 100, 0L, () -> 0L, null);
-        String marked = "⟦CS0⟧Damage 10⟦/CS0⟧";
+                broken, "zh-TW", DIRECT, 100, 1_000L, () -> now[0], inlineStore(disk));
 
-        cache.requestAsync(marked);
-        cache.requestAsync(marked);
-        cache.requestAsync(marked);
-        assertEquals(3, calls.get());
-        assertEquals(marked, cache.getCached(marked));
-        cache.requestAsync(marked);
-        assertEquals(3, calls.get(), "durable keep-original must stop the request loop");
-
-        cache.invalidate("Damage 10");
-        cache.requestAsync(marked);
-        assertEquals(4, calls.get(), "individual retranslate of the visible line unlocks all styles");
+        for (int i = 0; i < 5; i++) {
+            cache.requestAsync("Mystic Blade");
+            now[0] += 600_000L;                        // beyond any capped backoff window
+        }
+        assertEquals(5, calls.get(), "every expired window earns a real retry");
+        assertNull(cache.getCached("Mystic Blade"));
+        assertTrue(disk.isEmpty(), "no sentinel or value may be persisted for true failures");
     }
 
     @Test
@@ -1330,6 +1413,14 @@ class TranslationCacheTest {
             @Override public boolean isProvisional(String key) { return prov.contains(key); }
             @Override public void clear() { disk.clear(); prov.clear(); }
             @Override public void remove(String key) { disk.remove(key); prov.remove(key); }
+            @Override public Map<String, String> provisionalEntries() {
+                Map<String, String> out = new java.util.LinkedHashMap<>();
+                for (String key : prov) {
+                    String value = disk.get(key);
+                    if (value != null) out.put(key, value);
+                }
+                return out;
+            }
         };
     }
 
@@ -1412,24 +1503,32 @@ class TranslationCacheTest {
     }
 
     @Test
-    void provisionalAiSupplementStopsAfterThreeSessionAttemptsAndManualRedoUnlocks() {
+    void provisionalAiSupplementKeepsRetryingAfterBackoffInsteadOfLockingProvisional() {
         AtomicInteger calls = new AtomicInteger();
         Translator alwaysFallback = (text, target) -> {
             calls.incrementAndGet();
             return new TranslationResult("GT:" + text, "en", true);
         };
+        long[] now = {0L};
         TranslationCache cache = new TranslationCache(
-                alwaysFallback, "zh-TW", DIRECT, 100, 0L, () -> 0L, null);
+                alwaysFallback, "zh-TW", DIRECT, 100, 1_000L, () -> now[0], null);
         cache.setProvisionalRetryGate(() -> true);
 
-        cache.requestAsync("Summer Store Sale");
-        for (int i = 0; i < 20; i++) cache.getCached("Summer Store Sale");
-        assertEquals(4, calls.get(),
-                "one initial fallback plus three AI supplements is the hard session cap");
+        cache.requestAsync("Summer Store Sale");       // initial fallback stand-in
+        assertEquals(1, calls.get());
 
-        cache.invalidate("Summer Store Sale");
-        cache.requestAsync("Summer Store Sale");
-        assertEquals(5, calls.get(), "manual retranslation explicitly starts a fresh attempt family");
+        long[] expiries = {1_000L, 3_000L, 7_000L, 15_000L}; // 1s+2s+4s+8s exponential
+        for (int attempt = 0; attempt < expiries.length; attempt++) {
+            cache.getCached("Summer Store Sale");      // hit schedules one supplement
+            assertEquals(attempt + 2, calls.get());
+            cache.getCached("Summer Store Sale");      // inside backoff: quiet
+            assertEquals(attempt + 2, calls.get(), "backoff must throttle supplements");
+            now[0] = expiries[attempt];
+        }
+        assertEquals(5, calls.get(),
+                "the 4th supplement proves there is no permanent provisional lock");
+        assertEquals("GT:Summer Store Sale", cache.getCached("Summer Store Sale"),
+                "the stand-in keeps serving throughout");
     }
 
     @Test
@@ -1452,31 +1551,44 @@ class TranslationCacheTest {
     }
 
     @Test
-    void fallbackReadThroughSharesThreeAttemptsAcrossAllLobbyPlayersAndPlainRedoUnlocks() {
+    void fallbackReadThroughSharesOneSupplementFamilyAcrossAllLobbyPlayers() {
         TranslationCache gt = new TranslationCache((text, target) ->
                 new TranslationResult("GT:" + text, "en"), "zh-TW", DIRECT, 100);
         gt.requestAsync("Player0 joined the lobby!");
 
         AtomicInteger aiCalls = new AtomicInteger();
         java.util.Set<String> submitted = new java.util.HashSet<>();
+        long[] now = {0L};
         TranslationCache ai = new TranslationCache((text, target) -> {
             aiCalls.incrementAndGet();
             submitted.add(text);
-            return new TranslationResult("GT:" + text, "en", true);
-        }, "zh-TW", DIRECT, 100, 0L, () -> 0L, null);
+            throw new TranslationException("AI unavailable");
+        }, "zh-TW", DIRECT, 100, 10_000L, () -> now[0], null);
         ai.setFallback(gt, true);
         ai.setProvisionalRetryGate(() -> true);
 
+        assertNull(ai.getCached("Player1 joined the lobby!"));
+        ai.requestAsync("Player1 joined the lobby!");
         for (int i = 1; i <= 10; i++) {
             assertNotNull(ai.getCached("Player" + i + " joined the lobby!"));
         }
-        assertEquals(3, aiCalls.get(),
-                "all player IDs must share one semantic three-attempt supplement family");
+        assertEquals(1, aiCalls.get(),
+                "ten player IDs share one semantic supplement family and its backoff");
         assertEquals(1, submitted.size(), "only one canonical joined-lobby template is submitted");
 
-        ai.invalidate("Player99 joined the lobby!");
+        now[0] = 10_000L;                               // family backoff expired
         assertNotNull(ai.getCached("Player11 joined the lobby!"));
-        assertEquals(4, aiCalls.get(), "individual R on the plain line unlocks that template family");
+        ai.flushBatch();
+        ai.flushBatch();
+        assertEquals(2, aiCalls.get(), "the family retries once per expired backoff window");
+        assertEquals(1, submitted.size());
+
+        ai.invalidate("Player99 joined the lobby!");    // manual redo clears mark + backoff
+        assertNull(ai.getCached("Player12 joined the lobby!"),
+                "manual retry returns to strict AI-first ordering");
+        ai.requestAsync("Player12 joined the lobby!");
+        assertNotNull(ai.getCached("Player12 joined the lobby!"));
+        assertEquals(3, aiCalls.get(), "individual R on any variant unlocks the family at once");
     }
 
     @Test
@@ -1489,7 +1601,7 @@ class TranslationCacheTest {
                     ? new TranslationResult(text.replace("Summer", "GT Summer"), "en", true)
                     : new TranslationResult(text.replace("Summer", "AI Summer"), "en");
         },
-                "zh-TW", DIRECT, 100, 0L, () -> 0L, null);
+                "zh-TW", DIRECT, 100, 10_000L, () -> 0L, null);
         cache.setProvisionalRetryGate(() -> true);
 
         cache.requestAsync("Summer Store Sale");
@@ -1497,13 +1609,16 @@ class TranslationCacheTest {
 
         fallback[0] = true;
         String marked = "⟦CS0⟧Summer Store⟦/CS0⟧ ⟦CS1⟧Sale⟦/CS1⟧";
-        cache.requestAsync(marked);
+        cache.requestCoalescedExactStyle(marked, ignored -> { }, true);
+        cache.flushBatch();
+        cache.flushBatch();
         for (int i = 0; i < 20; i++) assertNotNull(cache.getCached(marked));
 
         assertEquals("AI Summer Store Sale", cache.getCached("Summer Store Sale"),
                 "a provisional styled fallback may not overwrite the final AI semantic row");
-        assertEquals(1, calls.get(),
-                "a final semantic row makes style-only fallback requests unnecessary");
+        assertEquals(2, calls.get(),
+                "the explicitly requested GT style answer was discarded; ordinary render"
+                        + " lookups must not launch any more presentation requests");
     }
 
     @Test
@@ -1563,20 +1678,22 @@ class TranslationCacheTest {
     }
 
     @Test
-    void finalOnlyLookupHidesAProvisionalGtFallback() {
+    void gtFallbackBecomesVisibleOnlyAfterAiFailureAndRemainsNonFinal() {
         TranslationCache gt = new TranslationCache(
                 (text, target) -> new TranslationResult(text.replace("Damage: ", "損壞："), "en"),
                 "zh-TW", DIRECT, 100);
         assertEquals("損壞：209", gt.translateBlocking("Damage: 209"));
 
         TranslationCache ai = new TranslationCache(
-                (text, target) -> new TranslationResult(text.replace("Damage: ", "傷害："), "en"),
-                "zh-TW", DIRECT, 100);
+                (text, target) -> { throw new TranslationException("AI unavailable"); },
+                "zh-TW", DIRECT, 100, 1_000L, () -> 0L);
         ai.setFallback(gt, true);
         ai.setProvisionalRetryGate(() -> false);
 
+        assertNull(ai.getCached("Damage: 209"));
+        ai.requestAsync("Damage: 209");
         assertEquals("損壞：209", ai.getCached("Damage: 209"),
-                "ordinary lookup may still expose the configured fallback");
+                "the configured GT fallback becomes visible after AI actually fails");
         assertNull(ai.getCachedFinal("Damage: 209"),
                 "context-rich AI surfaces must keep the original until AI is final");
     }
@@ -1617,5 +1734,362 @@ class TranslationCacheTest {
         assertEquals(2, calls.get());
         assertEquals(List.of("傷害：209"), delivered,
                 "the widget callback must never observe provisional GT wording");
+    }
+
+    // ---- v2 keep-original sentinel, failure ledger, and three-file separation ----
+
+    @Test
+    void threeEchoesMoveTheDurableIdentityDecisionIntoTheEngineCache() {
+        AtomicInteger calls = new AtomicInteger();
+        Translator echoing = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult(text, "en");
+        };
+        Map<String, String> aiDisk = new java.util.HashMap<>();
+        Map<String, String> failures = new java.util.HashMap<>();
+        PersistentStore aiStore = inlineStore(aiDisk);
+        PersistentStore failureStore = inlineStore(failures);
+        TranslationCache cache = new TranslationCache(
+                echoing, "zh-TW", DIRECT, 100, 0L, () -> 0L, aiStore);
+        cache.setFailureStore(failureStore);
+
+        cache.requestAsync("Rezzus");
+        cache.requestAsync("Rezzus");
+        cache.requestAsync("Rezzus");
+        assertEquals(3, calls.get());
+        assertFalse(failures.containsKey("Rezzus"),
+                "a confirmed identity is no longer a failure");
+        assertEquals("\0MT_KEEP_ORIGINAL2", aiDisk.get("Rezzus"),
+                "the terminal identity belongs to the engine's own cache");
+        assertEquals("Rezzus", cache.getCached("Rezzus"));
+        cache.requestAsync("Rezzus");
+        assertEquals(3, calls.get(), "a confirmed identity cache hit makes no request");
+
+        TranslationCache restarted = new TranslationCache(
+                echoing, "zh-TW", DIRECT, 100, 0L, () -> 0L, aiStore);
+        restarted.setFailureStore(failureStore);
+        assertEquals("Rezzus", restarted.getCached("Rezzus"), "identity decisions survive a restart");
+        restarted.requestAsync("Rezzus");
+        assertEquals(3, calls.get());
+
+        restarted.invalidate("Rezzus");
+        assertNull(restarted.getCached("Rezzus"), "manual retranslation removes the identity entry");
+        assertFalse(failures.containsKey("Rezzus"));
+    }
+
+    @Test
+    void legacyKeepOriginalSentinelIsDroppedOnReadAndRetranslated() {
+        AtomicInteger calls = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("T:" + text, "en");
+        };
+        Map<String, String> disk = new java.util.HashMap<>();
+        disk.put("Iron Pickaxe", "\0MT_KEEP_ORIGINAL"); // v1 sentinel: may be old poison
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(disk));
+
+        assertNull(cache.getCached("Iron Pickaxe"),
+                "a v1 sentinel is a miss, never a keep-original verdict");
+        assertFalse(disk.containsKey("Iron Pickaxe"),
+                "the possibly-poisoned v1 row is deleted the first time it is read");
+        cache.requestAsync("Iron Pickaxe");
+        assertEquals(1, calls.get(), "the line is bought again after the one-time unlock");
+        assertEquals("T:Iron Pickaxe", cache.getCached("Iron Pickaxe"));
+    }
+
+    @Test
+    void styleFallbackHitDoesNotSchedulePresentationOnlyWork() {
+        Map<String, String> disk = new java.util.HashMap<>();
+        disk.put("Hello World", "你好 世界");           // final semantic row, no projection yet
+        AtomicInteger calls = new AtomicInteger();
+        List<String> sent = new ArrayList<>();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            sent.add(text);
+            return new TranslationResult(text.replace("Hello", "你好").replace("World", "世界"), "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(disk));
+        cache.setProvisionalRetryGate(() -> true);
+        String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
+
+        String served = cache.getCached(marked);
+        assertTrue(TextFilter.isStyleFallback(served),
+                "the first frame still serves the semantic row as a style fallback");
+        assertTrue(sent.isEmpty(),
+                "generic render lookups must not buy an animated CS topology");
+
+        String next = cache.getCached(marked);
+        assertTrue(TextFilter.isStyleFallback(next));
+        assertEquals("你好 世界", TextFilter.stripFormatting(next));
+        assertEquals(0, calls.get(), "later frames keep reusing the semantic cache");
+    }
+
+    @Test
+    void exactStyleCoalescingWaitsForProjectionInsteadOfCompletingWithPlainHit() {
+        Map<String, String> disk = new java.util.HashMap<>();
+        disk.put("Hello World", "你好 世界");
+        AtomicInteger calls = new AtomicInteger();
+        List<String> sent = new ArrayList<>();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            sent.add(text);
+            return new TranslationResult(
+                    text.replace("Hello", "你好").replace("World", "世界"), "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(disk));
+        String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
+        java.util.concurrent.atomic.AtomicReference<String> delivered =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        cache.requestCoalescedExactStyle(marked, delivered::set, true);
+
+        assertNull(delivered.get(),
+                "one-shot chat must not terminally consume the marker-free semantic hit");
+        assertEquals(0, calls.get(), "the exact request remains coalesced until the settle queue flushes");
+        for (int i = 0; i < 4; i++) cache.flushBatch();
+
+        assertEquals(List.of(marked), sent, "the missing CS projection is translated exactly once");
+        assertEquals("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", delivered.get());
+        assertFalse(TextFilter.isStyleFallback(delivered.get()));
+        assertEquals(1, calls.get());
+    }
+
+    @Test
+    void gtStandInsPersistToTheGtFileAndAiFinalsToTheAiFile() {
+        boolean[] aiUp = {false};
+        AtomicInteger calls = new AtomicInteger();
+        Translator dispatcher = (text, target) -> {
+            calls.incrementAndGet();
+            return aiUp[0] ? new TranslationResult("AI:" + text, "en")
+                           : new TranslationResult("GT:" + text, "en", true);
+        };
+        Map<String, String> aiDisk = new java.util.HashMap<>();
+        Map<String, String> gtDisk = new java.util.HashMap<>();
+        TranslationCache cache = new TranslationCache(
+                dispatcher, "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(aiDisk));
+        cache.setProvisionalStore(inlineStore(gtDisk));
+        cache.setProvisionalRetryGate(() -> aiUp[0]);
+
+        cache.requestAsync("Hello world");             // AI down: GT stands in
+        assertEquals("GT:Hello world", cache.getCached("Hello world"),
+                "the GT stand-in is displayed immediately");
+        assertEquals("GT:Hello world", gtDisk.get("Hello world"),
+                "the stand-in is persisted into the GT file");
+        assertFalse(aiDisk.containsKey("Hello world"),
+                "the ai-cache file carries only final AI wording");
+
+        aiUp[0] = true;                                // AI recovered: hit schedules the redo
+        cache.getCached("Hello world");
+        assertEquals("AI:Hello world", cache.getCached("Hello world"),
+                "the landed AI wording overrides the GT stand-in on screen");
+        assertEquals("AI:Hello world", aiDisk.get("Hello world"));
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void legacyMixedProvisionalRowsMigrateToTheGtFileOnWiring() {
+        Map<String, String> aiDisk = new java.util.HashMap<>();
+        java.util.Set<String> prov = new java.util.HashSet<>();
+        aiDisk.put("Hello World", "GT:你好世界");       // old build: GT stand-in in ai-cache
+        prov.add("Hello World");
+        aiDisk.put("Iron Pickaxe", "鐵鎬");             // final AI row stays put
+        Map<String, String> gtDisk = new java.util.HashMap<>();
+        TranslationCache cache = new TranslationCache(
+                countingUpper(new AtomicInteger()), "zh-TW", DIRECT, 100,
+                10_000L, () -> 0L, provisionalStore(aiDisk, prov));
+
+        cache.setProvisionalStore(inlineStore(gtDisk));
+
+        assertEquals("GT:你好世界", gtDisk.get("Hello World"),
+                "mixed-in provisional rows move to the GT file once");
+        assertFalse(aiDisk.containsKey("Hello World"));
+        assertEquals("鐵鎬", aiDisk.get("Iron Pickaxe"), "final rows are not touched");
+    }
+
+    @Test
+    void temporaryFailureMarksSurviveRestartAndRetryAfterExpiry() {
+        AtomicInteger calls = new AtomicInteger();
+        Translator broken = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("", "en");
+        };
+        long[] now = {0L};
+        Map<String, String> failures = new java.util.HashMap<>();
+        PersistentStore failureStore = inlineStore(failures);
+        TranslationCache first = new TranslationCache(
+                broken, "zh-TW", DIRECT, 100, 1_000L, () -> now[0], null);
+        first.setFailureStore(failureStore);
+
+        first.requestAsync("Hello world");             // attempt 1 → mark temporary:1:1000
+        assertEquals(1, calls.get());
+        assertEquals("temporary:1:1000", failures.get("Hello world"));
+
+        now[0] = 500L;                                  // restart inside the backoff window
+        TranslationCache restarted = new TranslationCache(
+                broken, "zh-TW", DIRECT, 100, 1_000L, () -> now[0], null);
+        restarted.setFailureStore(failureStore);
+        restarted.requestAsync("Hello world");
+        assertEquals(1, calls.get(), "the rehydrated mark keeps throttling after a restart");
+
+        now[0] = 1_000L;                                // window expired: retry and escalate
+        restarted.requestAsync("Hello world");
+        assertEquals(2, calls.get());
+        assertEquals("temporary:2:3000", failures.get("Hello world"),
+                "the attempt count survives the restart and keeps escalating");
+    }
+
+    @Test
+    void zeroBackoffFailuresAreStillDurableAndQueuedUntilSuccess() {
+        AtomicInteger calls = new AtomicInteger();
+        boolean[] available = {false};
+        Translator flaky = (text, target) -> {
+            calls.incrementAndGet();
+            if (!available[0]) throw new TranslationException("offline");
+            return new TranslationResult("修復完成", "en");
+        };
+        Map<String, String> failures = new java.util.HashMap<>();
+        TranslationCache cache = new TranslationCache(
+                flaky, "zh-TW", DIRECT, 100, 0L, () -> 25L, null);
+        cache.setFailureStore(inlineStore(failures));
+
+        cache.requestAsync("Hello world");
+        assertEquals("temporary:1:25", failures.get("Hello world"),
+                "zero delay disables throttling, not persistence");
+
+        available[0] = true;
+        cache.flushBatch();
+        cache.flushBatch();
+        assertEquals("修復完成", cache.getCached("Hello world"));
+        assertFalse(failures.containsKey("Hello world"));
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void engineSuccessClearsOnlyItsOwnNamespacedFailure() {
+        Map<String, String> shared = new java.util.HashMap<>();
+        PersistentStore ledger = inlineStore(shared);
+        PersistentStore aiFailures = new com.dragonmeow.mctranslator.cache.NamespacedStore(ledger, "ai");
+        PersistentStore gtFailures = new com.dragonmeow.mctranslator.cache.NamespacedStore(ledger, "gt");
+        aiFailures.put("Hello world", "temporary:1:0");
+        gtFailures.put("Hello world", "temporary:2:0");
+
+        TranslationCache ai = new TranslationCache(
+                (text, target) -> new TranslationResult("人工翻譯", "en"),
+                "zh-TW", DIRECT, 100, 0L, () -> 0L, null);
+        ai.setFailureStore(aiFailures);
+        ai.requestAsync("Hello world");
+
+        assertNull(aiFailures.get("Hello world"));
+        assertEquals("temporary:2:0", gtFailures.get("Hello world"),
+                "an AI success must not erase a GT failure for the same source");
+    }
+
+    @Test
+    void confirmedAiIdentityDoesNotSuppressGtForTheSameSource() {
+        AtomicInteger gtCalls = new AtomicInteger();
+        Map<String, String> shared = new java.util.HashMap<>();
+        PersistentStore ledger = inlineStore(shared);
+        Map<String, String> aiDisk = new java.util.HashMap<>();
+        Map<String, String> gtDisk = new java.util.HashMap<>();
+
+        TranslationCache ai = new TranslationCache(
+                (text, target) -> new TranslationResult(text, "en"),
+                "zh-TW", DIRECT, 100, 0L, () -> 0L, inlineStore(aiDisk));
+        ai.setFailureStore(new com.dragonmeow.mctranslator.cache.NamespacedStore(ledger, "ai"));
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            return new TranslationResult("機器翻譯", "en");
+        }, "zh-TW", DIRECT, 100, 0L, () -> 0L, inlineStore(gtDisk));
+        gt.setFailureStore(new com.dragonmeow.mctranslator.cache.NamespacedStore(ledger, "gt"));
+
+        ai.requestAsync("Rezzus");
+        ai.requestAsync("Rezzus");
+        ai.requestAsync("Rezzus");
+        assertEquals("Rezzus", ai.getCached("Rezzus"));
+
+        gt.requestAsync("Rezzus");
+        assertEquals("機器翻譯", gt.getCached("Rezzus"));
+        assertEquals(1, gtCalls.get(), "GT owns an independent terminal decision");
+    }
+
+    @Test
+    void repeatedStyleProjectionEchoCannotPoisonSuccessfulAiMeaningOrStartGt() {
+        AtomicInteger gtCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            return new TranslationResult("錯誤候補", "en");
+        }, "zh-TW", DIRECT, 100);
+        Map<String, String> aiDisk = new java.util.HashMap<>();
+        TranslationCache ai = new TranslationCache((text, target) ->
+                text.contains("⟦CS") ? new TranslationResult(text, "en")
+                        : new TranslationResult("你好世界", "en"),
+                "zh-TW", DIRECT, 100, 0L, () -> 0L, inlineStore(aiDisk));
+        ai.setFallback(gt, true);
+        ai.setProvisionalRetryGate(() -> true);
+
+        ai.requestAsync("Hello world");
+        String marked = "⟦CS0⟧Hello world⟦/CS0⟧";
+        for (int i = 0; i < 5; i++) {
+            ai.getCached(marked);
+            ai.flushBatch();
+            ai.flushBatch();
+        }
+
+        assertEquals("你好世界", ai.getCached("Hello world"),
+                "presentation failures cannot replace good semantic AI wording with KEEP_ORIGINAL");
+        assertEquals("你好世界", TextFilter.stripFormatting(ai.getCached(marked)));
+        assertEquals(0, gtCalls.get(),
+                "a CS projection failure is not an AI semantic failure and must not start GT");
+    }
+
+    @Test
+    void lateGtReadThroughCannotOverwriteConcurrentlyLandedAiFinal() throws Exception {
+        Map<String, String> gtRows = new java.util.concurrent.ConcurrentHashMap<>();
+        java.util.concurrent.CountDownLatch enteredGtRead = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch releaseGtRead = new java.util.concurrent.CountDownLatch(1);
+        boolean[] blockReads = {false};
+        PersistentStore gtStore = new PersistentStore() {
+            @Override public String get(String key) {
+                if (blockReads[0] && "Hello world".equals(key)) {
+                    enteredGtRead.countDown();
+                    try {
+                        releaseGtRead.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                return gtRows.get(key);
+            }
+            @Override public void put(String key, String value) { gtRows.put(key, value); }
+            @Override public void clear() { gtRows.clear(); }
+        };
+        TranslationCache gt = new TranslationCache(countingUpper(new AtomicInteger()),
+                "zh-TW", DIRECT, 100, 1_000L, () -> 0L, gtStore);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            throw new TranslationException("AI offline");
+        }, "zh-TW", DIRECT, 100, 1_000L, () -> 0L);
+        ai.requestAsync("Hello world");
+        ai.setFallback(gt, true);
+        gtRows.put("Hello world", "機器候補");
+        blockReads[0] = true;
+
+        java.util.concurrent.ExecutorService worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.Future<String> observed = worker.submit(() -> ai.getCached("Hello world"));
+            assertTrue(enteredGtRead.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertTrue(ai.replaceFinal("Hello world", "人工最終"));
+            releaseGtRead.countDown();
+
+            assertEquals("人工最終", observed.get(5, java.util.concurrent.TimeUnit.SECONDS),
+                    "the own-tier recheck linearises AI ahead of the late GT read");
+            assertEquals("人工最終", ai.getCached("Hello world"));
+            assertEquals("人工最終", ai.getCachedFinal("Hello world"));
+        } finally {
+            releaseGtRead.countDown();
+            worker.shutdownNow();
+        }
     }
 }
