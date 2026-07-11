@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "mctranslator",
+  "version": "${version}",
+  "name": "Minecraft Translator",
+  "description": "Client-side asynchronous translation for legacy Minecraft.",
+  "authors": ["DragonMeow"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": { "client": ["com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod"] },
+  "mixins": [{ "config": "mctranslator.mixins.json", "environment": "client" }],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "~1.14.4",
+    "java": ">=8"
+  }
+}
