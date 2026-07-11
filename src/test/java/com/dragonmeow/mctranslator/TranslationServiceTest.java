@@ -811,6 +811,41 @@ class TranslationServiceTest {
     }
 
     @Test
+    void strictAiModeNeverFallsBackToGtAndRecoversOnAi() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = true;
+        cfg.disableGoogleFallbackForAi = true;
+        long[] now = {0L};
+        boolean[] aiUp = {false};
+        AtomicInteger aiCalls = new AtomicInteger();
+        AtomicInteger gtCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            return new TranslationResult("GT result", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            aiCalls.incrementAndGet();
+            if (!aiUp[0]) throw new TranslationException("AI offline");
+            return new TranslationResult("AI result", "en");
+        }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        ai.setProvisionalRetryGate(() -> true);
+        TranslationService service = new TranslationService(cfg, gt, ai);
+
+        service.translateChat("Hello world");
+        pump(service);
+        assertEquals(1, aiCalls.get());
+        assertEquals(0, gtCalls.get(), "strict AI mode must not start GT after AI failure");
+        assertFalse(service.translateChat("Hello world").changed());
+
+        aiUp[0] = true;
+        now[0] = 1_000L;
+        pump(service);
+        assertEquals("AI result", service.translateChat("Hello world").translated());
+        assertEquals(0, gtCalls.get());
+    }
+
+    @Test
     void gtModeFailureNeverStartsAi() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.chatMode = DisplayMode.TRANSLATION;

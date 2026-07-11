@@ -70,6 +70,18 @@ public final class TranslationConfigScreen extends Screen {
             b.setMessage(cooldownLabel(cfg));
         }).bounds(left, y, full, 18).build());
         y += 22;
+        this.addRenderableWidget(Button.builder(debugLabel(cfg), b -> {
+            cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
+            if (!cfg.debugTranslationOverlay) MctranslatorFabric.clearDebugLog();
+            MctranslatorFabric.saveConfig();
+            b.setMessage(debugLabel(cfg));
+        }).bounds(left, y, rowWidth, 18).build());
+        this.addRenderableWidget(Button.builder(aiFallbackLabel(cfg), b -> {
+            cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
+            MctranslatorFabric.saveConfig();
+            b.setMessage(aiFallbackLabel(cfg));
+        }).bounds(right, y, rowWidth, 18).build());
+        y += 22;
         // Engine for the "translate current screen" (P) hotkey: 機翻 (Google) or AI 精翻.
         this.addRenderableWidget(Button.builder(screenScanEngineLabel(cfg), b -> {
             cfg.aiScreenScan = !cfg.aiScreenScan;
@@ -133,6 +145,16 @@ public final class TranslationConfigScreen extends Screen {
                 ? Component.translatable("config.mctranslator.request_cooldown.off")
                 : Component.literal(cfg.requestCooldownMs + " ms");
         return Component.translatable("config.mctranslator.request_cooldown", state);
+    }
+
+    private static Component debugLabel(TranslatorConfig cfg) {
+        return Component.translatable("config.mctranslator.debug",
+                Component.translatable(cfg.debugTranslationOverlay ? "options.on" : "options.off"));
+    }
+
+    private static Component aiFallbackLabel(TranslatorConfig cfg) {
+        return Component.translatable("config.mctranslator.ai.disable_gt_fallback",
+                Component.translatable(cfg.disableGoogleFallbackForAi ? "options.on" : "options.off"));
     }
 
 

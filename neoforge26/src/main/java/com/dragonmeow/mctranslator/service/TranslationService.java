@@ -53,6 +53,7 @@ public final class TranslationService {
             // One-way, failure-gated fallback. GT mode selects google directly and can
             // never reach AI; AI mode may reach google only after an actual AI failure.
             ai.setFallback(google, true);
+            ai.setFallbackEnabled(() -> !config.disableGoogleFallbackForAi);
         }
 
         ChurnGuard guard = config.churnGuard
@@ -130,6 +131,13 @@ public final class TranslationService {
             if (followAiRecovery) {
                 if (exactStyle) ai.requestCoalescedExactStyleFinal(source, recoveredFinal);
                 else ai.requestCoalescedFinal(source, recoveredFinal);
+            }
+            // Strict AI mode deliberately leaves this request on the AI cache.
+            // Subsequent renders retry after the normal failure backoff, and the
+            // recovery waiter above delivers a later successful AI result.
+            if (config.disableGoogleFallbackForAi) {
+                if (always && !finalAiDelivered.get()) callback.accept(null);
+                return;
             }
             if (!ai.mayUseFallback(source)) {
                 if (always && !finalAiDelivered.get()) callback.accept(null);

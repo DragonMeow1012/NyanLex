@@ -8,6 +8,7 @@
     "BookPageMixin",
     "BossBarMixin",
     "ChatComponentMixin",
+    "DebugHudMixin",
     "EntityNameTagMixin",
     "FontSplitMixin",
     "GuiGraphicsTextMixin",

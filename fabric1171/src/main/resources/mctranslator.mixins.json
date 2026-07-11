@@ -5,8 +5,13 @@
   "compatibilityLevel": "JAVA_16",
   "client": [
     "AbstractContainerScreenAccessor",
+    "BookPageMixin",
+    "BossBarMixin",
     "ChatComponentMixin",
+    "DebugHudMixin",
+    "EntityNameTagMixin",
     "FontSplitMixin",
+    "GuiScoreboardMixin",
     "OptionsScreenMixin",
     "TextFieldMixin"
   ],

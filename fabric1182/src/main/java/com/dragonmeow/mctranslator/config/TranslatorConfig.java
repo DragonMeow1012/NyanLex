@@ -46,6 +46,9 @@ public final class TranslatorConfig {
     /** Engine for the always-on custom-GUI text surface ({@link #screenTextMode}). */
     public boolean aiScreenText = false;
 
+    /** Keep AI-selected surfaces on AI after temporary failures instead of using GT. */
+    public boolean disableGoogleFallbackForAi = false;
+
     /** OpenAI-compatible base URL (chat/completions is appended). Default: Gemini (high free quota). */
     public String aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
     /** Model id, e.g. {@code gemini-3.1-flash-lite}, {@code gpt-5.4-mini}, {@code deepseek-chat}. */
@@ -90,7 +93,7 @@ public final class TranslatorConfig {
      * requests of the SAME engine (Google and AI each pace independently). Proactive
      * spacing so the free endpoints don't see request bursts; 0 disables pacing.
      */
-    public int requestCooldownMs = 400;
+    public int requestCooldownMs = 2000;
 
     /**
      * After a failed translation, suppress retries of the same string for this
@@ -162,7 +165,7 @@ public final class TranslatorConfig {
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
-        if (requestCooldownMs < 0) requestCooldownMs = 400; // 0 is valid: pacing off
+        if (requestCooldownMs < 0) requestCooldownMs = 2000; // 0 is valid: pacing off
         if (failureBackoffMs < 0) failureBackoffMs = 10000;
         if (cacheMaxSize <= 0) cacheMaxSize = 5000;
         if (churnVariantThreshold < 2) churnVariantThreshold = 4;

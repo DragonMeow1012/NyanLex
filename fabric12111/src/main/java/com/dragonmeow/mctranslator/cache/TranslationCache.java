@@ -7,6 +7,7 @@ import com.dragonmeow.mctranslator.translate.TranslationException;
 import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
 import com.dragonmeow.mctranslator.translate.TranslationResult;
 import com.dragonmeow.mctranslator.translate.TranslationTemplate;
+import com.dragonmeow.mctranslator.translate.PriorityTranslationExecutor;
 import com.dragonmeow.mctranslator.translate.Translator;
 
 import java.util.ArrayList;
@@ -90,6 +91,7 @@ public final class TranslationCache {
 
     private volatile TranslationCache fallback;
     private volatile boolean fallbackHitsProvisional;
+    private volatile BooleanSupplier fallbackEnabled = () -> true;
     private volatile ChurnGuard churnGuard = new ChurnGuard();
 
     private final Map<String, Long> failedUntil = new ConcurrentHashMap<>();
@@ -170,6 +172,19 @@ public final class TranslationCache {
         resumeFailureFallbacks();
     }
 
+    /** Live policy switch used by strict-AI mode; existing cache wiring need not be rebuilt. */
+    public void setFallbackEnabled(BooleanSupplier enabled) {
+        this.fallbackEnabled = enabled == null ? () -> true : enabled;
+    }
+
+    private boolean isFallbackEnabled() {
+        try {
+            return fallbackEnabled.getAsBoolean();
+        } catch (RuntimeException ignored) {
+            return true;
+        }
+    }
+
     public void setChurnGuard(ChurnGuard churnGuard) {
         this.churnGuard = churnGuard;
     }
@@ -213,7 +228,7 @@ public final class TranslationCache {
     }
 
     private void resumeFailureFallbacks() {
-        if (!fallbackHitsProvisional || fallback == null) return;
+        if (!isFallbackEnabled() || !fallbackHitsProvisional || fallback == null) return;
         for (Map.Entry<String, TranslationTemplate.Snapshot> entry : retrySnapshots.entrySet()) {
             if (!entry.getKey().startsWith(STYLE_FAILURE_PREFIX)) {
                 requestFallback(entry.getValue());
@@ -261,6 +276,7 @@ public final class TranslationCache {
 
     /** True only when this engine failed and has no final semantic wording of its own. */
     public boolean mayUseFallback(String source) {
+        if (!isFallbackEnabled()) return false;
         if (!hasFailureState(source)) return false;
         TranslationTemplate.Snapshot plain = templates.prepare(stripStyle(source));
         String ownSemantic = lookupSnapshot(plain, this);
@@ -285,7 +301,7 @@ public final class TranslationCache {
                              boolean includeLowerFallback) {
         if (source == null) return null;
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
-        TranslationCache sibling = fallback;
+        TranslationCache sibling = isFallbackEnabled() ? fallback : null;
 
         // Style is not meaning, but CS markers carry the alignment needed to apply
         // the CURRENT component's styles to the translated words. A marked request
@@ -614,7 +630,7 @@ public final class TranslationCache {
 
         long expectedGeneration = generation.get();
         long expectedRevision = keyRevision(key);
-        executor.execute(() -> {
+        executeHigh(() -> {
             long debugId = 0L;
             try {
                 if (lookupSnapshot(snapshot, this) == null) {
@@ -830,7 +846,7 @@ public final class TranslationCache {
 
         long expectedGeneration = generation.get();
         Map<String, Long> expectedRevisions = revisions(send);
-        executor.execute(() -> {
+        executeHigh(() -> {
             try {
                 translateBatch(send, null, expectedGeneration, expectedRevisions);
             } finally {
@@ -872,7 +888,7 @@ public final class TranslationCache {
         List<String> requestContext = context(surfaceLines);
         long expectedGeneration = generation.get();
         Map<String, Long> expectedRevisions = revisions(send);
-        executor.execute(() -> {
+        executeLow(() -> {
             try {
                 translateBatch(send, requestContext, expectedGeneration, expectedRevisions);
             } finally {
@@ -882,7 +898,7 @@ public final class TranslationCache {
     }
 
     public void translateAllAsync(List<String> sources, Consumer<List<String>> onResults) {
-        executor.execute(() -> {
+        executeLow(() -> {
             warmBatch(sources);
             List<String> results = new ArrayList<>(sources.size());
             for (String source : sources) {
@@ -1271,7 +1287,7 @@ public final class TranslationCache {
         TranslationTemplate.Snapshot snapshot = templates.prepare(semanticKey);
         long expectedGeneration = generation.get();
         long expectedRevision = keyRevision(snapshot.key());
-        executor.execute(() -> {
+        executeHigh(() -> {
             long debugId = debugSubmitted(List.of(snapshot.key()));
             try {
                 TranslationResult result = translator.translate(snapshot.key(), targetLang);
@@ -1321,6 +1337,16 @@ public final class TranslationCache {
         failTemporarily(stateKey, attempt);
         retrySnapshots.put(stateKey, snapshot);
         requestFallback(snapshot);
+    }
+
+    private void executeHigh(Runnable task) {
+        if (executor instanceof PriorityTranslationExecutor priority) priority.executeHigh(task);
+        else executor.execute(task);
+    }
+
+    private void executeLow(Runnable task) {
+        if (executor instanceof PriorityTranslationExecutor priority) priority.executeLow(task);
+        else executor.execute(task);
     }
 
     private void failStyleProjection(TranslationTemplate.Snapshot snapshot) {
@@ -1555,12 +1581,14 @@ public final class TranslationCache {
      * including a failure restored from the shared, engine-namespaced ledger.
      */
     private boolean fallbackAllowed(String source) {
+        if (!isFallbackEnabled()) return false;
         if (!fallbackHitsProvisional) return true;
         return mayUseFallback(source);
     }
 
     /** Start the lower-priority engine only after this engine actually failed. */
     private void requestFallback(TranslationTemplate.Snapshot snapshot) {
+        if (!isFallbackEnabled()) return;
         TranslationCache lower = fallback;
         if (!fallbackHitsProvisional || lower == null || snapshot == null) return;
         // A CS projection is presentation only. If the AI semantic wording already

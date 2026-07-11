@@ -26,15 +26,15 @@ class TranslatorConfigTest {
         assertEquals(4, cfg.churnVariantThreshold);
         assertEquals(60, cfg.churnWindowSeconds);
         assertEquals(300, cfg.churnCooldownSeconds);
-        assertEquals(400, cfg.requestCooldownMs, "事前冷卻預設 400ms");
+        assertEquals(2000, cfg.requestCooldownMs, "事前冷卻預設 400ms");
     }
 
     @Test
     void requestCooldownNormalizesNegativeButKeepsZero() {
-        // Negative is invalid → back to the 400ms default; 0 is a VALID value (pacing off).
+        // Negative is invalid → back to the 2000ms default; 0 is a VALID value (pacing off).
         TranslatorConfig negative = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": -1 }"));
-        assertEquals(400, negative.requestCooldownMs);
+        assertEquals(2000, negative.requestCooldownMs);
 
         TranslatorConfig off = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": 0 }"));

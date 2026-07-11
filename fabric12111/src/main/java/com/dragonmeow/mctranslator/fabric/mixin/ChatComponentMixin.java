@@ -16,18 +16,20 @@ public abstract class ChatComponentMixin {
     @Accessor("allMessages")
     public abstract java.util.List<GuiMessage> mctranslator$getAllMessages();
 
-    @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIIZ)V",
+    @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;Lnet/minecraft/client/gui/Font;IIIZZ)V",
             at = @At("HEAD"), require = 0)
-    private void mctranslator$enterChatRender(GuiGraphics graphics, int tickCount,
-                                               int mouseX, int mouseY, boolean focused,
+    private void mctranslator$enterChatRender(GuiGraphics graphics, net.minecraft.client.gui.Font font,
+                                               int tickCount, int mouseX, int mouseY,
+                                               boolean focused, boolean showBackground,
                                                CallbackInfo ci) {
         InternalRenderGuard.enter();
     }
 
-    @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIIZ)V",
+    @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;Lnet/minecraft/client/gui/Font;IIIZZ)V",
             at = @At("RETURN"), require = 0)
-    private void mctranslator$exitChatRender(GuiGraphics graphics, int tickCount,
-                                              int mouseX, int mouseY, boolean focused,
+    private void mctranslator$exitChatRender(GuiGraphics graphics, net.minecraft.client.gui.Font font,
+                                              int tickCount, int mouseX, int mouseY,
+                                              boolean focused, boolean showBackground,
                                               CallbackInfo ci) {
         InternalRenderGuard.exit();
     }

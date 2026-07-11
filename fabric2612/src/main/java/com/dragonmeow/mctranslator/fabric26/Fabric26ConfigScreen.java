@@ -76,6 +76,12 @@ public final class Fabric26ConfigScreen extends Screen {
             b.setMessage(cooldownLabel(cfg));
         }).bounds(right, y, rowWidth, 18).build());
         y += step;
+        this.addRenderableWidget(Button.builder(aiFallbackLabel(cfg), b -> {
+            cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
+            MctranslatorFabric26.saveConfig();
+            b.setMessage(aiFallbackLabel(cfg));
+        }).bounds(left, y, rowWidth * 2 + gap, 18).build());
+        y += step;
         this.addRenderableWidget(Button.builder(screenScanEngineLabel(cfg), b -> {
             cfg.aiScreenScan = !cfg.aiScreenScan;
             MctranslatorFabric26.saveConfig();
@@ -124,6 +130,10 @@ public final class Fabric26ConfigScreen extends Screen {
 
     private static Component debugLabel(TranslatorConfig cfg) {
         return Component.translatable("config.mctranslator.debug", Component.translatable(cfg.debugTranslationOverlay ? "options.on" : "options.off"));
+    }
+    private static Component aiFallbackLabel(TranslatorConfig cfg) {
+        return Component.translatable("config.mctranslator.ai.disable_gt_fallback",
+                Component.translatable(cfg.disableGoogleFallbackForAi ? "options.on" : "options.off"));
     }
 
     /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value). */

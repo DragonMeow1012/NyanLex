@@ -2,6 +2,7 @@ package com.dragonmeow.mctranslator.fabric.mixin;
 
 import com.dragonmeow.mctranslator.fabric.FabricTextStyle;
 import com.dragonmeow.mctranslator.fabric.MctranslatorFabric;
+import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 
 import net.minecraft.client.gui.Font;
@@ -23,6 +24,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * MC 1.20.1 HUD text translation. 1.20.1 has no {@code drawStringWithBackdrop}, and renders
@@ -30,13 +32,17 @@ import java.util.List;
  * renderOverlayMessage methods were split out only in 1.20.2), so this covers the two surfaces
  * that 1.20.1 draws in their own methods via {@code drawString}: the scoreboard sidebar
  * ({@code displayScoreboardSidebar}) and the held-item name ({@code renderSelectedItemName}).
- * Title / action-bar are not translated on 1.20.1.
+ * The shared {@code render} redirect additionally identifies the title, subtitle and
+ * overlay-message fields so those inline call sites receive the correct surface policy.
  */
 @Mixin(Gui.class)
 public abstract class GuiScoreboardMixin {
 
     @Shadow
     public abstract Font getFont();
+    @Shadow private Component overlayMessageString;
+    @Shadow private Component title;
+    @Shadow private Component subtitle;
 
     private final ArrayDeque<Component> mctranslator$scoreboardSources = new ArrayDeque<>();
     private final ArrayDeque<Component> mctranslator$scoreboardRendered = new ArrayDeque<>();
@@ -136,12 +142,38 @@ public abstract class GuiScoreboardMixin {
             require = 0)
     private int mctranslator$heldName(GuiGraphics g, Font font, Component text, int x, int y, int color) {
         TranslationService service = MctranslatorFabric.service();
-        if (service != null && text != null) {
-            Component t = FabricTextStyle.renderTranslated("held", text, service::translateHeld);
-            if (t != null) return com.dragonmeow.mctranslator.translate.InternalRenderGuard.call(
-                    () -> g.drawString(font, t, x, y, color));
+        return mctranslator$drawTranslated("held", service == null ? null : service::translateHeld,
+                g, font, text, x, y, color);
+    }
+
+    @Redirect(method = "render", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/GuiGraphics;drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I"), require = 0)
+    private int mctranslator$inlineHud(GuiGraphics g, Font font, Component text, int x, int y, int color) {
+        TranslationService service = MctranslatorFabric.service();
+        if (service != null && text == overlayMessageString) {
+            return mctranslator$drawTranslated("actionBar", service::translateActionBar, g, font, text, x, y, color);
+        }
+        if (service != null && (text == title || text == subtitle)) {
+            return mctranslator$drawTranslated("title", service::translateTitle, g, font, text, x, y, color);
         }
         return com.dragonmeow.mctranslator.translate.InternalRenderGuard.call(
                 () -> g.drawString(font, text, x, y, color));
+    }
+
+    private static int mctranslator$drawTranslated(String id, Function<String, TranslationDecision> fn,
+                                                    GuiGraphics g, Font font, Component text,
+                                                    int x, int y, int color) {
+        Component shown = fn == null || text == null ? null : FabricTextStyle.renderTranslated(id, text, fn);
+        if (shown == null) shown = text;
+        int center = x + font.width(text) / 2;
+        List<Component> lines = FabricTextStyle.splitLines(shown);
+        int ret = 0;
+        for (int i = 0; i < lines.size(); i++) {
+            Component line = lines.get(i);
+            int ly = y - (lines.size() - 1 - i) * FabricTextStyle.STACK_LINE_GAP;
+            ret = com.dragonmeow.mctranslator.translate.InternalRenderGuard.call(
+                    () -> g.drawString(font, line, center - font.width(line) / 2, ly, color));
+        }
+        return ret;
     }
 }

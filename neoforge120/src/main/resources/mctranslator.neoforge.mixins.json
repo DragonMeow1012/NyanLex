@@ -8,6 +8,7 @@
     "GuiScoreboardMixin",
     "BossBarMixin",
     "ChatComponentMixin",
+    "DebugHudMixin",
     "AbstractContainerScreenAccessor",
     "BookPageMixin",
     "GuiGraphicsTextMixin",

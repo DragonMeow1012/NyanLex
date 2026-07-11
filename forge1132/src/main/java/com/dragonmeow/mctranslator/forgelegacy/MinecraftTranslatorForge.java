@@ -1,11 +1,14 @@
 package com.dragonmeow.mctranslator.forgelegacy;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.client.event.ClientChatReceivedEvent;
 import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
@@ -14,22 +17,29 @@ import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 
 @Mod("mctranslator")
 public final class MinecraftTranslatorForge {
     private final LegacyTranslator translator = new LegacyTranslator();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private final File configFile = new File("config", "mctranslator-forge-legacy.json");
+    private LegacyConfig config;
     private final KeyBinding toggle = new KeyBinding("key.mctranslator.toggle", GLFW.GLFW_KEY_G,
             "category.mctranslator");
     private volatile boolean enabled = true;
     private volatile boolean internal;
 
     public MinecraftTranslatorForge() {
+        config = loadConfig();
         ClientRegistry.registerKeyBinding(toggle);
         MinecraftForge.EVENT_BUS.register(this);
     }
 
     @SubscribeEvent public void onKey(InputEvent.KeyInputEvent event) {
-        if (toggle.isPressed()) enabled = !enabled;
+        if (toggle.isPressed()) { enabled = !enabled; config.enabled = enabled; saveConfig(); }
     }
 
     @SubscribeEvent public void onChat(ClientChatReceivedEvent event) {
@@ -39,7 +49,8 @@ public final class MinecraftTranslatorForge {
         if (!hasLetters(text)) return;
         event.setCanceled(true);
         final Minecraft minecraft = Minecraft.getInstance();
-        translator.translate(text, target(minecraft), translated -> minecraft.addScheduledTask(() -> {
+        translator.translate(text, target(minecraft), config.aiEnabled, true, config,
+                translated -> minecraft.addScheduledTask(() -> {
             internal = true;
             try {
                 ITextComponent output = new TextComponentString(text + "\n" + translated);
@@ -55,10 +66,67 @@ public final class MinecraftTranslatorForge {
         for (int i = 0; i < lines.size(); i++) {
             String source = lines.get(i).getString();
             if (!hasLetters(source)) continue;
-            String translated = translator.cached(source, target);
-            if (translated == null) translator.translate(source, target, ignored -> {});
+            String translated = translator.cached(source, target, config.aiEnabled);
+            if (translated == null) translator.translate(source, target, config.aiEnabled, true, config, ignored -> {});
             else if (!translated.equals(source)) lines.set(i, new TextComponentString(translated));
         }
+    }
+
+    @SubscribeEvent public void onOverlayText(RenderGameOverlayEvent.Text event) {
+        if (!enabled || config == null) return;
+        translateOverlay(event.getLeft());
+        translateOverlay(event.getRight());
+    }
+
+    @SubscribeEvent public void onOverlayPost(RenderGameOverlayEvent.Post event) {
+        if (config == null || !config.debugTranslationOverlay
+                || event.getType() != RenderGameOverlayEvent.ElementType.ALL) return;
+        Minecraft minecraft = Minecraft.getInstance();
+        List<LegacyTranslator.DebugEntry> entries = translator.debugSnapshot();
+        int start = Math.max(0, entries.size() - 8), y = 6;
+        for (int i = start; i < entries.size(); i++) {
+            LegacyTranslator.DebugEntry entry = entries.get(i);
+            minecraft.fontRenderer.drawStringWithShadow("[" + entry.engine + " " + entry.status + "] " + entry.source,
+                    6, y, 0x80FF80);
+            y += 10;
+        }
+    }
+
+    private void translateOverlay(List<String> lines) {
+        String target = target(Minecraft.getInstance());
+        for (int i = 0; i < lines.size(); i++) {
+            String source = lines.get(i);
+            if (!hasLetters(source)) continue;
+            String translated = translator.cached(source, target, config.aiEnabled);
+            if (translated == null) translator.translate(source, target, config.aiEnabled, true, config, ignored -> {});
+            else lines.set(i, translated);
+        }
+    }
+
+    private LegacyConfig loadConfig() {
+        if (configFile.isFile()) try {
+            FileReader reader = new FileReader(configFile);
+            try {
+                LegacyConfig loaded = GSON.fromJson(reader, LegacyConfig.class);
+                if (loaded != null) {
+                    if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
+                    enabled = loaded.enabled;
+                    return loaded;
+                }
+            } finally { reader.close(); }
+        } catch (Exception ignored) {}
+        LegacyConfig created = new LegacyConfig();
+        saveConfig(created);
+        return created;
+    }
+
+    private void saveConfig() { saveConfig(config); }
+    private void saveConfig(LegacyConfig value) {
+        try {
+            File parent = configFile.getParentFile(); if (parent != null) parent.mkdirs();
+            FileWriter writer = new FileWriter(configFile);
+            try { GSON.toJson(value, writer); } finally { writer.close(); }
+        } catch (Exception ignored) {}
     }
 
     private static String target(Minecraft minecraft) {

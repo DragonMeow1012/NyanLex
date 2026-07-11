@@ -6,9 +6,13 @@
   "client": [
     "AbstractContainerScreenAccessor",
     "BookPageMixin",
+    "BossBarMixin",
     "ChatComponentMixin",
+    "DebugHudMixin",
     "FontSplitMixin",
     "GuiGraphicsTextMixin",
+    "GuiScoreboardMixin",
+    "EntityNameTagMixin",
     "OptionsScreenMixin",
     "TextFieldMixin"
   ],

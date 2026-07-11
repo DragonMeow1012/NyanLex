@@ -11,7 +11,6 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
@@ -27,7 +26,10 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     private static final ThreadLocal<Boolean> INTERNAL_CHAT = new ThreadLocal<Boolean>() {
         @Override protected Boolean initialValue() { return Boolean.FALSE; }
     };
-    private static final LegacyTranslator TRANSLATOR = new LegacyTranslator();
+    static final LegacyTranslator TRANSLATOR = new LegacyTranslator();
+    private static final ThreadLocal<Boolean> INTERNAL_RENDER = new ThreadLocal<Boolean>() {
+        @Override protected Boolean initialValue() { return Boolean.FALSE; }
+    };
     private static LegacyTranslatorMod instance;
     private static LegacyConfig config;
     private static Path configPath;
@@ -53,7 +55,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         final Minecraft minecraft = Minecraft.getInstance();
         final String source = message.getString();
         final String target = currentTarget(minecraft);
-        TRANSLATOR.translate(source, config.sourceLang, target, translated -> minecraft.execute(() -> {
+        TRANSLATOR.translate(source, target, config.aiEnabled, true, config, translated -> minecraft.execute(() -> {
             Component output = new TextComponent(translated).setStyle(message.getStyle());
             if (config.showOriginal && !translated.equals(source)) {
                 output = message.copy().append(new TextComponent("\n")).append(output);
@@ -70,9 +72,9 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
             Component line = lines.get(i);
             String source = line.getString();
             if (!shouldTranslate(source)) continue;
-            String translated = TRANSLATOR.cached(source, target);
+            String translated = TRANSLATOR.cached(source, target, config.aiEnabled);
             if (translated == null) {
-                TRANSLATOR.translate(source, config.sourceLang, target, ignored -> {});
+                TRANSLATOR.translate(source, target, config.aiEnabled, true, config, ignored -> {});
             } else if (!translated.equals(source)) {
                 lines.set(i, new TextComponent(translated).setStyle(line.getStyle()));
             }
@@ -87,6 +89,54 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     }
 
     static LegacyConfig config() { return config; }
+    public static Component translateVisible(Component source) {
+        if (source == null || config == null || !config.enabled || INTERNAL_RENDER.get()) return source;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.level == null
+                || minecraft.screen instanceof LegacySettingsScreen
+                || minecraft.screen instanceof LegacyLanguageScreen) return source;
+        String plain = source.getString();
+        if (!shouldTranslate(plain)) return source;
+        String target = currentTarget(minecraft);
+        String translated = TRANSLATOR.cached(plain, target, config.aiEnabled);
+        if (translated == null) {
+            TRANSLATOR.translate(plain, target, config.aiEnabled, true, config, ignored -> {});
+            return source;
+        }
+        return translated.equals(plain) ? source : new TextComponent(translated).setStyle(source.getStyle());
+    }
+    public static String translateVisibleString(String source) {
+        if (source == null || config == null || !config.enabled || INTERNAL_RENDER.get()) return source;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.level == null
+                || minecraft.screen instanceof LegacySettingsScreen
+                || minecraft.screen instanceof LegacyLanguageScreen || !shouldTranslate(source)) return source;
+        String target = currentTarget(minecraft);
+        String translated = TRANSLATOR.cached(source, target, config.aiEnabled);
+        if (translated == null) {
+            TRANSLATOR.translate(source, target, config.aiEnabled, true, config, ignored -> {});
+            return source;
+        }
+        return translated;
+    }
+
+    public static boolean beginInternalRender() {
+        boolean previous = INTERNAL_RENDER.get();
+        INTERNAL_RENDER.set(Boolean.TRUE);
+        return previous;
+    }
+    public static void endInternalRender(boolean previous) { INTERNAL_RENDER.set(previous); }
+    public static List<String> debugLines() {
+        List<LegacyTranslator.DebugEntry> entries = TRANSLATOR.debugSnapshot();
+        java.util.ArrayList<String> lines = new java.util.ArrayList<String>();
+        int start = Math.max(0, entries.size() - 8);
+        for (int i = start; i < entries.size(); i++) {
+            LegacyTranslator.DebugEntry entry = entries.get(i);
+            lines.add("[" + entry.engine + " " + entry.status + "] " + entry.source);
+        }
+        return lines;
+    }
+    public static boolean debugEnabled() { return config != null && config.debugTranslationOverlay; }
     static void saveConfig() {
         try {
             Files.createDirectories(configPath.getParent());
@@ -101,7 +151,12 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
                 Reader reader = Files.newBufferedReader(configPath);
                 try {
                     LegacyConfig loaded = GSON.fromJson(reader, LegacyConfig.class);
-                    if (loaded != null) return loaded;
+                    if (loaded != null) {
+                        if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
+                        if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 2000;
+                        if (loaded.failureBackoffMs < 0) loaded.failureBackoffMs = 10000;
+                        return loaded;
+                    }
                 } finally { reader.close(); }
             } catch (Exception ignored) {}
         }

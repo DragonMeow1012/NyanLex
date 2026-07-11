@@ -9,7 +9,8 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $corePackages = 'cache', 'config', 'service', 'style', 'translate'
-$trees = 'fabric120', 'fabric26', 'neoforge', 'neoforge120', 'neoforge26'
+$trees = 'fabric1182', 'fabric1194', 'fabric120', 'fabric12111',
+    'fabric2612', 'fabric26', 'neoforge', 'neoforge120', 'neoforge26'
 
 $copied = 0
 foreach ($tree in $trees) {

@@ -8,6 +8,8 @@ import com.dragonmeow.mctranslator.service.TranslationService;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.numbers.NumberFormat;
 import net.minecraft.network.chat.numbers.StyledFormat;
@@ -115,6 +117,83 @@ public abstract class HudMixin {
                     : Neo26TextStyle.paragraphRequestText(List.of(row)));
         }
         return requests;
+    }
+
+    @Inject(method = "extractRenderState", at = @At("TAIL"), require = 0)
+    private void mctranslator$debugRequests(GuiGraphicsExtractor graphics,
+                                            DeltaTracker deltaTracker,
+                                            CallbackInfo ci) {
+        var log = MctranslatorNeoForge26.debugLog();
+        var config = MctranslatorNeoForge26.config();
+        Minecraft minecraft = Minecraft.getInstance();
+        if (log == null || config == null || !config.debugTranslationOverlay
+                || minecraft == null || minecraft.font == null) return;
+
+        com.dragonmeow.mctranslator.translate.InternalRenderGuard.enter();
+        try {
+            List<com.dragonmeow.mctranslator.translate.TranslationDebugLog.Entry> entries = log.snapshot(5);
+            Font font = minecraft.font;
+            int availableWidth = Math.max(160, graphics.guiWidth() - 16);
+            int maxWidth = Math.min(440,
+                    Math.min(availableWidth, Math.max(220, graphics.guiWidth() / 3)));
+            int lineHeight = 9;
+            int x = 6;
+            int y = 6;
+            int height = 14 + entries.size() * lineHeight;
+            graphics.fill(x - 3, y - 3, x + maxWidth + 3, y + height, 0xB0101010);
+
+            long waiting = entries.stream().filter(e -> e.status()
+                    == com.dragonmeow.mctranslator.translate.TranslationDebugLog.Status.IN_FLIGHT).count();
+            long failed = entries.stream().filter(e -> e.status()
+                    == com.dragonmeow.mctranslator.translate.TranslationDebugLog.Status.FAILED).count();
+            String header = "MT DEBUG  最近 " + entries.size() + " 項  …" + waiting + "  ✕" + failed;
+            graphics.text(font, Component.literal(header), x, y, 0xFFFFD060, false);
+
+            int row = y + 11;
+            for (var entry : entries) {
+                String state = switch (entry.status()) {
+                    case IN_FLIGHT -> "…";
+                    case SUCCESS -> "✓";
+                    case FALLBACK -> "↪";
+                    case KEEP_ORIGINAL -> "•";
+                    case FAILED -> "✕";
+                };
+                String provider = "AI".equalsIgnoreCase(entry.engine()) ? "AI" : "GT";
+                String prefix = "[" + provider + " #" + entry.requestId() + " " + state + "] ";
+                String translated = switch (entry.status()) {
+                    case IN_FLIGHT -> "等待中";
+                    case FAILED -> "失敗";
+                    case KEEP_ORIGINAL -> "略過";
+                    case SUCCESS, FALLBACK -> entry.translation() == null
+                            ? "無結果" : entry.translation();
+                };
+                String sourceText = com.dragonmeow.mctranslator.translate.TranslationDebugLog
+                        .compactText(entry.text());
+                String translatedText = com.dragonmeow.mctranslator.translate.TranslationDebugLog
+                        .compactText(translated);
+                int bodyBudget = Math.max(40, maxWidth - font.width(prefix + "原:  → 譯: "));
+                int sourceBudget = bodyBudget / 2;
+                int translatedBudget = bodyBudget - sourceBudget;
+                String body = "原: " + mctranslator$ellipsize(font, sourceText, sourceBudget)
+                        + " → 譯: " + mctranslator$ellipsize(font, translatedText, translatedBudget);
+                int color = switch (entry.status()) {
+                    case IN_FLIGHT -> 0xFFFFD080;
+                    case SUCCESS -> 0xFF80FF80;
+                    case FALLBACK -> 0xFF80C0FF;
+                    case KEEP_ORIGINAL -> 0xFFC0C0C0;
+                    case FAILED -> 0xFFFF8080;
+                };
+                graphics.text(font, Component.literal(prefix + body), x, row, color, false);
+                row += lineHeight;
+            }
+        } finally {
+            com.dragonmeow.mctranslator.translate.InternalRenderGuard.exit();
+        }
+    }
+
+    private static String mctranslator$ellipsize(Font font, String text, int width) {
+        if (text == null || text.isEmpty() || font.width(text) <= width) return text == null ? "" : text;
+        return font.plainSubstrByWidth(text, Math.max(4, width - font.width("…"))) + "…";
     }
 
     @Redirect(

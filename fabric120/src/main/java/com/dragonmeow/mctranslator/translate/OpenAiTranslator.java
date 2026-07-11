@@ -41,6 +41,26 @@ public final class OpenAiTranslator implements Translator {
     private final LongSupplier clock;
     private final RequestPacer pacer;
 
+    // Per-key health is kept separately from the all-keys gate. A dead/limited key
+    // must not be retried on every other round-robin request while another key is
+    // healthy. Changing endpoint/model/key list invalidates all old health state.
+    private final Object keyStateLock = new Object();
+    private final Map<String, KeyState> keyStates = new HashMap<>();
+    private String settingsSignature;
+
+    private static final long KEY_RATE_LIMIT_COOLDOWN_MS = 60_000L;
+    private static final long KEY_TRANSIENT_COOLDOWN_MS = 10_000L;
+
+    private static final class KeyState {
+        final long unavailableUntil;
+        final boolean rateLimited;
+
+        KeyState(long unavailableUntil, boolean rateLimited) {
+            this.unavailableUntil = unavailableUntil;
+            this.rateLimited = rateLimited;
+        }
+    }
+
     // ---- global 429 backoff gate ----
     // When EVERY key in one rotation comes back 429, the account/model quota itself is
     // exhausted — rotating keys just burns more quota. The gate fails every request fast
@@ -105,6 +125,7 @@ public final class OpenAiTranslator implements Translator {
         if (s == null || !s.isConfigured()) {
             throw new TranslationException("AI translator not configured (model / API key missing)");
         }
+        refreshSettingsState(s);
         long gateUntil = rateLimitedUntil;
         if (clock.getAsLong() < gateUntil) {
             // Fail fast without HTTP: the caller's DispatchingTranslator falls back to Google.
@@ -406,6 +427,7 @@ public final class OpenAiTranslator implements Translator {
         String url = chatCompletionsUrl(s.baseUrl());
         IOException last = null;
         int usableKeys = 0;
+        int attemptedKeys = 0;
         int rateLimitedKeys = 0;
         // Start at a rotating offset so load spreads across keys.
         int start = Math.floorMod(keyCursor.getAndIncrement(), keys.size());
@@ -413,12 +435,16 @@ public final class OpenAiTranslator implements Translator {
             String key = keys.get((start + n) % keys.size());
             if (key == null || key.isBlank()) continue;
             usableKeys++;
+            key = key.trim();
+            if (isKeyUnavailable(key)) continue;
+            attemptedKeys++;
             Map<String, String> headers = new HashMap<>();
-            headers.put("Authorization", "Bearer " + key.trim());
+            headers.put("Authorization", "Bearer " + key);
             for (int attempt = 0; attempt <= RETRIES_PER_KEY; attempt++) {
                 try {
                     pacer.acquire(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
                     String content = parseContent(transport.post(url, body, headers));
+                    clearKeyState(key);
                     resetRateLimitGate(); // any success proves the quota is back
                     return content;
                 } catch (IOException e) {
@@ -427,6 +453,13 @@ public final class OpenAiTranslator implements Translator {
                     // hole deeper. Move straight to the next key.
                     if (isRateLimited(e)) {
                         rateLimitedKeys++;
+                        markKeyUnavailable(key, clock.getAsLong() + KEY_RATE_LIMIT_COOLDOWN_MS, true);
+                        break;
+                    }
+                    // Invalid credentials should stay quarantined until the user edits
+                    // the provider settings; retrying them only adds latency/noise.
+                    if (isAuthenticationFailure(e)) {
+                        markKeyUnavailable(key, Long.MAX_VALUE, false);
                         break;
                     }
                     // A 400 most likely means this endpoint rejects an optional field
@@ -441,13 +474,19 @@ public final class OpenAiTranslator implements Translator {
                         sleep(RETRY_BACKOFF_MS * (attempt + 1));
                         continue;
                     }
+                    if (isTransient(e)) {
+                        markKeyUnavailable(key, clock.getAsLong() + KEY_TRANSIENT_COOLDOWN_MS, false);
+                    }
                     break;
                 }
             }
         }
         // A FULL rotation of 429s means the whole quota is exhausted: trip the gate.
-        if (usableKeys > 0 && rateLimitedKeys == usableKeys) {
+        if (attemptedKeys > 0 && rateLimitedKeys == attemptedKeys && allKeysUnavailable(keys)) {
             tripRateLimitGate();
+        }
+        if (usableKeys > 0 && attemptedKeys == 0) {
+            throw new TranslationException("AI request deferred: all API keys are cooling down");
         }
         throw new TranslationException("AI request failed (all keys): "
                 + (last == null ? "no usable key" : last.getMessage()), last);
@@ -478,6 +517,66 @@ public final class OpenAiTranslator implements Translator {
     private static boolean isRateLimited(IOException e) {
         String m = e.getMessage();
         return m != null && m.contains("HTTP 429");
+    }
+
+    private static boolean isAuthenticationFailure(IOException e) {
+        String m = e.getMessage();
+        return m != null && (m.contains("HTTP 401") || m.contains("HTTP 403"));
+    }
+
+    private void refreshSettingsState(AiSettings s) {
+        String signature = (s.baseUrl() == null ? "" : s.baseUrl().trim()) + '\n'
+                + (s.model() == null ? "" : s.model().trim()) + '\n'
+                + String.join("\n", s.apiKeys().stream()
+                .filter(java.util.Objects::nonNull).map(String::trim).toList());
+        synchronized (keyStateLock) {
+            if (signature.equals(settingsSignature)) return;
+            settingsSignature = signature;
+            keyStates.clear();
+            keyCursor.set(0);
+        }
+        synchronized (gateLock) {
+            penaltyMs = 0;
+            rateLimitedUntil = 0;
+        }
+    }
+
+    private boolean isKeyUnavailable(String key) {
+        synchronized (keyStateLock) {
+            KeyState state = keyStates.get(key);
+            if (state == null) return false;
+            if (state.unavailableUntil == Long.MAX_VALUE) return true;
+            if (clock.getAsLong() < state.unavailableUntil) return true;
+            keyStates.remove(key);
+            return false;
+        }
+    }
+
+    private void markKeyUnavailable(String key, long until, boolean rateLimited) {
+        synchronized (keyStateLock) {
+            keyStates.put(key, new KeyState(until, rateLimited));
+        }
+    }
+
+    private void clearKeyState(String key) {
+        synchronized (keyStateLock) {
+            keyStates.remove(key);
+        }
+    }
+
+    private boolean allKeysUnavailable(List<String> keys) {
+        boolean found = false;
+        synchronized (keyStateLock) {
+            long now = clock.getAsLong();
+            for (String raw : keys) {
+                if (raw == null || raw.isBlank()) continue;
+                found = true;
+                KeyState state = keyStates.get(raw.trim());
+                if (state == null || (state.unavailableUntil != Long.MAX_VALUE
+                        && now >= state.unavailableUntil)) return false;
+            }
+        }
+        return found;
     }
 
     private static boolean isTransient(IOException e) {

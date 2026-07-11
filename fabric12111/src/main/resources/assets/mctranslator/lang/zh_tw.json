@@ -27,6 +27,7 @@
   "config.mctranslator.language.follow": "跟隨遊戲（%s）",
   "config.mctranslator.screen_scan_engine": "介面擷取引擎：%s",
   "config.mctranslator.debug": "翻譯請求偵錯浮窗：%s",
+  "config.mctranslator.ai.disable_gt_fallback": "AI 精翻停用 GT 回退：%s",
   "config.mctranslator.request_cooldown": "翻譯請求冷卻：%s",
   "config.mctranslator.request_cooldown.off": "關閉",
   "config.mctranslator.ai.open": "AI 翻譯設定（模型／API 金鑰）...",

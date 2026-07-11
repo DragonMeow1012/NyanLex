@@ -62,6 +62,26 @@ public final class Neo26ConfigScreen extends Screen {
                         b -> this.minecraft.setScreenAndShow(new Neo26LanguageScreen(this)))
                 .bounds(left, y, rowWidth * 2 + gap, 18).build());
         y += step;
+        this.addRenderableWidget(Button.builder(debugLabel(cfg), b -> {
+            cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
+            if (!cfg.debugTranslationOverlay) MctranslatorNeoForge26.clearDebugLog();
+            MctranslatorNeoForge26.saveConfig();
+            b.setMessage(debugLabel(cfg));
+        }).bounds(left, y, rowWidth, 18).build());
+        // 事前冷卻節流：minimum spacing between outbound requests (per engine, Google 與 AI
+        // 各自計時). Click cycles 關閉 → 200 → … → 2000 ms; the pacer reads the value live.
+        this.addRenderableWidget(Button.builder(cooldownLabel(cfg), b -> {
+            cfg.requestCooldownMs = nextCooldown(cfg.requestCooldownMs);
+            MctranslatorNeoForge26.saveConfig();
+            b.setMessage(cooldownLabel(cfg));
+        }).bounds(right, y, rowWidth, 18).build());
+        y += step;
+        this.addRenderableWidget(Button.builder(aiFallbackLabel(cfg), b -> {
+            cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
+            MctranslatorNeoForge26.saveConfig();
+            b.setMessage(aiFallbackLabel(cfg));
+        }).bounds(left, y, rowWidth * 2 + gap, 18).build());
+        y += step;
         this.addRenderableWidget(Button.builder(screenScanEngineLabel(cfg), b -> {
             cfg.aiScreenScan = !cfg.aiScreenScan;
             MctranslatorNeoForge26.saveConfig();
@@ -106,6 +126,32 @@ public final class Neo26ConfigScreen extends Screen {
 
     private static Component screenScanEngineLabel(TranslatorConfig cfg) {
         return Component.translatable("config.mctranslator.screen_scan_engine", aiText(cfg.aiScreenScan));
+    }
+
+    private static Component debugLabel(TranslatorConfig cfg) {
+        return Component.translatable("config.mctranslator.debug", Component.translatable(cfg.debugTranslationOverlay ? "options.on" : "options.off"));
+    }
+    private static Component aiFallbackLabel(TranslatorConfig cfg) {
+        return Component.translatable("config.mctranslator.ai.disable_gt_fallback",
+                Component.translatable(cfg.disableGoogleFallbackForAi ? "options.on" : "options.off"));
+    }
+
+    /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value). */
+    private static final int[] COOLDOWN_STEPS = {0, 200, 400, 600, 800, 1000, 1500, 2000};
+
+    /** Next step above the current value; wraps to 0 (關閉) past the top. Off-list values snap up. */
+    private static int nextCooldown(int current) {
+        for (int v : COOLDOWN_STEPS) {
+            if (v > current) return v;
+        }
+        return 0;
+    }
+
+    private static Component cooldownLabel(TranslatorConfig cfg) {
+        Component state = cfg.requestCooldownMs <= 0
+                ? Component.translatable("config.mctranslator.request_cooldown.off")
+                : Component.literal(cfg.requestCooldownMs + " ms");
+        return Component.translatable("config.mctranslator.request_cooldown", state);
     }
 
     private int row(String label, int x, int y, int step,

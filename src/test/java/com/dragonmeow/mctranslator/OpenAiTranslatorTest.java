@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -478,6 +479,56 @@ class OpenAiTranslatorTest {
         // A round that SUCCEEDED must not gate the following request.
         t.translate("Hi again", "zh-TW");
         assertTrue(calls.get() > 2, "no gate may be up after a successful round");
+    }
+
+    @Test
+    void rateLimitedKeyIsQuarantinedWhileHealthyKeyContinues() throws Exception {
+        List<String> used = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                String auth = headers.get("Authorization");
+                used.add(auth);
+                if ("Bearer limited".equals(auth)) throw new IOException("HTTP 429");
+                return chatJson("1. ok");
+            }
+        };
+        long[] now = {0L};
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("limited", "healthy")), () -> now[0]);
+
+        t.translate("one", "zh-TW");   // limited -> healthy
+        t.translate("two", "zh-TW");   // healthy starts
+        t.translate("three", "zh-TW"); // limited would start, but remains quarantined
+
+        assertEquals(1, used.stream().filter("Bearer limited"::equals).count(),
+                "a 429 key must not be retried on every rotation during its cooldown");
+        assertEquals(3, used.stream().filter("Bearer healthy"::equals).count());
+    }
+
+    @Test
+    void changingProviderSettingsImmediatelyClearsOldAllKeyGate() throws Exception {
+        AtomicReference<AiSettings> settings = new AtomicReference<>(
+                new AiSettings("https://old/v1", "old", List.of("old-key")));
+        AtomicInteger calls = new AtomicInteger();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                calls.incrementAndGet();
+                if ("Bearer old-key".equals(headers.get("Authorization"))) throw new IOException("HTTP 429");
+                return chatJson("1. new-key-works");
+            }
+        };
+        long[] now = {0L};
+        OpenAiTranslator t = new OpenAiTranslator(fake, settings::get, () -> now[0]);
+
+        assertThrows(TranslationException.class, () -> t.translate("first", "zh-TW"));
+        assertTrue(t.isRateLimited());
+        settings.set(new AiSettings("https://new/v1", "new", List.of("new-key")));
+
+        assertEquals("new-key-works", t.translate("second", "zh-TW").translatedText(),
+                "a newly configured endpoint/key must not inherit the old provider's gate");
+        assertEquals(2, calls.get());
     }
 
     @Test

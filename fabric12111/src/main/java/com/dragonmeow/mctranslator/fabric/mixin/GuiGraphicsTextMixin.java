@@ -26,14 +26,14 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 public abstract class GuiGraphicsTextMixin {
 
     @ModifyVariable(
-            method = "drawString(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)I",
+            method = "drawString(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private String mctranslator$screenTextString(String text) {
         return MctranslatorFabric.screenText(text);
     }
 
     @ModifyVariable(
-            method = "drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)I",
+            method = "drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private Component mctranslator$screenTextComponent(Component text) {
         return MctranslatorFabric.screenText(text);
@@ -52,7 +52,7 @@ public abstract class GuiGraphicsTextMixin {
      * already translated (Chinese) and is skipped by the text filter.
      */
     @ModifyVariable(
-            method = "drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/util/FormattedCharSequence;IIIZ)I",
+            method = "drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/util/FormattedCharSequence;IIIZ)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private FormattedCharSequence mctranslator$screenTextOrdered(FormattedCharSequence text) {
         return MctranslatorFabric.screenText(text);

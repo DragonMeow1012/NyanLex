@@ -12,6 +12,8 @@ import com.dragonmeow.mctranslator.translate.AiSettings;
 import com.dragonmeow.mctranslator.translate.GoogleFreeTranslator;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
+import com.dragonmeow.mctranslator.translate.RequestPacer;
+import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
 
@@ -64,6 +66,7 @@ public final class MctranslatorNeoForge {
 
     private static TranslatorConfig config;
     private static TranslationService service;
+    private static TranslationDebugLog debugLog;
     private static Path configPath;
     private static UrlHttpTransport transport;
 
@@ -81,7 +84,6 @@ public final class MctranslatorNeoForge {
     private net.minecraft.client.gui.screens.Screen lastContainerScreen;
     private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
     /** Names queued from the local player's hotbar, backpack, armour and off-hand. */
-    private final java.util.Set<String> warmedOwnedItemNames = new java.util.HashSet<>();
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
@@ -318,6 +320,9 @@ public final class MctranslatorNeoForge {
         return config;
     }
 
+    public static TranslationDebugLog debugLog() { return debugLog; }
+    public static void clearDebugLog() { if (debugLog != null) debugLog.clear(); }
+
     /**
      * Translate arbitrary GUI text drawn via {@code GuiGraphics} (custom mod screens such as
      * shader-pack settings). Gated by {@code screenTextMode} and only while a screen is open
@@ -486,20 +491,15 @@ public final class MctranslatorNeoForge {
         // the player is looking at RIGHT NOW — are taken first, jumping ahead of any older
         // backlog (a previous screen, or the background pre-translation). So the current screen
         // is never stuck waiting behind a long queue.
-        java.util.concurrent.LinkedBlockingDeque<Runnable> workQueue =
-                new java.util.concurrent.LinkedBlockingDeque<>() {
-                    @Override
-                    public boolean offer(Runnable r) {
-                        return super.offerFirst(r); // enqueue at the front => LIFO
-                    }
-                };
-        ExecutorService executor = new java.util.concurrent.ThreadPoolExecutor(
-                workers, workers, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, workQueue, threadFactory);
+        ExecutorService executor = new com.dragonmeow.mctranslator.translate.PriorityTranslationExecutor(
+                workers, threadFactory);
 
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
-        GoogleFreeTranslator google = new GoogleFreeTranslator(transport, config.sourceLang);
+        GoogleFreeTranslator google = new GoogleFreeTranslator(transport, config.sourceLang,
+                new RequestPacer(() -> config.requestCooldownMs));
         OpenAiTranslator ai = new OpenAiTranslator(transport,
-                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary));
+                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
+                new RequestPacer(() -> config.requestCooldownMs));
         PersistentStore googleStore = new LanguageFileStore(
                 FMLPaths.CONFIGDIR.get(), MOD_ID + "-cache", config.targetLang);
         PersistentStore aiStore = new LanguageFileStore(
@@ -514,6 +514,9 @@ public final class MctranslatorNeoForge {
         cache.setFailureStore(new NamespacedStore(failureStore, "gt"));
         aiCache.setFailureStore(new NamespacedStore(failureStore, "ai"));
         aiCache.setProvisionalStore(googleStore);
+        debugLog = new TranslationDebugLog(() -> config != null && config.debugTranslationOverlay);
+        cache.setDebugLog("Google", debugLog);
+        aiCache.setDebugLog("AI", debugLog);
         aiCache.setProvisionalRetryGate(() ->
                 config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
@@ -1227,7 +1230,6 @@ public final class MctranslatorNeoForge {
         // R12 (user clarification of R10): the OPEN container is "the current page" — its
         // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
         // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
-        warmOwnedItems(Minecraft.getInstance());
         warmOpenContainerItems(Minecraft.getInstance());
     }
 
@@ -1330,7 +1332,7 @@ public final class MctranslatorNeoForge {
         }
         List<String> newNames = new ArrayList<>();
         for (Slot slot : screen.getMenu().slots) {
-            if (slot == null || !slot.hasItem()) continue;
+            if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
             String name = slot.getItem().getHoverName().getString();
             if (name != null && !name.isBlank() && warmedContainerNames.add(name)) {
                 newNames.add(name);
@@ -1339,26 +1341,6 @@ public final class MctranslatorNeoForge {
         if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
     }
 
-    /** Warm only names of items the player actually owns; lore remains hover-driven. */
-    private void warmOwnedItems(Minecraft mc) {
-        if (mc == null || service == null) return;
-        if (mc.player == null) {
-            warmedOwnedItemNames.clear();
-            return;
-        }
-        if (service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-        List<String> newNames = new ArrayList<>();
-        for (Slot slot : mc.player.inventoryMenu.slots) {
-            if (slot == null || !slot.hasItem()) continue;
-            String name = slot.getItem().getHoverName().getString();
-            if (name != null && !name.isBlank() && warmedOwnedItemNames.add(name)) {
-                newNames.add(name);
-            }
-        }
-        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
-    }
-
-    /** Evict + re-translate one item's tooltip lines (the "re-translate pointed item" hotkey). */
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
         Minecraft mc = Minecraft.getInstance();

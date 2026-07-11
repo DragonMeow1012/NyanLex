@@ -27,6 +27,7 @@
   "config.mctranslator.language.follow": "跟随游戏（%s）",
   "config.mctranslator.screen_scan_engine": "屏幕抓取引擎：%s",
   "config.mctranslator.debug": "翻译调试浮层：%s",
+  "config.mctranslator.ai.disable_gt_fallback": "AI 精翻停用 GT 回退：%s",
   "config.mctranslator.request_cooldown": "请求冷却：%s",
   "config.mctranslator.request_cooldown.off": "关",
   "config.mctranslator.ai.open": "AI 设置（模型/API 密钥）...",

@@ -81,7 +81,6 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
     /** Names already queued from the local player's hotbar, backpack, armour and
      *  off-hand. This is deliberately inventory-scoped; it never scans registries. */
-    private final java.util.Set<String> warmedOwnedItemNames = new java.util.HashSet<>();
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
@@ -563,16 +562,8 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
             t.setDaemon(true);
             return t;
         };
-        
-        java.util.concurrent.LinkedBlockingDeque<Runnable> workQueue =
-                new java.util.concurrent.LinkedBlockingDeque<>() {
-                    @Override
-                    public boolean offer(Runnable r) {
-                        return super.offerFirst(r);
-                    }
-                };
-        ExecutorService executor = new java.util.concurrent.ThreadPoolExecutor(
-                workers, workers, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, workQueue, threadFactory);
+        ExecutorService executor = new com.dragonmeow.mctranslator.translate.PriorityTranslationExecutor(
+                workers, threadFactory);
 
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         // 事前冷卻節流：one pacer PER ENGINE so Google and AI space their own requests
@@ -1244,7 +1235,6 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         // R12 (user clarification of R10): the OPEN container is "the current page" — its
         // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
         // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
-        warmOwnedItems(mc);
         warmOpenContainerItems(mc);
     }
 
@@ -1330,7 +1320,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         }
         List<String> newNames = new ArrayList<>();
         for (Slot slot : screen.getMenu().slots) {
-            if (slot == null || !slot.hasItem()) continue;
+            if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
             String name = slot.getItem().getHoverName().getString();
             if (name != null && !name.isBlank() && warmedContainerNames.add(name)) {
                 newNames.add(name);
@@ -1345,25 +1335,6 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
      * of those slots on every supported screen, including when no GUI is open.
      * Names are deduplicated for the session; full lore still warms only on hover.
      */
-    private void warmOwnedItems(Minecraft mc) {
-        if (mc == null || service == null) return;
-        if (mc.player == null) {
-            warmedOwnedItemNames.clear();
-            return;
-        }
-        if (service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-
-        List<String> newNames = new ArrayList<>();
-        for (Slot slot : mc.player.inventoryMenu.slots) {
-            if (slot == null || !slot.hasItem()) continue;
-            String name = slot.getItem().getHoverName().getString();
-            if (name != null && !name.isBlank() && warmedOwnedItemNames.add(name)) {
-                newNames.add(name);
-            }
-        }
-        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
-    }
-
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
         Minecraft mc = Minecraft.getInstance();

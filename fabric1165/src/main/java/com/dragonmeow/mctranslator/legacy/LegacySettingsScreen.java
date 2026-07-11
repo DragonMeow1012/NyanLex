@@ -29,8 +29,28 @@ final class LegacySettingsScreen extends Screen {
         addButton(new Button(width / 2 - 155, 102, 310, 20,
                 new TextComponent(cfg.showOriginal ? "Original + Translation" : "Translation Only"),
                 button -> { cfg.showOriginal = !cfg.showOriginal; init(minecraft, width, height); }));
+        addButton(new Button(width / 2 - 155, 128, 310, 20,
+                new TextComponent("All surfaces engine: " + (cfg.aiEnabled ? "AI" : "GT")),
+                button -> { cfg.aiEnabled = !cfg.aiEnabled; init(minecraft, width, height); }));
+        addButton(new Button(width / 2 - 155, 154, 310, 20,
+                new TextComponent("Disable GT fallback for AI: " + (cfg.disableGoogleFallbackForAi ? "ON" : "OFF")),
+                button -> { cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi; init(minecraft, width, height); }));
+        addButton(new Button(width / 2 - 155, 180, 152, 20,
+                new TextComponent("Cooldown: " + cfg.requestCooldownMs + " ms"),
+                button -> { cfg.requestCooldownMs = nextCooldown(cfg.requestCooldownMs); init(minecraft, width, height); }));
+        addButton(new Button(width / 2 + 3, 180, 152, 20,
+                new TextComponent("Debug overlay: " + (cfg.debugTranslationOverlay ? "ON" : "OFF")),
+                button -> { cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
+                    if (!cfg.debugTranslationOverlay) LegacyTranslatorMod.TRANSLATOR.clearDebug();
+                    init(minecraft, width, height); }));
         addButton(new Button(width / 2 - 100, height - 38, 200, 20,
                 new TranslatableComponent("gui.done"), button -> onClose()));
+    }
+
+    private static int nextCooldown(int current) {
+        int[] values = {0, 200, 400, 600, 800, 1000, 1500, 2000};
+        for (int value : values) if (value > current) return value;
+        return 0;
     }
 
     @Override public void render(PoseStack pose, int mouseX, int mouseY, float delta) {

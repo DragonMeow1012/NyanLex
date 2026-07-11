@@ -3,6 +3,6 @@
   "minVersion": "0.8",
   "package": "com.dragonmeow.mctranslator.legacy.mixin",
   "compatibilityLevel": "JAVA_8",
-  "client": ["ChatComponentMixin"],
+  "client": ["ChatComponentMixin", "DebugHudMixin", "EntityNameTagMixin", "FontTextMixin"],
   "injectors": { "defaultRequire": 0 }
 }

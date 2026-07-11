@@ -51,6 +51,12 @@ Fabric, Forge, and NeoForge builds.
 - Memory and disk caches reduce duplicate requests.
 - Player-name masking prevents listed player IDs from being sent to translation providers.
 - AI rate-limit fallback and manual retranslation controls.
+- Interactive text overtakes queued background pretranslation through an explicit priority queue.
+- A request debug overlay shows AI/GT requests, success, failure, and fallback state.
+- Optional strict AI mode disables GT fallback and keeps retrying AI after temporary failures.
+- New installs use a 2000 ms per-engine request interval. Multiple API keys rotate, while
+  rate-limited or invalid keys are quarantined individually.
+- Item pretranslation only scans active, visible slots in the currently open container.
 
 ## Settings and controls
 
@@ -71,13 +77,13 @@ All keys can be changed in Minecraft's Controls screen or the mod's keybind sett
 
 ## Version-specific limitations
 
-- Forge 1.12.2 and 1.13.2 are compatibility builds focused on chat and item tooltips.
-  They use the `G` hotkey and do not include the complete modern settings screen.
-- Fabric 1.14.4 through 1.16.5 focus on chat and tooltips, but include target-language
-  selection and search.
-- Fabric 1.21.11 does not hook boss-bar, entity-name, or scoreboard rendering because
-  that release changed those rendering APIs. Chat, tooltips, books, settings, target
-  language, and UI translation remain available.
+- Forge 1.12.2 and 1.13.2 store their Java 8 compatibility settings in
+  `config/mctranslator-forge-legacy.json`, including AI, multiple keys, strict AI,
+  cooldown, and the debug overlay.
+- Fabric 1.14.4 through 1.16.5 use Java 8-specific text hooks. Their in-game screen
+  controls the global AI/GT engine, strict AI, cooldown, and debug state.
+- Fabric 1.21.11 has dedicated render-state and void-drawing hooks for boss bars,
+  entity names, scoreboards, chat, and GUI text instead of reusing 1.21.1 descriptors.
 - Compilation and remapping are verified for every release JAR. In-game behavior can
   still vary with other mods, resource packs, and server-specific interfaces.
 
