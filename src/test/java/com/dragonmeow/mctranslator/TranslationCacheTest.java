@@ -2092,4 +2092,188 @@ class TranslationCacheTest {
             worker.shutdownNow();
         }
     }
+
+    // ---- chat back-fill root causes: style-projection debts must survive and retire ----
+
+    /** Root cause #2A: a plain semantic success used to uproot the pending CS-marked
+     *  retry entirely (clearFailureState removed the shared family retry snapshot),
+     *  so the missing projection was never bought again. It must transfer to the
+     *  style ledger and be re-bought after backoff. */
+    @Test
+    void plainSemanticSuccessTransfersPendingMarkedRetryToStyleLedger() {
+        String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
+        long[] now = {0L};
+        List<String> sent = new ArrayList<>();
+        AtomicInteger markedRound = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            sent.add(text);
+            if (text.contains("⟦CS")) {
+                return markedRound.incrementAndGet() == 1
+                        ? new TranslationResult("你好 世界", "en")   // markers eaten: unusable
+                        : new TranslationResult("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en");
+            }
+            return new TranslationResult("你好 世界", "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 100, 1_000L, () -> now[0]);
+
+        cache.requestAsync(marked);                    // damaged shape -> family failure
+        assertEquals(List.of(marked), sent);
+
+        now[0] = 1_000L;                               // family backoff expired
+        cache.requestAsync("Hello World");             // plain semantics land as final
+        assertEquals("你好 世界", cache.getCached("Hello World"));
+
+        now[0] = 5_000L;                               // style-ledger backoff expired
+        for (int i = 0; i < 4; i++) cache.flushBatch();
+        assertEquals(2, sent.stream().filter(marked::equals).count(),
+                "the surviving style debt must re-buy the marked key after backoff");
+
+        java.util.concurrent.atomic.AtomicReference<String> exact =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        cache.requestCoalescedExactStyle(marked, exact::set, false);
+        assertEquals("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", exact.get(),
+                "the late retry success must materialise the exact projection");
+    }
+
+    /** Root cause #2B: writeStyleProjection can silently skip its row (here: stripping
+     *  §-codes destroys every §-adjacent marker, leaving bare residue). The semantic
+     *  store must then record a style-ledger debt so the projection keeps retrying. */
+    @Test
+    void unwritableStyleProjectionAfterSemanticStoreLeavesRetryDebt() {
+        String marked = "⟦CS0⟧Hello world⟦/CS0⟧";
+        long[] now = {0L};
+        List<String> sent = new ArrayList<>();
+        Translator translator = (text, target) -> {
+            sent.add(text);
+            // usable() passes (marker topology intact), but stripSectionCodes("§⟦")
+            // later destroys both markers, so the projection row cannot be written.
+            return new TranslationResult("§⟦CS0⟧你好世界§⟦/CS0⟧", "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 100, 1_000L, () -> now[0]);
+
+        cache.requestAsync(marked);
+        assertEquals(1, sent.size());
+
+        now[0] = 1_000L;
+        for (int i = 0; i < 4; i++) cache.flushBatch();
+        assertEquals(2, sent.stream().filter(marked::equals).count(),
+                "a semantic store without a projection row must leave a retryable style debt");
+    }
+
+    /** Root cause #2C: a style retry whose snapshot key carries §-codes uses a
+     *  projection key that lookupSnapshot cannot see; once the projection exists the
+     *  retry must be discarded instead of re-buying the same marked key forever. */
+    @Test
+    void styleRetryIsDiscardedOnceProjectionExistsIncludingSectionCodeKeys() {
+        String sectionMarked = "⟦CS0⟧§eHello⟦/CS0⟧ ⟦CS1⟧§aWorld⟦/CS1⟧";
+        String cleanMarked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
+        long[] now = {0L};
+        List<String> sent = new ArrayList<>();
+        Translator translator = (text, target) -> {
+            sent.add(text);
+            if (text.contains("§")) {
+                return new TranslationResult("你好 世界", "en");    // markers eaten: unusable
+            }
+            if (text.contains("⟦CS")) {
+                return new TranslationResult("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en");
+            }
+            return new TranslationResult("你好 世界", "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 100, 1_000L, () -> now[0]);
+
+        cache.requestAsync(sectionMarked);             // damaged -> pending marked retry
+        now[0] = 1_000L;
+        cache.requestAsync("Hello World");             // transfer debt to the style ledger
+        cache.requestCoalescedExactStyle(cleanMarked, ignored -> { }, true);
+        for (int i = 0; i < 4; i++) cache.flushBatch(); // writes the shared projection row
+
+        now[0] = 10_000L;
+        for (int i = 0; i < 6; i++) cache.flushBatch();
+        assertEquals(1, sent.stream().filter(sectionMarked::equals).count(),
+                "an already-satisfied projection must not be bought again");
+
+        java.util.concurrent.atomic.AtomicReference<String> exact =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        cache.requestCoalescedExactStyle(sectionMarked, exact::set, false);
+        assertEquals("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", exact.get(),
+                "the §-code variant is served from the shared projection row");
+    }
+
+    /** Root cause #3 core chain: an exact-style final waiter must be reached by
+     *  notifyFinalWaiters when the projection lands via the retry queue. */
+    @Test
+    void exactStyleFinalWaiterIsNotifiedByLateRetrySuccess() {
+        String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
+        long[] now = {0L};
+        AtomicInteger markedRound = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            if (text.contains("⟦CS")) {
+                return markedRound.incrementAndGet() == 1
+                        ? new TranslationResult("你好 世界", "en")
+                        : new TranslationResult("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en");
+            }
+            return new TranslationResult("你好 世界", "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 100, 1_000L, () -> now[0]);
+        java.util.concurrent.atomic.AtomicReference<String> delivered =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        cache.requestAsync(marked);                    // damaged -> family failure
+        cache.requestCoalescedExactStyleFinal(marked, delivered::set);
+        assertNull(delivered.get());
+
+        now[0] = 1_000L;
+        cache.requestAsync("Hello World");             // plain final; projection still missing
+        assertNull(delivered.get(),
+                "a style-fallback state must not satisfy an exact-style final waiter");
+
+        now[0] = 5_000L;
+        for (int i = 0; i < 4; i++) cache.flushBatch();
+        assertEquals("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", delivered.get(),
+                "the retry-driven late success must notify the exact-style waiter");
+    }
+
+    /** Regression lock: waiter families stay LRU-bounded at 512. */
+    @Test
+    void finalWaiterFamiliesStayBoundedAt512() {
+        TranslationCache cache = new TranslationCache(
+                countingUpper(new AtomicInteger()), "zh-TW", DIRECT, 4096);
+        List<String> delivered = new ArrayList<>();
+        int families = 600;
+        for (int i = 0; i < families; i++) {
+            cache.requestCoalescedFinal(waiterKey(i), delivered::add);
+        }
+        for (int i = 0; i < families; i++) cache.translateBlocking(waiterKey(i));
+        assertEquals(512, delivered.size(),
+                "registering 600 families must keep only 512 live waiters");
+    }
+
+    /** Digit-free distinct keys: numbers would template every key into ONE family. */
+    private static String waiterKey(int i) {
+        StringBuilder out = new StringBuilder("Waiter key ");
+        for (char digit : Integer.toString(i).toCharArray()) out.append((char) ('a' + digit - '0'));
+        return out.toString();
+    }
+
+    /** Regression lock: a projection supplement can never rewrite the final semantic row. */
+    @Test
+    void styleProjectionSupplementNeverRewritesFinalSemanticRow() {
+        String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
+        Translator translator = (text, target) -> text.contains("⟦CS")
+                ? new TranslationResult("⟦CS0⟧嗨呀⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en")
+                : new TranslationResult("你好 世界", "en");
+        TranslationCache cache = new TranslationCache(translator, "zh-TW", DIRECT, 100);
+
+        cache.requestAsync("Hello World");
+        assertEquals("你好 世界", cache.getCached("Hello World"));
+
+        cache.requestCoalescedExactStyle(marked, ignored -> { }, true);
+        for (int i = 0; i < 4; i++) cache.flushBatch(); // buys the differently worded projection
+        assertEquals("你好 世界", cache.getCached("Hello World"),
+                "first final semantic wording wins; a style supplement adds rows only");
+    }
 }

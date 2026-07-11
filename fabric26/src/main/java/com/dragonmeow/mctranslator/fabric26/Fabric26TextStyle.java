@@ -183,8 +183,17 @@ public final class Fabric26TextStyle {
         String request = marked.marked() ? marked.text() : joined.getString();
         TranslationDecision decision = translateFn.apply(request);
         if (decision == null || !decision.changed()) return null;
-        MutableComponent rebuilt = rebuildRich(joined, decision.translated(), marked);
-        return new Rendered(restoreParagraphBreaks(rebuilt), decision.mode());
+        MutableComponent rebuilt;
+        if (ParagraphModel.validBreakSequence(decision.translated(),
+                ParagraphModel.countBreakTokens(request))) {
+            rebuilt = restoreParagraphBreaks(rebuildRich(joined, decision.translated(), marked));
+        } else {
+            // The model dropped/duplicated/reordered a PB token: restoring on the surviving
+            // tokens would misplace every following row. Flatten instead — one flowing block.
+            rebuilt = rebuildRich(joined,
+                    ParagraphModel.flattenBreakTokens(decision.translated()), marked);
+        }
+        return new Rendered(rebuilt, decision.mode());
     }
 
     public static void clearRenderMemo() {
@@ -268,16 +277,30 @@ public final class Fabric26TextStyle {
             ParagraphModel.BREAK_TOKEN_PATTERN;
 
     /** Join every visible row in one blank-line-delimited information paragraph while
-     * retaining explicit protected line breaks. The model receives one semantic unit. */
+     * retaining explicit protected line breaks. The model receives one semantic unit.
+     * A lower-case sentence continuation (a server-side visual wrap) is joined back with
+     * a single space instead of a PB token, so the model translates the whole sentence
+     * naturally; PB indices stay contiguous 0..n-1 for sequence validation. */
     private static MutableComponent joinParagraph(List<Component> paragraph) {
         MutableComponent out = Component.empty();
+        int breaks = 0;
+        String prevPlain = null;
         for (int i = 0; i < paragraph.size(); i++) {
-            if (i > 0) out.append(Component.literal(ParagraphModel.breakToken(i - 1)));
             Component line = paragraph.get(i);
-            if (line == null) continue;
-            for (Seg seg : segments(line)) {
-                out.append(Component.literal(seg.text()).setStyle(seg.style()));
+            String plain = (line == null) ? "" : line.getString();
+            if (i > 0) {
+                if (continuesSentence(prevPlain, plain)) {
+                    out.append(Component.literal(" "));
+                } else {
+                    out.append(Component.literal(ParagraphModel.breakToken(breaks++)));
+                }
             }
+            if (line != null) {
+                for (Seg seg : segments(line)) {
+                    out.append(Component.literal(seg.text()).setStyle(seg.style()));
+                }
+            }
+            prevPlain = plain;
         }
         return out;
     }
@@ -298,12 +321,21 @@ public final class Fabric26TextStyle {
         String request = marked.marked() ? marked.text() : joined.getString();
         TranslationDecision decision = translateFn.apply(request);
         if (decision == null || !decision.changed()) return null;
-        MutableComponent hardLines = restoreParagraphBreaks(
-                rebuildRich(joined, decision.translated(), marked));
+        int expected = ParagraphModel.countBreakTokens(request);
+        List<Component> hardLines;
+        if (ParagraphModel.validBreakSequence(decision.translated(), expected)) {
+            hardLines = splitStyledLines(restoreParagraphBreaks(
+                    rebuildRich(joined, decision.translated(), marked)));
+        } else {
+            // Scrambled PB sequence: hard row boundaries are unrecoverable. Flatten the
+            // whole paragraph into one flowing block and let splitToWidth re-wrap it.
+            String flowed = ParagraphModel.flattenBreakTokens(decision.translated());
+            hardLines = List.of(rebuildRich(joined, flowed, marked));
+        }
         int width = 0;
         for (Component line : paragraph) if (line != null) width = Math.max(width, font.width(line));
         List<Component> out = new ArrayList<>();
-        for (Component line : splitStyledLines(hardLines)) {
+        for (Component line : hardLines) {
             out.addAll(splitToWidth(line, width, font));
         }
         return out;

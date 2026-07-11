@@ -1048,7 +1048,13 @@ public final class TranslationCache {
         // impossible; this prevents colour permutations from disagreeing forever.
         boolean plainWritten = writePlainCopy(snapshot, translated, isProvisional, writes);
         if (hasCsMarkers(snapshot.key())) {
-            writeStyleProjection(snapshot, translated, isProvisional, writes);
+            boolean projected = writeStyleProjection(snapshot, translated, isProvisional, writes);
+            // A semantic success whose projection could not be written (markers eaten,
+            // residue) must leave a style-ledger debt, or the missing projection would
+            // never be retried and exact-style chat would starve forever.
+            if (!projected && !isProvisional && read(styleProjectionKey(snapshot)) == null) {
+                failStyleProjection(snapshot);
+            }
         }
         if (!plainWritten) {
             if (snapshot.changed()) {
@@ -1158,12 +1164,14 @@ public final class TranslationCache {
         return true;
     }
 
-    private void writeStyleProjection(TranslationTemplate.Snapshot snapshot, String translated,
-                                      boolean isProvisional, WriteBatch writes) {
-        if (translated == null || !hasCsMarkers(translated)) return;
+    /** @return whether a projection row write was actually attempted (valid content). */
+    private boolean writeStyleProjection(TranslationTemplate.Snapshot snapshot, String translated,
+                                         boolean isProvisional, WriteBatch writes) {
+        if (translated == null || !hasCsMarkers(translated)) return false;
         String value = TextFilter.stripSectionCodes(translated);
-        if (CS_RESIDUE.matcher(value).find() && !CS_MARKER.matcher(value).find()) return;
+        if (CS_RESIDUE.matcher(value).find() && !CS_MARKER.matcher(value).find()) return false;
         write(styleProjectionKey(snapshot), value, isProvisional, writes);
+        return true;
     }
 
     private final class WriteBatch {
@@ -1415,8 +1423,16 @@ public final class TranslationCache {
         provisionalRetryAttempts.remove(failureKey);
         failedUntil.remove(snapshot.key());
         failedUntil.remove(failureKey);
+        TranslationTemplate.Snapshot pendingRetry = retrySnapshots.remove(failureKey);
         retrySnapshots.remove(snapshot.key());
-        retrySnapshots.remove(failureKey);
+        // A plain semantic success must not uproot a pending CS-marked retry whose
+        // presentation projection is still missing: move that debt to the style
+        // ledger (never GT-eligible) instead of silently dropping it forever.
+        if (pendingRetry != null && hasCsMarkers(pendingRetry.key())
+                && !pendingRetry.key().equals(snapshot.key())
+                && read(styleProjectionKey(pendingRetry)) == null) {
+            failStyleProjection(pendingRetry);
+        }
         if (styleFailure != null) {
             contentFailures.remove(styleFailure);
             contentRetryAttempts.remove(styleFailure);
@@ -1574,6 +1590,15 @@ public final class TranslationCache {
             String stateKey = entry.getKey();
             TranslationTemplate.Snapshot snapshot = entry.getValue();
             if (snapshot == null || keepsOriginal(stateKey)) {
+                discardRetryState(stateKey, snapshot);
+                continue;
+            }
+            // A style retry is done once the projection row exists. Its snapshot key may
+            // carry §-codes, so projectionKey != snapshot.key() and lookupSnapshot below
+            // cannot see the projection row — without this check the retry would rebuy
+            // the same marked key forever.
+            if (stateKey.startsWith(STYLE_FAILURE_PREFIX)
+                    && read(styleProjectionKey(snapshot)) != null) {
                 discardRetryState(stateKey, snapshot);
                 continue;
             }

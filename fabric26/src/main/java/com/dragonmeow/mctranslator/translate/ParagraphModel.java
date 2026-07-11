@@ -86,6 +86,61 @@ public final class ParagraphModel {
         return List.copyOf(rows);
     }
 
+    /** Number of {@link #BREAK_TOKEN_PATTERN} tokens occurring in {@code text} (0 for null). */
+    public static int countBreakTokens(String text) {
+        if (text == null) return 0;
+        java.util.regex.Matcher matcher = BREAK_TOKEN_PATTERN.matcher(text);
+        int count = 0;
+        while (matcher.find()) count++;
+        return count;
+    }
+
+    /** True when the PB indices in {@code translated} are exactly {@code 0..expectedBreaks-1}
+     *  and appear in that order (an unparseable index is invalid). With
+     *  {@code expectedBreaks == 0} the translated text must not contain any PB token, so an
+     *  AI-hallucinated break is caught too. */
+    public static boolean validBreakSequence(String translated, int expectedBreaks) {
+        if (translated == null) return false;
+        java.util.regex.Matcher matcher = BREAK_TOKEN_PATTERN.matcher(translated);
+        int next = 0;
+        while (matcher.find()) {
+            int index;
+            try {
+                index = Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException e) {
+                return false;
+            }
+            if (index != next) return false;
+            next++;
+        }
+        return next == expectedBreaks;
+    }
+
+    /** Flatten every PB token (together with the surrounding whitespace the pattern
+     *  swallows): a token whose OUTER neighbours are both ASCII letters/digits becomes one
+     *  single space, anything else is removed outright — no seam is left between CJK. */
+    public static String flattenBreakTokens(String translated) {
+        if (translated == null) return null;
+        java.util.regex.Matcher matcher = BREAK_TOKEN_PATTERN.matcher(translated);
+        StringBuilder out = new StringBuilder(translated.length());
+        int cursor = 0;
+        while (matcher.find()) {
+            out.append(translated, cursor, matcher.start());
+            boolean asciiBefore = matcher.start() > 0
+                    && isAsciiAlnum(translated.charAt(matcher.start() - 1));
+            boolean asciiAfter = matcher.end() < translated.length()
+                    && isAsciiAlnum(translated.charAt(matcher.end()));
+            if (asciiBefore && asciiAfter) out.append(' ');
+            cursor = matcher.end();
+        }
+        out.append(translated, cursor, translated.length());
+        return out.toString();
+    }
+
+    private static boolean isAsciiAlnum(char c) {
+        return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    }
+
     public static boolean isBlank(String text) {
         return text == null || text.isBlank();
     }

@@ -433,10 +433,32 @@ class FabricTextStyleIntegrationTest {
         String request = FabricTextStyle.paragraphRequestText(paragraph);
         String plain = com.dragonmeow.mctranslator.translate.TextFilter.stripTranslationMarkers(request);
 
-        assertTrue(plain.contains("⟦PB0⟧"));
-        assertTrue(plain.contains("⟦PB1⟧"));
+        assertTrue(plain.contains("⟦PB0⟧"), "independent rows keep their protected break");
+        // A lower-case continuation of a server-wrapped sentence no longer gets a PB wall:
+        // it joins its sentence with one space so the model translates the sentence whole.
+        assertFalse(plain.contains("⟦PB1⟧"), plain);
+        assertTrue(plain.contains("your aim and exploding"), plain);
         assertFalse(plain.contains("\n"), "one paragraph must occupy one backend item");
         assertEquals(1, request.lines().count());
+    }
+
+    @Test
+    void scrambledParagraphBreaksFlattenToOneBlockWithoutTokenResidue() {
+        Component tooltip = Component.literal(
+                "Ability: Guided Bat\nUltimate Wise V, Execute V\nLuck V, Vampirism V");
+
+        // The model reordered the PB tokens: restoring on them would shuffle the rows.
+        Component rebuilt = FabricTextStyle.renderTranslated("tooltip", tooltip, request -> {
+            assertEquals(2, com.dragonmeow.mctranslator.translate.ParagraphModel
+                    .countBreakTokens(request), request);
+            return TranslationDecision.of(DisplayMode.TRANSLATION, request,
+                    "技能：導引蝙蝠 ⟦PB1⟧ 終極智慧V、處決V ⟦PB0⟧ 幸運V、吸血V");
+        });
+
+        assertEquals("技能：導引蝙蝠終極智慧V、處決V幸運V、吸血V", rebuilt.getString(),
+                "a scrambled PB sequence flattens to one flowing block");
+        assertFalse(rebuilt.getString().contains("PB"), "no token residue reaches the screen");
+        assertFalse(rebuilt.getString().contains("\n"), "no guessed row boundaries remain");
     }
 
     @Test

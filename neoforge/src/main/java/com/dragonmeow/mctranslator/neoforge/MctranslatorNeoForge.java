@@ -12,6 +12,7 @@ import com.dragonmeow.mctranslator.translate.AiSettings;
 import com.dragonmeow.mctranslator.translate.GoogleFreeTranslator;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
+import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
 
 import com.dragonmeow.mctranslator.neoforge.mixin.AbstractContainerScreenAccessor;
@@ -835,18 +836,37 @@ public final class MctranslatorNeoForge {
             ParagraphModel.Range range = requested.get(paragraph);
             String request = requests.get(paragraph);
             service.translateChatAsync(request, translated -> {
-                List<String> rows = validatedParagraphRows(translated, range.size());
+                // A style-fallback paragraph arrives as ONE marked string. Strip the
+                // prefix before the row split, then re-mark EVERY row: otherwise only
+                // row 0 carries the prefix and the remaining rows fail
+                // validMarkedResponse and silently fall back to the original text.
+                boolean styleFallback = TextFilter.isStyleFallback(translated);
+                String semantic = TextFilter.stripStyleFallback(translated);
+                List<String> rows = validatedParagraphRows(semantic, range.size());
                 if (!rows.isEmpty()) {
                     List<Component> paragraphLines = new ArrayList<>(range.size());
                     for (int row = range.start(); row <= range.end(); row++) {
+                        String rowText = rows.get(row - range.start());
+                        // Only marked rows understand the prefix (markedChat strips it);
+                        // an unmarked row would render the NUL prefix as literal text.
+                        if (styleFallback && plans.get(row).marked().marked()) {
+                            rowText = TextFilter.markStyleFallback(rowText);
+                        }
                         paragraphLines.add(NeoTextStyle.rebuildChatLine(
-                                plans.get(row), rows.get(row - range.start())));
+                                plans.get(row), rowText));
                     }
                     for (int row = range.start(); row <= range.end(); row++) {
                         rebuilt.set(row, paragraphLines.get(row - range.start()));
                     }
                 }
-                if (awaiting.decrementAndGet() == 0) {
+                // <= 0, not == 0: an exact-style recovery waiter may call back a second
+                // time (approx fallback first, exact projection later), driving the
+                // counter negative — each late arrival must still replace the shown row.
+                // Known limit: with several paragraphs each arriving late more than
+                // once, replaces after the 2nd completion are dropped because
+                // completeChat retires the entry (translationCompletions >= 2); a
+                // multi-paragraph CS chat message is rare enough to accept that.
+                if (awaiting.decrementAndGet() <= 0) {
                     completeChat(pending.id, mode, () -> {
                         List<Component> ready = new ArrayList<>(rebuilt.length());
                         for (int row = 0; row < rebuilt.length(); row++) ready.add(rebuilt.get(row));

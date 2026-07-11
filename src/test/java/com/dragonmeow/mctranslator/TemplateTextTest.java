@@ -300,6 +300,56 @@ class TemplateTextTest {
                         .replace("Mana", "魔力")));
     }
 
+    // ---- symptom 4: template spacing eaten by the translator is restored ----
+
+    @Test
+    void restoredDateTokensGetTheirLostAsciiSpacingBack() {
+        TemplateText.Prepared p = TemplateText.prepare("Jun 30, 2026");
+        assertEquals("Jun ⟦MT0⟧, ⟦MT1⟧", p.text());
+        // The AI ate the template's spaces: "6月30,2026" must come back as "6月30, 2026".
+        assertEquals("6月30, 2026", p.restore("6月⟦MT0⟧,⟦MT1⟧"));
+        // A translation that KEPT the spacing is not double-spaced.
+        assertEquals("6月30, 2026", p.restore("6月⟦MT0⟧, ⟦MT1⟧"));
+    }
+
+    @Test
+    void fullWidthPunctuationAndCjkNeighboursGetNoInjectedSpace() {
+        TemplateText.Prepared price = TemplateText.prepare("Price: 50");
+        assertEquals("價格：50", price.restore("價格：⟦MT0⟧"),
+                "a full-width colon neighbour earns no ASCII space");
+        TemplateText.Prepared coins = TemplateText.prepare("You got 5 coins");
+        assertEquals("你拿到5枚", coins.restore("你拿到⟦MT0⟧枚"),
+                "CJK on both sides of the value earns no ASCII space");
+    }
+
+    @Test
+    void adjacentRestoredTokensSeparateWhenTheTemplateHadASpace() {
+        TemplateText.Prepared p = TemplateText.prepare("Jun 30, 2026");
+        // "⟦MT0⟧⟦MT1⟧": while restoring MT1 its left neighbour is the already-restored
+        // "30" (ASCII digit) and the template carried a space before MT1 -> re-added.
+        assertEquals("30 2026", p.restore("⟦MT0⟧⟦MT1⟧"));
+    }
+
+    // ---- symptom 2: translated tooltip column gaps collapse to two spaces ----
+
+    @Test
+    void collapseTranslatedColumnGapsTightensOnlyTranslatedCjkLines() {
+        assertEquals("NPC 出售價格：  50,000",
+                TemplateText.collapseTranslatedColumnGaps("NPC 出售價格：     50,000"));
+        assertEquals("NPC Sell Price:     50,000",
+                TemplateText.collapseTranslatedColumnGaps("NPC Sell Price:     50,000"),
+                "a line without CJK was not translated and keeps its layout");
+        assertEquals("    縮排段落文字",
+                TemplateText.collapseTranslatedColumnGaps("    縮排段落文字"),
+                "leading indentation is paragraph semantics, never collapsed");
+        assertEquals("標籤:  數值",
+                TemplateText.collapseTranslatedColumnGaps("標籤:  數值"),
+                "an exact two-space gap is already tight");
+        assertEquals("中文行:  值\nplain row:     value",
+                TemplateText.collapseTranslatedColumnGaps("中文行:     值\nplain row:     value"),
+                "multi-line input collapses only the CJK lines");
+    }
+
     @Test
     void serverInstanceIdsPlayerCountsAndHubNumbersShareOneTemplate() {
         String first = "SkyBlock Hub #11  Players: 48/60  Server: mega33A";
@@ -321,5 +371,48 @@ class TemplateTextTest {
         assertEquals(first.text(), second.text());
         assertFalse(first.text().contains("alphaShard"));
         assertEquals("Server: xxxxx", second.restore(second.text()));
+    }
+
+    // ---- NUMBER tokenizer: atomic group + quantity-x suffix (key-shredding fix) ----
+
+    @Test
+    void quantitySuffixVariantsShareOneKeyAndRestoreTheirOwnValues() {
+        TemplateText.Prepared qty31x = TemplateText.prepare("Sold 31x String");
+        TemplateText.Prepared qty1x = TemplateText.prepare("Sold 1x String");
+        TemplateText.Prepared bare31 = TemplateText.prepare("Sold 31 String");
+
+        assertEquals("Sold ⟦MT0⟧ String", qty31x.text(),
+                "the whole quantity including its x suffix must be ONE slot");
+        assertEquals(qty31x.text(), qty1x.text());
+        assertEquals(qty31x.text(), bare31.text(),
+                "31x / 1x / 31 variants must fold into the same request key");
+        assertEquals("Sold 31x String", qty31x.restore(qty31x.text()));
+        assertEquals("Sold 1x String", qty1x.restore(qty1x.text()));
+        assertEquals("Sold 31 String", bare31.restore(bare31.text()));
+    }
+
+    @Test
+    void hexDimensionsAndGluedWordsStayUntouchedAndExistingKeysAreStable() {
+        // The x suffix guard: hex literals, dimensions and letter-glued runs are prose.
+        assertFalse(TemplateText.prepare("0x1F").changed(), TemplateText.prepare("0x1F").text());
+        assertFalse(TemplateText.prepare("2x2").changed(), TemplateText.prepare("2x2").text());
+        assertFalse(TemplateText.prepare("4xp").changed(), TemplateText.prepare("4xp").text());
+        // Existing key shapes must not move.
+        assertEquals("Balance ⟦MT0⟧", TemplateText.prepare("Balance 10k").text());
+        assertEquals("Progress ⟦MT0⟧", TemplateText.prepare("Progress 5%").text());
+        assertEquals("Purse: ⟦MT0⟧", TemplateText.prepare("Purse: 1,605").text());
+        assertEquals("⟦MT0⟧ place", TemplateText.prepare("23rd place").text());
+        assertEquals("Vote before ⟦MT0⟧", TemplateText.prepare("Vote before 2:30").text());
+        assertEquals("Reset in ⟦MT0⟧", TemplateText.prepare("Reset in 2h 30m").text());
+    }
+
+    @Test
+    void unitGluedNumbersNoLongerShredIntoHalfKeys() {
+        // Pre-fix, "10kg" backtracked into a half-number slot ("⟦MT0⟧0kg"): the atomic
+        // group now fails the whole match instead, leaving the glued run untouched.
+        TemplateText.Prepared glued = TemplateText.prepare("Weight 10kg");
+        assertFalse(glued.changed(), glued.text());
+        assertFalse(TemplateText.prepare("10kg").changed(),
+                TemplateText.prepare("10kg").text());
     }
 }

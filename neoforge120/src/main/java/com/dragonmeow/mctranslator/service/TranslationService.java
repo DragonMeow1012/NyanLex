@@ -6,6 +6,7 @@ import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.translate.ChurnGuard;
 import com.dragonmeow.mctranslator.translate.LayoutPreserver;
 import com.dragonmeow.mctranslator.translate.NameMasker;
+import com.dragonmeow.mctranslator.translate.TemplateText;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 
 import java.util.ArrayList;
@@ -102,24 +103,37 @@ public final class TranslationService {
         AtomicBoolean finalAiDelivered = new AtomicBoolean();
         requestCache(ai, source, exactStyle, primary -> {
             String finalNow = ai.getCachedFinal(source);
-            if (finalNow != null
-                    && (!exactStyle || !TextFilter.isStyleFallback(finalNow))) {
+            boolean styleFallbackOnly = exactStyle && finalNow != null
+                    && TextFilter.isStyleFallback(finalNow);
+            if (finalNow != null && !styleFallbackOnly) {
                 finalAiDelivered.set(true);
                 callback.accept(finalNow);
                 return;
             }
-            if (!ai.mayUseFallback(source)) {
-                if (always) callback.accept(null);
+            Consumer<String> recoveredFinal = recovered -> {
+                if (recovered != null && finalAiDelivered.compareAndSet(false, true)) {
+                    callback.accept(recovered);
+                }
+            };
+            if (styleFallbackOnly) {
+                // The semantic wording is final; only the CS projection is missing.
+                // Ship the approximate-colour fallback now, then let the exact-style
+                // waiter replace it when the projection lands. Delivering BEFORE
+                // registering keeps the exact value last even if the projection is
+                // already present at registration time.
+                callback.accept(finalNow);
+                if (followAiRecovery) ai.requestCoalescedExactStyleFinal(source, recoveredFinal);
                 return;
             }
+            // Register the recovery waiter before any early return: a miss without a
+            // recorded failure state must still be back-filled once the value lands.
             if (followAiRecovery) {
-                Consumer<String> recoveredFinal = recovered -> {
-                    if (recovered != null && finalAiDelivered.compareAndSet(false, true)) {
-                        callback.accept(recovered);
-                    }
-                };
                 if (exactStyle) ai.requestCoalescedExactStyleFinal(source, recoveredFinal);
                 else ai.requestCoalescedFinal(source, recoveredFinal);
+            }
+            if (!ai.mayUseFallback(source)) {
+                if (always && !finalAiDelivered.get()) callback.accept(null);
+                return;
             }
             if (primary != null) {
                 if (!finalAiDelivered.get()) callback.accept(primary);
@@ -278,9 +292,18 @@ public final class TranslationService {
         // For CS-marked rich text, wait for the exact semantic style projection instead
         // of permanently displaying the marker-free fallback with guessed colours.
         requestByEngine(config.aiChat, masked.text(), true, translated -> {
-            String restored = NameMasker.unmask(translated, masked.names());
-            onResult.accept(meaningful(content, restored)
-                    ? LayoutPreserver.matchOuterWhitespace(content, restored) : null);
+            // Strip the style-fallback prefix before unmask/layout: NameMasker and
+            // LayoutPreserver treat the NUL prefix as content, so outer whitespace
+            // would land BEFORE the prefix and break startsWith detection downstream.
+            boolean styleFallback = TextFilter.isStyleFallback(translated);
+            String semantic = TextFilter.stripStyleFallback(translated);
+            String restored = NameMasker.unmask(semantic, masked.names());
+            if (!meaningful(content, restored)) {
+                onResult.accept(null);
+                return;
+            }
+            String laidOut = LayoutPreserver.matchOuterWhitespace(content, restored);
+            onResult.accept(styleFallback ? TextFilter.markStyleFallback(laidOut) : laidOut);
         }, true, true);
     }
 
@@ -343,7 +366,15 @@ public final class TranslationService {
         return lookup(text, config.chatMode, config.aiChat);
     }
     public TranslationDecision translateItemLine(String text) {
-        return lookup(text, config.tooltipMode, config.aiTooltip, true);
+        TranslationDecision d = lookup(text, config.tooltipMode, config.aiTooltip, true);
+        if (!d.changed()) return d;
+        // Display-only tooltip clean-up: preserved wide column padding looks like a hole
+        // after the much narrower CJK translation. Applied AFTER the cache lookup, so the
+        // stored translation (and its retokenised template) stays untouched; scoreboard /
+        // boss bar / chat / book surfaces never pass through here.
+        String tightened = TemplateText.collapseTranslatedColumnGaps(d.translated());
+        return tightened.equals(d.translated()) ? d
+                : TranslationDecision.of(d.mode(), d.original(), tightened);
     }
     public TranslationDecision translateHeld(String text) {
         return lookup(text, config.tooltipMode, config.aiTooltip);

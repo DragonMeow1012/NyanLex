@@ -63,7 +63,13 @@ public final class TemplateText {
     private static final Pattern ORDINAL = Pattern.compile(
             "(?i)" + DYNAMIC_START + "\\d+(?:st|nd|rd|th)(?![A-Za-z_\\u27E7])");
     // Digits adjacent to ⟦…⟧ are inside a NameMasker/TemplateText token — never re-template those.
-    private static final Pattern NUMBER = Pattern.compile(DYNAMIC_START + "[-+]?\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB])?(?![A-Za-z_⟧])");
+    // Atomic group (?>…): when the trailing guard rejects ("10kg", "31x?"), the whole match
+    // fails instead of backtracking into a half number ("1", "3") that shreds the cache key.
+    // The quantity suffix x ("Sold 31x String") rides inside the slot — its own lookahead
+    // keeps hex/dimensions/words ("0x1F", "2x2", "4xp") untouched — so 31x/1x/31 variants
+    // fold into one key.
+    private static final Pattern NUMBER = Pattern.compile(DYNAMIC_START
+            + "(?>[-+]?\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB]|[xX](?![0-9A-Za-z_⟧]))?)(?![A-Za-z_⟧])");
     // Decorative icon runs (⚔, ✪✪✪✪✪, ☀, 🔹, modded PUA icon fonts): OTHER_SYMBOL +
     // private-use + surrogates, MINUS the ⟦⟧ token brackets and '§' (style, not icon).
     // One slot per RUN, so star-upgrade variants ("✪✪✪" vs "✪✪✪✪✪") share a key and each
@@ -134,7 +140,11 @@ public final class TemplateText {
         }
 
         /** Substitute the original values back into a translated template. Tolerates the
-         *  translator inserting spaces around/inside the token (common with CJK output). */
+         *  translator inserting spaces around/inside the token (common with CJK output),
+         *  and puts back the template's own ASCII spacing when the translator ATE it
+         *  ("Jun \u27E6MT0\u27E7, \u27E6MT1\u27E7" answered as "6\u6708\u27E6MT0\u27E7,\u27E6MT1\u27E7" must not render "6\u670830,2026").
+         *  A space is only re-added between an ASCII visible neighbour and the value \u2014
+         *  never next to CJK or full-width punctuation, where no space belongs. */
         public String restore(String translated) {
             if (translated == null || values.isEmpty()) return translated;
             String out = translated;
@@ -150,8 +160,37 @@ public final class TemplateText {
                         + (trailingSpace ? "[ \\t\\u00A0]*" : "");
                 String protectedValue = value.replace(' ', SLOT_SPACE)
                         .replace('\t', SLOT_TAB).replace('\u00A0', SLOT_NBSP);
-                out = Pattern.compile(regex).matcher(out)
-                        .replaceAll(Matcher.quoteReplacement(protectedValue));
+
+                // Did the TEMPLATE carry horizontal whitespace around this token? Each
+                // token is unique in text() (sequentially numbered), so indexOf is exact.
+                String tok = OPEN + "MT" + i + String.valueOf(CLOSE);
+                int at = text.indexOf(tok);
+                boolean hadSpaceBefore = at > 0 && isHorizontalSpace(text.charAt(at - 1));
+                boolean hadSpaceAfter = at >= 0 && at + tok.length() < text.length()
+                        && isHorizontalSpace(text.charAt(at + tok.length()));
+
+                Matcher m = Pattern.compile(regex).matcher(out);
+                StringBuilder sb = new StringBuilder(out.length() + 8);
+                int last = 0;
+                while (m.find()) {
+                    String rep = protectedValue;
+                    // Only restore "ASCII visible char \u2194 token" spacing the template had:
+                    // full-width punctuation (\uFF1A\uFF0C\u3002), CJK, existing whitespace and \u27E6\u27E7
+                    // brackets get nothing. SLOT_SPACE dodges tightenCjkSpacing and is
+                    // turned back into ' ' below.
+                    if (hadSpaceBefore && !leadingSpace && m.start() > 0
+                            && isAsciiVisible(out.charAt(m.start() - 1))) {
+                        rep = SLOT_SPACE + rep;
+                    }
+                    if (hadSpaceAfter && !trailingSpace && m.end() < out.length()
+                            && isAsciiVisible(out.charAt(m.end()))) {
+                        rep = rep + SLOT_SPACE;
+                    }
+                    sb.append(out, last, m.start()).append(rep);
+                    last = m.end();
+                }
+                sb.append(out, last, out.length());
+                out = sb.toString();
             }
             return tightenCjkSpacing(out)
                     .replace(SLOT_SPACE, ' ')
@@ -186,6 +225,39 @@ public final class TemplateText {
         if (out.indexOf('．') >= 0) out = FW_DOT_IN_NUMBER.matcher(out).replaceAll(".");
         if (out.indexOf(' ') < 0) return out;
         return NUM_BEFORE_CJK.matcher(CJK_BEFORE_NUM.matcher(out).replaceAll("")).replaceAll("");
+    }
+
+    /** ASCII visible character (letters, digits, ASCII punctuation) — the only
+     *  neighbours that may earn back a template space in {@code restore}. */
+    private static boolean isAsciiVisible(char c) {
+        return c >= '!' && c <= '~';
+    }
+
+    private static boolean isHorizontalSpace(char c) {
+        return c == ' ' || c == '\t' || c == '\u00A0';
+    }
+
+    // Tooltip label/value rows are padded with a wide space run ("NPC Sell Price:     50,000").
+    // Translated CJK text is far narrower than the English original, so the preserved padding
+    // renders as a huge hole after the colon. The (?<=\S) lookbehind keeps leading indentation
+    // (ParagraphModel's indent-paragraph semantics) untouched.
+    private static final Pattern TRANSLATED_COLUMN_GAP =
+            Pattern.compile("(?<=\\S)[ \\t\\u00A0]{3,}");
+    private static final Pattern CJK_CHAR = Pattern.compile("[\\u4e00-\\u9fff]");
+
+    /** Tooltip-only display clean-up: on lines that actually translated into CJK, collapse any
+     *  in-line run of 3+ horizontal spaces to a fixed 2 — label and value stay visibly
+     *  separated. Lines without CJK (untranslated, or a non-Chinese target) pass through
+     *  unchanged, as does every other surface (this is only applied by translateItemLine). */
+    public static String collapseTranslatedColumnGaps(String text) {
+        if (text == null || text.indexOf(' ') < 0 || !CJK_CHAR.matcher(text).find()) return text;
+        String[] lines = text.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (CJK_CHAR.matcher(lines[i]).find()) {
+                lines[i] = TRANSLATED_COLUMN_GAP.matcher(lines[i]).replaceAll("  ");
+            }
+        }
+        return String.join("\n", lines);
     }
 
     public static Prepared prepare(String source) {

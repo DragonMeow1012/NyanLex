@@ -5,6 +5,7 @@ import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
+import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.TranslationException;
 import com.dragonmeow.mctranslator.translate.TranslationResult;
 import com.dragonmeow.mctranslator.translate.Translator;
@@ -288,6 +289,32 @@ class TranslationServiceTest {
         assertTrue(d.changed());
         assertTrue(d.translated().contains("Steve123"), "player name restored verbatim: " + d.translated());
         assertFalse(String.join(" ", sent).contains("Steve123"), "name never sent to the backend: " + sent);
+    }
+
+    @Test
+    void translatedTooltipColumnGapCollapsesButScoreboardKeepsItsLayout() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        cfg.scoreboardMode = DisplayMode.TRANSLATION;
+        // Inline fake: translates the label into CJK and echoes every ⟦WS/MT⟧ token, so
+        // the preserved padding comes back through Snapshot.restore untouched.
+        Translator t = (text, target) -> new TranslationResult(
+                text.replace("NPC Sell Price", "NPC 出售價格"), "en");
+        TranslationService s = service(cfg, t, DIRECT);
+        String line = "NPC Sell Price:     50,000";
+
+        s.translateItemLine(line); // queue the miss
+        pump(s);
+        TranslationDecision tooltip = s.translateItemLine(line);
+        assertTrue(tooltip.changed());
+        assertEquals("NPC 出售價格:  50,000", tooltip.translated(),
+                "the tooltip display collapses the translated column gap to two spaces");
+
+        s.translateScoreboardLine(line);
+        pump(s);
+        assertEquals("NPC 出售價格:     50,000",
+                s.translateScoreboardLine(line).translated(),
+                "scoreboard fixed HUD columns must stay untouched");
     }
 
     @Test
@@ -873,5 +900,132 @@ class TranslationServiceTest {
                 "⟦CS1⟧白色禮物護符⟦/CS1⟧，⟦CS0⟧機翻出售⟦/CS0⟧",
                 "⟦CS1⟧白色禮物護符⟦/CS1⟧，⟦CS0⟧精翻售出⟦/CS0⟧"), delivered,
                 "the second callback lets the loader replace the same displayed chat row");
+    }
+
+    // ---- chat back-fill: style-fallback ships first, the exact projection replaces later ----
+
+    /** Fake AI: eats the CS markers on the first marked round, restores them on the
+     *  second; plain semantic keys always translate cleanly. */
+    private static Translator markerEatingThenHealingAi(AtomicInteger markedRound) {
+        return (text, target) -> {
+            if (text.contains("⟦CS")) {
+                return markedRound.incrementAndGet() == 1
+                        ? new TranslationResult("你好 世界", "en")
+                        : new TranslationResult("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en");
+            }
+            return new TranslationResult("你好 世界", "en");
+        };
+    }
+
+    @Test
+    void exactStyleChatShipsSemanticFallbackFirstThenExactProjectionBackfills() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = true;
+        long[] now = {0L};
+        AtomicInteger gtCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            throw new TranslationException("GT must not be consulted");
+        }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        TranslationCache ai = new TranslationCache(markerEatingThenHealingAi(new AtomicInteger()),
+                cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        TranslationService s = new TranslationService(cfg, gt, ai);
+        String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
+        List<String> delivered = new ArrayList<>();
+
+        s.translateChat("Hello World");   // seed the final plain semantic row
+        pump(s);
+        s.translateChatAsync(marked, t -> {
+            if (t != null) delivered.add(t);
+        });
+        pump(s);                          // marked round loses its markers -> style debt
+
+        assertEquals(1, delivered.size(), "the semantic wording must ship immediately");
+        assertTrue(TextFilter.isStyleFallback(delivered.get(0)),
+                "the first delivery is explicitly marked as a style fallback");
+        assertEquals("你好 世界", TextFilter.stripStyleFallback(delivered.get(0)));
+
+        now[0] = 10_000L;
+        pump(s);                          // retry succeeds with exact markers
+        assertEquals(2, delivered.size(), "the late exact projection must back-fill the row");
+        assertEquals("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", delivered.get(1));
+        assertFalse(TextFilter.isStyleFallback(delivered.get(1)));
+        assertEquals(0, gtCalls.get(), "a style-only projection debt must never buy GT");
+    }
+
+    @Test
+    void styleFallbackPrefixSurvivesOuterWhitespaceRestoration() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = true;
+        long[] now = {0L};
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            throw new TranslationException("GT must not be consulted");
+        }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        TranslationCache ai = new TranslationCache(markerEatingThenHealingAi(new AtomicInteger()),
+                cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        TranslationService s = new TranslationService(cfg, gt, ai);
+        String content = " ⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧ ";
+        List<String> delivered = new ArrayList<>();
+
+        s.translateChat("Hello World");
+        pump(s);
+        s.translateChatAsync(content, t -> {
+            if (t != null) delivered.add(t);
+        });
+        pump(s);
+
+        assertEquals(1, delivered.size());
+        assertTrue(TextFilter.isStyleFallback(delivered.get(0)),
+                "outer whitespace must be restored INSIDE the fallback prefix, not before it");
+        assertEquals(" 你好 世界 ", TextFilter.stripStyleFallback(delivered.get(0)));
+    }
+
+    @Test
+    void screenTextMissStillDeliversExactlyOnce() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.aiScreenScan = true;
+        AtomicInteger aiCalls = new AtomicInteger();
+        AtomicInteger gtCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            return new TranslationResult("機器譯文", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            aiCalls.incrementAndGet();
+            return new TranslationResult("歡迎來到伺服器", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        TranslationService s = new TranslationService(cfg, gt, ai);
+        List<String> results = new ArrayList<>();
+
+        s.requestScreenTextAsync("Welcome to the server", results::add);
+        pump(s);
+
+        assertEquals(List.of("歡迎來到伺服器"), results,
+                "a healthy screen-text miss still resolves with exactly one callback");
+        assertEquals(1, aiCalls.get());
+        assertEquals(0, gtCalls.get(), "healthy AI screen text must never buy GT");
+    }
+
+    @Test
+    void gtOnlyScreenTextPathIsUnchanged() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.aiScreenScan = false;
+        AtomicInteger aiCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) ->
+                new TranslationResult("機器譯文", "en"), cfg.targetLang, DIRECT, 100);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            aiCalls.incrementAndGet();
+            return new TranslationResult("不應呼叫", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        TranslationService s = new TranslationService(cfg, gt, ai);
+        List<String> results = new ArrayList<>();
+
+        s.requestScreenTextAsync("Welcome to the server", results::add);
+        pump(s);
+
+        assertEquals(List.of("機器譯文"), results);
+        assertEquals(0, aiCalls.get(), "GT mode must never consult AI");
     }
 }
