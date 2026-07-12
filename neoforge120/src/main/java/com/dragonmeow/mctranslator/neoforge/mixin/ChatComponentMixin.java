@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /** Prevent the broad screen-text hook from translating the chat HUD while another screen is open. */
 @Mixin(ChatComponent.class)
-public abstract class ChatComponentMixin {
+public abstract class ChatComponentMixin implements com.dragonmeow.mctranslator.neoforge.ChatComponentAccess {
     @Accessor("allMessages")
     public abstract java.util.List<GuiMessage> mctranslator$getAllMessages();
 

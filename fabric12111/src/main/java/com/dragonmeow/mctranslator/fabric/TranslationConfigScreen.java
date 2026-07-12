@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator.fabric;
 
 import com.dragonmeow.mctranslator.config.DisplayMode;
+import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 
 import net.minecraft.client.gui.GuiGraphics;
@@ -38,7 +39,6 @@ public final class TranslationConfigScreen extends Screen {
         int gap = 6;
         int left = this.width / 2 - rowWidth - gap / 2;
         int right = this.width / 2 + gap / 2;
-        int full = rowWidth * 2 + gap;
         int y = 24;
         int step = 20;
 
@@ -60,15 +60,23 @@ public final class TranslationConfigScreen extends Screen {
         y += 6;
         this.addRenderableWidget(Button.builder(langLabel(cfg),
                         b -> this.minecraft.setScreen(new TranslationLanguageScreen(this)))
-                .bounds(left, y, full, 20).build());
+                .bounds(left, y, rowWidth, 20).build());
+        this.addRenderableWidget(Button.builder(providerLabel(cfg),
+                        b -> this.minecraft.setScreen(new MachineProviderScreen(this)))
+                .bounds(right, y, rowWidth, 20).build());
         y += 22;
         // 事前冷卻節流：minimum spacing between outbound requests (per engine, Google 與 AI
-        // 各自計時). Click cycles 關閉 → 200 → … → 2000 ms; the pacer reads the value live.
+        // 各自計時). Click cycles 關閉 → 1000 → … → 10000 ms; the pacer reads the value live.
         this.addRenderableWidget(Button.builder(cooldownLabel(cfg), b -> {
             cfg.requestCooldownMs = nextCooldown(cfg.requestCooldownMs);
             MctranslatorFabric.saveConfig();
             b.setMessage(cooldownLabel(cfg));
-        }).bounds(left, y, full, 18).build());
+        }).bounds(left, y, rowWidth, 18).build());
+        this.addRenderableWidget(Button.builder(batchWindowLabel(cfg), b -> {
+            cfg.batchWindowMs = nextBatchWindow(cfg.batchWindowMs);
+            MctranslatorFabric.saveConfig();
+            b.setMessage(batchWindowLabel(cfg));
+        }).bounds(right, y, rowWidth, 18).build());
         y += 22;
         this.addRenderableWidget(Button.builder(debugLabel(cfg), b -> {
             cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
@@ -130,7 +138,7 @@ public final class TranslationConfigScreen extends Screen {
     }
 
     /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value). */
-    private static final int[] COOLDOWN_STEPS = {0, 200, 400, 600, 800, 1000, 1500, 2000};
+    private static final int[] COOLDOWN_STEPS = {0, 1000, 2000, 4000, 6000, 8000, 10000};
 
     /** Next step above the current value; wraps to 0 (關閉) past the top. Off-list values snap up. */
     private static int nextCooldown(int current) {
@@ -145,6 +153,24 @@ public final class TranslationConfigScreen extends Screen {
                 ? Component.translatable("config.mctranslator.request_cooldown.off")
                 : Component.literal(cfg.requestCooldownMs + " ms");
         return Component.translatable("config.mctranslator.request_cooldown", state);
+    }
+
+    private static Component providerLabel(TranslatorConfig cfg) {
+        MachineTranslationProvider provider = MachineTranslationProvider.fromId(
+                cfg.machineTranslationProvider);
+        return Component.translatable("config.mctranslator.machine_provider",
+                MachineProviderScreen.providerName(provider));
+    }
+    private static final int[] BATCH_WINDOW_STEPS = {0, 1000, 2000, 3000, 5000, 8000, 10000};
+    private static int nextBatchWindow(int current) {
+        for (int value : BATCH_WINDOW_STEPS) if (value > current) return value;
+        return 0;
+    }
+    private static Component batchWindowLabel(TranslatorConfig cfg) {
+        Component state = cfg.batchWindowMs <= 0
+                ? Component.translatable("config.mctranslator.batch_window.off")
+                : Component.literal(cfg.batchWindowMs / 1000F + " s");
+        return Component.translatable("config.mctranslator.batch_window", state);
     }
 
     private static Component debugLabel(TranslatorConfig cfg) {

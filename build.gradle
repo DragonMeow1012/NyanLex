@@ -10,9 +10,15 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: mctranslator-1.0.0-Fabric-1.21.1.jar (mirrors the NeoForge classifier scheme).
+// Final jar name: mctranslator-1.0.2-Fabric-1.21.1.jar (mirrors the NeoForge classifier scheme).
 tasks.named('remapJar') {
     archiveClassifier = 'Fabric-1.21.1'
+}
+
+tasks.named('jar') {
+    from('LICENSE') {
+        rename { 'LICENSE_MinecraftTranslator' }
+    }
 }
 
 repositories {
@@ -40,7 +46,7 @@ dependencies {
 }
 
 java {
-    // Minecraft 1.21.x requires Java 21. Loom provisions a matching JDK via toolchains.
+    // Minecraft 1.21.1 requires Java 21. Loom provisions a matching JDK via toolchains.
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }

@@ -95,6 +95,9 @@ dependencies {
 // Example for how to get properties into the manifest for reading by the runtime..
 jar {
     classifier = 'Forge-1.13.2'
+    from('../LICENSE') {
+        rename { 'LICENSE_MinecraftTranslator' }
+    }
     manifest {
         attributes([
             "Specification-Title": "examplemod",

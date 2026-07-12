@@ -2,6 +2,8 @@ package com.dragonmeow.mctranslator.translate;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -17,9 +19,11 @@ public final class UrlHttpTransport implements HttpTransport {
 
     public UrlHttpTransport(Duration timeout) {
         this.timeout = timeout;
+        CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         this.client = HttpClient.newBuilder()
                 .connectTimeout(timeout)
                 .followRedirects(HttpClient.Redirect.NORMAL)
+                .cookieHandler(cookies)
                 .build();
     }
 
@@ -52,11 +56,12 @@ public final class UrlHttpTransport implements HttpTransport {
                 .uri(URI.create(url))
                 // AI completions are slower than the free GET endpoint; allow more time.
                 .timeout(Duration.ofSeconds(30))
-                .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-        if (headers != null) {
-            headers.forEach(builder::header);
+        if (headers == null || headers.keySet().stream().noneMatch(
+                name -> "content-type".equalsIgnoreCase(name))) {
+            builder.setHeader("Content-Type", "application/json");
         }
+        if (headers != null) headers.forEach(builder::setHeader);
         try {
             HttpResponse<String> resp =
                     client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));

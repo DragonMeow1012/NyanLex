@@ -30,6 +30,8 @@
   "config.mctranslator.ai.disable_gt_fallback": "AI 精翻停用 GT 回退：%s",
   "config.mctranslator.request_cooldown": "翻譯請求冷卻：%s",
   "config.mctranslator.request_cooldown.off": "關閉",
+  "config.mctranslator.batch_window": "批次收集：%s",
+  "config.mctranslator.batch_window.off": "關閉",
   "config.mctranslator.ai.open": "AI 翻譯設定（模型／API 金鑰）...",
   "config.mctranslator.keybind.open": "快捷鍵設定...",
   "config.mctranslator.cache.clear": "清除目前語言全部快取",
@@ -77,5 +79,14 @@
   "debug.mctranslator.skipped": "略過",
   "debug.mctranslator.empty": "無結果",
   "debug.mctranslator.source": "原文：",
-  "debug.mctranslator.translation": "譯文："
+  "debug.mctranslator.translation": "譯文：",
+  "config.mctranslator.machine_provider": "機翻來源：%s",
+  "screen.mctranslator.provider.title": "機器翻譯來源",
+  "screen.mctranslator.provider.search": "搜尋來源名稱...",
+  "screen.mctranslator.provider.google": "Google 免費翻譯",
+  "screen.mctranslator.provider.youdao": "有道網頁翻譯",
+  "screen.mctranslator.provider.deepl": "DeepL 網頁翻譯",
+  "screen.mctranslator.provider.microsoft": "微軟／Bing 網頁翻譯",
+  "screen.mctranslator.provider.experimental_name": "%s（實驗）",
+  "screen.mctranslator.provider.warning": "實驗網頁來源可能改版或失效；Google 為穩定預設。"
 }

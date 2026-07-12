@@ -21,7 +21,7 @@ import java.util.function.Supplier;
  * <p>Key behaviours:</p>
  * <ul>
  *   <li><b>Context-aware batching:</b> {@link #translateBatch} sends every line of a
- *       surface (e.g. a whole item tooltip) in <em>one</em> request, numbered, so the
+ *       surface (e.g. a whole item tooltip) in <em>one</em> strictly anchored request, so the
  *       model translates them coherently with shared context (fixes things like
  *       "EV Yields" → "電動車產量").</li>
  *   <li><b>Multi-key rotation:</b> keys are tried round-robin and, on failure
@@ -34,6 +34,8 @@ import java.util.function.Supplier;
 public final class OpenAiTranslator implements Translator {
 
     private static final Gson GSON = new Gson();
+    /** Five-digit outer boundaries are compact while remaining easy for chat models to copy. */
+    public static final int BATCH_ANCHOR_BASE = 86001;
 
     private final HttpTransport transport;
     private final Supplier<AiSettings> settings;
@@ -132,25 +134,43 @@ public final class OpenAiTranslator implements Translator {
             throw new TranslationException("AI rate-limited (429 on all keys): backing off");
         }
 
-        String numbered = buildSurfaceContextBlock(surfaceContext) + buildPrompt(texts, targetLang);
-        String requestBody = buildRequestBody(s, targetLang, numbered, true);
-        // If the endpoint rejects the reasoning override (HTTP 400), retry without it.
-        String plainBody = wantsNoReasoning(s.model()) ? buildRequestBody(s, targetLang, numbered, false) : null;
-        String content = postWithKeyRotation(s, requestBody, plainBody);
-        List<String> lines = parseNumbered(content, texts.size());
-        if (lines.size() != texts.size()) {
-            throw new TranslationException(
-                    "AI returned " + lines.size() + " lines, expected " + texts.size());
-        }
         List<TranslationResult> out = new ArrayList<>(texts.size());
-        for (int i = 0; i < lines.size(); i++) {
-            // A translated line must carry the SAME ⟦…⟧ tokens as its source line.
-            // A mismatch means the model merged/shifted lines — caching that would
-            // poison the wrong key (e.g. /levels text landing on a progress bar), so
-            // the line is failed individually instead.
-            out.add(new TranslationResult(tokensMatch(texts.get(i), lines.get(i)) ? lines.get(i) : "", null));
-        }
+        translateChunk(texts, targetLang, surfaceContext, s, out);
         return out;
+    }
+
+    /**
+     * One normal chunk is one physical AI request. If a model damages the boundary
+     * protocol, bisect before accepting anything; a bad sibling can therefore never
+     * shift text into another cache key.
+     */
+    private void translateChunk(List<String> texts, String targetLang,
+                                List<String> surfaceContext, AiSettings settings,
+                                List<TranslationResult> out) throws TranslationException {
+        int base = anchorBase(texts, surfaceContext);
+        List<AiWireItem> wire = new ArrayList<>(texts.size());
+        for (int i = 0; i < texts.size(); i++) wire.add(maskHardLines(texts.get(i), i));
+        String anchored = buildSurfaceContextBlock(surfaceContext) + buildAnchoredPrompt(wire, base);
+        String requestBody = buildRequestBody(settings, targetLang, anchored, true);
+        String plainBody = wantsNoReasoning(settings.model())
+                ? buildRequestBody(settings, targetLang, anchored, false) : null;
+        String content = postWithKeyRotation(settings, requestBody, plainBody);
+        List<String> parts = extractAnchoredBatch(content, texts.size(), base);
+        if (parts == null) {
+            if (texts.size() == 1) {
+                out.add(new TranslationResult("", null));
+                return;
+            }
+            int mid = texts.size() / 2;
+            translateChunk(texts.subList(0, mid), targetLang, surfaceContext, settings, out);
+            translateChunk(texts.subList(mid, texts.size()), targetLang, surfaceContext, settings, out);
+            return;
+        }
+        for (int i = 0; i < parts.size(); i++) {
+            String restored = restoreHardLines(parts.get(i), wire.get(i));
+            out.add(new TranslationResult(restored != null
+                    && tokensMatch(texts.get(i), restored) ? restored : "", null));
+        }
     }
 
     private static final java.util.regex.Pattern ANY_TOKEN =
@@ -225,7 +245,7 @@ public final class OpenAiTranslator implements Translator {
         }
         if (emitted == 0) return "";
         if (emitted < surfaceContext.size()) sb.append("[remaining context omitted]\n");
-        sb.append("Translate ONLY the numbered units below; do not output the visible-block context.\n\n");
+        sb.append("Translate ONLY the strictly anchored units below; do not output the visible-block context.\n\n");
         return sb.toString();
     }
 
@@ -245,9 +265,17 @@ public final class OpenAiTranslator implements Translator {
     }
 
     String buildPrompt(List<String> texts, String targetLang) {
+        int base = anchorBase(texts, null);
+        List<AiWireItem> wire = new ArrayList<>(texts.size());
+        for (int i = 0; i < texts.size(); i++) wire.add(maskHardLines(texts.get(i), i));
+        return buildAnchoredPrompt(wire, base);
+    }
+
+    private static String buildAnchoredPrompt(List<AiWireItem> items, int base) {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < texts.size(); i++) {
-            sb.append(i + 1).append(". ").append(texts.get(i).replace("\n", " ")).append('\n');
+        for (int i = 0; i < items.size(); i++) {
+            sb.append(base + i * 2).append(' ').append(items.get(i).wire())
+                    .append(' ').append(base + i * 2 + 1).append('\n');
         }
         return sb.toString();
     }
@@ -297,8 +325,8 @@ public final class OpenAiTranslator implements Translator {
                 .append("Adapt naturally to the detected server/mod genre and keep wording coherent across lines. ")
                 .append("The source may be vanilla Minecraft or any server/mod genre, including RPG/MMO equipment, stats, abilities, quests and economy. ")
                 .append("Infer ambiguous terms from the entire visible-block context, never as isolated dictionary labels. ")
-                .append("Return exactly one numbered translation per numbered input unit, with the same numbering and no commentary. ")
-                .append("Never merge, split, add, remove or reorder numbered units; the program owns all sections, PB line breaks and blank lines. ")
+                .append("Each input unit begins and ends with a unique five-digit boundary token. Return the same boundary tokens exactly once, in the same order, with only that unit's translation between its pair and no commentary outside the pairs. ")
+                .append("Never merge, split, add, remove or reorder anchored units; the program owns all sections, PB line breaks and blank lines. ")
                 .append("Keep numbers, symbols and formatting codes intact. ")
                 .append("Translate ordinary UI, item and location terms completely; do not leave a source-language location word unchanged while translating the rest. ")
                 .append("Translate each word as a WHOLE: NEVER mix the original script and the target script inside a single word. ")
@@ -619,56 +647,96 @@ public final class OpenAiTranslator implements Translator {
         }
     }
 
-    private static final java.util.regex.Pattern NUMBERED =
-            java.util.regex.Pattern.compile("^(\\d+)\\s*[.)、]\\s*(.*)$");
+    private record AiLineSlot(String token, String original) {}
+    private record AiWireItem(String wire, List<AiLineSlot> hardLines) {}
 
-    /**
-     * Re-assemble the model's reply into exactly {@code expected} translations, keyed by
-     * the leading "N." numbering. A translation wrapped across multiple physical lines is
-     * joined back to its number; blank lines and a stray trailing note are tolerated; the
-     * result is padded/truncated to {@code expected} so one misbehaving line never fails
-     * the whole batch (empty entries are treated as per-item failures downstream).
-     */
-    public static List<String> parseNumbered(String content, int expected) {
-        if (content == null) content = "";
-        List<String> out = new ArrayList<>();
-        for (int i = 0; i < Math.max(0, expected); i++) out.add("");
-        List<String> unnumbered = new ArrayList<>();
-        StringBuilder cur = null;
-        int curIndex = -1;
-        boolean sawNumber = false;
-        java.util.Set<Integer> seen = new java.util.HashSet<>();
-        for (String raw : content.split("\n", -1)) {
-            String line = raw.strip();
-            if (line.isEmpty()) continue;
-            java.util.regex.Matcher m = NUMBERED.matcher(line);
-            if (m.matches()) {
-                sawNumber = true;
-                if (cur != null && curIndex >= 0) out.set(curIndex, cur.toString());
-                int number;
-                try {
-                    number = Integer.parseInt(m.group(1));
-                } catch (NumberFormatException ignored) {
-                    number = -1;
-                }
-                int index = number - 1;
-                curIndex = index >= 0 && index < expected && seen.add(index) ? index : -1;
-                cur = curIndex >= 0 ? new StringBuilder(m.group(2).strip()) : null;
-            } else if (cur != null) {
-                if (cur.length() > 0) cur.append(' ');
-                cur.append(line); // continuation of a wrapped translation
-            } else if (!sawNumber) {
-                unnumbered.add(line);
+    /** Replace hard line endings with immutable placeholders so each cache item remains
+     * one wire unit without losing CR/LF semantics. */
+    private static AiWireItem maskHardLines(String text, int itemIndex) {
+        String source = text == null ? "" : text;
+        StringBuilder wire = new StringBuilder(source.length());
+        List<AiLineSlot> slots = new ArrayList<>();
+        int slotIndex = 0;
+        for (int i = 0; i < source.length(); i++) {
+            char ch = source.charAt(i);
+            if (ch != '\r' && ch != '\n') {
+                wire.append(ch);
+                continue;
+            }
+            String original;
+            if (ch == '\r' && i + 1 < source.length() && source.charAt(i + 1) == '\n') {
+                original = "\r\n";
+                i++;
+            } else original = Character.toString(ch);
+            String token;
+            do {
+                token = "⟦AI_LINE_" + itemIndex + "_" + slotIndex++ + "⟧";
+            } while (source.contains(token));
+            wire.append(token);
+            slots.add(new AiLineSlot(token, original));
+        }
+        return new AiWireItem(wire.toString(), List.copyOf(slots));
+    }
+
+    private static String restoreHardLines(String translated, AiWireItem item) {
+        if (translated == null || item == null) return null;
+        String restored = translated;
+        for (AiLineSlot slot : item.hardLines()) {
+            int first = restored.indexOf(slot.token());
+            if (first < 0 || restored.indexOf(slot.token(), first + slot.token().length()) >= 0) {
+                return null;
+            }
+            restored = restored.replace(slot.token(), slot.original());
+        }
+        return restored.contains("⟦AI_LINE_") ? null : restored;
+    }
+
+    /** Pick a compact boundary range not present in request text or context. */
+    private static int anchorBase(List<String> texts, List<String> surfaceContext) {
+        int base = BATCH_ANCHOR_BASE;
+        int count = Math.max(1, texts == null ? 0 : texts.size() * 2);
+        while (true) {
+            boolean collision = containsAnchorRange(texts, base, count)
+                    || containsAnchorRange(surfaceContext, base, count);
+            if (!collision) return base;
+            base += 2_000;
+        }
+    }
+
+    private static boolean containsAnchorRange(List<String> values, int base, int count) {
+        if (values == null) return false;
+        for (String value : values) {
+            if (value == null) continue;
+            for (int i = 0; i < count; i++) {
+                if (value.contains(Integer.toString(base + i))) return true;
             }
         }
-        if (cur != null && curIndex >= 0) out.set(curIndex, cur.toString());
-        // No numbering at all: fall back to one entry per non-blank line.
-        if (!sawNumber) {
-            out.clear();
-            out.addAll(unnumbered);
-            while (out.size() > expected) out.remove(out.size() - 1);
-            while (out.size() < expected) out.add("");
+        return false;
+    }
+
+    /**
+     * Strict global reconstruction. Every opener and closer must occur exactly once in
+     * order, and all text outside complete pairs must be whitespace. Missing, repeated,
+     * crossed or interleaved boundaries reject the whole chunk before any cache write.
+     */
+    public static List<String> extractAnchoredBatch(String content, int expected, int base) {
+        if (content == null || expected < 0) return null;
+        List<String> out = new ArrayList<>(expected);
+        int cursor = 0;
+        for (int i = 0; i < expected; i++) {
+            String open = Integer.toString(base + i * 2);
+            String close = Integer.toString(base + i * 2 + 1);
+            int start = content.indexOf(open, cursor);
+            if (start < 0 || content.indexOf(open) != start
+                    || content.indexOf(open, start + open.length()) >= 0) return null;
+            if (!content.substring(cursor, start).isBlank()) return null;
+            int valueStart = start + open.length();
+            int end = content.indexOf(close, valueStart);
+            if (end < valueStart || content.indexOf(close) != end
+                    || content.indexOf(close, end + close.length()) >= 0) return null;
+            out.add(content.substring(valueStart, end).strip());
+            cursor = end + close.length();
         }
-        return out;
+        return content.substring(cursor).isBlank() ? out : null;
     }
 }

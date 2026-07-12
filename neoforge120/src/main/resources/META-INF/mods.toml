@@ -9,7 +9,7 @@ config = "mctranslator.neoforge.mixins.json"
 modId = "mctranslator"
 version = "${version}"
 displayName = "Minecraft Translator"
-description = "Translates chat and item names/lore into Traditional/Simplified Chinese. Client-only."
+description = "Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation."
 authors = "DragonMeow"
 displayTest = "IGNORE_ALL_VERSION"
 

@@ -22,17 +22,20 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Schema 3 stores a header on the first physical line and exactly one translation
  * on each following line. It remains a canonical snapshot rather than an append log,
  * so a key exists at most once on disk. Updates are written to a sibling temporary
- * file and atomically replaced where the filesystem supports it. Unknown/legacy
- * schemas are intentionally discarded; this store does not carry migration code.</p>
+ * file and atomically replaced where the filesystem supports it. Schema 2 is migrated
+ * losslessly. Unknown or unreadable files are backed up and never deleted merely
+ * because a newer build cannot read them.</p>
  */
 public final class FileStore implements PersistentStore {
     private static final int SCHEMA = 3;
+    private static final int LEGACY_SCHEMA = 2;
 
     private final Path file;
     private final Path temporary;
     private final Map<String, String> values = new ConcurrentHashMap<>();
     private final Set<String> provisional = ConcurrentHashMap.newKeySet();
     private final Object lock = new Object();
+    private String requiredBackupSuffix;
 
     public FileStore(Path file, boolean clearOnStart) {
         this.file = file;
@@ -135,6 +138,7 @@ public final class FileStore implements PersistentStore {
         synchronized (lock) {
             values.clear();
             provisional.clear();
+            requiredBackupSuffix = null;
             delete(file);
             delete(temporary);
         }
@@ -147,48 +151,114 @@ public final class FileStore implements PersistentStore {
     private void load() {
         if (!Files.isRegularFile(file)) return;
         synchronized (lock) {
+            boolean migrateAfterClose = false;
             try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                 String headerLine = reader.readLine();
                 if (headerLine == null || headerLine.isBlank()) {
-                    clear();
+                    preserveUnreadableFile();
                     return;
                 }
                 JsonObject header = JsonParser.parseString(headerLine).getAsJsonObject();
-                if (!header.has("schema") || header.get("schema").getAsInt() != SCHEMA) {
-                    clear();
+                if (!header.has("schema")) {
+                    preserveUnreadableFile();
                     return;
                 }
 
                 Map<String, String> loaded = new LinkedHashMap<>();
                 Set<String> loadedProvisional = ConcurrentHashMap.newKeySet();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.isBlank()) continue;
-                    try {
-                        JsonObject entry = JsonParser.parseString(line).getAsJsonObject();
-                        if (!entry.has("key") || !entry.has("translation")) continue;
-                        String key = entry.get("key").getAsString();
-                        loaded.put(key, entry.get("translation").getAsString());
-                        if (entry.has("provisional") && entry.get("provisional").getAsBoolean()) {
-                            loadedProvisional.add(key);
-                        }
-                    } catch (RuntimeException ignored) {
-                        // JSONL isolates damage: one truncated/corrupt entry must never
-                        // erase every valid permanent translation in the file.
+                int schema = header.get("schema").getAsInt();
+                boolean migrated = schema == LEGACY_SCHEMA;
+                boolean damaged = false;
+                if (migrated) {
+                    if (!header.has("entries") || !header.get("entries").isJsonArray()) {
+                        preserveUnreadableFile();
+                        return;
                     }
+                    for (var element : header.getAsJsonArray("entries")) {
+                        if (element.isJsonObject()) {
+                            readEntry(element.getAsJsonObject(), loaded, loadedProvisional);
+                        }
+                    }
+                } else if (schema == SCHEMA) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.isBlank()) continue;
+                        try {
+                            damaged |= !readEntry(JsonParser.parseString(line).getAsJsonObject(),
+                                    loaded, loadedProvisional);
+                        } catch (RuntimeException ignored) {
+                            // JSONL isolates damage: one truncated entry must not erase
+                            // every other permanent translation in the file.
+                            damaged = true;
+                        }
+                    }
+                } else {
+                    preserveUnreadableFile();
+                    return;
                 }
                 values.clear();
                 values.putAll(loaded);
                 provisional.clear();
                 provisional.addAll(loadedProvisional);
+                if (migrated) {
+                    requireBackup(".schema2.bak");
+                    migrateAfterClose = true;
+                } else if (damaged) {
+                    requireBackup(".unreadable.bak");
+                }
             } catch (IOException | RuntimeException ignored) {
-                // Corrupt and pre-schema files start a new clean cache.
-                clear();
+                preserveUnreadableFile();
+                return;
             }
+            // Windows does not allow the atomic replace while the source reader is open.
+            if (migrateAfterClose) persist();
         }
     }
 
+    private static boolean readEntry(JsonObject entry, Map<String, String> loaded,
+                                     Set<String> loadedProvisional) {
+        if (!entry.has("key") || !entry.has("translation")) return false;
+        String key = entry.get("key").getAsString();
+        loaded.put(key, entry.get("translation").getAsString());
+        if (entry.has("provisional") && entry.get("provisional").getAsBoolean()) {
+            loadedProvisional.add(key);
+        }
+        return true;
+    }
+
+    private void preserveUnreadableFile() {
+        requireBackup(".unreadable.bak");
+    }
+
+    private void requireBackup(String suffix) {
+        requiredBackupSuffix = suffix;
+        ensureRequiredBackup();
+    }
+
+    private boolean ensureRequiredBackup() {
+        if (requiredBackupSuffix == null) return true;
+        if (!Files.exists(file)) return true;
+        if (!Files.isRegularFile(file)) return false;
+
+        Path backup = file.resolveSibling(file.getFileName() + requiredBackupSuffix);
+        boolean backupExisted = Files.exists(backup);
+        try {
+            if (backupExisted) {
+                return Files.isRegularFile(backup) && Files.mismatch(file, backup) == -1L;
+            }
+            Files.copy(file, backup, StandardCopyOption.COPY_ATTRIBUTES);
+            if (Files.isRegularFile(backup) && Files.mismatch(file, backup) == -1L) {
+                return true;
+            }
+        } catch (IOException ignored) {
+            // A failed or unverifiable safety copy must never authorize replacement.
+        }
+        if (!backupExisted) delete(backup);
+        return false;
+    }
+
     private void persist() {
+        if (!ensureRequiredBackup()) return;
         try {
             Path parent = file.getParent();
             if (parent != null) Files.createDirectories(parent);
@@ -214,6 +284,7 @@ public final class FileStore implements PersistentStore {
             } catch (AtomicMoveNotSupportedException ignored) {
                 Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
             }
+            requiredBackupSuffix = null;
         } catch (IOException ignored) {
             delete(temporary); // memory remains authoritative for this session
         }

@@ -1,10 +1,13 @@
 # Mirror the MC-agnostic core packages from the root tree (src\) — the canonical,
-# unit-tested copy — into every loader tree. Run after ANY edit under
+# unit-tested copy — into the modern source-compatible loader trees. Run after
+# ANY edit under
 # src\main\java\com\dragonmeow\mctranslator\{cache,config,service,style,translate}.
 #
 #   powershell -ExecutionPolicy Bypass -File .\sync-core.ps1
 #
 # Per-tree glue packages (fabric / fabric26 / neoforge) are never touched.
+# Fabric 1.17.1 and the Java 8 ports require manual compatibility ports and are
+# intentionally excluded from this mechanical copy list.
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path

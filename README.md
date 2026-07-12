@@ -1,118 +1,172 @@
-# Minecraft Translator
+# Minecraft Translator 1.0.2
 
 [English README](README_EN.md)
 
-Minecraft 用戶端即時翻譯模組，可翻譯聊天訊息、物品提示與遊戲介面文字。
+Minecraft Translator 是完全在用戶端運作的 Minecraft 即時翻譯模組。它會翻譯目前畫面實際顯示的聊天、物品與介面文字，並以批次、快取和嚴格的結果驗證降低請求數與 token 消耗；不會修改伺服器資料或玩家送出的訊息。
 
-Minecraft Translator 支援 Google 翻譯及 OpenAI 相容的 AI API，會盡量保留
-Minecraft 原有的文字顏色、格式與互動事件，不會修改伺服器資料或玩家送出的訊息。
-設定介面會跟隨 Minecraft 目前使用的語言，翻譯目標語言則使用可搜尋、接近原版
-Minecraft 的語言清單。
+## 功能摘要
 
-## 下載與安裝
+- 非同步翻譯聊天、物品名稱、物品提示，不阻塞遊戲渲染。
+- 現代版本亦支援計分板、名稱標籤、Boss 血條、標題／副標題、動作列、書本、講台、FTB 任務與其他介面文字。
+- 每種介面可獨立選擇只顯示原文、只顯示翻譯或原文＋翻譯，並選擇 AI 精翻或機器翻譯。
+- 只收集目前實際顯示的內容；未開啟的創造模式分頁、搜尋索引產生的背景 tooltip 等內容不應送出翻譯。
+- 游標指向的物品與互動中的內容具有最高優先權，可插隊尚未送出的普通批次。
+- 可搜尋的翻譯目標語言與機翻來源選擇畫面；目標語言亦可跟隨 Minecraft 目前語言。
+- 現代版本盡量保留段落、空白行、顏色、粗斜體、圖示、數字、時間、網址、玩家名稱、點擊／懸停事件及原介面版面；Java 8 相容版保留其舊 API 能安全重建的格式。
+- 現代版本提供記憶體與永久磁碟快取，避免重複請求；偵錯浮窗可顯示等待、成功、失敗與回退狀態。
+- 現代版本的玩家名稱遮罩可避免把線上玩家 ID 當成一般翻譯文字送出。
+- 現代版本支援 OpenAI 相容 AI 端點、模型、詞彙表、多組 API Key 輪替，以及選擇是否停用 AI 失敗時的 GT 回退；Java 8 版本提供精簡的 AI／機翻設定。
 
-1. 前往[最新 GitHub Release](https://github.com/DragonMeow1012/MinecraftTranslator/releases/latest)。
-2. 下載與你的 **Minecraft 版本及模組載入器完全相符**的 JAR。
-3. 安裝對應的 Forge、Fabric 或 NeoForge；Fabric 版還需要相符版本的 Fabric API。
-4. 將 JAR 放入遊戲實例的 `mods` 資料夾，然後啟動 Minecraft。
+## 支援版本：16 個獨立 JAR
 
-每個 JAR 都只對應檔名標示的版本。請勿將 1.21.1 的 JAR 裝到 1.21.11，
-也不要混用 Fabric、Forge 與 NeoForge 版本。
+Java 欄是執行該 Minecraft 版本所需的 Java 主版本。每個 JAR 都綁定檔名中的 Minecraft 版本與載入器，不能跨版本或混用載入器。
 
-## 支援版本
+| # | Minecraft | 載入器 | Java | 正確 JAR 名稱 |
+| ---: | --- | --- | ---: | --- |
+| 1 | 1.12.2 | Forge | 8 | `mctranslator-1.0.2-Forge-1.12.2.jar` |
+| 2 | 1.13.2 | Forge | 8 | `mctranslator-1.0.2-Forge-1.13.2.jar` |
+| 3 | 1.14.4 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.14.4.jar` |
+| 4 | 1.15.2 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.15.2.jar` |
+| 5 | 1.16.5 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.16.5.jar` |
+| 6 | 1.17.1 | Fabric | 16 | `mctranslator-1.0.2-Fabric-1.17.1.jar` |
+| 7 | 1.18.2 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.18.2.jar` |
+| 8 | 1.19.4 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.19.4.jar` |
+| 9 | 1.20.1 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.20.1.jar` |
+| 10 | 1.20.1 | NeoForge | 17 | `mctranslator-1.0.2-NeoForge-1.20.1.jar` |
+| 11 | 1.21.1 | Fabric | 21 | `mctranslator-1.0.2-Fabric-1.21.1.jar` |
+| 12 | 1.21.1 | NeoForge | 21 | `mctranslator-1.0.2-NeoForge-1.21.1.jar` |
+| 13 | 1.21.11 | Fabric | 21 | `mctranslator-1.0.2-Fabric-1.21.11.jar` |
+| 14 | 26.1.2 | Fabric | 25 | `mctranslator-1.0.2-Fabric-26.1.2.jar` |
+| 15 | 26.2 | Fabric | 25 | `mctranslator-1.0.2-Fabric-26.2.jar` |
+| 16 | 26.2 | NeoForge | 25 | `mctranslator-1.0.2-NeoForge-26.2.jar` |
 
-| Minecraft | 載入器 | Java | Release 檔案 |
-| --- | --- | ---: | --- |
-| 1.12.2 | Forge | 8 | `mctranslator-1.0.2-Forge-1.12.2.jar` |
-| 1.13.2 | Forge | 8 | `mctranslator-1.0.2-Forge-1.13.2.jar` |
-| 1.14.4 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.14.4.jar` |
-| 1.15.2 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.15.2.jar` |
-| 1.16.5 | Fabric | 8 | `mctranslator-1.0.2-Fabric-1.16.5.jar` |
-| 1.17.1 | Fabric | 16 | `mctranslator-1.0.2-Fabric-1.17.1.jar` |
-| 1.18.2 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.18.2.jar` |
-| 1.19.4 | Fabric | 17 | `mctranslator-1.0.2-Fabric-1.19.4.jar` |
-| 1.20.1 | Fabric / NeoForge | 17 | 選擇相符載入器的 JAR |
-| 1.21.1 | Fabric / NeoForge | 21 | 選擇相符載入器的 JAR |
-| 1.21.11 | Fabric | 21 | `mctranslator-1.0.2-Fabric-1.21.11.jar` |
-| 26.1.2 | Fabric | 25 | `mctranslator-1.0.2-Fabric-26.1.2.jar` |
-| 26.2 | Fabric / NeoForge | 25 | 選擇相符載入器的 JAR |
+## 安裝
 
-## 功能
+1. 從[最新 GitHub Release](https://github.com/DragonMeow1012/MinecraftTranslator/releases/latest)下載與上表完全相符的 JAR。
+2. 安裝相符版本的 Fabric、Forge 或 NeoForge。Fabric 版另需相符版本的 Fabric API。
+3. 把 Minecraft Translator JAR 放進該遊戲實例的 `mods` 資料夾。
+4. 使用表中對應的 Java 啟動遊戲。
+5. 首次測試建議只安裝載入器、必要 API 與本模組；確認正常後再加入大型模組包。
 
-- 非同步翻譯聊天訊息、物品名稱與物品提示，不阻塞畫面渲染。
-- 新版支援計分板、名稱標籤、Boss Bar、標題、動作列、書本、講台及自訂介面文字。
-- 各類文字可分別設定只顯示原文、只顯示翻譯或同時顯示原文與翻譯。
-- 支援 Google 翻譯及可自行設定的 OpenAI 相容 AI 服務。
-- 翻譯目標語言可自動跟隨 Minecraft 目前語言。
-- 使用接近 Minecraft 原版的翻譯目標語言介面，並支援搜尋。
-- 盡量保留顏色、格式、點擊與懸停事件、圖示、數字、時間、網址、玩家名稱及版面。
-- 記憶體與磁碟快取可減少重複翻譯請求。
-- 玩家名稱遮罩可避免將線上玩家 ID 傳給翻譯服務。
-- 支援 AI 流量限制備援及手動重新翻譯。
-- 玩家正在看的文字會以高優先插隊，先於尚未執行的背景預翻譯送出。
-- 可開啟翻譯請求 Debug 浮窗，檢查 AI／GT 請求、成功、失敗與回退狀態。
-- AI 精翻可選「停用 GT 回退」；開啟後暫時失敗會等待並重試 AI，不改用 GT。
-- 新安裝預設 Google 與 AI 各自使用 2000 ms 請求冷卻，多組 API Key 會輪替使用，
-  遇到 429／無效金鑰時只隔離有問題的金鑰。
-- 物品預翻譯只處理目前開啟容器中有效、可見的欄位，不再於每個 tick 掃描整個背包。
+例如，Minecraft 1.21.1 Fabric 與 Minecraft 1.21.1 NeoForge 是兩個不同檔案；Minecraft 1.21.1 與 1.21.11 也不是相容版本。
 
-## 設定與按鍵
+## 翻譯來源
 
-新版可從 **選項 → 翻譯設定** 進入模組設定。遊戲內可調整翻譯模式、
-目標語言、AI 服務、模型、API Key、請求冷卻、快取與按鍵設定。
+機器翻譯來源可在現代版的翻譯設定中以可搜尋清單選擇：
 
-預設按鍵：
+| 來源 | 使用者 API Key | 狀態 |
+| --- | --- | --- |
+| Google GT | 不需要 | 預設機翻來源；使用嚴格批次與結果驗證路徑 |
+| Youdao Web | 不需要 | 非官方實驗網頁端點 |
+| DeepL Web | 不需要 | 非官方實驗網頁端點 |
+| Microsoft / Bing Web | 不需要 | 非官方實驗網頁端點 |
+
+Youdao、DeepL 與 Microsoft 來源是為方便不同地區測試而提供的免使用者金鑰網頁介面，不是受保證的正式 API。網站可能隨時改版、增加驗證、限制 IP、封鎖自動請求或停止提供目前協定，因此它們可能暫時或永久失效。模組會盡量套用相同的整項切批與拆回檢查，但不承諾這些實驗端點永久可靠。
+
+AI 精翻不在上述機翻清單內。它使用使用者設定的 OpenAI 相容端點、模型與 API Key；可搭配 Gemini、OpenAI、DeepSeek、OpenRouter、相容的自架服務或其他 OpenAI 相容服務，實際支援能力與費用依端點供應者而定。
+
+## 設定與快捷鍵
+
+現代版本可從 **選項 → 翻譯設定** 開啟完整設定。主要項目包括：
+
+- 各介面的顯示模式與 AI／機翻引擎。
+- 可搜尋的翻譯目標語言與機翻來源。
+- 批次收集秒數、每引擎請求冷卻與失敗重試設定。
+- AI Base URL、模型、API Key、詞彙表與「停用 GT 回退」。
+- 翻譯偵錯浮窗、目前來源／語言快取清除與快捷鍵設定。
+
+現代版本預設按鍵：
 
 | 按鍵 | 功能 |
 | --- | --- |
-| `G` | 切換顯示原文或翻譯 |
-| `R` | 重新翻譯滑鼠指向的物品 |
-| `P` | 掃描並翻譯目前畫面 |
-| 未綁定 | 循環切換翻譯顯示模式 |
+| `G` | 快速切換顯示原文／翻譯 |
+| `R` | 重新翻譯游標指向的物品 |
+| `P` | 掃描並翻譯目前介面的按鈕／選項 |
+| 未綁定 | 開啟翻譯設定 |
 
-所有按鍵都可以在 Minecraft 控制設定或模組的按鍵設定中修改。
+所有按鍵都可在 Minecraft 控制設定或模組的快捷鍵設定中重新綁定。Java 8 舊版的介面與按鍵較精簡，請參考下方限制。
 
-## 各版本限制
+## 批次收集規則
 
-- Forge 1.12.2 與 1.13.2 是以聊天和物品提示為主的相容版，使用 `G` 鍵切換，
-  Java 8 相容設定存放於 `config/mctranslator-forge-legacy.json`；其中包含 AI、
-  多 API Key、停用 GT 回退、2000 ms 冷卻與 Debug 浮窗選項。
-- Fabric 1.14.4 至 1.16.5 使用 Java 8 專用文字攔截器；遊戲內可切換全表面 AI／GT、
-  停用 GT 回退、冷卻及 Debug，AI 端點、模型與金鑰也會保存在舊版設定檔。
-- Fabric 1.21.11 已針對該版的 render-state、void 繪圖 API 另行重寫 Boss Bar、
-  實體名稱、計分板、聊天及介面攔截，不與 1.21.1 共用錯誤描述符。
-- 所有 Release JAR 都已通過編譯、重新映射、載入器 metadata、Minecraft 版本限制及
-  Java bytecode 檢查。與其他模組、資源包或伺服器自訂介面搭配時仍可能出現相容性差異。
+普通翻譯缺項會先進入單一有序收集佇列，再以完整項目組成一筆翻譯批次：
 
-## 隱私
+- 預設批次視窗是 **5 秒（5000 ms）**，可在設定調整。
+- 設為 **0** 代表關閉等待視窗，但不會在渲染呼叫中立即連線；內容會在**下一個 client tick** 送出。
+- 每批的安全輸入預算是 **1400 字元**。切批只發生在物品名稱、tooltip 行或段落等「完整項目之間」，絕不把最後一個名稱或段落攔腰截斷。
+- 若單一完整項目本身超過 1400 字元，該項目會獨立成批送出，而不是被裁切。
+- 只要加入下一項會超出預算，目前批次便先送出；剩餘項目保留到下一批。
+- 游標指向的物品等高優先內容會排到普通項目前面。
+- 同一內容的並行請求會合流；翻譯成功後才按項拆回各自快取。
 
-只有需要翻譯的文字會傳送到設定中選擇的翻譯服務。此模組完全在用戶端運作，
-不會修改玩家送出的聊天訊息或伺服器資料。若使用 AI 翻譯，資料處理方式依該 API
-服務商的隱私政策為準。API Key 儲存在本機 Minecraft 設定目錄，請勿分享含有
-API Key 的設定檔。
+## AI 與 Google GT 的嚴格整批保護
+
+AI 與 Google GT 是正式驗證的兩條核心路徑。這裡的「保證」是指批次完整性與不交叉污染快取，不代表任何供應者能保證翻譯語意永遠正確或永遠在線。
+
+正常批次流程如下：
+
+1. 收集器保留每個完整項目及原有段落邊界。
+2. 每項外層加入成對的起點／終點錨點（雙錨點），並遮罩換行、段落、顏色區段與其他不可翻譯標記。
+3. 整批透過一次高階翻譯請求送出；Google GT 在一般安全長度內亦維持單次實體 HTTP 請求。
+4. 回覆必須通過項目數量、順序、成對錨點、標記完整性、段落與受保護 token 檢查。
+5. 只有全部對齊的結果才會按項拆開，寫回各自的語意與樣式快取。
+6. 缺項、多項、錯序、交錯錨點、標記遺失或語意文字跑到錨點外時，整個不可信結果會被拒絕；程式可縮小批次重試，但不會把錯誤項目寫進其他項目的快取。
+
+顏色與格式以原始 Minecraft Component 為基準重建。翻譯器只負責受控文字區段，程式會驗證顏色區段、段落及格式標記後再投影回目前畫面，因此伺服器動態數字、重新著色或同字不同配色不應沿用上一筆的顏色。少數完全自訂的第三方渲染器仍可能需要個別相容處理，請附畫面與模組資訊回報。
+
+## 冷卻與 429 防護
+
+每個引擎的請求冷卻選項為：
+
+`0 / 1000 / 2000 / 4000 / 6000 / 8000 / 10000 ms`
+
+預設是 **6000 ms**。AI 與機翻各自計時；`0` 只代表關閉事前冷卻，不會關閉 5 秒批次收集。較長冷卻可降低短時間撞到 429 或網站限流的機率，但無法保證第三方服務不限制帳號、金鑰或 IP。失敗項目會受退避與可見性需求控制，避免每個畫面幀都重送。
+
+## 快取隔離與舊快取
+
+- 機翻快取以「機翻來源＋目標語言」隔離；切換來源或語言不會把另一組譯文誤當成目前來源的結果。
+- Google 延續既有檔名，例如 `mctranslator-cache-zh-tw.json`，升級後不會因加入來源選擇器而刪除或改名。
+- 實驗來源使用獨立檔名，例如 `mctranslator-cache-youdao-zh-tw.json`，不會覆寫 Google 快取。
+- AI 快取亦按目標語言獨立保存。
+- 「清除目前快取」會清除目前機翻來源／語言分區及目前語言的 AI 快取；其他機翻來源與其他語言分區仍保留。
+- 舊格式升級會先建立安全備份再遷移；無法確認備份時不應覆寫原檔。
+
+## 舊版 Forge 的 JSON 限制
+
+Forge 1.12.2 與 1.13.2 是以聊天及物品提示為主的 Java 8 相容版，沒有完整的現代設定畫面或可搜尋來源清單。設定存放於：
+
+`config/mctranslator-forge-legacy.json`
+
+請先關閉遊戲再編輯 JSON，儲存後重新啟動。常用欄位包括：
+
+- `machineTranslationProvider`：`google`、`youdao`、`deepl` 或 `microsoft`。
+- `batchWindowMs`：預設 `5000`；`0` 代表下一個 tick。
+- `requestCooldownMs`：預設 `6000`。
+- AI 端點、模型、API Key、是否停用 GT 回退及偵錯選項。
+
+這兩版使用 `G` 鍵切換顯示，並受舊 Minecraft GUI／文字 API 限制。Fabric 1.14.4～1.16.5 同樣是 Java 8 相容移植版，但提供精簡的遊戲內設定畫面。五個 Java 8 版本仍會以完整項目切批、使用成對邊界拆回 AI／GT 結果，並拒絕邊界損壞的批次；樣式重建能力則受舊版 API 限制。
+
+## 隱私與 API Key
+
+- 只有需要翻譯的文字會送到目前選擇的翻譯來源；本模組不會修改伺服器資料或玩家送出的聊天。
+- Google GT 與三個實驗機翻來源不要求使用者輸入 API Key，但第三方網站仍會收到請求文字、網路位址及一般連線資訊；其隱私政策與使用條款仍適用。
+- AI 翻譯會把文字送到使用者設定的 Base URL。API Key 儲存在本機 Minecraft 設定目錄，請保護設定檔與整合包備份。
+- 請勿把 API Key 貼進 Issue、聊天、截圖、`latest.log` 或崩潰報告。回報前應先遮蔽 URL 查詢參數、Authorization header 及設定檔中的金鑰。
+- 開啟玩家名稱遮罩可讓已辨識的線上玩家名稱保持原樣並避免送出，但任何自訂文字仍可能包含伺服器或玩家提供的內容。
 
 ## 從原始碼建置
 
-由於不同 Minecraft 與載入器版本之間不具二進位相容性，每個支援版本都是獨立的
-Gradle 專案。專案、Java、載入器與成品目錄對照請參考 [PACKAGING.md](PACKAGING.md)。
+16 個版本是彼此獨立的 Gradle 專案，因為 Minecraft、Fabric、Forge 與 NeoForge API 不具跨版本二進位相容性。各專案目錄、所需 JDK、建置命令、驗證方式與發布目錄請參考 [PACKAGING.md](PACKAGING.md)。
 
-版本分支命名格式：
-
-```text
-mc/<minecraft-version>-<loader>
-```
-
-整合發布分支為 `release/1.0.2-current`，建置成品集中在 `mods-jar/1.0.2`。
+版本維持 **1.0.2**，正式成品集中於 `mods-jar/1.0.2`。編譯、重映射與 metadata 檢查不能取代對應 Minecraft／載入器下的實機測試。
 
 ## 回報問題
 
-請至 [GitHub Issues](https://github.com/DragonMeow1012/MinecraftTranslator/issues)
-回報，並附上：
+請到 [GitHub Issues](https://github.com/DragonMeow1012/MinecraftTranslator/issues) 回報，並盡量提供：
 
-- Minecraft 版本
-- Fabric、Forge 或 NeoForge 版本
-- Java 版本
-- 其他已安裝模組
-- 相關用戶端日誌或崩潰報告
+- 完整 JAR 檔名、Minecraft 版本、載入器名稱與版本、Fabric API 版本（若適用）及 Java 版本。
+- 問題發生的介面／伺服器／模組、重現步驟，以及原文與預期結果。
+- 目標語言、AI 或機翻、所選機翻來源、批次秒數與冷卻值。
+- 是否清過目前快取、切換過語言／來源，以及問題是否能在乾淨實例重現。
+- `latest.log`、崩潰報告、偵錯浮窗內容、模組清單與不含敏感資訊的截圖。
 
-請勿在日誌或截圖中公開 API Key。
+回報前請再次確認所有 API Key、權杖與私人伺服器資訊都已遮蔽。

@@ -9,10 +9,11 @@ import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.client.event.ClientChatReceivedEvent;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
-import net.minecraftforge.event.entity.player.ItemTooltipEvent;
+import net.minecraftforge.client.event.RenderTooltipEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.glfw.GLFW;
 
@@ -42,6 +43,10 @@ public final class MinecraftTranslatorForge {
         if (toggle.isPressed()) { enabled = !enabled; config.enabled = enabled; saveConfig(); }
     }
 
+    @SubscribeEvent public void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) translator.flushBatch();
+    }
+
     @SubscribeEvent public void onChat(ClientChatReceivedEvent event) {
         if (!enabled || internal || event.getMessage() == null) return;
         final ITextComponent source = event.getMessage();
@@ -49,7 +54,7 @@ public final class MinecraftTranslatorForge {
         if (!hasLetters(text)) return;
         event.setCanceled(true);
         final Minecraft minecraft = Minecraft.getInstance();
-        translator.translate(text, target(minecraft), config.aiEnabled, true, config,
+        translator.translate(text, target(minecraft), config.aiEnabled, false, config,
                 translated -> minecraft.addScheduledTask(() -> {
             internal = true;
             try {
@@ -59,16 +64,19 @@ public final class MinecraftTranslatorForge {
         }));
     }
 
-    @SubscribeEvent public void onTooltip(ItemTooltipEvent event) {
-        if (!enabled) return;
-        List<ITextComponent> lines = event.getToolTip();
+    @SubscribeEvent public void onTooltipRender(RenderTooltipEvent.Pre event) {
+        // ItemTooltipEvent is also fired by background tooltip/index builders.  Pre is
+        // reached only when Forge is actually about to draw this tooltip on screen.
+        if (!enabled || config == null || event.getStack() == null
+                || event.getStack().isEmpty() || event.getLines().isEmpty()) return;
+        List<String> lines = event.getLines();
         String target = target(Minecraft.getInstance());
         for (int i = 0; i < lines.size(); i++) {
-            String source = lines.get(i).getString();
+            String source = lines.get(i);
             if (!hasLetters(source)) continue;
-            String translated = translator.cached(source, target, config.aiEnabled);
+            String translated = translator.cached(source, target, config.aiEnabled, config);
             if (translated == null) translator.translate(source, target, config.aiEnabled, true, config, ignored -> {});
-            else if (!translated.equals(source)) lines.set(i, new TextComponentString(translated));
+            else if (!translated.equals(source)) lines.set(i, translated);
         }
     }
 
@@ -97,8 +105,8 @@ public final class MinecraftTranslatorForge {
         for (int i = 0; i < lines.size(); i++) {
             String source = lines.get(i);
             if (!hasLetters(source)) continue;
-            String translated = translator.cached(source, target, config.aiEnabled);
-            if (translated == null) translator.translate(source, target, config.aiEnabled, true, config, ignored -> {});
+            String translated = translator.cached(source, target, config.aiEnabled, config);
+            if (translated == null) translator.translate(source, target, config.aiEnabled, false, config, ignored -> {});
             else lines.set(i, translated);
         }
     }
@@ -110,6 +118,11 @@ public final class MinecraftTranslatorForge {
                 LegacyConfig loaded = GSON.fromJson(reader, LegacyConfig.class);
                 if (loaded != null) {
                     if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
+                    loaded.machineTranslationProvider = LegacyConfig.normalizeMachineProvider(
+                            loaded.machineTranslationProvider);
+                    if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 6000;
+                    if (loaded.batchWindowMs < 0) loaded.batchWindowMs = 5000;
+                    if (loaded.failureBackoffMs < 0) loaded.failureBackoffMs = 10000;
                     enabled = loaded.enabled;
                     return loaded;
                 }
@@ -123,6 +136,8 @@ public final class MinecraftTranslatorForge {
     private void saveConfig() { saveConfig(config); }
     private void saveConfig(LegacyConfig value) {
         try {
+            value.machineTranslationProvider = LegacyConfig.normalizeMachineProvider(
+                    value.machineTranslationProvider);
             File parent = configFile.getParentFile(); if (parent != null) parent.mkdirs();
             FileWriter writer = new FileWriter(configFile);
             try { GSON.toJson(value, writer); } finally { writer.close(); }

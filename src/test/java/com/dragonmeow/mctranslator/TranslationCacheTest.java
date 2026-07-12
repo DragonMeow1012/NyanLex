@@ -39,6 +39,18 @@ class TranslationCacheTest {
         };
     }
 
+    /** Test translator that keeps its synthetic prefix inside the first CS pair. */
+    private static Translator countingStyleSafeUpper(AtomicInteger counter) {
+        return (text, target) -> {
+            counter.incrementAndGet();
+            int firstMarkerEnd = text == null ? -1 : text.indexOf('\u27E7');
+            String translated = firstMarkerEnd < 0
+                    ? "T:" + text
+                    : text.substring(0, firstMarkerEnd + 1) + "T:" + text.substring(firstMarkerEnd + 1);
+            return new TranslationResult(translated, "en");
+        };
+    }
+
     @Test
     void warmBatchAsyncSendsFullSurfaceContextButOnlyUncachedTodoLines() {
         List<List<String>> seenTexts = new ArrayList<>();
@@ -906,7 +918,7 @@ class TranslationCacheTest {
         AtomicInteger calls = new AtomicInteger();
         Map<String, String> disk = new java.util.HashMap<>();
         TranslationCache cache = new TranslationCache(
-                countingUpper(calls), "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(disk));
+                countingStyleSafeUpper(calls), "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(disk));
 
         cache.requestAsync("⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧");
         assertEquals(1, calls.get());
@@ -976,7 +988,7 @@ class TranslationCacheTest {
     @Test
     void colourStrippedTierSubstitutesCurrentNumbers() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);
+        TranslationCache cache = new TranslationCache(countingStyleSafeUpper(calls), "zh-TW", DIRECT, 100);
 
         cache.requestAsync("⟦CS0⟧Kill streak⟦/CS0⟧ ⟦CS1⟧5⟦/CS1⟧");
         assertEquals(1, calls.get());
@@ -1003,6 +1015,20 @@ class TranslationCacheTest {
     }
 
     @Test
+    void semanticTextOutsideCompleteCsPairsIsRejected() {
+        String marked = "\u27E6CS0\u27E7Hello\u27E6/CS0\u27E7 \u27E6CS1\u27E7World\u27E6/CS1\u27E7";
+        Translator boundaryDrift = (text, target) -> new TranslationResult(
+                "\u27E6CS0\u27E7\u4F60\u597D\u27E6/CS0\u27E7\u8DD1\u51FA\u6A19\u8A18"
+                        + "\u27E6CS1\u27E7\u4E16\u754C\u27E6/CS1\u27E7", "en");
+        TranslationCache cache = new TranslationCache(boundaryDrift, "zh-TW", DIRECT, 100);
+
+        cache.requestAsync(marked);
+
+        assertNull(cache.getCached(marked),
+                "semantic prose outside a complete CS pair must never enter the style cache");
+    }
+
+    @Test
     void letterlessStrippedSourceSkipsColourStrippedCopy() {
         AtomicInteger calls = new AtomicInteger();
         TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);
@@ -1017,7 +1043,7 @@ class TranslationCacheTest {
     @Test
     void colourStrippedCopyIsReachableThroughFallbackChain() {
         AtomicInteger aiCalls = new AtomicInteger();
-        TranslationCache ai = new TranslationCache(countingUpper(aiCalls), "zh-TW", DIRECT, 100);
+        TranslationCache ai = new TranslationCache(countingStyleSafeUpper(aiCalls), "zh-TW", DIRECT, 100);
         AtomicInteger googleCalls = new AtomicInteger();
         TranslationCache google = new TranslationCache(countingUpper(googleCalls), "zh-TW", DIRECT, 100);
         google.setFallback(ai); // the Google cache consults the AI cache on miss
@@ -1260,7 +1286,7 @@ class TranslationCacheTest {
     @Test
     void mixedCsAndSectionCodeVariantHits() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);
+        TranslationCache cache = new TranslationCache(countingStyleSafeUpper(calls), "zh-TW", DIRECT, 100);
 
         cache.requestAsync("⟦CS0⟧§eHello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧");
         assertEquals(1, calls.get());
@@ -1536,7 +1562,11 @@ class TranslationCacheTest {
         AtomicInteger calls = new AtomicInteger();
         Translator alwaysFallback = (text, target) -> {
             calls.incrementAndGet();
-            return new TranslationResult("GT:" + text, "en", true);
+            int firstMarkerEnd = text == null ? -1 : text.indexOf('\u27E7');
+            String translated = firstMarkerEnd < 0
+                    ? "GT:" + text
+                    : text.substring(0, firstMarkerEnd + 1) + "GT:" + text.substring(firstMarkerEnd + 1);
+            return new TranslationResult(translated, "en", true);
         };
         TranslationCache cache = new TranslationCache(
                 alwaysFallback, "zh-TW", DIRECT, 100, 0L, () -> 0L, null);
@@ -1942,6 +1972,28 @@ class TranslationCacheTest {
     }
 
     @Test
+    void restoredItemFailureDoesNotSendUntilTheItemIsVisibleAgain() {
+        AtomicInteger calls = new AtomicInteger();
+        Map<String, String> failures = new java.util.HashMap<>();
+        failures.put("Old tooltip item", "temporary:3:0");
+        TranslationCache restarted = new TranslationCache((text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("已修復", "en");
+        }, "zh-TW", DIRECT, 100, 1_000L, () -> 10_000L, null);
+        restarted.setFailureStore(inlineStore(failures));
+        restarted.setBatchWindowMs(() -> 0);
+
+        restarted.flushBatch();
+        restarted.flushBatch();
+        assertEquals(0, calls.get(),
+                "world ticks must not revive historical tooltip debt in the background");
+
+        restarted.requestBatchedPassive("Old tooltip item");
+        restarted.flushBatch();
+        assertEquals(1, calls.get(), "re-observing the item unlocks exactly one retry");
+    }
+
+    @Test
     void zeroBackoffFailuresAreStillDurableAndQueuedUntilSuccess() {
         AtomicInteger calls = new AtomicInteger();
         boolean[] available = {false};
@@ -2263,17 +2315,34 @@ class TranslationCacheTest {
     @Test
     void styleProjectionSupplementNeverRewritesFinalSemanticRow() {
         String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
-        Translator translator = (text, target) -> text.contains("⟦CS")
-                ? new TranslationResult("⟦CS0⟧嗨呀⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en")
-                : new TranslationResult("你好 世界", "en");
+        AtomicInteger calls = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return text.contains("⟦CS")
+                    ? new TranslationResult("⟦CS0⟧嗨呀⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en")
+                    : new TranslationResult("你好 世界", "en");
+        };
         TranslationCache cache = new TranslationCache(translator, "zh-TW", DIRECT, 100);
 
         cache.requestAsync("Hello World");
         assertEquals("你好 世界", cache.getCached("Hello World"));
 
-        cache.requestCoalescedExactStyle(marked, ignored -> { }, true);
+        java.util.concurrent.atomic.AtomicReference<String> exact =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        cache.requestCoalescedExactStyle(marked, exact::set, true);
         for (int i = 0; i < 4; i++) cache.flushBatch(); // buys the differently worded projection
         assertEquals("你好 世界", cache.getCached("Hello World"),
                 "first final semantic wording wins; a style supplement adds rows only");
+        assertEquals("⟦CS0⟧嗨呀⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", exact.get(),
+                "the exact rich consumer receives its verified colour projection");
+
+        int callsAfterProjection = calls.get();
+        java.util.concurrent.atomic.AtomicReference<String> cachedExact =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        cache.requestCoalescedExactStyle(marked, cachedExact::set, true);
+        assertEquals(exact.get(), cachedExact.get(),
+                "a differently worded final projection remains available from cache");
+        assertEquals(callsAfterProjection, calls.get(),
+                "reading the exact projection again must not buy another request");
     }
 }

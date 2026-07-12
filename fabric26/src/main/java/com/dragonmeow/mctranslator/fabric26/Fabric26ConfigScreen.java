@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator.fabric26;
 
 import com.dragonmeow.mctranslator.config.DisplayMode;
+import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -60,7 +61,10 @@ public final class Fabric26ConfigScreen extends Screen {
         y += step + 6;
         this.addRenderableWidget(Button.builder(langLabel(cfg),
                         b -> this.minecraft.setScreenAndShow(new Fabric26LanguageScreen(this)))
-                .bounds(left, y, rowWidth * 2 + gap, 18).build());
+                .bounds(left, y, rowWidth, 18).build());
+        this.addRenderableWidget(Button.builder(providerLabel(cfg),
+                        b -> this.minecraft.setScreenAndShow(new Fabric26ProviderScreen(this)))
+                .bounds(right, y, rowWidth, 18).build());
         y += step;
         this.addRenderableWidget(Button.builder(debugLabel(cfg), b -> {
             cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
@@ -69,7 +73,7 @@ public final class Fabric26ConfigScreen extends Screen {
             b.setMessage(debugLabel(cfg));
         }).bounds(left, y, rowWidth, 18).build());
         // 事前冷卻節流：minimum spacing between outbound requests (per engine, Google 與 AI
-        // 各自計時). Click cycles 關閉 → 200 → … → 2000 ms; the pacer reads the value live.
+        // 各自計時). Click cycles 關閉 → 1000 → … → 10000 ms; the pacer reads the value live.
         this.addRenderableWidget(Button.builder(cooldownLabel(cfg), b -> {
             cfg.requestCooldownMs = nextCooldown(cfg.requestCooldownMs);
             MctranslatorFabric26.saveConfig();
@@ -80,7 +84,12 @@ public final class Fabric26ConfigScreen extends Screen {
             cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
             MctranslatorFabric26.saveConfig();
             b.setMessage(aiFallbackLabel(cfg));
-        }).bounds(left, y, rowWidth * 2 + gap, 18).build());
+        }).bounds(left, y, rowWidth, 18).build());
+        this.addRenderableWidget(Button.builder(batchWindowLabel(cfg), b -> {
+            cfg.batchWindowMs = nextBatchWindow(cfg.batchWindowMs);
+            MctranslatorFabric26.saveConfig();
+            b.setMessage(batchWindowLabel(cfg));
+        }).bounds(right, y, rowWidth, 18).build());
         y += step;
         this.addRenderableWidget(Button.builder(screenScanEngineLabel(cfg), b -> {
             cfg.aiScreenScan = !cfg.aiScreenScan;
@@ -124,6 +133,13 @@ public final class Fabric26ConfigScreen extends Screen {
         return Component.translatable("config.mctranslator.language", target);
     }
 
+    private static Component providerLabel(TranslatorConfig cfg) {
+        MachineTranslationProvider provider = MachineTranslationProvider.fromId(
+                cfg.machineTranslationProvider);
+        return Component.translatable("config.mctranslator.machine_provider",
+                Fabric26ProviderScreen.providerName(provider));
+    }
+
     private static Component screenScanEngineLabel(TranslatorConfig cfg) {
         return Component.translatable("config.mctranslator.screen_scan_engine", aiText(cfg.aiScreenScan));
     }
@@ -137,7 +153,7 @@ public final class Fabric26ConfigScreen extends Screen {
     }
 
     /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value). */
-    private static final int[] COOLDOWN_STEPS = {0, 200, 400, 600, 800, 1000, 1500, 2000};
+    private static final int[] COOLDOWN_STEPS = {0, 1000, 2000, 4000, 6000, 8000, 10000};
 
     /** Next step above the current value; wraps to 0 (關閉) past the top. Off-list values snap up. */
     private static int nextCooldown(int current) {
@@ -152,6 +168,17 @@ public final class Fabric26ConfigScreen extends Screen {
                 ? Component.translatable("config.mctranslator.request_cooldown.off")
                 : Component.literal(cfg.requestCooldownMs + " ms");
         return Component.translatable("config.mctranslator.request_cooldown", state);
+    }
+    private static final int[] BATCH_WINDOW_STEPS = {0, 1000, 2000, 3000, 5000, 8000, 10000};
+    private static int nextBatchWindow(int current) {
+        for (int value : BATCH_WINDOW_STEPS) if (value > current) return value;
+        return 0;
+    }
+    private static Component batchWindowLabel(TranslatorConfig cfg) {
+        Component state = cfg.batchWindowMs <= 0
+                ? Component.translatable("config.mctranslator.batch_window.off")
+                : Component.literal(cfg.batchWindowMs / 1000F + " s");
+        return Component.translatable("config.mctranslator.batch_window", state);
     }
 
     private int row(String label, int x, int y, int step,

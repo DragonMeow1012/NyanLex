@@ -171,22 +171,21 @@ public final class GoogleFreeTranslator implements Translator {
             out.add(translate(texts.get(0), targetLang));
             return;
         }
-        // Token-carrying lines must go through the whole-line sentinel path (their ⟦…⟧
-        // tokens are never allowed on the wire), so a chunk containing any is translated
-        // line by line instead of as one joined request. The batch protocol for token-free
-        // chunks is unchanged.
-        for (String t : texts) {
-            if (t != null && (ANY_TOKEN.matcher(t).find() || t.indexOf('\n') >= 0)) {
-                for (String each : texts) out.add(translate(each, targetLang));
-                return;
-            }
-        }
-        int anchorBase = batchAnchorBase(texts);
+        // Protect every rich marker and hard line break with a numeric sentinel, then
+        // wrap each independent cache item in its own numeric start/end anchors. This
+        // lets GT receive the whole collected batch in one HTTP request without ever
+        // seeing the renderer protocol itself.
+        int protectedCount = texts.stream().mapToInt(GoogleFreeTranslator::protectedUnitCount).sum();
+        int sentinelCount = texts.size() * 2 + protectedCount;
+        int anchorBase = batchSentinelBase(texts, sentinelCount);
+        int[] nextSentinel = {anchorBase + texts.size() * 2};
+        List<BatchMasked> masked = new ArrayList<>(texts.size());
+        for (String text : texts) masked.add(maskForBatch(text, nextSentinel));
         StringBuilder joined = new StringBuilder();
         for (int i = 0; i < texts.size(); i++) {
             if (i > 0) joined.append('\n');
             joined.append(anchorBase + i * 2)
-                    .append(texts.get(i))
+                    .append(masked.get(i).wireText())
                     .append(anchorBase + i * 2 + 1);
         }
         TranslationResult combined = requestOnce(joined.toString(), targetLang);
@@ -195,7 +194,8 @@ public final class GoogleFreeTranslator implements Translator {
         if (parts != null) {
             for (int i = 0; i < parts.size(); i++) {
                 String src = texts.get(i);
-                String part = preservesTokens(src, parts.get(i)) ? parts.get(i) : "";
+                String restored = restoreBatchPart(parts.get(i), masked.get(i));
+                String part = restored != null && preservesTokens(src, restored) ? restored : "";
                 out.add(new TranslationResult(part, combined.detectedSourceLang()));
             }
             return;
@@ -206,13 +206,84 @@ public final class GoogleFreeTranslator implements Translator {
         translateChunk(texts.subList(mid, texts.size()), targetLang, out);
     }
 
-    private static int batchAnchorBase(List<String> texts) {
+    private record BatchSlot(String sentinel, String original) {
+    }
+
+    private record BatchMasked(String wireText, List<BatchSlot> slots) {
+    }
+
+    private static int protectedUnitCount(String text) {
+        if (text == null || text.isEmpty()) return 0;
+        int count = 0;
+        java.util.regex.Matcher matcher = ANY_TOKEN.matcher(text);
+        while (matcher.find()) count++;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch == '\n' || (ch == '\r' && (i + 1 >= text.length() || text.charAt(i + 1) != '\n'))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static BatchMasked maskForBatch(String text, int[] nextSentinel) {
+        String source = text == null ? "" : text;
+        StringBuilder wire = new StringBuilder(source.length());
+        List<BatchSlot> slots = new ArrayList<>();
+        java.util.regex.Matcher matcher = ANY_TOKEN.matcher(source);
+        int pos = 0;
+        while (matcher.find()) {
+            appendBatchLiteral(source, pos, matcher.start(), wire, slots, nextSentinel);
+            addBatchSlot(matcher.group(), wire, slots, nextSentinel);
+            pos = matcher.end();
+        }
+        appendBatchLiteral(source, pos, source.length(), wire, slots, nextSentinel);
+        return new BatchMasked(wire.toString(), List.copyOf(slots));
+    }
+
+    private static void appendBatchLiteral(String source, int start, int end,
+                                           StringBuilder wire, List<BatchSlot> slots,
+                                           int[] nextSentinel) {
+        for (int i = start; i < end; i++) {
+            char ch = source.charAt(i);
+            if (ch == '\r') {
+                if (i + 1 < end && source.charAt(i + 1) == '\n') i++;
+                addBatchSlot("\n", wire, slots, nextSentinel);
+            } else if (ch == '\n') {
+                addBatchSlot("\n", wire, slots, nextSentinel);
+            } else {
+                wire.append(ch);
+            }
+        }
+    }
+
+    private static void addBatchSlot(String original, StringBuilder wire,
+                                     List<BatchSlot> slots, int[] nextSentinel) {
+        String sentinel = Integer.toString(nextSentinel[0]++);
+        wire.append(sentinel);
+        slots.add(new BatchSlot(sentinel, original));
+    }
+
+    private static String restoreBatchPart(String translated, BatchMasked masked) {
+        if (translated == null || masked == null) return null;
+        String restored = translated;
+        for (BatchSlot slot : masked.slots()) {
+            int first = restored.indexOf(slot.sentinel());
+            if (first < 0 || restored.indexOf(slot.sentinel(), first + slot.sentinel().length()) >= 0) {
+                return null;
+            }
+            restored = restored.replace(slot.sentinel(), slot.original());
+        }
+        return restored;
+    }
+
+    private static int batchSentinelBase(List<String> texts, int sentinelCount) {
         int base = SENTINEL_BASE;
         outer:
         while (true) {
             for (String text : texts) {
                 String source = text == null ? "" : text;
-                for (int i = 0; i < texts.size() * 2; i++) {
+                for (int i = 0; i < sentinelCount; i++) {
                     if (source.contains(Integer.toString(base + i))) {
                         base += 2_000;
                         continue outer;
@@ -226,16 +297,20 @@ public final class GoogleFreeTranslator implements Translator {
     private static List<String> extractAnchoredBatch(String translated, int count, int base) {
         if (translated == null) return null;
         List<String> out = new ArrayList<>(count);
+        int cursor = 0;
         for (int i = 0; i < count; i++) {
             String open = Integer.toString(base + i * 2);
             String close = Integer.toString(base + i * 2 + 1);
-            int start = translated.indexOf(open);
+            int start = translated.indexOf(open, cursor);
             if (start < 0 || translated.indexOf(open, start + open.length()) >= 0) return null;
+            if (!translated.substring(cursor, start).isBlank()) return null;
             start += open.length();
             int end = translated.indexOf(close, start);
             if (end < start || translated.indexOf(close, end + close.length()) >= 0) return null;
             out.add(translated.substring(start, end).strip());
+            cursor = end + close.length();
         }
+        if (!translated.substring(cursor).isBlank()) return null;
         return out;
     }
 

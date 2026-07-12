@@ -7,9 +7,12 @@ version = project.mod_version
 group = project.maven_group
 base { archivesName = 'mctranslator' }
 
-// Final jar name: mctranslator-1.0.0-NeoForge-1.21.1.jar (name-version-loader-mcversion)
+// Final jar name: mctranslator-1.0.2-NeoForge-1.21.1.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     archiveClassifier = 'NeoForge-1.21.1'
+    from('../LICENSE') {
+        rename { 'LICENSE_MinecraftTranslator' }
+    }
 }
 
 repositories {

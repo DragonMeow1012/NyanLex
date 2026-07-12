@@ -45,6 +45,12 @@ public final class TextFilter {
     }
 
     public static boolean shouldTranslate(String text, String targetLang) {
+        return shouldTranslate(text, targetLang, null);
+    }
+
+    /** Optional locale hint for surfaces whose source language is known. This is kept
+     * away from free-form chat so Chinese player messages are not translated again. */
+    public static boolean shouldTranslate(String text, String targetLang, String sourceLangHint) {
         if (text == null) return false;
         if (isInternalDebugText(text)) return false;
         // Judge translatability on the CORE text: decorative icons (⚔ ✪ ☀ 🔹 …) are
@@ -59,8 +65,35 @@ public final class TextFilter {
         // values are volatile verbatim slots too. Count language only on the semantic
         // text or already-Chinese rows such as "人氣鑽石: [n]/[n]" and
         // "前往 hypixel.net/ptl" are pointlessly submitted forever.
-        if (isTargetChinese(targetLang) && isMostlyCjk(languageSample(t))) return false;
+        String languageSample = languageSample(t);
+        // Han characters are shared by Chinese and Japanese. A Japanese item can be
+        // mostly Han while its kana still makes it unambiguously non-Chinese. Korean
+        // text needs the same protection when translating into Chinese.
+        String hint = sourceLangHint == null ? ""
+                : sourceLangHint.toLowerCase(java.util.Locale.ROOT);
+        boolean knownJapaneseOrKorean = hint.startsWith("ja") || hint.startsWith("ko");
+        if (isTargetChinese(targetLang)
+                && !knownJapaneseOrKorean
+                && !containsJapaneseKanaOrHangul(languageSample)
+                && isMostlyCjk(languageSample)) return false;
         return true;
+    }
+
+    static boolean containsJapaneseKanaOrHangul(String text) {
+        if (text == null) return false;
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if ((cp >= 0x3040 && cp <= 0x30FF)        // Hiragana + Katakana
+                    || (cp >= 0x31F0 && cp <= 0x31FF) // Katakana extensions
+                    || (cp >= 0xFF66 && cp <= 0xFF9D) // Halfwidth Katakana
+                    || (cp >= 0x1100 && cp <= 0x11FF) // Hangul Jamo
+                    || (cp >= 0x3130 && cp <= 0x318F) // Hangul compatibility Jamo
+                    || (cp >= 0xAC00 && cp <= 0xD7AF)) { // Hangul syllables
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String languageSample(String text) {
@@ -225,6 +258,32 @@ public final class TextFilter {
      *  {@link #isPartialTransliteration}). Null-safe. */
     public static String stripSectionCodes(String text) {
         return text == null ? null : SECTION_CODE.matcher(text).replaceAll("");
+    }
+
+    /**
+     * True when a marker-exterior fragment contains layout and punctuation only.
+     * Translators commonly insert a target-language comma between two reordered colour
+     * spans; accepting punctuation is safe because it carries no translatable wording and
+     * the renderer can attach it to the preceding style. Letters and digits remain
+     * forbidden, so escaped words can never silently inherit the wrong colour.
+     */
+    public static boolean isLayoutOrPunctuationOnly(String text) {
+        if (text == null || text.isEmpty()) return true;
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if (Character.isWhitespace(cp) || Character.isSpaceChar(cp)) continue;
+            int type = Character.getType(cp);
+            if (type == Character.CONNECTOR_PUNCTUATION
+                    || type == Character.DASH_PUNCTUATION
+                    || type == Character.START_PUNCTUATION
+                    || type == Character.END_PUNCTUATION
+                    || type == Character.INITIAL_QUOTE_PUNCTUATION
+                    || type == Character.FINAL_QUOTE_PUNCTUATION
+                    || type == Character.OTHER_PUNCTUATION) continue;
+            return false;
+        }
+        return true;
     }
 
     /** Remove internal colour-run markers used between the renderer and cache. */

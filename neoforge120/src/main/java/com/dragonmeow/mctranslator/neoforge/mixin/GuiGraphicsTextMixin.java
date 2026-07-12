@@ -9,6 +9,8 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
+import java.util.List;
+
 /**
  * Translates arbitrary GUI text drawn through {@link GuiGraphics} — the only general hook
  * that reaches custom mod screens (e.g. Iris/Oculus shader-pack settings) that render their
@@ -24,6 +26,18 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  */
 @Mixin(GuiGraphics.class)
 public abstract class GuiGraphicsTextMixin {
+
+    @ModifyVariable(method = "renderTooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;Ljava/util/Optional;II)V",
+            at = @At("HEAD"), argsOnly = true, require = 0)
+    private List<Component> mctranslator$visibleTooltip(List<Component> lines) {
+        return MctranslatorNeoForge.visibleTooltip(lines);
+    }
+
+    @ModifyVariable(method = "renderComponentTooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;II)V",
+            at = @At("HEAD"), argsOnly = true, require = 0)
+    private List<Component> mctranslator$visibleComponentTooltip(List<Component> lines) {
+        return MctranslatorNeoForge.visibleTooltip(lines);
+    }
 
     @ModifyVariable(
             method = "drawString(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)I",

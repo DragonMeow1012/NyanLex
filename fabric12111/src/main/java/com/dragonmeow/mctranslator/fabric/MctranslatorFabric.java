@@ -1,24 +1,26 @@
 package com.dragonmeow.mctranslator.fabric;
 
 import com.dragonmeow.mctranslator.cache.LanguageFileStore;
+import com.dragonmeow.mctranslator.cache.DynamicNamespacedStore;
 import com.dragonmeow.mctranslator.cache.NamespacedStore;
 import com.dragonmeow.mctranslator.cache.PersistentStore;
+import com.dragonmeow.mctranslator.cache.ProviderLanguageFileStore;
 import com.dragonmeow.mctranslator.cache.TranslationCache;
 import com.dragonmeow.mctranslator.config.DisplayMode;
+import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.AiSettings;
-import com.dragonmeow.mctranslator.translate.GoogleFreeTranslator;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.RequestPacer;
+import com.dragonmeow.mctranslator.translate.SwitchingMachineTranslator;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
 
 import com.dragonmeow.mctranslator.fabric.mixin.AbstractContainerScreenAccessor;
-import com.dragonmeow.mctranslator.fabric.mixin.ChatComponentMixin;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -78,6 +80,10 @@ public final class MctranslatorFabric implements ClientModInitializer {
      *  closing a quest screen can never retain its widget tree. */
     private static final java.util.Map<Object, String> FTB_PENDING =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    private static final ThreadLocal<Integer> tooltipProbeDepth =
+            ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen>>
+            SCREEN_RENDER_STACK = ThreadLocal.withInitial(java.util.ArrayDeque::new);
 
     private net.minecraft.client.gui.screens.Screen lastContainerScreen;
     private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
@@ -85,6 +91,8 @@ public final class MctranslatorFabric implements ClientModInitializer {
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
+    private net.minecraft.client.gui.screens.Screen lastTooltipScreen;
+    private long lastTooltipAtMs;
 
     /** Online player names, refreshed once per second on the tick thread; read by the
      *  service to mask names in chat and to skip "translating" name tags / scoreboards. */
@@ -343,7 +351,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
         TranslationService s = service;
         if (s == null || c == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return c;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
+        if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return c;
         Component t = FabricTextStyle.renderTranslated("screenText", c, s::translateScreenText);
         return t != null ? t : c;
@@ -360,7 +368,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
         if (widget == null || source == null || s == null
                 || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return source;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null) return source;
+        if (!renderingCurrentScreen(mc) && !ftbWidgetOnCurrentScreen(widget, mc)) return source;
 
         Component resolved = FabricTextStyle.resolveLegacyCodes(source);
         Component rendered = FabricTextStyle.renderTranslated(
@@ -399,6 +407,23 @@ public final class MctranslatorFabric implements ClientModInitializer {
         return source;
     }
 
+    /** FTB populates TextField content while the new screen is being initialized,
+     * before the first Render.Pre event. Accept that call only when the widget's own
+     * GUI is the BaseScreen wrapped by Minecraft's current ScreenWrapper;
+     * unrelated/background widgets remain outside the translation scope. */
+    private static boolean ftbWidgetOnCurrentScreen(Object widget, Minecraft mc) {
+        if (widget == null || mc == null || mc.screen == null) return false;
+        try {
+            java.lang.reflect.Method getter = widget.getClass().getMethod("getGui");
+            Object widgetGui = getter.invoke(widget);
+            if (widgetGui == mc.screen) return true;
+            java.lang.reflect.Method screenGetter = mc.screen.getClass().getMethod("getGui");
+            return screenGetter.invoke(mc.screen) == widgetGui;
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private static void applyFtbText(Object widget, Component translated) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.screen == null
@@ -421,6 +446,8 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 } finally {
                     com.dragonmeow.mctranslator.translate.InternalRenderGuard.exit();
                 }
+                Object gui = widget.getClass().getMethod("getGui").invoke(widget);
+                if (gui != null) gui.getClass().getMethod("refreshWidgets").invoke(gui);
             }
         } catch (ReflectiveOperationException | RuntimeException error) {
             LOGGER.debug("Unable to reflow translated FTB text field", error);
@@ -432,7 +459,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
         TranslationService s = service;
         if (s == null || str == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return str;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
+        if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return str;
         if (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0) {
             String normalized = str.replace("\r\n", "\n").replace('\r', '\n');
@@ -449,7 +476,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
         TranslationService s = service;
         if (s == null || fcs == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return fcs;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
+        if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;
         if (mc.screen.getClass().getName().startsWith("dev.ftb.")) return fcs;
         Component source = FabricTextStyle.toComponent(fcs);
@@ -470,7 +497,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
         TranslationService s = service;
         if (s == null || text == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return text;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
+        if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return text;
         if (mc.screen.getClass().getName().startsWith("dev.ftb.")) return text;
         if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;
@@ -478,6 +505,39 @@ public final class MctranslatorFabric implements ClientModInitializer {
         Component translated = FabricTextStyle.renderTranslated(
                 "screenTextBlock", source, s::translateScreenText);
         return translated == null ? text : translated;
+    }
+
+    public static List<Component> visibleTooltip(List<Component> lines) {
+        TranslationService s = service;
+        Minecraft mc = Minecraft.getInstance();
+        if (s == null || lines == null || lines.isEmpty() || !renderingCurrentScreen(mc)) return lines;
+        DisplayMode mode = s.tooltipMode();
+        if (mode == DisplayMode.ORIGINAL_ONLY) return lines;
+        for (Component line : lines) if (line != null && FabricTextStyle.isSeparatorText(line.getString())) return lines;
+        List<String> requests = new ArrayList<>();
+        for (Component line : lines) if (line != null && !line.getString().isBlank()) requests.add(FabricTextStyle.requestText(line));
+        s.warmTooltipBatch(requests);
+        List<Component> translatedLines = new ArrayList<>(lines.size());
+        boolean changed = false;
+        int maxLen = 0;
+        for (Component line : lines) {
+            if (line == null) { translatedLines.add(null); continue; }
+            maxLen = Math.max(maxLen, line.getString().length());
+            Component translated = FabricTextStyle.renderTranslated("visibleTooltip", line, s::translateItemLine);
+            if (translated != null) { translatedLines.add(translated); maxLen = Math.max(maxLen, translated.getString().length()); changed = true; }
+            else translatedLines.add(line);
+        }
+        if (!changed) return lines;
+        if (mode == DisplayMode.TRANSLATION) return translatedLines;
+        List<Component> both = new ArrayList<>(lines.size() + translatedLines.size() + 2);
+        both.addAll(lines); both.add(FabricTextStyle.separatorLine(maxLen)); both.addAll(translatedLines); both.add(FabricTextStyle.separatorLine(maxLen));
+        return both;
+    }
+
+    private static boolean renderingCurrentScreen(Minecraft mc) {
+        return mc != null && mc.screen != null
+                && !mc.screen.getClass().getName().startsWith("com.dragonmeow.mctranslator.")
+                && SCREEN_RENDER_STACK.get().peek() == mc.screen;
     }
 
 
@@ -564,13 +624,16 @@ public final class MctranslatorFabric implements ClientModInitializer {
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         // 事前冷卻節流：one pacer PER ENGINE so Google and AI space their own requests
         // without blocking each other. The cooldown is read live from config.
-        GoogleFreeTranslator google = new GoogleFreeTranslator(transport, config.sourceLang,
+        SwitchingMachineTranslator google = new SwitchingMachineTranslator(transport,
+                () -> config.sourceLang,
+                () -> config.machineTranslationProvider,
                 new RequestPacer(() -> config.requestCooldownMs));
         OpenAiTranslator ai = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
-        PersistentStore googleStore = new LanguageFileStore(
-                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-cache", config.targetLang);
+        PersistentStore googleStore = new ProviderLanguageFileStore(
+                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-cache", config.targetLang,
+                () -> config.machineTranslationProvider);
         PersistentStore aiStore = new LanguageFileStore(
                 FabricLoader.getInstance().getConfigDir(), MOD_ID + "-ai-cache", config.targetLang);
         // Three files: AI and GT own their wording/confirmed-identity entries; one
@@ -581,19 +644,28 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
         TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
-        cache.setFailureStore(new NamespacedStore(failureStore, "gt"));
+        cache.setFailureStore(new DynamicNamespacedStore(failureStore,
+                () -> "gt-" + MachineTranslationProvider.normalize(config.machineTranslationProvider)));
         aiCache.setFailureStore(new NamespacedStore(failureStore, "ai"));
         // One-time migration only: old builds mixed dispatcher-produced GT stand-ins
         // into ai-cache. New requests always go through the independently owned GT cache.
         aiCache.setProvisionalStore(googleStore);
         debugLog = new TranslationDebugLog(() -> config != null && config.debugTranslationOverlay);
-        cache.setDebugLog("Google", debugLog);
+        cache.setDebugLog("GT", debugLog);
         aiCache.setDebugLog("AI", debugLog);
         // A GT result shown after AI failure remains provisional from the AI cache's
         // perspective, so AI retries after its global 429 gate reopens.
         aiCache.setProvisionalRetryGate(() ->
                 config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
+        service.setTargetLangChangeListener(this::onTargetLanguageChanged);
+        service.setBatchWindowMs(() -> config.batchWindowMs);
+        service.setItemSourceLanguage(() -> {
+            if (config.sourceLang != null && !config.sourceLang.isBlank()
+                    && !"auto".equalsIgnoreCase(config.sourceLang)) return config.sourceLang;
+            Minecraft mc = Minecraft.getInstance();
+            return mc == null || mc.options == null ? null : mc.options.languageCode;
+        });
         service.setProtectedNames(() -> onlineNames);
 
         registerKeyBinds();
@@ -628,7 +700,28 @@ public final class MctranslatorFabric implements ClientModInitializer {
         String desired = mapGameLang(mc.options.languageCode);
         if (!desired.equals(config.targetLang)) {
             service.setTargetLang(desired);
-            FabricTextStyle.clearRenderMemo();
+        }
+    }
+
+    private void onTargetLanguageChanged() {
+        FabricTextStyle.clearRenderMemo();
+        lastContainerScreen = null;
+        warmedContainerNames.clear();
+        lastTooltipStack = null;
+        lastTooltipParagraphSources = null;
+        lastTooltipScreen = null;
+        lastTooltipAtMs = 0L;
+        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+        refreshCurrentFtbScreen();
+    }
+
+    private static void refreshCurrentFtbScreen() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.screen == null) return;
+        try {
+            Object gui = mc.screen.getClass().getMethod("getGui").invoke(mc.screen);
+            if (gui != null) gui.getClass().getMethod("refreshWidgets").invoke(gui);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
         }
     }
 
@@ -651,8 +744,18 @@ public final class MctranslatorFabric implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
 
-        ScreenEvents.AFTER_INIT.register((client, screen, w, h) ->
-                ScreenKeyboardEvents.afterKeyPress(screen).register(this::onScreenKey));
+        ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
+            ScreenKeyboardEvents.afterKeyPress(screen).register(this::onScreenKey);
+            ScreenEvents.beforeRender(screen).register((scr, graphics, mouseX, mouseY, delta) ->
+                    SCREEN_RENDER_STACK.get().push(scr));
+            ScreenEvents.afterRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> {
+                java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen> stack =
+                        SCREEN_RENDER_STACK.get();
+                if (!stack.isEmpty() && stack.peek() == scr) stack.pop();
+                else stack.removeFirstOccurrence(scr);
+                if (stack.isEmpty()) SCREEN_RENDER_STACK.remove();
+            });
+        });
     }
 
     /**
@@ -997,7 +1100,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
             Component previous, Component replacement) {
         try {
             java.util.List<net.minecraft.client.GuiMessage> messages =
-                    ((ChatComponentMixin) (Object) chat).mctranslator$getAllMessages();
+                    ((ChatComponentAccess) (Object) chat).mctranslator$getAllMessages();
             for (int i = 0; i < messages.size(); i++) {
                 net.minecraft.client.GuiMessage old = messages.get(i);
                 if (old.content() != previous && !old.content().equals(previous)) continue;
@@ -1031,6 +1134,11 @@ public final class MctranslatorFabric implements ClientModInitializer {
 
     private void onItemTooltip(ItemStack stack, List<Component> lines) {
         if (service == null) return;
+        if (tooltipProbeDepth.get() > 0) return;
+        Minecraft tooltipClient = Minecraft.getInstance();
+        if (tooltipClient == null || tooltipClient.player == null
+                || !tooltipClient.isSameThread()
+                || !renderingCurrentScreen(tooltipClient)) return;
         DisplayMode mode = service.tooltipMode();
         if (mode == DisplayMode.ORIGINAL_ONLY || lines.isEmpty()) return;
 
@@ -1039,6 +1147,8 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 stack, lines, FabricTextStyle::paragraphRequestText);
         lastTooltipStack = stack;
         lastTooltipParagraphSources = plan.sources();
+        lastTooltipScreen = tooltipClient.screen;
+        lastTooltipAtMs = System.currentTimeMillis();
         service.warmTooltipBatch(plan.sources());
         boolean[] paragraphReady = tooltipParagraphReadiness(lines, plan);
         if (stack != null && !stack.isEmpty()) {
@@ -1215,6 +1325,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
     }
 
     private void onClientTick(Minecraft mc) {
+        SCREEN_RENDER_STACK.remove();
         if (modeKey != null) {
             while (modeKey.consumeClick()) {
                 if (mc != null) mc.setScreen(new TranslationConfigScreen(mc.screen));
@@ -1233,6 +1344,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
         if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(mc);
+        warmVisibleHudItems(mc);
         // R12 (user clarification of R10): the OPEN container is "the current page" — its
         // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
         // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
@@ -1241,15 +1353,15 @@ public final class MctranslatorFabric implements ClientModInitializer {
 
     private void onScreenKey(net.minecraft.client.gui.screens.Screen screen, KeyEvent keyEvent) {
         if (service == null) return;
+        if (screen instanceof TranslationConfigScreen || screen instanceof AiConfigScreen
+                || screen instanceof TranslationKeybindScreen || screen instanceof TranslationLanguageScreen
+                || screen instanceof MachineProviderScreen) return;
         if (toggleKey != null && toggleKey.matches(keyEvent)) {
             flipShowOriginal();
             return;
         }
         if (retranslateKey != null && retranslateKey.matches(keyEvent)) {
-            if (screen instanceof AbstractContainerScreen<?> cs && cs instanceof AbstractContainerScreenAccessor accessor) {
-                Slot slot = accessor.mctranslator$hoveredSlot();
-                if (slot != null && slot.hasItem()) retranslateItem(slot.getItem());
-            }
+            retranslatePointedItem(screen);
             return;
         }
         if (screenScanKey != null && screenScanKey.matches(keyEvent)) {
@@ -1315,11 +1427,43 @@ public final class MctranslatorFabric implements ClientModInitializer {
         for (Slot slot : screen.getMenu().slots) {
             if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
             String name = slot.getItem().getHoverName().getString();
-            if (name != null && !name.isBlank() && warmedContainerNames.add(name)) {
+            if (name != null && !name.isBlank()) {
                 newNames.add(name);
             }
         }
         if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
+    }
+
+    private void warmVisibleHudItems(Minecraft mc) {
+        if (mc == null || mc.player == null || service == null
+                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = mc.player.getInventory().getItem(slot);
+            if (stack == null || stack.isEmpty()) continue;
+            String name = stack.getHoverName().getString();
+            if (name != null && !name.isBlank()) names.add(name);
+        }
+        ItemStack offhand = mc.player.getOffhandItem();
+        if (offhand != null && !offhand.isEmpty()) {
+            String name = offhand.getHoverName().getString();
+            if (name != null && !name.isBlank()) names.add(name);
+        }
+        if (!names.isEmpty()) service.warmNamesBatch(List.copyOf(names));
+    }
+
+    private void retranslatePointedItem(net.minecraft.client.gui.screens.Screen screen) {
+        ItemStack target = null;
+        if (screen instanceof AbstractContainerScreen<?> container
+                && container instanceof AbstractContainerScreenAccessor accessor) {
+            Slot slot = accessor.mctranslator$hoveredSlot();
+            if (slot != null && slot.hasItem()) target = slot.getItem();
+        }
+        if ((target == null || target.isEmpty()) && lastTooltipScreen == screen
+                && System.currentTimeMillis() - lastTooltipAtMs <= 1_500L) {
+            target = lastTooltipStack;
+        }
+        if (target != null && !target.isEmpty()) retranslateItem(target);
     }
 
     private void retranslateItem(ItemStack stack) {
@@ -1329,17 +1473,26 @@ public final class MctranslatorFabric implements ClientModInitializer {
         List<String> sources = lastTooltipStack == stack ? lastTooltipParagraphSources : null;
         if (sources == null) {
             List<Component> lines;
+            int depth = tooltipProbeDepth.get();
+            tooltipProbeDepth.set(depth + 1);
             try {
                 Item.TooltipContext ctx = Item.TooltipContext.of(mc.level);
                 lines = stack.getTooltipLines(ctx, mc.player, TooltipFlag.Default.NORMAL);
             } catch (RuntimeException e) {
                 return;
+            } finally {
+                if (depth == 0) tooltipProbeDepth.remove();
+                else tooltipProbeDepth.set(depth);
             }
             TooltipParagraphPlan plan = tooltipParagraphPlan(
                     stack, lines, FabricTextStyle::paragraphRequestText);
             sources = plan.sources();
         }
-        service.retranslate(sources);
+        java.util.LinkedHashSet<String> requests = new java.util.LinkedHashSet<>();
+        String itemName = stack.getHoverName().getString();
+        if (itemName != null && !itemName.isBlank()) requests.add(itemName);
+        if (sources != null) requests.addAll(sources);
+        service.retranslate(List.copyOf(requests));
         FabricTextStyle.clearRenderMemo();
         status(Component.translatable("message.mctranslator.retranslate", stack.getHoverName().getString()).getString());
     }

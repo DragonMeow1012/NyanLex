@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 /** Exposes the 1.19.4 chat history so an asynchronous translation can replace its source row. */
 @Mixin(ChatComponent.class)
-public abstract class ChatComponentMixin {
+public abstract class ChatComponentMixin implements com.dragonmeow.mctranslator.fabric.ChatComponentAccess {
     @Accessor("allMessages")
     public abstract java.util.List<GuiMessage> mctranslator$getAllMessages();
 }

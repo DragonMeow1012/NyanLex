@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -35,8 +36,11 @@ public final class TranslationService {
      * notifying the service, but that must never make a real cache switch look like a
      * no-op. */
     private volatile String activeTargetLang;
+    /** Loader-side visible-surface invalidation after an actual target-language change. */
+    private volatile Runnable targetLangChangeListener = () -> { };
     private volatile boolean showOriginalOnly;
     private volatile Supplier<? extends Collection<String>> protectedNames = List::of;
+    private volatile Supplier<String> itemSourceLanguage = () -> null;
     private final Set<String> invalidatedNameFailures = ConcurrentHashMap.newKeySet();
     /** At most one context-aware correction per item name and target language in a
      *  session. Prevents a stubborn model from creating a hover-triggered retry loop. */
@@ -68,6 +72,18 @@ public final class TranslationService {
 
     public void setProtectedNames(Supplier<? extends Collection<String>> supplier) {
         if (supplier != null) protectedNames = supplier;
+    }
+
+    /** Locale of Minecraft-provided item labels (for example ja_jp). Applied only to
+     * item surfaces; chat remains language-autodetected/free-form. */
+    public void setItemSourceLanguage(Supplier<String> supplier) {
+        if (supplier != null) itemSourceLanguage = supplier;
+    }
+
+    /** Connect both engine queues to the live in-game batching-window setting. */
+    public void setBatchWindowMs(IntSupplier supplier) {
+        google.setBatchWindowMs(supplier);
+        if (ai != google) ai.setBatchWindowMs(supplier);
     }
 
     private Collection<String> names() {
@@ -324,6 +340,19 @@ public final class TranslationService {
 
     public String targetLang() { return activeTargetLang; }
 
+    public void setTargetLangChangeListener(Runnable listener) {
+        targetLangChangeListener = listener == null ? () -> { } : listener;
+    }
+
+    /** Apply a live machine-provider selection while preserving every provider's disk rows. */
+    public void reloadMachineProvider() {
+        google.reloadProviderPartition();
+        contextualItemNameRetries.clear();
+        invalidatedNameFailures.clear();
+        try { targetLangChangeListener.run(); }
+        catch (RuntimeException ignored) { }
+    }
+
     public synchronized void setTargetLang(String language) {
         if (language == null) return;
         String next = normalizedTargetLang(language);
@@ -342,10 +371,25 @@ public final class TranslationService {
         config.targetLang = next;
         contextualItemNameRetries.clear();
         invalidatedNameFailures.clear();
+        try {
+            targetLangChangeListener.run();
+        } catch (RuntimeException ignored) {
+            // A loader-specific repaint hook must never leave the service half-switched.
+        }
     }
 
     private static String normalizedTargetLang(String language) {
         return language == null || language.isBlank() ? "zh-TW" : language.strip();
+    }
+
+    private boolean shouldTranslateItem(String source) {
+        String hint;
+        try {
+            hint = itemSourceLanguage.get();
+        } catch (RuntimeException ignored) {
+            hint = null;
+        }
+        return TextFilter.shouldTranslate(source, activeTargetLang, hint);
     }
 
     public void flushBatches() {
@@ -374,7 +418,7 @@ public final class TranslationService {
         return lookup(text, config.chatMode, config.aiChat);
     }
     public TranslationDecision translateItemLine(String text) {
-        TranslationDecision d = lookup(text, config.tooltipMode, config.aiTooltip, true);
+        TranslationDecision d = lookup(text, config.tooltipMode, config.aiTooltip, true, true);
         if (!d.changed()) return d;
         // Display-only tooltip clean-up: preserved wide column padding looks like a hole
         // after the much narrower CJK translation. Applied AFTER the cache lookup, so the
@@ -385,7 +429,7 @@ public final class TranslationService {
                 : TranslationDecision.of(d.mode(), d.original(), tightened);
     }
     public TranslationDecision translateHeld(String text) {
-        return lookup(text, config.tooltipMode, config.aiTooltip);
+        return lookup(text, config.tooltipMode, config.aiTooltip, false, true);
     }
     public TranslationDecision translateScoreboardLine(String text) {
         return lookup(text, config.scoreboardMode, config.aiScoreboard, true);
@@ -418,20 +462,28 @@ public final class TranslationService {
 
     private TranslationDecision lookup(String original, DisplayMode mode, boolean useAi,
                                        boolean requireFinalAi) {
+        return lookup(original, mode, useAi, requireFinalAi, false);
+    }
+
+    private TranslationDecision lookup(String original, DisplayMode mode, boolean useAi,
+                                       boolean requireFinalAi, boolean itemText) {
         if (showOriginalOnly || mode == DisplayMode.ORIGINAL_ONLY
-                || !TextFilter.shouldTranslate(original, activeTargetLang)) {
+                || !(itemText ? shouldTranslateItem(original)
+                : TextFilter.shouldTranslate(original, activeTargetLang))) {
             return TranslationDecision.unchanged(original);
         }
 
         NameMasker.Masked masked = NameMasker.mask(original, names());
-        if (masked.hasMasks() && !TextFilter.shouldTranslate(masked.text(), activeTargetLang)) {
+        if (masked.hasMasks() && !(itemText ? shouldTranslateItem(masked.text())
+                : TextFilter.shouldTranslate(masked.text(), activeTargetLang))) {
             return TranslationDecision.unchanged(original);
         }
 
         TranslationCache selected = cache(useAi);
         String translated = selected.getCached(masked.text());
         if (translated == null) {
-            selected.requestBatched(masked.text());
+            if (itemText) selected.requestBatchedPassive(masked.text());
+            else selected.requestBatched(masked.text());
             return TranslationDecision.unchanged(original);
         }
         return decide(original, NameMasker.unmask(translated, masked.names()), mode);
@@ -439,13 +491,13 @@ public final class TranslationService {
 
     public boolean warmUp(String source) {
         if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY
-                || !TextFilter.shouldTranslate(source, activeTargetLang)) return true;
+                || !shouldTranslateItem(source)) return true;
         TranslationCache selected = cache(config.aiTooltip);
         return selected.getCached(source) != null || selected.translateBlocking(source) != null;
     }
 
     public void warmTooltipBatch(List<String> sources) {
-        warmMasked(sources, true, config.tooltipMode, config.aiTooltip);
+        warmMasked(sources, true, config.tooltipMode, config.aiTooltip, true, true);
     }
 
     /** Warm every blank-line/indent-delimited paragraph on the current book page in one
@@ -468,9 +520,9 @@ public final class TranslationService {
      * owns submission for the complete visible tooltip. */
     public boolean isTooltipTranslationReady(String source) {
         if (source == null || config.tooltipMode == DisplayMode.ORIGINAL_ONLY
-                || !TextFilter.shouldTranslate(source, activeTargetLang)) return true;
+                || !shouldTranslateItem(source)) return true;
         NameMasker.Masked masked = NameMasker.mask(source, names());
-        if (masked.hasMasks() && !TextFilter.shouldTranslate(masked.text(), activeTargetLang)) {
+        if (masked.hasMasks() && !shouldTranslateItem(masked.text())) {
             return true;
         }
         TranslationCache selected = cache(config.aiTooltip);
@@ -478,7 +530,7 @@ public final class TranslationService {
     }
 
     public void warmNamesBatch(List<String> sources) {
-        warmMasked(sources, false, config.tooltipMode, config.aiTooltip);
+        warmMasked(sources, false, config.tooltipMode, config.aiTooltip, false, true);
     }
 
     /**
@@ -575,6 +627,17 @@ public final class TranslationService {
 
     private void warmMasked(List<String> sources, boolean includeContext,
                             DisplayMode mode, boolean useAi) {
+        warmMasked(sources, includeContext, mode, useAi, false);
+    }
+
+    private void warmMasked(List<String> sources, boolean includeContext,
+                            DisplayMode mode, boolean useAi, boolean highPriority) {
+        warmMasked(sources, includeContext, mode, useAi, highPriority, false);
+    }
+
+    private void warmMasked(List<String> sources, boolean includeContext,
+                            DisplayMode mode, boolean useAi, boolean highPriority,
+                            boolean itemText) {
         if (mode == DisplayMode.ORIGINAL_ONLY || sources == null) return;
         Collection<String> protectedNow = names();
         List<String> todo = new ArrayList<>();
@@ -583,9 +646,14 @@ public final class TranslationService {
             if (source == null) continue;
             String masked = NameMasker.mask(source, protectedNow).text();
             if (context != null) context.add(masked);
-            if (TextFilter.shouldTranslate(masked, activeTargetLang)) todo.add(masked);
+            if (itemText ? shouldTranslateItem(masked)
+                    : TextFilter.shouldTranslate(masked, activeTargetLang)) todo.add(masked);
         }
-        if (!todo.isEmpty()) cache(useAi).warmBatchAsync(todo, context);
+        if (!todo.isEmpty()) {
+            TranslationCache selected = cache(useAi);
+            if (highPriority) selected.warmBatchAsyncHigh(todo, context);
+            else selected.warmBatchAsync(todo, context);
+        }
     }
 
     private TranslationDecision decide(String original, String translated, DisplayMode mode) {

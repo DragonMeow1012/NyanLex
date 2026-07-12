@@ -760,10 +760,15 @@ public final class FabricTextStyle {
 
     private static boolean validMarkedResponse(MarkedChat marked, String translated) {
         if (marked == null || translated == null) return false;
-        if (!markerMultiset(marked.text()).equals(markerMultiset(translated))) return false;
+        java.util.Map<String, Integer> expected = markerMultiset(marked.text());
+        java.util.Map<String, Integer> actual = markerMultiset(translated);
+        if (!expected.equals(actual)) return false;
         java.util.regex.Matcher matcher = MARKER.matcher(translated);
         Integer open = null;
+        int cursor = 0;
         while (matcher.find()) {
+            if (open == null && !outsideMarkerLayoutOnly(
+                    translated.substring(cursor, matcher.start()))) return false;
             int index = Integer.parseInt(matcher.group(2));
             if (index < 0 || index >= marked.styles().size()) return false;
             boolean closing = matcher.group(1) != null && !matcher.group(1).isEmpty();
@@ -774,8 +779,18 @@ public final class FabricTextStyle {
                 if (open == null || open != index) return false;
                 open = null;
             }
+            cursor = matcher.end();
         }
-        return open == null;
+        return open == null && outsideMarkerLayoutOnly(translated.substring(cursor));
+    }
+
+    private static final java.util.regex.Pattern OUTSIDE_LAYOUT_SLOT =
+            java.util.regex.Pattern.compile("\\u27E6\\s*(?:WS|PB)\\s*\\d+\\s*\\u27E7");
+
+    private static boolean outsideMarkerLayoutOnly(String text) {
+        if (text == null || text.isEmpty()) return true;
+        return TextFilter.isLayoutOrPunctuationOnly(
+                OUTSIDE_LAYOUT_SLOT.matcher(TextFilter.stripSectionCodes(text)).replaceAll(""));
     }
 
     private static java.util.Map<String, Integer> markerMultiset(String text) {
@@ -957,21 +972,26 @@ public final class FabricTextStyle {
         if (segs.size() <= 1) return styled(translated, profile);
 
         List<StyleAnchor> anchors = new ArrayList<>();
-        List<Integer> order = new ArrayList<>();
-        String[] probes = new String[segs.size()];
+        List<StyleProbe> probes = new ArrayList<>();
         for (int i = 0; i < segs.size(); i++) {
-            probes[i] = segs.get(i).text().strip();
-            if (probes[i].length() >= 2) order.add(i);
+            String whole = segs.get(i).text().strip();
+            if (whole.length() >= 2) probes.add(new StyleProbe(i, whole));
+            java.util.regex.Matcher stable = STABLE_ANCHOR.matcher(whole);
+            while (stable.find()) {
+                String token = stable.group();
+                if (!token.equals(whole)) probes.add(new StyleProbe(i, token));
+            }
         }
-        order.sort((left, right) -> {
-            int length = Integer.compare(probes[right].length(), probes[left].length());
-            return length != 0 ? length : Integer.compare(left, right);
+        probes.sort((left, right) -> {
+            int length = Integer.compare(right.text().length(), left.text().length());
+            return length != 0 ? length : Integer.compare(left.segment(), right.segment());
         });
 
         // Verbatim numbers, URLs, names and ids are matched independently of source
         // order. Translations commonly reorder them; a forward-only search lost styles.
-        for (int index : order) {
-            String probe = probes[index];
+        for (StyleProbe candidate : probes) {
+            int index = candidate.segment();
+            String probe = candidate.text();
             int at = translated.indexOf(probe);
             while (at >= 0 && overlapsAnchor(anchors, at, at + probe.length())) {
                 at = translated.indexOf(probe, at + 1);
@@ -1016,6 +1036,14 @@ public final class FabricTextStyle {
     }
 
     private record StyleAnchor(int segment, int start, int end) {
+    }
+
+    /** Verbatim fragments likely to survive translation even when the surrounding
+     * coloured phrase changes language: signed values, percentages, ids/names and icons. */
+    private static final java.util.regex.Pattern STABLE_ANCHOR = java.util.regex.Pattern.compile(
+            "[+-]?\\d[\\d,]*(?:\\.\\d+)?%?|[A-Za-z_][A-Za-z0-9_./:#-]{1,}|[\\p{So}\\p{Co}]");
+
+    private record StyleProbe(int segment, String text) {
     }
 
     private static boolean overlapsAnchor(List<StyleAnchor> anchors, int start, int end) {

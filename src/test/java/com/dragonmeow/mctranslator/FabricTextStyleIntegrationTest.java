@@ -357,6 +357,69 @@ class FabricTextStyleIntegrationTest {
     }
 
     @Test
+    void embeddedSignedValuesAnchorTranslatedKillComboColourGroups() {
+        Style purple = Style.EMPTY.withColor(TextColor.fromRgb(0xAA00AA));
+        Style aqua = Style.EMPTY.withColor(TextColor.fromRgb(0x00AAAA));
+        Component source = Component.empty()
+                .append(Component.literal("+20 Kill Combo ").setStyle(purple))
+                .append(Component.literal("+50 Combat Wisdom").setStyle(aqua));
+        FabricTextStyle.MarkedChat marked = FabricTextStyle.markChatContent(source, 0);
+
+        Component rebuilt = FabricTextStyle.rebuildRich(source,
+                TextFilter.markStyleFallback("+20擊殺連擊 +50戰鬥智慧"), marked);
+        var segments = FabricTextStyle.segments(rebuilt);
+
+        assertEquals("+20擊殺連擊 +50戰鬥智慧", rebuilt.getString());
+        int aquaBoundary = rebuilt.getString().indexOf("+50");
+        int cursor = 0;
+        for (FabricTextStyle.Seg segment : segments) {
+            int end = cursor + segment.text().length();
+            if (end <= aquaBoundary) {
+                assertEquals(purple, segment.style(),
+                        "every run before +50 must retain the Kill Combo colour");
+            } else if (cursor >= aquaBoundary) {
+                assertEquals(aqua, segment.style(),
+                        "every run from +50 onward must retain the Combat Wisdom colour");
+            } else {
+                throw new AssertionError("a rebuilt style run crossed the +50 colour boundary");
+            }
+            cursor = end;
+        }
+    }
+
+    @Test
+    void completeMarkersWithSemanticTextOutsideAPairAreRejected() {
+        Style purple = Style.EMPTY.withColor(TextColor.fromRgb(0xAA00AA));
+        Style aqua = Style.EMPTY.withColor(TextColor.fromRgb(0x00AAAA));
+        Component source = Component.empty()
+                .append(Component.literal("Kill Combo").setStyle(purple))
+                .append(Component.literal(" Magic Find").setStyle(aqua));
+        FabricTextStyle.MarkedChat marked = FabricTextStyle.markChatContent(source, 0);
+
+        Component rebuilt = FabricTextStyle.rebuildRich(source,
+                "⟦CS0⟧擊殺⟦/CS0⟧連擊⟦CS1⟧魔法尋獲⟦/CS1⟧", marked);
+
+        assertEquals(source.getString(), rebuilt.getString(),
+                "prose outside CS pairs must never inherit the previous colour");
+    }
+
+    @Test
+    void targetLanguagePunctuationBetweenCompletePairsRemainsValid() {
+        Style purple = Style.EMPTY.withColor(TextColor.fromRgb(0xAA00AA));
+        Style aqua = Style.EMPTY.withColor(TextColor.fromRgb(0x00AAAA));
+        Component source = Component.empty()
+                .append(Component.literal("sold").setStyle(purple))
+                .append(Component.literal(" White Gift Talisman").setStyle(aqua));
+        FabricTextStyle.MarkedChat marked = FabricTextStyle.markChatContent(source, 0);
+
+        Component rebuilt = FabricTextStyle.rebuildRich(source,
+                "\u27E6CS1\u27E7白色禮物護符\u27E6/CS1\u27E7，"
+                        + "\u27E6CS0\u27E7已售出\u27E6/CS0\u27E7", marked);
+
+        assertEquals("白色禮物護符，已售出", rebuilt.getString());
+    }
+
+    @Test
     void markerlessFallbackUsesTheDominantStyleWithoutProportionalSplits() {
         Style yellow = Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF55));
         Style aqua = Style.EMPTY.withColor(TextColor.fromRgb(0x55FFFF));

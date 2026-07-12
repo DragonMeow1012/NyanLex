@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextComponent;
@@ -31,6 +32,12 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     private static final ThreadLocal<Boolean> INTERNAL_RENDER = new ThreadLocal<Boolean>() {
         @Override protected Boolean initialValue() { return Boolean.FALSE; }
     };
+    private static final ThreadLocal<java.util.ArrayDeque<Screen>> SCREEN_RENDER_STACK =
+            new ThreadLocal<java.util.ArrayDeque<Screen>>() {
+                @Override protected java.util.ArrayDeque<Screen> initialValue() {
+                    return new java.util.ArrayDeque<Screen>();
+                }
+            };
     private static LegacyTranslatorMod instance;
     private static LegacyConfig config;
     private static Path configPath;
@@ -45,9 +52,10 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
                 "category.mctranslator"));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             syncLanguage(client);
+            TRANSLATOR.flushBatch();
             while (settingsKey.consumeClick()) client.setScreen(new LegacySettingsScreen(client.screen));
         });
-        ItemTooltipCallback.EVENT.register((stack, context, lines) -> translateTooltip(lines));
+        ItemTooltipCallback.EVENT.register((stack, context, lines) -> translateTooltip(stack, lines));
     }
 
     public static boolean interceptChat(final Component message) {
@@ -56,7 +64,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         final Minecraft minecraft = Minecraft.getInstance();
         final String source = message.getString();
         final String target = currentTarget(minecraft);
-        TRANSLATOR.translate(source, target, config.aiEnabled, true, config, translated -> minecraft.execute(() -> {
+        TRANSLATOR.translate(source, target, config.aiEnabled, false, config, translated -> minecraft.execute(() -> {
             MutableComponent output = new TextComponent(translated).setStyle(message.getStyle());
             if (config.showOriginal && !translated.equals(source)) {
                 output = message.copy().append(new TextComponent("\n")).append(output);
@@ -66,14 +74,17 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return true;
     }
 
-    private static void translateTooltip(List<Component> lines) {
-        if (config == null || !config.enabled || lines == null) return;
-        String target = currentTarget(Minecraft.getInstance());
+    private static void translateTooltip(ItemStack stack, List<Component> lines) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (config == null || !config.enabled || stack == null || stack.isEmpty()
+                || lines == null || minecraft == null || minecraft.level == null
+                || !minecraft.isSameThread() || !renderingCurrentScreen(minecraft)) return;
+        String target = currentTarget(minecraft);
         for (int i = 0; i < lines.size(); i++) {
             Component line = lines.get(i);
             String source = line.getString();
             if (!shouldTranslate(source)) continue;
-            String translated = TRANSLATOR.cached(source, target, config.aiEnabled);
+            String translated = TRANSLATOR.cached(source, target, config.aiEnabled, config);
             if (translated == null) {
                 TRANSLATOR.translate(source, target, config.aiEnabled, true, config, ignored -> {});
             } else if (!translated.equals(source)) {
@@ -95,13 +106,14 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null
                 || minecraft.screen instanceof LegacySettingsScreen
-                || minecraft.screen instanceof LegacyLanguageScreen) return source;
+                || minecraft.screen instanceof LegacyLanguageScreen
+                || minecraft.screen instanceof LegacyProviderScreen) return source;
         String plain = source.getString();
         if (!shouldTranslate(plain)) return source;
         String target = currentTarget(minecraft);
-        String translated = TRANSLATOR.cached(plain, target, config.aiEnabled);
+        String translated = TRANSLATOR.cached(plain, target, config.aiEnabled, config);
         if (translated == null) {
-            TRANSLATOR.translate(plain, target, config.aiEnabled, true, config, ignored -> {});
+            TRANSLATOR.translate(plain, target, config.aiEnabled, false, config, ignored -> {});
             return source;
         }
         return translated.equals(plain) ? source : new TextComponent(translated).setStyle(source.getStyle());
@@ -113,6 +125,22 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return previous;
     }
     public static void endInternalRender(boolean previous) { INTERNAL_RENDER.set(previous); }
+    public static void beginScreenRender(Screen screen) {
+        if (screen != null) SCREEN_RENDER_STACK.get().push(screen);
+    }
+    public static void endScreenRender() {
+        java.util.ArrayDeque<Screen> stack = SCREEN_RENDER_STACK.get();
+        if (!stack.isEmpty()) stack.pop();
+        if (stack.isEmpty()) SCREEN_RENDER_STACK.remove();
+    }
+    private static boolean renderingCurrentScreen(Minecraft minecraft) {
+        Screen screen = minecraft.screen;
+        if (screen == null || screen instanceof LegacySettingsScreen
+                || screen instanceof LegacyLanguageScreen
+                || screen instanceof LegacyProviderScreen) return false;
+        java.util.ArrayDeque<Screen> stack = SCREEN_RENDER_STACK.get();
+        return !stack.isEmpty() && stack.peek() == screen;
+    }
     public static List<String> debugLines() {
         List<LegacyTranslator.DebugEntry> entries = TRANSLATOR.debugSnapshot();
         java.util.ArrayList<String> lines = new java.util.ArrayList<String>();
@@ -126,6 +154,8 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     public static boolean debugEnabled() { return config != null && config.debugTranslationOverlay; }
     static void saveConfig() {
         try {
+            config.machineTranslationProvider = LegacyConfig.normalizeMachineProvider(
+                    config.machineTranslationProvider);
             Files.createDirectories(configPath.getParent());
             Writer writer = Files.newBufferedWriter(configPath);
             try { GSON.toJson(config, writer); } finally { writer.close(); }
@@ -140,7 +170,10 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
                     LegacyConfig loaded = GSON.fromJson(reader, LegacyConfig.class);
                     if (loaded != null) {
                         if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
-                        if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 2000;
+                        loaded.machineTranslationProvider = LegacyConfig.normalizeMachineProvider(
+                                loaded.machineTranslationProvider);
+                        if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 6000;
+                        if (loaded.batchWindowMs < 0) loaded.batchWindowMs = 5000;
                         if (loaded.failureBackoffMs < 0) loaded.failureBackoffMs = 10000;
                         return loaded;
                     }

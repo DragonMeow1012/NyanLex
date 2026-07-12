@@ -39,6 +39,18 @@ class TranslationCacheTest {
         };
     }
 
+    /** Test translator that keeps its synthetic prefix inside the first CS pair. */
+    private static Translator countingStyleSafeUpper(AtomicInteger counter) {
+        return (text, target) -> {
+            counter.incrementAndGet();
+            int firstMarkerEnd = text == null ? -1 : text.indexOf('\u27E7');
+            String translated = firstMarkerEnd < 0
+                    ? "T:" + text
+                    : text.substring(0, firstMarkerEnd + 1) + "T:" + text.substring(firstMarkerEnd + 1);
+            return new TranslationResult(translated, "en");
+        };
+    }
+
     @Test
     void warmBatchAsyncSendsFullSurfaceContextButOnlyUncachedTodoLines() {
         List<List<String>> seenTexts = new ArrayList<>();
@@ -906,7 +918,7 @@ class TranslationCacheTest {
         AtomicInteger calls = new AtomicInteger();
         Map<String, String> disk = new java.util.HashMap<>();
         TranslationCache cache = new TranslationCache(
-                countingUpper(calls), "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(disk));
+                countingStyleSafeUpper(calls), "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(disk));
 
         cache.requestAsync("⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧");
         assertEquals(1, calls.get());
@@ -976,7 +988,7 @@ class TranslationCacheTest {
     @Test
     void colourStrippedTierSubstitutesCurrentNumbers() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);
+        TranslationCache cache = new TranslationCache(countingStyleSafeUpper(calls), "zh-TW", DIRECT, 100);
 
         cache.requestAsync("⟦CS0⟧Kill streak⟦/CS0⟧ ⟦CS1⟧5⟦/CS1⟧");
         assertEquals(1, calls.get());
@@ -1017,7 +1029,7 @@ class TranslationCacheTest {
     @Test
     void colourStrippedCopyIsReachableThroughFallbackChain() {
         AtomicInteger aiCalls = new AtomicInteger();
-        TranslationCache ai = new TranslationCache(countingUpper(aiCalls), "zh-TW", DIRECT, 100);
+        TranslationCache ai = new TranslationCache(countingStyleSafeUpper(aiCalls), "zh-TW", DIRECT, 100);
         AtomicInteger googleCalls = new AtomicInteger();
         TranslationCache google = new TranslationCache(countingUpper(googleCalls), "zh-TW", DIRECT, 100);
         google.setFallback(ai); // the Google cache consults the AI cache on miss
@@ -1260,7 +1272,7 @@ class TranslationCacheTest {
     @Test
     void mixedCsAndSectionCodeVariantHits() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);
+        TranslationCache cache = new TranslationCache(countingStyleSafeUpper(calls), "zh-TW", DIRECT, 100);
 
         cache.requestAsync("⟦CS0⟧§eHello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧");
         assertEquals(1, calls.get());
@@ -1480,7 +1492,11 @@ class TranslationCacheTest {
         AtomicInteger calls = new AtomicInteger();
         Translator alwaysFallback = (text, target) -> {
             calls.incrementAndGet();
-            return new TranslationResult("GT:" + text, "en", true);
+            int firstMarkerEnd = text == null ? -1 : text.indexOf('\u27E7');
+            String translated = firstMarkerEnd < 0
+                    ? "GT:" + text
+                    : text.substring(0, firstMarkerEnd + 1) + "GT:" + text.substring(firstMarkerEnd + 1);
+            return new TranslationResult(translated, "en", true);
         };
         long[] now = {0L};
         TranslationCache cache = new TranslationCache(
@@ -1536,7 +1552,11 @@ class TranslationCacheTest {
         AtomicInteger calls = new AtomicInteger();
         Translator alwaysFallback = (text, target) -> {
             calls.incrementAndGet();
-            return new TranslationResult("GT:" + text, "en", true);
+            int firstMarkerEnd = text == null ? -1 : text.indexOf('\u27E7');
+            String translated = firstMarkerEnd < 0
+                    ? "GT:" + text
+                    : text.substring(0, firstMarkerEnd + 1) + "GT:" + text.substring(firstMarkerEnd + 1);
+            return new TranslationResult(translated, "en", true);
         };
         TranslationCache cache = new TranslationCache(
                 alwaysFallback, "zh-TW", DIRECT, 100, 0L, () -> 0L, null);

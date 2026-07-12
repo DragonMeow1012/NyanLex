@@ -32,7 +32,10 @@ public abstract class DebugHudMixin {
         int width = Math.min(520, Math.max(260, graphics.guiWidth() / 2));
         int x = 6, y = 6, line = 10;
         graphics.fill(x - 3, y - 3, x + width + 3, y + 14 + entries.size() * line, 0xB0101010);
-        graphics.drawString(font, Component.literal("MT DEBUG · " + entries.size() + " requests"), x, y, 0xFFFFD060, false);
+        long batches = entries.stream().map(TranslationDebugLog.Entry::requestId).distinct().count();
+        graphics.drawString(font, Component.literal(
+                "MT DEBUG · HTTP " + batches + " 批 / " + entries.size() + " 項"),
+                x, y, 0xFFFFD060, false);
         int row = y + 11;
         for (TranslationDebugLog.Entry entry : entries) {
             String state = switch (entry.status()) {
