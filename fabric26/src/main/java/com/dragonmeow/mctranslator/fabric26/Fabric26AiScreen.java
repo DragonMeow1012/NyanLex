@@ -31,14 +31,17 @@ public final class Fabric26AiScreen extends Screen {
       this.modelBox.setMaxLength(128);
       this.modelBox.setValue(cfg.aiModel == null ? "" : cfg.aiModel);
       this.addRenderableWidget(this.modelBox);
-      this.keysBox = new EditBox(this.font, x, 128, 320, 20, Component.literal("API Keys"));
+      this.keysBox = new EditBox(this.font, x, 128, 320, 20,
+         Component.translatable("screen.mctranslator.ai.keys"));
       this.keysBox.setMaxLength(8000);
       this.keysBox.setValue(keysForEndpoint(cfg, cfg.aiBaseUrl));
       this.addRenderableWidget(this.keysBox);
-      int pw = 102;
+      int pw = (320 - 3 * 6) / 4;
       this.addPreset("Gemini", x, 158, pw, "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.1-flash-lite");
       this.addPreset("OpenAI", x + pw + 6, 158, pw, "https://api.openai.com/v1", "gpt-5.4-mini");
       this.addPreset("DeepSeek", x + 2 * (pw + 6), 158, pw, "https://api.deepseek.com", "deepseek-chat");
+      this.addPreset(Component.translatable("screen.mctranslator.ai.custom").getString(),
+         x + 3 * (pw + 6), 158, pw, "http://127.0.0.1:11434/v1", "");
       Button[] testBtn = new Button[1];
       testBtn[0] = Button.builder(Component.translatable("screen.mctranslator.ai.test"), b -> {
          b.setMessage(Component.translatable("screen.mctranslator.ai.testing"));
@@ -58,7 +61,7 @@ public final class Fabric26AiScreen extends Screen {
          cfg.aiKeysByEndpoint.put(endpointKey(this.baseUrlBox.getValue()), this.keysBox.getValue());
          this.baseUrlBox.setValue(url);
          this.modelBox.setValue(model);
-         this.keysBox.setValue(keysForEndpoint(cfg, url));
+         this.keysBox.setValue(model.isEmpty() ? "" : keysForEndpoint(cfg, url));
       }).bounds(x, y, w, 20).build());
    }
 

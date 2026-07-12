@@ -21,7 +21,9 @@ public abstract class DebugHudMixin {
             java.util.List<String> lines = LegacyTranslatorMod.debugLines();
             int y = 6;
             for (String line : lines) {
-                minecraft.font.drawShadow(pose, line, 6, y, 0x80FF80);
+                int color = line.contains("failed (429 rate limit)") ? 0xFFFF40FF
+                        : line.contains("failed (") ? 0xFFFF8080 : 0x80FF80;
+                minecraft.font.drawShadow(pose, line, 6, y, color);
                 y += 10;
             }
         } finally { LegacyTranslatorMod.endInternalRender(previous); }

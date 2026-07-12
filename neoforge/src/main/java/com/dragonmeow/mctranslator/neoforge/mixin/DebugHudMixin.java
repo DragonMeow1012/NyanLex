@@ -43,10 +43,15 @@ public abstract class DebugHudMixin {
                 case SUCCESS -> "✓";
                 case FALLBACK -> "↪";
                 case KEEP_ORIGINAL -> "=";
+                case RATE_LIMITED -> "429";
                 case FAILED -> "✗";
             };
+            String failureReason = entry.failureReason();
+            if (failureReason == null || failureReason.isBlank()) failureReason = "unknown";
             String result = entry.status() == TranslationDebugLog.Status.IN_FLIGHT ? "waiting"
-                    : entry.status() == TranslationDebugLog.Status.FAILED ? "failed"
+                    : entry.status() == TranslationDebugLog.Status.RATE_LIMITED
+                            || entry.status() == TranslationDebugLog.Status.FAILED
+                    ? "failed (" + failureReason + ")"
                     : entry.translation() == null ? "" : entry.translation();
             String text = "[" + entry.engine() + " #" + entry.requestId() + " " + state + "] "
                     + TranslationDebugLog.compactText(entry.text()) + " -> "
@@ -57,6 +62,7 @@ public abstract class DebugHudMixin {
                 case SUCCESS -> 0xFF80FF80;
                 case FALLBACK -> 0xFF80C0FF;
                 case KEEP_ORIGINAL -> 0xFFC0C0C0;
+                case RATE_LIMITED -> 0xFFFF40FF;
                 case FAILED -> 0xFFFF8080;
             };
             graphics.drawString(font, Component.literal(text), x, row, color, false);

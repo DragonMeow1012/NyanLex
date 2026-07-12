@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * AI 翻譯設定 — configure the OpenAI-compatible endpoint used for 精翻: base URL,
- * model id, and one or more API keys (comma-separated, rotated on rate-limits).
+ * model id, and optional API keys (comma-separated and rotated when present).
  * Preset buttons fill known providers; 測試連接 verifies it works. Saved on close;
  * the AI cache is cleared only if the settings actually changed.
  */
@@ -55,16 +55,19 @@ public final class AiConfigScreen extends Screen {
         modelBox.setValue(cfg.aiModel == null ? "" : cfg.aiModel);
         addRenderableWidget(modelBox);
 
-        keysBox = new EditBox(this.font, x, Y_KEYS, FIELD_W, 20, Component.literal("API Keys"));
+        keysBox = new EditBox(this.font, x, Y_KEYS, FIELD_W, 20,
+                Component.translatable("screen.mctranslator.ai.keys"));
         keysBox.setMaxLength(8000);
         keysBox.setValue(keysForEndpoint(cfg, cfg.aiBaseUrl));
         addRenderableWidget(keysBox);
 
-        int pw = (FIELD_W - 2 * 6) / 3;
+        int pw = (FIELD_W - 3 * 6) / 4;
         addPreset("Gemini", x, Y_PRESETS, pw,
                 "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.1-flash-lite");
         addPreset("OpenAI", x + pw + 6, Y_PRESETS, pw, "https://api.openai.com/v1", "gpt-5.4-mini");
         addPreset("DeepSeek", x + 2 * (pw + 6), Y_PRESETS, pw, "https://api.deepseek.com", "deepseek-chat");
+        addPreset(Component.translatable("screen.mctranslator.ai.custom").getString(),
+                x + 3 * (pw + 6), Y_PRESETS, pw, "http://127.0.0.1:11434/v1", "");
 
         addRenderableWidget(Button.builder(Component.translatable("screen.mctranslator.ai.test"), b -> {
             testResult = Component.translatable("screen.mctranslator.ai.testing").getString();
@@ -83,7 +86,7 @@ public final class AiConfigScreen extends Screen {
             cfg.aiKeysByEndpoint.put(endpointKey(baseUrlBox.getValue()), keysBox.getValue());
             baseUrlBox.setValue(url);
             modelBox.setValue(model);
-            keysBox.setValue(keysForEndpoint(cfg, url)); // restore this provider's saved key
+            keysBox.setValue(model.isEmpty() ? "" : keysForEndpoint(cfg, url));
         }).bounds(x, y, w, 20).build());
     }
 

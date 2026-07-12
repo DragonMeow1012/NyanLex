@@ -63,7 +63,7 @@ Modern translation settings provide a searchable machine-provider list:
 
 The Youdao, DeepL, and Microsoft sources are no-user-key website interfaces included for regional testing. They are not guaranteed official APIs. A website may change its protocol, add verification, rate-limit or block an IP, reject automation, or remove the current interface at any time, so these sources may fail temporarily or permanently. The mod applies whole-entry batching and reconstruction checks where possible, but does not promise permanent reliability for experimental endpoints.
 
-AI translation is separate from the machine-provider list. It uses the OpenAI-compatible Base URL, model, and API key configured by the user. It can work with Gemini, OpenAI, DeepSeek, OpenRouter, compatible self-hosted services, and other OpenAI-compatible providers; actual features and cost depend on that provider.
+AI translation is separate from the machine-provider list. It uses a user-configured OpenAI-compatible Base URL and model. Gemini, OpenAI, DeepSeek, OpenRouter, Ollama, LM Studio, compatible self-hosted services, and other OpenAI-compatible providers can be used. The AI screen includes a Custom / Local preset, and the API key is optional; when blank, the mod omits the `Authorization` header. Actual features, quotas, and cost depend on the provider.
 
 ## Settings and key bindings
 
@@ -72,8 +72,10 @@ Modern builds expose the full screen under **Options → Translation Settings**.
 - Per-surface display mode and AI/machine engine selection.
 - Searchable target language and machine provider.
 - Batch-window duration, per-engine request cooldown, and retry behavior.
-- AI Base URL, model, API keys, glossary, and the “disable GT fallback” option.
+- AI Base URL, model, optional API keys, glossary, and the “disable GT fallback” option. The Custom / Local preset fills Ollama's common `http://127.0.0.1:11434/v1`; LM Studio commonly uses `http://127.0.0.1:1234/v1` instead.
 - Translation debug overlay, active provider/language cache clearing, and keybind settings.
+
+To avoid retranslating text that Minecraft already localizes, modern builds blacklist the complete vanilla Language, Skin, Sound, Controls/Keybinds, Chat, Resource Packs, and Accessibility settings screens. Vanilla Video/Display settings remain eligible, and unknown or mod-added settings screens are allowed by default so third-party options are not lost to a whitelist.
 
 Default keys on modern builds:
 
@@ -119,7 +121,9 @@ Available per-engine request cooldown values are:
 
 `0 / 1000 / 2000 / 4000 / 6000 / 8000 / 10000 ms`
 
-The default is **6000 ms**. AI and machine translation are paced independently. `0` disables proactive pacing only; it does not disable the five-second batch window. A longer cooldown reduces burst-related 429 responses, but cannot guarantee that a third party will not limit an account, key, or IP. Failed entries use backoff and visibility demand so they are not resent every rendered frame.
+The new default is **10000 ms**; an untouched legacy 6000 ms default is migrated once. AI and machine translation are paced independently. `0` disables proactive pacing only; it does not disable the five-second batch window. Google states that effective Gemini RPM, TPM, and RPD vary by model, project, and account status and should be checked in AI Studio. Ten seconds is a conservative default for free Gemini 3.1 Flash-Lite with headroom for hovered-item priority; it cannot guarantee that an account, daily quota, or IP will never be limited. Failed entries use backoff and visibility demand so they are not resent every rendered frame.
+
+Failed debug rows now show `failed (reason)`. Recognized reasons include 429 rate limit, HTTP 5xx, authentication, timeout/network, anchor/order damage, paragraph loss, format/protected-token loss, and empty responses. Unclassifiable failures use `unknown`; 429 remains highlighted separately.
 
 ## Provider/language cache isolation and legacy cache preservation
 
@@ -140,8 +144,8 @@ Close the game before editing this JSON file, then restart after saving. Common 
 
 - `machineTranslationProvider`: `google`, `youdao`, `deepl`, or `microsoft`.
 - `batchWindowMs`: default `5000`; `0` means next tick.
-- `requestCooldownMs`: default `6000`.
-- AI endpoint, model, API keys, GT-fallback policy, and debug options.
+- `requestCooldownMs`: new default `10000`; the old untouched `6000` default migrates once.
+- AI endpoint, model, optional API keys, GT-fallback policy, and debug options; keyless local OpenAI-compatible services can be used directly.
 
 These builds use `G` for display toggling and are limited by old Minecraft GUI/text APIs. Fabric 1.14.4–1.16.5 are also Java 8 compatibility ports, but include a compact in-game settings screen. All five Java 8 builds still batch only complete entries, reconstruct AI/GT results with paired boundaries, and reject batches with damaged boundaries; style reconstruction remains limited by the old APIs.
 

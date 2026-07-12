@@ -94,8 +94,10 @@ public final class MinecraftTranslatorForge {
         int start = Math.max(0, entries.size() - 8), y = 6;
         for (int i = start; i < entries.size(); i++) {
             LegacyTranslator.DebugEntry entry = entries.get(i);
+            int color = entry.status.contains("failed (429 rate limit)") ? 0xFFFF40FF
+                    : entry.status.contains("failed (") ? 0xFFFF8080 : 0x80FF80;
             minecraft.fontRenderer.drawStringWithShadow("[" + entry.engine + " " + entry.status + "] " + entry.source,
-                    6, y, 0x80FF80);
+                    6, y, color);
             y += 10;
         }
     }
@@ -114,19 +116,16 @@ public final class MinecraftTranslatorForge {
     private LegacyConfig loadConfig() {
         if (configFile.isFile()) try {
             FileReader reader = new FileReader(configFile);
+            LegacyConfig loaded;
             try {
-                LegacyConfig loaded = GSON.fromJson(reader, LegacyConfig.class);
-                if (loaded != null) {
-                    if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
-                    loaded.machineTranslationProvider = LegacyConfig.normalizeMachineProvider(
-                            loaded.machineTranslationProvider);
-                    if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 6000;
-                    if (loaded.batchWindowMs < 0) loaded.batchWindowMs = 5000;
-                    if (loaded.failureBackoffMs < 0) loaded.failureBackoffMs = 10000;
-                    enabled = loaded.enabled;
-                    return loaded;
-                }
+                loaded = GSON.fromJson(reader, LegacyConfig.class);
             } finally { reader.close(); }
+            loaded = LegacyConfig.normalizeLoaded(loaded);
+            if (loaded != null) {
+                saveConfig(loaded);
+                enabled = loaded.enabled;
+                return loaded;
+            }
         } catch (Exception ignored) {}
         LegacyConfig created = new LegacyConfig();
         saveConfig(created);

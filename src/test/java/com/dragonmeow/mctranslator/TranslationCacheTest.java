@@ -765,6 +765,54 @@ class TranslationCacheTest {
     }
 
     @Test
+    void rateLimitedBatchMarksEveryDebugRowAs429() {
+        Translator rateLimited = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang)
+                    throws TranslationException {
+                throw new TranslationException("provider wrapper",
+                        new java.io.IOException("HTTP 429: too many requests"));
+            }
+
+            @Override public List<TranslationResult> translateBatch(List<String> texts, String targetLang)
+                    throws TranslationException {
+                throw new TranslationException("provider wrapper",
+                        new java.io.IOException("HTTP 429: too many requests"));
+            }
+        };
+        TranslationDebugLog debug = new TranslationDebugLog(() -> true);
+        TranslationCache cache = new TranslationCache(rateLimited, "zh-TW", DIRECT, 100);
+        cache.setDebugLog("AI", debug);
+
+        cache.warmBatch(List.of("First item", "Second item"));
+
+        List<TranslationDebugLog.Entry> entries = debug.snapshot(10);
+        assertEquals(2, entries.size());
+        assertTrue(entries.stream().allMatch(entry ->
+                entry.status() == TranslationDebugLog.Status.RATE_LIMITED));
+        assertTrue(entries.stream().allMatch(entry ->
+                "429 rate limit".equals(entry.failureReason())));
+    }
+
+    @Test
+    void debugFailurePrefersBackendReasonThenInfersShapeDamage() {
+        Translator backendReason = (text, targetLang) ->
+                new TranslationResult("", null, false, "anchor/order damaged");
+        TranslationDebugLog explicitDebug = new TranslationDebugLog(() -> true);
+        TranslationCache explicit = new TranslationCache(backendReason, "zh-TW", DIRECT, 100);
+        explicit.setDebugLog("AI", explicitDebug);
+        explicit.translateBlocking("Visible item");
+        assertEquals("anchor/order damaged", explicitDebug.snapshot(1).get(0).failureReason());
+
+        Translator damagedParagraph = (text, targetLang) ->
+                new TranslationResult("翻譯成同一行", null);
+        TranslationDebugLog inferredDebug = new TranslationDebugLog(() -> true);
+        TranslationCache inferred = new TranslationCache(damagedParagraph, "zh-TW", DIRECT, 100);
+        inferred.setDebugLog("AI", inferredDebug);
+        inferred.translateBlocking("First paragraph\nSecond paragraph");
+        assertEquals("paragraph lost", inferredDebug.snapshot(1).get(0).failureReason());
+    }
+
+    @Test
     void inFlightLocationRequestsStayBoundToTheirOwnSemanticKeys() {
         List<String> sent = new ArrayList<>();
         Translator fake = (text, targetLang) -> {
@@ -1726,6 +1774,30 @@ class TranslationCacheTest {
                 "the configured GT fallback becomes visible after AI actually fails");
         assertNull(ai.getCachedFinal("Damage: 209"),
                 "context-rich AI surfaces must keep the original until AI is final");
+    }
+
+    @Test
+    void validatedAiContentFailureAlsoStartsGtFallback() {
+        TranslationCache gt = new TranslationCache(
+                (text, target) -> new TranslationResult("可見物品", "en"),
+                "zh-TW", DIRECT, 100);
+        TranslationCache ai = new TranslationCache(
+                (text, target) -> new TranslationResult(
+                        "", null, false, "anchor/order damaged"),
+                "zh-TW", DIRECT, 100, 1_000L, () -> 0L);
+        ai.setFallback(gt, true);
+        ai.setProvisionalRetryGate(() -> false);
+
+        ai.requestAsync("Visible item");
+        gt.flushBatch();
+        gt.flushBatch();
+
+        assertTrue(ai.hasFailureState("Visible item"));
+        assertTrue(ai.mayUseFallback("Visible item"));
+        assertEquals("可見物品", ai.getCached("Visible item"),
+                "a rejected AI payload must start the same GT fallback as a transport failure");
+        assertNull(ai.getCachedFinal("Visible item"),
+                "GT remains provisional while the AI result is structurally invalid");
     }
 
     @Test

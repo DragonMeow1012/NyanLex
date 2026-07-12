@@ -104,9 +104,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         if (source == null || config == null || !config.enabled || INTERNAL_RENDER.get()) return source;
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null
-                || minecraft.screen instanceof LegacySettingsScreen
-                || minecraft.screen instanceof LegacyLanguageScreen
-                || minecraft.screen instanceof LegacyProviderScreen) return source;
+                || minecraft.screen != null && !screenTranslationAllowed(minecraft.screen)) return source;
         String plain = source.getString();
         if (!shouldTranslate(plain)) return source;
         String target = currentTarget(minecraft);
@@ -121,9 +119,8 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         if (source == null || config == null || !config.enabled || INTERNAL_RENDER.get()) return source;
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null
-                || minecraft.screen instanceof LegacySettingsScreen
-                || minecraft.screen instanceof LegacyLanguageScreen
-                || minecraft.screen instanceof LegacyProviderScreen || !shouldTranslate(source)) return source;
+                || minecraft.screen != null && !screenTranslationAllowed(minecraft.screen)
+                || !shouldTranslate(source)) return source;
         String target = currentTarget(minecraft);
         String translated = TRANSLATOR.cached(source, target, config.aiEnabled, config);
         if (translated == null) {
@@ -149,11 +146,35 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     }
     private static boolean renderingCurrentScreen(Minecraft minecraft) {
         Screen screen = minecraft.screen;
-        if (screen == null || screen instanceof LegacySettingsScreen
-                || screen instanceof LegacyLanguageScreen
-                || screen instanceof LegacyProviderScreen) return false;
+        if (!screenTranslationAllowed(screen)) return false;
         java.util.ArrayDeque<Screen> stack = SCREEN_RENDER_STACK.get();
         return !stack.isEmpty() && stack.peek() == screen;
+    }
+    private static boolean screenTranslationAllowed(Screen screen) {
+        if (screen == null || screen.getClass().getName().startsWith("com.dragonmeow.mctranslator.")) return false;
+        Component title = screen.getTitle();
+        String key = title instanceof net.minecraft.network.chat.TranslatableComponent
+                ? ((net.minecraft.network.chat.TranslatableComponent) title).getKey() : null;
+        return !blockedVanillaSettingsTitle(key);
+    }
+    private static boolean blockedVanillaSettingsTitle(String key) {
+        return "options.title".equals(key)
+                || "options.language".equals(key) || "options.language.title".equals(key)
+                || "options.skinCustomisation".equals(key) || "options.skinCustomisation.title".equals(key)
+                || "options.sounds".equals(key) || "options.sounds.title".equals(key)
+                || "options.controls".equals(key) || "controls.title".equals(key)
+                || "controls.keybinds".equals(key) || "controls.keybinds.title".equals(key)
+                || "options.mouse_settings".equals(key) || "options.mouse_settings.title".equals(key)
+                || "options.chat".equals(key) || "options.chat.title".equals(key)
+                || "options.resourcepack".equals(key) || "resourcePack.title".equals(key)
+                || "options.accessibility".equals(key) || "options.accessibility.title".equals(key)
+                || "options.font".equals(key) || "options.font.title".equals(key)
+                || "options.telemetry".equals(key) || "telemetry_info.screen.title".equals(key)
+                || "options.credits_and_attribution".equals(key)
+                || "credits_and_attribution.screen.title".equals(key)
+                || "options.multiplayer.title".equals(key) || "options.online.title".equals(key)
+                || "debug.options.title".equals(key)
+                || "accessibility.onboarding.screen.title".equals(key);
     }
     public static List<String> debugLines() {
         List<LegacyTranslator.DebugEntry> entries = TRANSLATOR.debugSnapshot();
@@ -166,13 +187,15 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return lines;
     }
     public static boolean debugEnabled() { return config != null && config.debugTranslationOverlay; }
-    static void saveConfig() {
+    static void saveConfig() { saveConfig(config); }
+    private static void saveConfig(LegacyConfig value) {
+        if (value == null) return;
         try {
-            config.machineTranslationProvider = LegacyConfig.normalizeMachineProvider(
-                    config.machineTranslationProvider);
+            value.machineTranslationProvider = LegacyConfig.normalizeMachineProvider(
+                    value.machineTranslationProvider);
             Files.createDirectories(configPath.getParent());
             Writer writer = Files.newBufferedWriter(configPath);
-            try { GSON.toJson(config, writer); } finally { writer.close(); }
+            try { GSON.toJson(value, writer); } finally { writer.close(); }
         } catch (Exception ignored) {}
     }
 
@@ -180,18 +203,15 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         if (Files.isRegularFile(configPath)) {
             try {
                 Reader reader = Files.newBufferedReader(configPath);
+                LegacyConfig loaded;
                 try {
-                    LegacyConfig loaded = GSON.fromJson(reader, LegacyConfig.class);
-                    if (loaded != null) {
-                        if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
-                        loaded.machineTranslationProvider = LegacyConfig.normalizeMachineProvider(
-                                loaded.machineTranslationProvider);
-                        if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 6000;
-                        if (loaded.batchWindowMs < 0) loaded.batchWindowMs = 5000;
-                        if (loaded.failureBackoffMs < 0) loaded.failureBackoffMs = 10000;
-                        return loaded;
-                    }
+                    loaded = GSON.fromJson(reader, LegacyConfig.class);
                 } finally { reader.close(); }
+                loaded = LegacyConfig.normalizeLoaded(loaded);
+                if (loaded != null) {
+                    saveConfig(loaded);
+                    return loaded;
+                }
             } catch (Exception ignored) {}
         }
         return new LegacyConfig();

@@ -125,7 +125,7 @@ public final class OpenAiTranslator implements Translator {
         if (texts.isEmpty()) return List.of();
         AiSettings s = settings.get();
         if (s == null || !s.isConfigured()) {
-            throw new TranslationException("AI translator not configured (model / API key missing)");
+            throw new TranslationException("AI translator not configured (base URL / model missing)");
         }
         refreshSettingsState(s);
         long gateUntil = rateLimitedUntil;
@@ -155,10 +155,16 @@ public final class OpenAiTranslator implements Translator {
         String plainBody = wantsNoReasoning(settings.model())
                 ? buildRequestBody(settings, targetLang, anchored, false) : null;
         String content = postWithKeyRotation(settings, requestBody, plainBody);
+        if (content == null || content.isBlank()) {
+            for (int i = 0; i < texts.size(); i++) {
+                out.add(new TranslationResult("", null, false, "empty response"));
+            }
+            return;
+        }
         List<String> parts = extractAnchoredBatch(content, texts.size(), base);
         if (parts == null) {
             if (texts.size() == 1) {
-                out.add(new TranslationResult("", null));
+                out.add(new TranslationResult("", null, false, "anchor/order damaged"));
                 return;
             }
             int mid = texts.size() / 2;
@@ -168,8 +174,13 @@ public final class OpenAiTranslator implements Translator {
         }
         for (int i = 0; i < parts.size(); i++) {
             String restored = restoreHardLines(parts.get(i), wire.get(i));
-            out.add(new TranslationResult(restored != null
-                    && tokensMatch(texts.get(i), restored) ? restored : "", null));
+            if (restored == null) {
+                out.add(new TranslationResult("", null, false, "paragraph lost"));
+            } else if (!tokensMatch(texts.get(i), restored)) {
+                out.add(new TranslationResult("", null, false, "format/token lost"));
+            } else {
+                out.add(new TranslationResult(restored, null));
+            }
         }
     }
 
@@ -444,7 +455,7 @@ public final class OpenAiTranslator implements Translator {
         return m;
     }
 
-    // ---- HTTP with key rotation ----
+    // ---- HTTP with optional key rotation ----
 
     /** Retries per key for transient server errors (e.g. Gemini's frequent 503 "overloaded"). */
     private static final int RETRIES_PER_KEY = 2;
@@ -457,6 +468,18 @@ public final class OpenAiTranslator implements Translator {
         int usableKeys = 0;
         int attemptedKeys = 0;
         int rateLimitedKeys = 0;
+        boolean hasUsableKey = keys.stream().anyMatch(key -> key != null && !key.isBlank());
+        if (!hasUsableKey) {
+            try {
+                pacer.acquire();
+                String content = parseContent(transport.post(url, body, Map.of()));
+                resetRateLimitGate();
+                return content;
+            } catch (IOException e) {
+                if (isRateLimited(e)) tripRateLimitGate();
+                throw new TranslationException("AI request failed (no API key): " + e.getMessage(), e);
+            }
+        }
         // Start at a rotating offset so load spreads across keys.
         int start = Math.floorMod(keyCursor.getAndIncrement(), keys.size());
         for (int n = 0; n < keys.size(); n++) {

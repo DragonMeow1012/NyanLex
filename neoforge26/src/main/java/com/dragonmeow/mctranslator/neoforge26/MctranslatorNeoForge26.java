@@ -496,8 +496,18 @@ public final class MctranslatorNeoForge26 {
 
     private static boolean renderingCurrentScreen(Minecraft mc) {
         return mc != null && mc.gui.screen() != null
-                && !mc.gui.screen().getClass().getName().startsWith("com.dragonmeow.mctranslator.")
+                && screenTranslationAllowed(mc.gui.screen())
                 && SCREEN_RENDER_STACK.get().peek() == mc.gui.screen();
+    }
+
+    private static boolean screenTranslationAllowed(net.minecraft.client.gui.screens.Screen screen) {
+        if (screen == null
+                || screen.getClass().getName().startsWith("com.dragonmeow.mctranslator.")) return false;
+        Component title = screen.getTitle();
+        String key = title != null
+                && title.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents translatable
+                ? translatable.getKey() : null;
+        return com.dragonmeow.mctranslator.translate.ScreenTranslationPolicy.allowsTranslation(key);
     }
 
     
@@ -1353,7 +1363,8 @@ public final class MctranslatorNeoForge26 {
 
     private void scanAndTranslateScreen(net.minecraft.client.gui.screens.Screen screen) {
         if (screen == null || service == null
-                || screen instanceof net.minecraft.client.gui.screens.ChatScreen) return;
+                || screen instanceof net.minecraft.client.gui.screens.ChatScreen
+                || !screenTranslationAllowed(screen)) return;
         List<net.minecraft.client.gui.components.AbstractWidget> widgets = new ArrayList<>();
         collectWidgets(screen.children(), widgets, 0);
         int requested = 0;

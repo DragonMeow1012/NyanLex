@@ -603,7 +603,8 @@ public final class TranslationCache {
                         && handleUnusableContent(snapshot, result.translatedText());
                 debugCompleted(debugId, result.translatedText(), kept
                         ? TranslationDebugLog.Status.KEEP_ORIGINAL
-                        : TranslationDebugLog.Status.FAILED);
+                        : TranslationDebugLog.Status.FAILED,
+                        kept ? null : failureReasonFor(snapshot.key(), result));
                 return kept ? snapshot.source() : null;
             }
             if (current(snapshot.key(), expectedGeneration, expectedRevision)) {
@@ -615,7 +616,7 @@ public final class TranslationCache {
             return snapshot.restore(result.translatedText());
         } catch (TranslationException | RuntimeException e) {
             if (current(snapshot.key(), expectedGeneration, expectedRevision)) fail(snapshot.key());
-            debugCompleted(debugId, false);
+            debugCompleted(debugId, TranslationDebugLog.failureFor(e));
             return null;
         }
     }
@@ -680,11 +681,12 @@ public final class TranslationCache {
                             kept ? TranslationDebugLog.Status.KEEP_ORIGINAL
                                     : !usableResult ? TranslationDebugLog.Status.FAILED
                                     : result.fromFallback() ? TranslationDebugLog.Status.FALLBACK
-                                    : TranslationDebugLog.Status.SUCCESS);
+                                    : TranslationDebugLog.Status.SUCCESS,
+                            !usableResult && !kept ? failureReasonFor(key, result) : null);
                 }
             } catch (TranslationException | RuntimeException e) {
                 if (current(key, expectedGeneration, expectedRevision)) fail(key);
-                debugCompleted(debugId, false);
+                debugCompleted(debugId, TranslationDebugLog.failureFor(e));
             } finally {
                 finishFlight(key, ours);
             }
@@ -1121,7 +1123,8 @@ public final class TranslationCache {
                         fail(snapshot.key());
                     }
                 }
-                debugCompleted(debugId, false);
+                debugCompleted(debugId, new TranslationDebugLog.Failure(
+                        TranslationDebugLog.Status.FAILED, "anchor/order damaged"));
                 return false;
             }
             List<Boolean> keptOriginal = new ArrayList<>(todo.size());
@@ -1160,6 +1163,7 @@ public final class TranslationCache {
             }
             List<String> debugTranslations = new ArrayList<>(results.size());
             List<TranslationDebugLog.Status> debugStatuses = new ArrayList<>(results.size());
+            List<String> debugFailureReasons = new ArrayList<>(results.size());
             for (int i = 0; i < results.size(); i++) {
                 TranslationResult result = results.get(i);
                 boolean usableResult = usable(todo.get(i).key(), result.translatedText());
@@ -1169,8 +1173,10 @@ public final class TranslationCache {
                         : !usableResult ? TranslationDebugLog.Status.FAILED
                         : result.fromFallback() ? TranslationDebugLog.Status.FALLBACK
                         : TranslationDebugLog.Status.SUCCESS);
+                debugFailureReasons.add(!usableResult && !kept
+                        ? failureReasonFor(todo.get(i).key(), result) : null);
             }
-            debugCompleted(debugId, debugTranslations, debugStatuses);
+            debugCompleted(debugId, debugTranslations, debugStatuses, debugFailureReasons);
             return allSucceeded;
         } catch (TranslationException | RuntimeException e) {
             for (TranslationTemplate.Snapshot snapshot : todo) {
@@ -1179,7 +1185,7 @@ public final class TranslationCache {
                     fail(snapshot.key());
                 }
             }
-            debugCompleted(debugId, false);
+            debugCompleted(debugId, TranslationDebugLog.failureFor(e));
             return false;
         }
     }
@@ -1482,10 +1488,12 @@ public final class TranslationCache {
                         kept ? TranslationDebugLog.Status.KEEP_ORIGINAL
                                 : !usableResult ? TranslationDebugLog.Status.FAILED
                                 : result.fromFallback() ? TranslationDebugLog.Status.FALLBACK
-                                : TranslationDebugLog.Status.SUCCESS);
+                                : TranslationDebugLog.Status.SUCCESS,
+                        !usableResult && !kept
+                                ? failureReasonFor(snapshot.key(), result) : null);
             } catch (TranslationException | RuntimeException e) {
                 if (current(snapshot.key(), expectedGeneration, expectedRevision)) fail(snapshot.key());
-                debugCompleted(debugId, false);
+                debugCompleted(debugId, TranslationDebugLog.failureFor(e));
             } finally {
                 provisionalRetrying.remove(semanticKey);
             }
@@ -1854,17 +1862,35 @@ public final class TranslationCache {
         if (log != null) log.completed(requestId, status);
     }
 
+    private void debugCompleted(long requestId, TranslationDebugLog.Failure failure) {
+        TranslationDebugLog log = debugLog;
+        if (log != null) log.completed(requestId, failure);
+    }
+
     private void debugCompleted(long requestId, String translation,
                                 TranslationDebugLog.Status status) {
+        debugCompleted(requestId, translation, status, null);
+    }
+
+    private void debugCompleted(long requestId, String translation,
+                                TranslationDebugLog.Status status, String failureReason) {
         TranslationDebugLog log = debugLog;
         if (log != null) log.completed(requestId,
-                translation == null ? List.of() : List.of(translation), List.of(status));
+                translation == null ? List.of() : List.of(translation), List.of(status),
+                failureReason == null ? List.of() : List.of(failureReason));
     }
 
     private void debugCompleted(long requestId, List<String> translations,
                                 List<TranslationDebugLog.Status> statuses) {
         TranslationDebugLog log = debugLog;
         if (log != null) log.completed(requestId, translations, statuses);
+    }
+
+    private void debugCompleted(long requestId, List<String> translations,
+                                List<TranslationDebugLog.Status> statuses,
+                                List<String> failureReasons) {
+        TranslationDebugLog log = debugLog;
+        if (log != null) log.completed(requestId, translations, statuses, failureReasons);
     }
 
     // -------------------------------------------------------------------------
@@ -1974,6 +2000,30 @@ public final class TranslationCache {
                 && TranslationTemplate.styleSlotShapeMatches(source, translated)
                 && !TextFilter.isPartialTransliteration(source, translated)
                 && !TextFilter.hasUntranslatedAnchoredField(source, translated);
+    }
+
+    /** Prefer the backend's precise parser diagnosis, then derive the broad protocol
+     * category from the same shape checks that rejected the cache value. */
+    private static String failureReasonFor(String source, TranslationResult result) {
+        if (result != null && result.failureReason() != null
+                && !result.failureReason().isBlank()) {
+            return result.failureReason().strip();
+        }
+        String translated = result == null ? null : result.translatedText();
+        if (translated == null || translated.isBlank()) return "empty response";
+        if (newlineCount(source) != newlineCount(translated)
+                || !matchingParagraphBreakShape(source, translated)
+                || !matchingParagraphSlotShape(source, translated)) {
+            return "paragraph lost";
+        }
+        if (!matchingCsShape(source, translated)
+                || !matchingMtShape(source, translated)
+                || !TranslationTemplate.layoutSkeletonMatches(source, translated)
+                || !TranslationTemplate.styleSlotShapeMatches(source, translated)
+                || TextFilter.isLikelyMojibake(TextFilter.stripDecorativeSymbols(translated))) {
+            return "format/token lost";
+        }
+        return "unknown";
     }
 
     private static long newlineCount(String text) {
