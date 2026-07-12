@@ -4,9 +4,14 @@ import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -29,19 +34,69 @@ class TranslatorConfigTest {
         assertEquals(60, cfg.churnWindowSeconds);
         assertEquals(300, cfg.churnCooldownSeconds);
         assertEquals(5000, cfg.batchWindowMs);
-        assertEquals(6000, cfg.requestCooldownMs, "事前冷卻安全預設 6000ms");
+        assertEquals(10000, cfg.requestCooldownMs, "事前冷卻安全預設 10000ms");
+        assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, cfg.pacingDefaultsVersion);
     }
 
     @Test
     void requestCooldownNormalizesNegativeButKeepsZero() {
-        // Negative is invalid → back to the 6000ms safe default; 0 is a VALID value (pacing off).
+        // Negative is invalid → back to the 10000ms safe default; 0 is a VALID value (pacing off).
         TranslatorConfig negative = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": -1 }"));
-        assertEquals(6000, negative.requestCooldownMs);
+        assertEquals(10000, negative.requestCooldownMs);
 
         TranslatorConfig off = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": 0 }"));
         assertEquals(0, off.requestCooldownMs, "0 = 關閉節流，不得被回填");
+    }
+
+    @Test
+    void oldUntouchedPacingDefaultMigratesExactlyOnce() {
+        TranslatorConfig migrated = TranslatorConfig.fromReader(
+                new StringReader("{ \"requestCooldownMs\": 6000 }"));
+        assertEquals(10000, migrated.requestCooldownMs);
+        assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, migrated.pacingDefaultsVersion);
+
+        TranslatorConfig userSelectedSixSeconds = TranslatorConfig.fromReader(new StringReader(
+                "{ \"requestCooldownMs\": 6000, \"pacingDefaultsVersion\": "
+                        + TranslatorConfig.PACING_DEFAULTS_VERSION + " }"));
+        assertEquals(6000, userSelectedSixSeconds.requestCooldownMs,
+                "6000 selected after migration must remain a user choice");
+    }
+
+    @Test
+    void loadPersistsPacingMigrationBeforeLaterUserChoice(@TempDir Path directory)
+            throws IOException {
+        Path path = directory.resolve("mctranslator.json");
+        Files.writeString(path, "{ \"requestCooldownMs\": 6000 }", StandardCharsets.UTF_8);
+
+        TranslatorConfig migrated = TranslatorConfig.load(path);
+        assertEquals(10000, migrated.requestCooldownMs);
+        assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, migrated.pacingDefaultsVersion);
+        String migratedJson = Files.readString(path, StandardCharsets.UTF_8);
+        assertTrue(migratedJson.contains("\"requestCooldownMs\": 10000"));
+        assertTrue(migratedJson.contains("\"pacingDefaultsVersion\": 1"),
+                "the one-time marker must be durable before load returns");
+
+        migrated.requestCooldownMs = 6000;
+        migrated.save(path);
+        TranslatorConfig reloaded = TranslatorConfig.load(path);
+        assertEquals(6000, reloaded.requestCooldownMs,
+                "marker=1 makes a later 6000ms setting an explicit user choice");
+        assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, reloaded.pacingDefaultsVersion);
+        String userJson = Files.readString(path, StandardCharsets.UTF_8);
+        assertTrue(userJson.contains("\"requestCooldownMs\": 6000"));
+        assertTrue(userJson.contains("\"pacingDefaultsVersion\": 1"));
+    }
+
+    @Test
+    void pacingMigrationPreservesEveryNonLegacyChoice() {
+        for (int selected : new int[]{0, 1000, 2000, 4000, 8000, 10000}) {
+            TranslatorConfig loaded = TranslatorConfig.fromReader(
+                    new StringReader("{ \"requestCooldownMs\": " + selected + " }"));
+            assertEquals(selected, loaded.requestCooldownMs);
+            assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, loaded.pacingDefaultsVersion);
+        }
     }
 
     @Test

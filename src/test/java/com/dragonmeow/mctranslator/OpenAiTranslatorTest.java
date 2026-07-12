@@ -129,8 +129,32 @@ class OpenAiTranslatorTest {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
         };
         OpenAiTranslator t = new OpenAiTranslator(fake,
-                () -> new AiSettings("https://x/v1", "", List.of())); // no model, no keys
+                () -> new AiSettings("https://x/v1", "", List.of())); // missing model
         assertThrows(TranslationException.class, () -> t.translate("Hi", "zh-TW"));
+    }
+
+    @Test
+    void keylessEndpointSendsExactlyOnceWithoutAuthorizationHeader() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        AiSettings keyless = new AiSettings("http://127.0.0.1:11434/v1", "local-model", null);
+        assertTrue(keyless.isConfigured());
+        assertEquals(List.of(), keyless.apiKeys(), "null keys must normalize to an empty list");
+        assertTrue(new AiSettings("https://x/v1", "m", List.of()).isConfigured());
+        assertTrue(!new AiSettings("", "m", List.of()).isConfigured());
+
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                calls.incrementAndGet();
+                assertTrue(headers.isEmpty(), "a keyless endpoint must receive no Authorization header");
+                assertNull(headers.get("Authorization"));
+                return chatJson("1. 本地翻譯");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake, () -> keyless);
+
+        assertEquals("本地翻譯", t.translate("Local", "zh-TW").translatedText());
+        assertEquals(1, calls.get());
     }
 
     @Test
@@ -151,6 +175,7 @@ class OpenAiTranslatorTest {
         assertEquals(2, r.size());
         assertEquals("只有一行", r.get(0).translatedText());
         assertEquals("", r.get(1).translatedText(), "missing item padded to empty, not whole-batch failure");
+        assertEquals("anchor/order damaged", r.get(1).failureReason());
         assertEquals(3, calls.get(), "damaged pair must bisect before accepting either sibling");
     }
 
@@ -361,6 +386,7 @@ class OpenAiTranslatorTest {
                 () -> new AiSettings("https://x/v1", "m", List.of("k")));
         List<TranslationResult> r = t.translateBatch(List.of("Progress to Level ⟦MT0⟧:", "Hello"), "zh-TW");
         assertEquals("", r.get(0).translatedText(), "token-mismatched line must fail, not poison the cache");
+        assertEquals("format/token lost", r.get(0).failureReason());
         assertEquals("你好", r.get(1).translatedText());
     }
 
@@ -378,6 +404,7 @@ class OpenAiTranslatorTest {
                 () -> new AiSettings("https://x/v1", "m", List.of("k")));
         List<TranslationResult> r = t.translateBatch(List.of("Creation Date: Jun ⟦MT0⟧, ⟦MT1⟧ ⟦MT2⟧"), "zh-TW");
         assertEquals("", r.get(0).translatedText());
+        assertEquals("format/token lost", r.get(0).failureReason());
     }
 
     @Test

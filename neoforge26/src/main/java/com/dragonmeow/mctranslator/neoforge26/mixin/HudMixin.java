@@ -146,7 +146,10 @@ public abstract class HudMixin {
                     == com.dragonmeow.mctranslator.translate.TranslationDebugLog.Status.IN_FLIGHT).count();
             long failed = entries.stream().filter(e -> e.status()
                     == com.dragonmeow.mctranslator.translate.TranslationDebugLog.Status.FAILED).count();
-            String header = "MT DEBUG  最近 " + entries.size() + " 項  …" + waiting + "  ✕" + failed;
+            long rateLimited = entries.stream().filter(e -> e.status()
+                    == com.dragonmeow.mctranslator.translate.TranslationDebugLog.Status.RATE_LIMITED).count();
+            String header = "MT DEBUG  最近 " + entries.size() + " 項  …" + waiting
+                    + "  429×" + rateLimited + "  ✕" + failed;
             graphics.text(font, Component.literal(header), x, y, 0xFFFFD060, false);
 
             int row = y + 11;
@@ -156,13 +159,16 @@ public abstract class HudMixin {
                     case SUCCESS -> "✓";
                     case FALLBACK -> "↪";
                     case KEEP_ORIGINAL -> "•";
+                    case RATE_LIMITED -> "429";
                     case FAILED -> "✕";
                 };
                 String provider = "AI".equalsIgnoreCase(entry.engine()) ? "AI" : "GT";
                 String prefix = "[" + provider + " #" + entry.requestId() + " " + state + "] ";
+                String failureReason = entry.failureReason();
+                if (failureReason == null || failureReason.isBlank()) failureReason = "unknown";
                 String translated = switch (entry.status()) {
                     case IN_FLIGHT -> "等待中";
-                    case FAILED -> "失敗";
+                    case RATE_LIMITED, FAILED -> "failed (" + failureReason + ")";
                     case KEEP_ORIGINAL -> "略過";
                     case SUCCESS, FALLBACK -> entry.translation() == null
                             ? "無結果" : entry.translation();
@@ -181,6 +187,7 @@ public abstract class HudMixin {
                     case SUCCESS -> 0xFF80FF80;
                     case FALLBACK -> 0xFF80C0FF;
                     case KEEP_ORIGINAL -> 0xFFC0C0C0;
+                    case RATE_LIMITED -> 0xFFFF40FF;
                     case FAILED -> 0xFFFF8080;
                 };
                 graphics.text(font, Component.literal(prefix + body), x, row, color, false);

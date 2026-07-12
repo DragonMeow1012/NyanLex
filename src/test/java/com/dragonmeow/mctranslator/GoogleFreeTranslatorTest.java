@@ -240,6 +240,7 @@ class GoogleFreeTranslatorTest {
 
         TranslationResult r = t.translate("You won ⟦MT0⟧ coins", "zh-TW");
         assertEquals("", r.translatedText());
+        assertEquals("format/token lost", r.failureReason());
     }
 
     @Test

@@ -59,7 +59,7 @@ public final class GoogleFreeTranslator implements Translator {
         if (!preservesTokens(text, r.translatedText())) {
             // Protocol damage is a retryable provider failure, never evidence that the
             // source legitimately needs no translation.
-            return new TranslationResult("", r.detectedSourceLang());
+            return new TranslationResult("", r.detectedSourceLang(), false, "format/token lost");
         }
         return r;
     }
@@ -115,14 +115,16 @@ public final class GoogleFreeTranslator implements Translator {
         }
         String translated = (r == null) ? null : r.translatedText();
         if (translated == null || translated.isBlank()) {
-            return new TranslationResult("", r == null ? null : r.detectedSourceLang());
+            return new TranslationResult("", r == null ? null : r.detectedSourceLang(),
+                    false, "empty response");
         }
         // Every sentinel must survive EXACTLY once, or the slot mapping would lie.
         for (int i = 0; i < slots.size(); i++) {
             String sentinel = Integer.toString(SENTINEL_BASE + i);
             int first = translated.indexOf(sentinel);
             if (first < 0 || translated.indexOf(sentinel, first + sentinel.length()) >= 0) {
-                return new TranslationResult("", r.detectedSourceLang());
+                return new TranslationResult("", r.detectedSourceLang(),
+                        false, "format/token lost");
             }
         }
         String out = translated;
@@ -130,7 +132,8 @@ public final class GoogleFreeTranslator implements Translator {
             out = out.replace(Integer.toString(SENTINEL_BASE + i), slots.get(i));
         }
         if (!preservesTokens(text, out)) { // belt: the MT/mask multiset must match
-            return new TranslationResult("", r.detectedSourceLang());
+            return new TranslationResult("", r.detectedSourceLang(),
+                    false, "format/token lost");
         }
         return new TranslationResult(out, r.detectedSourceLang());
     }
@@ -195,8 +198,19 @@ public final class GoogleFreeTranslator implements Translator {
             for (int i = 0; i < parts.size(); i++) {
                 String src = texts.get(i);
                 String restored = restoreBatchPart(parts.get(i), masked.get(i));
-                String part = restored != null && preservesTokens(src, restored) ? restored : "";
-                out.add(new TranslationResult(part, combined.detectedSourceLang()));
+                if (restored == null) {
+                    String reason = src.indexOf('\n') >= 0 || src.indexOf('\r') >= 0
+                            || src.contains("⟦PB") ? "paragraph lost" : "format/token lost";
+                    out.add(new TranslationResult("", combined.detectedSourceLang(), false, reason));
+                } else if (!preservesTokens(src, restored)) {
+                    out.add(new TranslationResult("", combined.detectedSourceLang(),
+                            false, "format/token lost"));
+                } else if (restored.isBlank()) {
+                    out.add(new TranslationResult("", combined.detectedSourceLang(),
+                            false, "empty response"));
+                } else {
+                    out.add(new TranslationResult(restored, combined.detectedSourceLang()));
+                }
             }
             return;
         }

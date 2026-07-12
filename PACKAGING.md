@@ -86,8 +86,9 @@ git diff --check
 Also confirm each archive contains the correct loader metadata and exact
 Minecraft dependency, and compare every packaged JAR hash with its matching
 `build/libs` output. Publish the 16 individual JARs plus the all-versions ZIP;
-release notes must state the final batch window, cooldown defaults, providers,
-and experimental-provider warning.
+release notes must state the final batch window, 10000 ms cooldown default, providers,
+experimental-provider warning, optional-key custom/local AI support, the vanilla
+settings blacklist, and structured debug failure reasons.
 
 Before publishing, test the matching JAR in a clean client with the matching
 loader/API dependency. Compilation and remapping verify the build toolchain, but

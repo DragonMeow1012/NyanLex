@@ -15,7 +15,9 @@ final class LegacyConfig {
     String aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
     String aiModel = "gemini-3.1-flash-lite";
     java.util.List<String> aiApiKeys = new java.util.ArrayList<String>();
-    int requestCooldownMs = 6000;
+    /** One-time migration marker for the safer Gemini 3.1 Flash-Lite pacing default. */
+    int pacingDefaultsVersion = 0;
+    int requestCooldownMs = 10000;
     /** Ordinary misses collect for this long; zero flushes on the next client tick. */
     int batchWindowMs = 5000;
     int failureBackoffMs = 10000;
@@ -26,5 +28,19 @@ final class LegacyConfig {
         if ("youdao".equals(provider) || "deepl".equals(provider)
                 || "microsoft".equals(provider)) return provider;
         return "google";
+    }
+
+    static LegacyConfig normalizeLoaded(LegacyConfig loaded) {
+        if (loaded == null) return null;
+        if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
+        loaded.machineTranslationProvider = normalizeMachineProvider(loaded.machineTranslationProvider);
+        if (loaded.pacingDefaultsVersion < 1) {
+            if (loaded.requestCooldownMs == 6000) loaded.requestCooldownMs = 10000;
+            loaded.pacingDefaultsVersion = 1;
+        }
+        if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 10000;
+        if (loaded.batchWindowMs < 0) loaded.batchWindowMs = 5000;
+        if (loaded.failureBackoffMs < 0) loaded.failureBackoffMs = 10000;
+        return loaded;
     }
 }

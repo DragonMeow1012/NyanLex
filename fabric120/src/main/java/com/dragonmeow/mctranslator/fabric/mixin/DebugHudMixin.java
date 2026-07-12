@@ -29,11 +29,14 @@ public abstract class DebugHudMixin {
             graphics.fill(x - 3, y - 3, x + width + 3, y + 14 + entries.size() * 10, 0xB0101010);
             graphics.drawString(font, Component.literal("MT DEBUG · " + entries.size() + " requests"), x, y, 0xFFFFD060, false);
             for (TranslationDebugLog.Entry entry : entries) {
-                String state = switch (entry.status()) { case IN_FLIGHT -> "…"; case SUCCESS -> "✓"; case FALLBACK -> "↪"; case KEEP_ORIGINAL -> "="; case FAILED -> "✗"; };
-                String result = entry.status() == TranslationDebugLog.Status.IN_FLIGHT ? "waiting" : entry.status() == TranslationDebugLog.Status.FAILED ? "failed" : entry.translation() == null ? "" : entry.translation();
+                String state = switch (entry.status()) { case IN_FLIGHT -> "…"; case SUCCESS -> "✓"; case FALLBACK -> "↪"; case KEEP_ORIGINAL -> "="; case RATE_LIMITED -> "429"; case FAILED -> "✗"; };
+                String failureReason = entry.failureReason();
+                if (failureReason == null || failureReason.isBlank()) failureReason = "unknown";
+                String result = entry.status() == TranslationDebugLog.Status.IN_FLIGHT ? "waiting" : entry.status() == TranslationDebugLog.Status.RATE_LIMITED || entry.status() == TranslationDebugLog.Status.FAILED ? "failed (" + failureReason + ")" : entry.translation() == null ? "" : entry.translation();
                 String text = "[" + entry.engine() + " #" + entry.requestId() + " " + state + "] " + TranslationDebugLog.compactText(entry.text()) + " -> " + TranslationDebugLog.compactText(result);
                 if (font.width(text) > width) text = font.plainSubstrByWidth(text, width - font.width("…")) + "…";
-                graphics.drawString(font, Component.literal(text), x, row, 0xFFFFFFFF, false);
+                int color = entry.status() == TranslationDebugLog.Status.RATE_LIMITED ? 0xFFFF40FF : 0xFFFFFFFF;
+                graphics.drawString(font, Component.literal(text), x, row, color, false);
                 row += 10;
             }
         });

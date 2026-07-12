@@ -9,14 +9,15 @@ import java.util.List;
  *
  * @param baseUrl  OpenAI-compatible base URL (e.g. {@code https://api.openai.com/v1})
  * @param model    model id (e.g. {@code gpt-5.4-mini})
- * @param apiKeys  one or more API keys, rotated round-robin / on failure
+ * @param apiKeys  zero or more API keys, rotated round-robin / on failure when present
  * @param glossary request-local user-pinned term overrides ("訂翻譯"), each a
  *                 {@code "English=中文"} line. Never {@code null} (defaults to empty).
  */
 public record AiSettings(String baseUrl, String model, List<String> apiKeys, List<String> glossary) {
 
-    /** Canonical constructor: null-guard the glossary so callers may pass {@code null}. */
+    /** Canonical constructor: null-guard optional lists so callers may pass {@code null}. */
     public AiSettings {
+        if (apiKeys == null) apiKeys = List.of();
         if (glossary == null) glossary = List.of();
     }
 
@@ -26,7 +27,7 @@ public record AiSettings(String baseUrl, String model, List<String> apiKeys, Lis
     }
 
     public boolean isConfigured() {
-        return model != null && !model.isBlank()
-                && apiKeys != null && !apiKeys.isEmpty();
+        return baseUrl != null && !baseUrl.isBlank()
+                && model != null && !model.isBlank();
     }
 }

@@ -63,7 +63,7 @@ public final class DispatchingTranslator implements Translator {
      *  for the AI engine) and re-asks the AI once its 429 gate reopens. */
     private static TranslationResult markFallback(TranslationResult r) {
         if (r == null || r.fromFallback()) return r;
-        return new TranslationResult(r.translatedText(), r.detectedSourceLang(), true);
+        return new TranslationResult(r.translatedText(), r.detectedSourceLang(), true, r.failureReason());
     }
 
     private static List<TranslationResult> markFallback(List<TranslationResult> results) {

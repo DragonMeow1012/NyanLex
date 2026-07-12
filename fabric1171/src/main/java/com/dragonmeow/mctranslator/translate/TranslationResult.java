@@ -9,11 +9,19 @@ package com.dragonmeow.mctranslator.translate;
  *                           FALLBACK backend (Google standing in for the AI engine) — the
  *                           cache stores such values as PROVISIONAL and re-asks the AI once
  *                           it recovers. Plain backends always report {@code false}.
+ * @param failureReason      nullable debug classification when the backend returned an
+ *                           unusable per-item result
  */
-public record TranslationResult(String translatedText, String detectedSourceLang, boolean fromFallback) {
+public record TranslationResult(String translatedText, String detectedSourceLang,
+                                boolean fromFallback, String failureReason) {
 
     /** Canonical two-arg form used by every plain backend: not a fallback product. */
     public TranslationResult(String translatedText, String detectedSourceLang) {
-        this(translatedText, detectedSourceLang, false);
+        this(translatedText, detectedSourceLang, false, null);
+    }
+
+    /** Backward-compatible fallback-tagged form. */
+    public TranslationResult(String translatedText, String detectedSourceLang, boolean fromFallback) {
+        this(translatedText, detectedSourceLang, fromFallback, null);
     }
 }

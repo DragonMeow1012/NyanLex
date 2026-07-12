@@ -27,11 +27,15 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Java-8 translation core used by MC 1.14-1.16. */
 final class LegacyTranslator {
     private static final int MAX_BATCH_CHARS = 1400;
     private static final int BATCH_ITEM_OVERHEAD = 16;
+    private static final Pattern FORMAT_TOKEN = Pattern.compile(
+            "(?i)(?:\\u00a7[0-9A-FK-ORX]|%(?:\\d+\\$)?[A-Z%]|\\{\\d+\\})");
 
     static final class DebugEntry {
         final String engine, source, status;
@@ -209,13 +213,14 @@ final class LegacyTranslator {
                 translated = requestMachineBatch(batch, first.sourceLang, first.target,
                         first.machineProvider, first.config.requestCooldownMs);
             }
-            if (translated.size() != batch.size()) throw new IllegalStateException("batch size mismatch");
+            if (translated.size() != batch.size())
+                throw new IllegalStateException("paragraph lost: batch size mismatch");
             for (int i = 0; i < batch.size(); i++) {
                 Pending item = batch.get(i);
                 String result = translated.get(i);
-                if (result == null || result.trim().isEmpty()
-                        || result.trim().equals(item.source.trim())) {
-                    fail(item, engine);
+                String validationFailure = validationFailureFor(item.source, result);
+                if (validationFailure != null || result.trim().equals(item.source.trim())) {
+                    fail(item, engine, validationFailure == null ? "unknown" : validationFailure);
                     continue;
                 }
                 cache.put(item.key, result);
@@ -226,14 +231,18 @@ final class LegacyTranslator {
                 finally { inFlight.remove(item.key); }
             }
         } catch (Exception failure) {
-            for (Pending item : batch) fail(item, engine);
+            for (Pending item : batch) fail(item, engine, failure);
         }
     }
 
-    private void fail(final Pending item, String engine) {
+    private void fail(final Pending item, String engine, Throwable failure) {
+        fail(item, engine, failureReason(failure));
+    }
+
+    private void fail(final Pending item, String engine, String reason) {
         final long retryDelay = Math.max(250L, item.config.failureBackoffMs);
         failedUntil.put(item.key, System.currentTimeMillis() + retryDelay);
-        log(item.config, engine, item.source, "FAIL");
+        log(item.config, engine, item.source, "failed (" + normalizeFailureReason(reason) + ")");
         inFlight.remove(item.key);
         if (item.ai && item.config.disableGoogleFallbackForAi) {
             retryScheduler.schedule(new Runnable() {
@@ -331,8 +340,112 @@ final class LegacyTranslator {
         return new BatchWire(joined.toString(), base);
     }
 
+    private static String validationFailureFor(String source, String translated) {
+        if (translated == null || translated.trim().isEmpty()) return "empty response";
+        if (lineBreakCount(translated) < lineBreakCount(source)) return "paragraph lost";
+        if (!formatTokens(source).equals(formatTokens(translated))) return "format/token lost";
+        return null;
+    }
+
+    private static int lineBreakCount(String value) {
+        if (value == null || value.isEmpty()) return 0;
+        int count = 0;
+        for (int i = 0; i < value.length(); i++) {
+            char current = value.charAt(i);
+            if (current == '\r') {
+                count++;
+                if (i + 1 < value.length() && value.charAt(i + 1) == '\n') i++;
+            } else if (current == '\n') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static List<String> formatTokens(String value) {
+        List<String> tokens = new ArrayList<String>();
+        Matcher matcher = FORMAT_TOKEN.matcher(value == null ? "" : value);
+        while (matcher.find()) tokens.add(matcher.group().toLowerCase(java.util.Locale.ROOT));
+        Collections.sort(tokens);
+        return tokens;
+    }
+
+    private static String failureReason(Throwable failure) {
+        StringBuilder messages = new StringBuilder();
+        boolean serverError = false;
+        boolean authentication = false;
+        boolean network = false;
+        Throwable cursor = failure;
+        for (int depth = 0; cursor != null && depth < 32; depth++) {
+            if (cursor instanceof HttpStatusException) {
+                int code = ((HttpStatusException) cursor).code;
+                if (code == 429) return "429 rate limit";
+                if (code >= 500 && code <= 599) serverError = true;
+                if (code == 401 || code == 403) authentication = true;
+            }
+            if (isNetworkFailure(cursor)) network = true;
+            String message = cursor.getMessage();
+            if (message != null && !message.trim().isEmpty()) {
+                if (messages.length() > 0) messages.append(" | ");
+                messages.append(message);
+            }
+            Throwable cause = cursor.getCause();
+            if (cause == cursor) break;
+            cursor = cause;
+        }
+        String combined = messages.toString().toLowerCase(java.util.Locale.ROOT);
+        if (containsAny(combined, "http 429", "rate limit", "rate_limit",
+                "rate-limit", "too many requests")) return "429 rate limit";
+        if (serverError || combined.matches("(?s).*\\bhttp\\s*5\\d\\d\\b.*")) return "HTTP 5xx";
+        if (authentication || containsAny(combined, "http 401", "http 403", "authentication",
+                "authorization", "unauthorized", "unauthorised", "forbidden",
+                "invalid api key", "invalid key")) return "authentication";
+        if (network || containsAny(combined, "timed out", "timeout", "network", "connection",
+                "connect reset", "connect refused", "connect failed", "unknown host",
+                "dns", "no route", "socket")) return "timeout/network";
+        if (containsAny(combined, "anchor", "order")
+                && containsAny(combined, "damage", "damaged", "missing", "invalid",
+                "mismatch", "reorder", "out-of-order", "unexpected")) return "anchor/order damaged";
+        if (containsAny(combined, "paragraph", "hard line", "hard_line", "line break", "line-break")
+                && containsAny(combined, "lost", "missing", "damage", "damaged",
+                "mismatch", "invalid")) return "paragraph lost";
+        if (containsAny(combined, "format", "token", "marker", "placeholder", "sentinel")
+                && containsAny(combined, "lost", "missing", "damage", "damaged",
+                "mismatch", "invalid")) return "format/token lost";
+        if (containsAny(combined, "empty response", "empty body", "empty translation", "empty result",
+                "blank response", "blank body", "blank translation", "blank result",
+                "no choice", "no content", "no translation", "no result")) return "empty response";
+        return "unknown";
+    }
+
+    private static boolean isNetworkFailure(Throwable failure) {
+        return failure instanceof java.net.SocketTimeoutException
+                || failure instanceof java.net.ConnectException
+                || failure instanceof java.net.UnknownHostException
+                || failure instanceof java.net.NoRouteToHostException
+                || failure instanceof java.net.SocketException
+                || failure instanceof java.io.InterruptedIOException
+                || failure instanceof java.util.concurrent.TimeoutException;
+    }
+
+    private static boolean containsAny(String value, String... needles) {
+        for (String needle : needles) if (value.contains(needle)) return true;
+        return false;
+    }
+
+    private static String normalizeFailureReason(String reason) {
+        if ("429 rate limit".equals(reason) || "HTTP 5xx".equals(reason)
+                || "authentication".equals(reason) || "timeout/network".equals(reason)
+                || "anchor/order damaged".equals(reason) || "paragraph lost".equals(reason)
+                || "format/token lost".equals(reason) || "empty response".equals(reason)) {
+            return reason;
+        }
+        return "unknown";
+    }
+
     private static List<String> splitBatch(String translated, int count, int base) {
-        if (translated == null) throw new IllegalStateException("empty batch response");
+        if (translated == null || translated.trim().isEmpty())
+            throw new IllegalStateException("empty response");
         List<String> out = new ArrayList<String>(count);
         int cursor = 0;
         for (int i = 0; i < count; i++) {
@@ -356,11 +469,17 @@ final class LegacyTranslator {
     }
 
     private String requestAi(String text, String target, LegacyConfig config) throws Exception {
+        String baseUrl = config.aiBaseUrl == null ? "" : config.aiBaseUrl.trim();
+        String model = config.aiModel == null ? "" : config.aiModel.trim();
+        if (baseUrl.isEmpty() || model.isEmpty())
+            throw new IllegalStateException("AI not configured");
         List<String> keys = new ArrayList<String>();
         if (config.aiApiKeys != null) for (String key : config.aiApiKeys)
             if (key != null && !key.trim().isEmpty()) keys.add(key.trim());
-        if (keys.isEmpty() || config.aiModel == null || config.aiModel.trim().isEmpty())
-            throw new IllegalStateException("AI not configured");
+        if (keys.isEmpty()) {
+            pace(true, config.requestCooldownMs);
+            return postAi(text, target, config, null);
+        }
         Exception last = null;
         int start = keyCursor.getAndIncrement() & Integer.MAX_VALUE;
         for (int attempt = 0; attempt < keys.size(); attempt++) {
@@ -407,7 +526,8 @@ final class LegacyTranslator {
         connection.setDoOutput(true);
         connection.setConnectTimeout(10000);
         connection.setReadTimeout(45000);
-        connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+        if (apiKey != null && !apiKey.trim().isEmpty())
+            connection.setRequestProperty("Authorization", "Bearer " + apiKey);
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         byte[] body = root.toString().getBytes(StandardCharsets.UTF_8);
         OutputStream output = connection.getOutputStream();
@@ -416,9 +536,18 @@ final class LegacyTranslator {
             int code = connection.getResponseCode();
             String response = read(connection, code >= 400);
             if (code >= 400) throw new HttpStatusException(code, response);
+            if (response == null || response.trim().isEmpty())
+                throw new IllegalStateException("empty response");
             JsonObject parsed = new JsonParser().parse(response).getAsJsonObject();
-            return parsed.getAsJsonArray("choices").get(0).getAsJsonObject()
-                    .getAsJsonObject("message").get("content").getAsString().trim();
+            JsonArray choices = parsed.getAsJsonArray("choices");
+            if (choices == null || choices.size() == 0)
+                throw new IllegalStateException("no choices in response");
+            JsonObject message = choices.get(0).getAsJsonObject().getAsJsonObject("message");
+            if (message == null || !message.has("content") || message.get("content").isJsonNull())
+                throw new IllegalStateException("no content in response");
+            String content = message.get("content").getAsString().trim();
+            if (content.isEmpty()) throw new IllegalStateException("empty response");
+            return content;
         } finally { connection.disconnect(); }
     }
 
@@ -434,6 +563,8 @@ final class LegacyTranslator {
             int code = connection.getResponseCode();
             String body = read(connection, code >= 400);
             if (code >= 400) throw new HttpStatusException(code, body);
+            if (body == null || body.trim().isEmpty())
+                throw new IllegalStateException("empty response");
             JsonArray chunks = new JsonParser().parse(body).getAsJsonArray().get(0).getAsJsonArray();
             StringBuilder translated = new StringBuilder();
             for (JsonElement element : chunks) {

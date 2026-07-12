@@ -2,6 +2,8 @@ package com.dragonmeow.mctranslator.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -17,6 +19,9 @@ import java.nio.file.Path;
  * with an in-memory {@link Reader}/{@link Writer}.</p>
  */
 public final class TranslatorConfig {
+
+    public static final int PACING_DEFAULTS_VERSION = 1;
+    private static final int LEGACY_REQUEST_COOLDOWN_MS = 6000;
 
     // Per-surface display mode. Each surface can independently be 原文 (off) /
     // 原文＋翻譯 (both) / 只有翻譯 (translation only). Configured via the in-game
@@ -96,7 +101,10 @@ public final class TranslatorConfig {
      * requests of the SAME engine (Google and AI each pace independently). Proactive
      * spacing so the free endpoints don't see request bursts; 0 disables pacing.
      */
-    public int requestCooldownMs = 6000;
+    public int requestCooldownMs = 10000;
+
+    /** Persisted migration marker for pacing defaults. */
+    public int pacingDefaultsVersion = PACING_DEFAULTS_VERSION;
 
     /**
      * Collect ordinary render/chat misses for this long before sending one batch.
@@ -143,7 +151,12 @@ public final class TranslatorConfig {
 
     /** Parse a config from a reader; never returns {@code null}. */
     public static TranslatorConfig fromReader(Reader reader) {
-        TranslatorConfig cfg = GSON.fromJson(reader, TranslatorConfig.class);
+        JsonElement json = new JsonParser().parse(reader);
+        TranslatorConfig cfg = GSON.fromJson(json, TranslatorConfig.class);
+        if (cfg != null && json != null && json.isJsonObject()
+                && !json.getAsJsonObject().has("pacingDefaultsVersion")) {
+            cfg.pacingDefaultsVersion = 0;
+        }
         return (cfg == null ? new TranslatorConfig() : cfg).normalized();
     }
 
@@ -175,7 +188,11 @@ public final class TranslatorConfig {
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
-        if (requestCooldownMs < 0) requestCooldownMs = 6000; // 0 is valid: pacing off
+        if (pacingDefaultsVersion < PACING_DEFAULTS_VERSION) {
+            if (requestCooldownMs == LEGACY_REQUEST_COOLDOWN_MS) requestCooldownMs = 10000;
+            pacingDefaultsVersion = PACING_DEFAULTS_VERSION;
+        }
+        if (requestCooldownMs < 0) requestCooldownMs = 10000; // 0 is valid: pacing off
         if (batchWindowMs < 0) batchWindowMs = 5000; // 0 is valid: batching off
         if (batchWindowMs > 60_000) batchWindowMs = 60_000;
         if (failureBackoffMs < 0) failureBackoffMs = 10000;
@@ -191,9 +208,15 @@ public final class TranslatorConfig {
     public static TranslatorConfig load(Path path) {
         try {
             if (Files.exists(path)) {
+                TranslatorConfig loaded;
                 try (Reader r = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-                    return fromReader(r);
+                    loaded = fromReader(r);
                 }
+                // Persist normalization and one-time migration markers only after the
+                // input reader is closed, so a later user choice cannot be mistaken for
+                // an untouched legacy default on the next launch.
+                loaded.save(path);
+                return loaded;
             }
         } catch (IOException | RuntimeException ignored) {
             // fall through and write a fresh default

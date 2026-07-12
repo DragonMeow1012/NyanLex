@@ -52,7 +52,10 @@ public final class GoogleResponseParser {
                 detected = arr.get(2).getAsString();
             }
 
-            return new TranslationResult(sb.toString(), detected);
+            String translated = sb.toString();
+            return translated.isBlank()
+                    ? new TranslationResult("", detected, false, "empty response")
+                    : new TranslationResult(translated, detected);
         } catch (TranslationException e) {
             throw e;
         } catch (RuntimeException e) {
