@@ -30,11 +30,35 @@ import java.util.function.Consumer;
 
 /** Java-8 translation core used by MC 1.14-1.16. */
 final class LegacyTranslator {
+    private static final int MAX_BATCH_CHARS = 1400;
+    private static final int BATCH_ITEM_OVERHEAD = 16;
+
     static final class DebugEntry {
         final String engine, source, status;
         DebugEntry(String engine, String source, String status) {
             this.engine = engine; this.source = source; this.status = status;
         }
+    }
+
+    private static final class Pending {
+        final String key, source, target, sourceLang, machineProvider;
+        final boolean ai;
+        final LegacyConfig config;
+        final Consumer<String> callback;
+        boolean highPriority;
+
+        Pending(String key, String source, String target, String sourceLang,
+                String machineProvider, boolean ai,
+                boolean highPriority, LegacyConfig config, Consumer<String> callback) {
+            this.key = key; this.source = source; this.target = target; this.sourceLang = sourceLang;
+            this.machineProvider = machineProvider;
+            this.ai = ai; this.highPriority = highPriority; this.config = config; this.callback = callback;
+        }
+    }
+
+    private static final class BatchWire {
+        final String text; final int anchorBase;
+        BatchWire(String text, int anchorBase) { this.text = text; this.anchorBase = anchorBase; }
     }
 
     private final LinkedBlockingDeque<Runnable> queue = new LinkedBlockingDeque<Runnable>();
@@ -58,68 +82,169 @@ final class LegacyTranslator {
     private final Map<String, Boolean> inFlight = new ConcurrentHashMap<String, Boolean>();
     private final Map<String, Long> failedUntil = new ConcurrentHashMap<String, Long>();
     private final Map<String, Long> keyUnavailableUntil = new ConcurrentHashMap<String, Long>();
+    private final LegacyMachineProvider experimentalProviders = new LegacyMachineProvider();
     private final AtomicInteger keyCursor = new AtomicInteger();
     private final List<DebugEntry> debug = Collections.synchronizedList(new ArrayList<DebugEntry>());
+    private final Object batchLock = new Object();
+    private final LinkedHashMap<String, Pending> pending = new LinkedHashMap<String, Pending>();
     private final Object paceLock = new Object();
+    private long batchStartedAt = -1L;
     private long lastGtRequest, lastAiRequest;
 
     LegacyTranslator() { executor.prestartAllCoreThreads(); }
 
     String cached(String source, String target, boolean ai) {
-        return cache.get(cacheKey(source, target, ai));
+        return cache.get(cacheKey(source, target, ai, "google"));
+    }
+
+    String cached(String source, String target, boolean ai, LegacyConfig config) {
+        String provider = LegacyConfig.normalizeMachineProvider(
+                config == null ? null : config.machineTranslationProvider);
+        return cache.get(cacheKey(source, target, ai, provider));
     }
 
     void translate(final String source, final String target, final boolean ai, final boolean highPriority,
                    final LegacyConfig config, final Consumer<String> callback) {
-        final String key = cacheKey(source, target, ai);
+        final String provider = LegacyConfig.normalizeMachineProvider(
+                config == null ? null : config.machineTranslationProvider);
+        final String key = cacheKey(source, target, ai, provider);
         String hit = cache.get(key);
         if (hit != null) { callback.accept(hit); return; }
         Long blocked = failedUntil.get(key);
         if (blocked != null && blocked.longValue() > System.currentTimeMillis()) return;
-        if (inFlight.putIfAbsent(key, Boolean.TRUE) != null) return;
-        Runnable task = new Runnable() {
-            @Override public void run() {
-                String result = null;
-                String engine = ai ? "AI" : "GT";
-                log(config, engine, source, "...");
-                try {
-                    if (ai) {
-                        try { result = requestAi(source, target, config); }
-                        catch (Exception aiFailure) {
-                            if (!config.disableGoogleFallbackForAi) {
-                                engine = "GT";
-                                result = requestGoogle(source, config.sourceLang, target, config.requestCooldownMs);
-                            } else {
-                                throw aiFailure;
-                            }
-                        }
-                    } else {
-                        result = requestGoogle(source, config.sourceLang, target, config.requestCooldownMs);
-                    }
-                    if (result == null || result.trim().isEmpty() || result.trim().equals(source.trim()))
-                        throw new IllegalStateException("empty/identity response");
-                    cache.put(key, result);
-                    failedUntil.remove(key);
-                    log(config, engine, source, "OK");
-                    callback.accept(result);
-                } catch (Exception failure) {
-                    final long retryDelay = Math.max(250L, config.failureBackoffMs);
-                    failedUntil.put(key, System.currentTimeMillis() + retryDelay);
-                    log(config, engine, source, "FAIL");
-                    if (ai && config.disableGoogleFallbackForAi) {
-                        retryScheduler.schedule(new Runnable() {
-                            @Override public void run() {
-                                failedUntil.remove(key);
-                                translate(source, target, true, highPriority, config, callback);
-                            }
-                        }, retryDelay, TimeUnit.MILLISECONDS);
-                    }
-                } finally {
-                    inFlight.remove(key);
+        if (inFlight.putIfAbsent(key, Boolean.TRUE) != null) {
+            if (highPriority) {
+                synchronized (batchLock) {
+                    Pending existing = pending.get(key);
+                    if (existing != null) existing.highPriority = true;
                 }
             }
+            return;
+        }
+        synchronized (batchLock) {
+            if (pending.isEmpty()) batchStartedAt = System.currentTimeMillis();
+            pending.put(key, new Pending(key, source, target, config.sourceLang, provider, ai,
+                    highPriority, config, callback));
+        }
+    }
+
+    /** Called once at the end of each client tick. Zero window therefore means next tick. */
+    void flushBatch() {
+        final List<Pending> batch = new ArrayList<Pending>();
+        boolean high = false;
+        synchronized (batchLock) {
+            if (pending.isEmpty()) {
+                batchStartedAt = -1L;
+                return;
+            }
+            long now = System.currentTimeMillis();
+            Pending seed = null;
+            int totalChars = 0;
+            for (Pending item : pending.values()) {
+                totalChars += batchChars(item.source);
+                if (seed == null || (!seed.highPriority && item.highPriority)) seed = item;
+            }
+            int window = Math.max(0, seed.config.batchWindowMs);
+            boolean full = totalChars >= MAX_BATCH_CHARS;
+            if (!seed.highPriority && !full && window > 0 && now - batchStartedAt < window) return;
+
+            int chars = 0;
+            boolean budgetFull = false;
+            for (int pass = 0; pass < 2 && !budgetFull; pass++) {
+                boolean highPass = pass == 0;
+                java.util.Iterator<Map.Entry<String, Pending>> iterator = pending.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Pending item = iterator.next().getValue();
+                    if (item.highPriority != highPass || !sameBatch(seed, item)) continue;
+                    int next = batchChars(item.source);
+                    if (!batch.isEmpty() && chars + next > MAX_BATCH_CHARS) {
+                        budgetFull = true;
+                        break;
+                    }
+                    batch.add(item);
+                    chars += next;
+                    high |= item.highPriority;
+                    iterator.remove();
+                    if (chars >= MAX_BATCH_CHARS) {
+                        budgetFull = true;
+                        break;
+                    }
+                }
+            }
+            batchStartedAt = pending.isEmpty() ? -1L : now;
+        }
+        if (batch.isEmpty()) return;
+        Runnable task = new Runnable() {
+            @Override public void run() { processBatch(batch); }
         };
-        if (highPriority) queue.offerFirst(task); else queue.offerLast(task);
+        if (high) queue.offerFirst(task); else queue.offerLast(task);
+    }
+
+    private void processBatch(List<Pending> batch) {
+        Pending first = batch.get(0);
+        String engine = first.ai ? "AI" : "GT";
+        for (Pending item : batch) log(item.config, engine, item.source, "...");
+        try {
+            List<String> translated;
+            if (first.ai) {
+                try {
+                    translated = requestAiBatch(batch, first.target, first.config);
+                } catch (Exception aiFailure) {
+                    if (first.config.disableGoogleFallbackForAi) throw aiFailure;
+                    engine = "GT";
+                    translated = requestMachineBatch(batch, first.sourceLang, first.target,
+                            first.machineProvider, first.config.requestCooldownMs);
+                }
+            } else {
+                translated = requestMachineBatch(batch, first.sourceLang, first.target,
+                        first.machineProvider, first.config.requestCooldownMs);
+            }
+            if (translated.size() != batch.size()) throw new IllegalStateException("batch size mismatch");
+            for (int i = 0; i < batch.size(); i++) {
+                Pending item = batch.get(i);
+                String result = translated.get(i);
+                if (result == null || result.trim().isEmpty()
+                        || result.trim().equals(item.source.trim())) {
+                    fail(item, engine);
+                    continue;
+                }
+                cache.put(item.key, result);
+                failedUntil.remove(item.key);
+                log(item.config, engine, item.source, "OK");
+                try { item.callback.accept(result); }
+                catch (RuntimeException ignored) {}
+                finally { inFlight.remove(item.key); }
+            }
+        } catch (Exception failure) {
+            for (Pending item : batch) fail(item, engine);
+        }
+    }
+
+    private void fail(final Pending item, String engine) {
+        final long retryDelay = Math.max(250L, item.config.failureBackoffMs);
+        failedUntil.put(item.key, System.currentTimeMillis() + retryDelay);
+        log(item.config, engine, item.source, "FAIL");
+        inFlight.remove(item.key);
+        if (item.ai && item.config.disableGoogleFallbackForAi) {
+            retryScheduler.schedule(new Runnable() {
+                @Override public void run() {
+                    failedUntil.remove(item.key);
+                    translate(item.source, item.target, true, item.highPriority,
+                            item.config, item.callback);
+                }
+            }, retryDelay, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static boolean sameBatch(Pending first, Pending other) {
+        return first.ai == other.ai && first.target.equals(other.target)
+                && safe(first.sourceLang).equals(safe(other.sourceLang))
+                && first.machineProvider.equals(other.machineProvider)
+                && first.config == other.config;
+    }
+
+    private static int batchChars(String source) {
+        return (source == null ? 0 : source.length()) + BATCH_ITEM_OVERHEAD;
     }
 
     List<DebugEntry> debugSnapshot() {
@@ -134,6 +259,90 @@ final class LegacyTranslator {
             debug.add(new DebugEntry(engine, compact(source), status));
             while (debug.size() > 24) debug.remove(0);
         }
+    }
+
+    private List<String> requestAiBatch(List<Pending> batch, String target,
+                                        LegacyConfig config) throws Exception {
+        if (batch.size() == 1) {
+            return Collections.singletonList(requestAi(batch.get(0).source, target, config));
+        }
+        BatchWire wire = buildBatchWire(batch);
+        return splitBatch(requestAi(wire.text, target, config), batch.size(), wire.anchorBase);
+    }
+
+    private List<String> requestGoogleBatch(List<Pending> batch, String sourceLang,
+                                            String target, int cooldown) throws Exception {
+        if (batch.size() == 1) {
+            return Collections.singletonList(requestGoogle(batch.get(0).source,
+                    sourceLang, target, cooldown));
+        }
+        BatchWire wire = buildBatchWire(batch);
+        return splitBatch(requestGoogle(wire.text, sourceLang, target, cooldown),
+                batch.size(), wire.anchorBase);
+    }
+
+    private List<String> requestMachineBatch(List<Pending> batch, String sourceLang,
+                                             String target, String provider,
+                                             int cooldown) throws Exception {
+        String selected = LegacyConfig.normalizeMachineProvider(provider);
+        if ("google".equals(selected)) {
+            // Keep the historical Google path byte-for-byte equivalent.
+            return requestGoogleBatch(batch, sourceLang, target, cooldown);
+        }
+        // Experimental sources always carry anchors, including a one-item batch. A
+        // malformed/error-shaped response therefore cannot be accepted as cache data.
+        BatchWire wire = buildBatchWire(batch);
+        pace(false, cooldown);
+        String translated = experimentalProviders.translate(
+                selected, wire.text, sourceLang, target);
+        return splitBatch(translated, batch.size(), wire.anchorBase);
+    }
+
+    private static BatchWire buildBatchWire(List<Pending> batch) {
+        int anchorCount = batch.size() * 2;
+        int base = 70001;
+        outer:
+        while (true) {
+            for (Pending item : batch) {
+                for (int i = 0; i < anchorCount; i++) {
+                    if (item.source.contains(Integer.toString(base + i))) {
+                        base += 2000;
+                        continue outer;
+                    }
+                }
+            }
+            break;
+        }
+        StringBuilder joined = new StringBuilder();
+        for (int i = 0; i < batch.size(); i++) {
+            if (i > 0) joined.append('\n');
+            joined.append(base + i * 2).append(batch.get(i).source).append(base + i * 2 + 1);
+        }
+        return new BatchWire(joined.toString(), base);
+    }
+
+    private static List<String> splitBatch(String translated, int count, int base) {
+        if (translated == null) throw new IllegalStateException("empty batch response");
+        List<String> out = new ArrayList<String>(count);
+        int cursor = 0;
+        for (int i = 0; i < count; i++) {
+            String open = Integer.toString(base + i * 2);
+            String close = Integer.toString(base + i * 2 + 1);
+            int start = translated.indexOf(open, cursor);
+            if (start < 0 || translated.indexOf(open, start + open.length()) >= 0)
+                throw new IllegalStateException("missing batch start anchor");
+            if (!translated.substring(cursor, start).trim().isEmpty())
+                throw new IllegalStateException("out-of-order batch anchor");
+            start += open.length();
+            int end = translated.indexOf(close, start);
+            if (end < start || translated.indexOf(close, end + close.length()) >= 0)
+                throw new IllegalStateException("missing batch end anchor");
+            out.add(translated.substring(start, end).trim());
+            cursor = end + close.length();
+        }
+        if (!translated.substring(cursor).trim().isEmpty())
+            throw new IllegalStateException("unexpected text outside batch anchors");
+        return out;
     }
 
     private String requestAi(String text, String target, LegacyConfig config) throws Exception {
@@ -175,7 +384,8 @@ final class LegacyTranslator {
         JsonObject system = new JsonObject();
         system.addProperty("role", "system");
         system.addProperty("content", "Translate Minecraft text to " + target
-                + ". Preserve names, numbers, formatting codes and line breaks. Return translation only.");
+                + ". Preserve names, numbers, formatting codes, line breaks, and numeric boundary markers exactly."
+                + " Return translation only.");
         messages.add(system);
         JsonObject user = new JsonObject();
         user.addProperty("role", "user");
@@ -248,6 +458,13 @@ final class LegacyTranslator {
     private static String cacheKey(String source, String target, boolean ai) {
         return (ai ? "AI\n" : "GT\n") + target + '\n' + source;
     }
+    private static String cacheKey(String source, String target, boolean ai, String provider) {
+        String selected = LegacyConfig.normalizeMachineProvider(provider);
+        if ("google".equals(selected)) return cacheKey(source, target, ai);
+        return (ai ? "AI\n" : "GT\n")
+                + selected + '\n' + target + '\n' + source;
+    }
+    private static String safe(String value) { return value == null ? "" : value; }
     private static String enc(String value) throws Exception { return URLEncoder.encode(value, "UTF-8"); }
     private static String compact(String value) {
         String flat = value == null ? "" : value.replace('\n', ' ').replace('\r', ' ');

@@ -5,7 +5,10 @@ plugins {
 version = project.mod_version
 group = project.maven_group
 base { archivesName = 'mctranslator' }
-tasks.named('jar') { archiveClassifier = 'NeoForge-1.20.1' }
+tasks.named('jar') {
+    archiveClassifier = 'NeoForge-1.20.1'
+    from('../LICENSE') { rename { 'LICENSE_MinecraftTranslator' } }
+}
 repositories { mavenCentral() }
 dependencies {
     implementation "net.neoforged:forge:${project.forge_version}"

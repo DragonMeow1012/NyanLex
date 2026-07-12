@@ -1,24 +1,26 @@
 package com.dragonmeow.mctranslator.neoforge;
 
+import com.dragonmeow.mctranslator.cache.DynamicNamespacedStore;
 import com.dragonmeow.mctranslator.cache.LanguageFileStore;
 import com.dragonmeow.mctranslator.cache.NamespacedStore;
 import com.dragonmeow.mctranslator.cache.PersistentStore;
+import com.dragonmeow.mctranslator.cache.ProviderLanguageFileStore;
 import com.dragonmeow.mctranslator.cache.TranslationCache;
 import com.dragonmeow.mctranslator.config.DisplayMode;
+import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.AiSettings;
-import com.dragonmeow.mctranslator.translate.GoogleFreeTranslator;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.RequestPacer;
+import com.dragonmeow.mctranslator.translate.SwitchingMachineTranslator;
 import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
 
 import com.dragonmeow.mctranslator.neoforge.mixin.AbstractContainerScreenAccessor;
-import com.dragonmeow.mctranslator.neoforge.mixin.ChatComponentMixin;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -79,6 +81,12 @@ public final class MctranslatorNeoForge {
 
     private static final java.util.Map<Object, String> FTB_PENDING =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    private static final ThreadLocal<Integer> tooltipProbeDepth =
+            ThreadLocal.withInitial(() -> 0);
+    /** True only while Forge is rendering the current screen. This excludes world/HUD
+     * text and background tooltip/search-index construction from automatic capture. */
+    private static final ThreadLocal<java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen>>
+            SCREEN_RENDER_STACK = ThreadLocal.withInitial(java.util.ArrayDeque::new);
 
     // Pre-translate items in an open container screen: track the open screen and the
     // item names already warmed, so each distinct item is warmed once (not per tick).
@@ -88,6 +96,8 @@ public final class MctranslatorNeoForge {
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
+    private net.minecraft.client.gui.screens.Screen lastTooltipScreen;
+    private long lastTooltipAtMs;
 
     /** Online player names, refreshed once per second on the tick thread; read by the
      *  service to mask names in chat and to skip "translating" name tags / scoreboards. */
@@ -334,7 +344,7 @@ public final class MctranslatorNeoForge {
         TranslationService s = service;
         if (s == null || c == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return c;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
+        if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return c;
         Component t = NeoTextStyle.renderTranslated("screenText", c, s::translateScreenText);
         return t != null ? t : c;
@@ -347,7 +357,7 @@ public final class MctranslatorNeoForge {
         if (widget == null || source == null || s == null
                 || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return source;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null) return source;
+        if (!renderingCurrentScreen(mc) && !ftbWidgetOnCurrentScreen(widget, mc)) return source;
         Component resolved = NeoTextStyle.resolveLegacyCodes(source);
         Component rendered = NeoTextStyle.renderTranslated("ftb", resolved, s::translateScreenText);
         if (rendered != null) {
@@ -380,6 +390,23 @@ public final class MctranslatorNeoForge {
         return source;
     }
 
+    /** FTB populates TextField content while the new screen is being initialized,
+     * before the first Render.Pre event. Accept that call only when the widget's own
+     * GUI is the BaseScreen wrapped by Minecraft's current ScreenWrapper;
+     * unrelated/background widgets remain outside the translation scope. */
+    private static boolean ftbWidgetOnCurrentScreen(Object widget, Minecraft mc) {
+        if (widget == null || mc == null || mc.screen == null) return false;
+        try {
+            java.lang.reflect.Method getter = widget.getClass().getMethod("getGui");
+            Object widgetGui = getter.invoke(widget);
+            if (widgetGui == mc.screen) return true;
+            java.lang.reflect.Method screenGetter = mc.screen.getClass().getMethod("getGui");
+            return screenGetter.invoke(mc.screen) == widgetGui;
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private static void applyFtbText(Object widget, Component translated) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.screen == null
@@ -399,6 +426,8 @@ public final class MctranslatorNeoForge {
                 } finally {
                     com.dragonmeow.mctranslator.translate.InternalRenderGuard.exit();
                 }
+                Object gui = widget.getClass().getMethod("getGui").invoke(widget);
+                if (gui != null) gui.getClass().getMethod("refreshWidgets").invoke(gui);
             }
         } catch (ReflectiveOperationException | RuntimeException error) {
             LOGGER.debug("Unable to reflow translated FTB text field", error);
@@ -411,7 +440,7 @@ public final class MctranslatorNeoForge {
         TranslationService s = service;
         if (s == null || str == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return str;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
+        if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return str;
         if (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0) {
             String normalized = str.replace("\r\n", "\n").replace('\r', '\n');
@@ -434,7 +463,7 @@ public final class MctranslatorNeoForge {
         TranslationService s = service;
         if (s == null || fcs == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return fcs;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
+        if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;
         if (mc.screen.getClass().getName().startsWith("dev.ftb.")) return fcs;
         Component source = NeoTextStyle.toComponent(fcs);
@@ -460,13 +489,46 @@ public final class MctranslatorNeoForge {
         TranslationService s = service;
         if (s == null || text == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return text;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
+        if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return text;
         if (mc.screen.getClass().getName().startsWith("dev.ftb.")) return text;
         if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;
         Component source = NeoTextStyle.toComponent(text);
         Component translated = NeoTextStyle.renderTranslated("screenTextBlock", source, s::translateScreenText);
         return translated == null ? text : translated;
+    }
+
+    public static List<Component> visibleTooltip(List<Component> lines) {
+        TranslationService s = service;
+        Minecraft mc = Minecraft.getInstance();
+        if (s == null || lines == null || lines.isEmpty() || !renderingCurrentScreen(mc)) return lines;
+        DisplayMode mode = s.tooltipMode();
+        if (mode == DisplayMode.ORIGINAL_ONLY) return lines;
+        for (Component line : lines) if (line != null && NeoTextStyle.isSeparatorText(line.getString())) return lines;
+        List<String> requests = new ArrayList<>();
+        for (Component line : lines) if (line != null && !line.getString().isBlank()) requests.add(NeoTextStyle.requestText(line));
+        s.warmTooltipBatch(requests);
+        List<Component> translatedLines = new ArrayList<>(lines.size());
+        boolean changed = false;
+        int maxLen = 0;
+        for (Component line : lines) {
+            if (line == null) { translatedLines.add(null); continue; }
+            maxLen = Math.max(maxLen, line.getString().length());
+            Component translated = NeoTextStyle.renderTranslated("visibleTooltip", line, s::translateItemLine);
+            if (translated != null) { translatedLines.add(translated); maxLen = Math.max(maxLen, translated.getString().length()); changed = true; }
+            else translatedLines.add(line);
+        }
+        if (!changed) return lines;
+        if (mode == DisplayMode.TRANSLATION) return translatedLines;
+        List<Component> both = new ArrayList<>(lines.size() + translatedLines.size() + 2);
+        both.addAll(lines); both.add(NeoTextStyle.separatorLine(maxLen)); both.addAll(translatedLines); both.add(NeoTextStyle.separatorLine(maxLen));
+        return both;
+    }
+
+    private static boolean renderingCurrentScreen(Minecraft mc) {
+        return mc != null && mc.screen != null
+                && !mc.screen.getClass().getName().startsWith("com.dragonmeow.mctranslator.")
+                && SCREEN_RENDER_STACK.get().peek() == mc.screen;
     }
 
     /** Persist config (used by the config screen). Also drops the render cache so a
@@ -497,13 +559,15 @@ public final class MctranslatorNeoForge {
                 workers, threadFactory);
 
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
-        GoogleFreeTranslator google = new GoogleFreeTranslator(transport, config.sourceLang,
+        SwitchingMachineTranslator google = new SwitchingMachineTranslator(
+                transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
                 new RequestPacer(() -> config.requestCooldownMs));
         OpenAiTranslator ai = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
-        PersistentStore googleStore = new LanguageFileStore(
-                FMLPaths.CONFIGDIR.get(), MOD_ID + "-cache", config.targetLang);
+        PersistentStore googleStore = new ProviderLanguageFileStore(
+                FMLPaths.CONFIGDIR.get(), MOD_ID + "-cache", config.targetLang,
+                () -> config.machineTranslationProvider);
         PersistentStore aiStore = new LanguageFileStore(
                 FMLPaths.CONFIGDIR.get(), MOD_ID + "-ai-cache", config.targetLang);
         PersistentStore failureStore = new LanguageFileStore(
@@ -513,15 +577,27 @@ public final class MctranslatorNeoForge {
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
         TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
-        cache.setFailureStore(new NamespacedStore(failureStore, "gt"));
+        cache.setFailureStore(new DynamicNamespacedStore(failureStore, () -> {
+            String provider = MachineTranslationProvider.normalize(config.machineTranslationProvider);
+            return MachineTranslationProvider.GOOGLE.id().equals(provider)
+                    ? "gt" : "gt-" + provider;
+        }));
         aiCache.setFailureStore(new NamespacedStore(failureStore, "ai"));
         aiCache.setProvisionalStore(googleStore);
         debugLog = new TranslationDebugLog(() -> config != null && config.debugTranslationOverlay);
-        cache.setDebugLog("Google", debugLog);
+        cache.setDebugLog("GT", debugLog);
         aiCache.setDebugLog("AI", debugLog);
         aiCache.setProvisionalRetryGate(() ->
                 config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
+        service.setTargetLangChangeListener(this::onTargetLanguageChanged);
+        service.setBatchWindowMs(() -> config.batchWindowMs);
+        service.setItemSourceLanguage(() -> {
+            if (config.sourceLang != null && !config.sourceLang.isBlank()
+                    && !"auto".equalsIgnoreCase(config.sourceLang)) return config.sourceLang;
+            Minecraft mc = Minecraft.getInstance();
+            return mc == null || mc.options == null ? null : mc.options.languageCode;
+        });
         service.setProtectedNames(() -> onlineNames);
 
         modBus.addListener(this::onRegisterKeyMappings);
@@ -568,7 +644,28 @@ public final class MctranslatorNeoForge {
         String desired = mapGameLang(mc.options.languageCode);
         if (!desired.equals(config.targetLang)) {
             service.setTargetLang(desired);
-            NeoTextStyle.clearRenderMemo();
+        }
+    }
+
+    private void onTargetLanguageChanged() {
+        NeoTextStyle.clearRenderMemo();
+        lastContainerScreen = null;
+        warmedContainerNames.clear();
+        lastTooltipStack = null;
+        lastTooltipParagraphSources = null;
+        lastTooltipScreen = null;
+        lastTooltipAtMs = 0L;
+        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+        refreshCurrentFtbScreen();
+    }
+
+    private static void refreshCurrentFtbScreen() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.screen == null) return;
+        try {
+            Object gui = mc.screen.getClass().getMethod("getGui").invoke(mc.screen);
+            if (gui != null) gui.getClass().getMethod("refreshWidgets").invoke(gui);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
         }
     }
 
@@ -999,7 +1096,7 @@ public final class MctranslatorNeoForge {
                                               Component previous, Component replacement) {
         try {
             java.util.List<net.minecraft.client.GuiMessage> messages =
-                    ((ChatComponentMixin) (Object) chat).mctranslator$getAllMessages();
+                    ((ChatComponentAccess) (Object) chat).mctranslator$getAllMessages();
             for (int i = 0; i < messages.size(); i++) {
                 net.minecraft.client.GuiMessage old = messages.get(i);
                 if (old.content() != previous && !old.content().equals(previous)) continue;
@@ -1031,6 +1128,11 @@ public final class MctranslatorNeoForge {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onItemTooltip(ItemTooltipEvent event) {
         if (service == null) return;
+        if (tooltipProbeDepth.get() > 0) return;
+        Minecraft tooltipClient = Minecraft.getInstance();
+        if (event.getEntity() == null || tooltipClient == null
+                || !tooltipClient.isSameThread()
+                || !renderingCurrentScreen(tooltipClient)) return;
         DisplayMode mode = service.tooltipMode();
         if (mode == DisplayMode.ORIGINAL_ONLY) return;
         List<Component> lines = event.getToolTip();
@@ -1042,6 +1144,8 @@ public final class MctranslatorNeoForge {
                 stack, lines, NeoTextStyle::paragraphRequestText);
         lastTooltipStack = stack;
         lastTooltipParagraphSources = plan.sources();
+        lastTooltipScreen = tooltipClient.screen;
+        lastTooltipAtMs = System.currentTimeMillis();
         service.warmTooltipBatch(plan.sources());
         boolean[] paragraphReady = tooltipParagraphReadiness(lines, plan);
         if (stack != null && !stack.isEmpty()) {
@@ -1204,6 +1308,8 @@ public final class MctranslatorNeoForge {
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        // Recover if a cancelled/failed render did not deliver the matching Post event.
+        SCREEN_RENDER_STACK.remove();
         if (modeKey != null) {
             while (modeKey.consumeClick()) {
                 Minecraft mc = Minecraft.getInstance();
@@ -1228,10 +1334,25 @@ public final class MctranslatorNeoForge {
         if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(Minecraft.getInstance());
+        warmVisibleHudItems(Minecraft.getInstance());
         // R12 (user clarification of R10): the OPEN container is "the current page" — its
         // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
         // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
         warmOpenContainerItems(Minecraft.getInstance());
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onScreenRenderPre(net.minecraftforge.client.event.ScreenEvent.Render.Pre event) {
+        SCREEN_RENDER_STACK.get().push(event.getScreen());
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onScreenRenderPost(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {
+        java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen> stack =
+                SCREEN_RENDER_STACK.get();
+        if (!stack.isEmpty() && stack.peek() == event.getScreen()) stack.pop();
+        else stack.removeFirstOccurrence(event.getScreen());
+        if (stack.isEmpty()) SCREEN_RENDER_STACK.remove();
     }
 
     @SubscribeEvent
@@ -1243,14 +1364,7 @@ public final class MctranslatorNeoForge {
             return;
         }
         if (retranslateKey != null && retranslateKey.matches(event.getKeyCode(), event.getScanCode())) {
-            // Re-translate the item under the mouse in a container screen.
-            if (event.getScreen() instanceof AbstractContainerScreen<?> screen
-                    && screen instanceof AbstractContainerScreenAccessor accessor) {
-                Slot slot = accessor.mctranslator$hoveredSlot();
-                if (slot != null && slot.hasItem()) {
-                    retranslateItem(slot.getItem());
-                }
-            }
+            retranslatePointedItem(event.getScreen());
             return;
         }
         if (screenScanKey != null && screenScanKey.matches(event.getKeyCode(), event.getScanCode())) {
@@ -1335,11 +1449,47 @@ public final class MctranslatorNeoForge {
         for (Slot slot : screen.getMenu().slots) {
             if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
             String name = slot.getItem().getHoverName().getString();
-            if (name != null && !name.isBlank() && warmedContainerNames.add(name)) {
+            if (name != null && !name.isBlank()) {
                 newNames.add(name);
             }
         }
         if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
+    }
+
+    /** Only icons actually visible on the HUD are collected here. Backpack and armour
+     * slots are collected only after their container screen is opened. */
+    private void warmVisibleHudItems(Minecraft mc) {
+        if (mc == null || mc.player == null || service == null
+                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = mc.player.getInventory().getItem(slot);
+            if (stack == null || stack.isEmpty()) continue;
+            String name = stack.getHoverName().getString();
+            if (name != null && !name.isBlank()) names.add(name);
+        }
+        ItemStack offhand = mc.player.getOffhandItem();
+        if (offhand != null && !offhand.isEmpty()) {
+            String name = offhand.getHoverName().getString();
+            if (name != null && !name.isBlank()) names.add(name);
+        }
+        if (!names.isEmpty()) service.warmNamesBatch(List.copyOf(names));
+    }
+
+    private void retranslatePointedItem(net.minecraft.client.gui.screens.Screen screen) {
+        ItemStack target = null;
+        if (screen instanceof AbstractContainerScreen<?> container
+                && container instanceof AbstractContainerScreenAccessor accessor) {
+            Slot slot = accessor.mctranslator$hoveredSlot();
+            if (slot != null && slot.hasItem()) target = slot.getItem();
+        }
+        // JEI/FTB/custom widgets may show a tooltip without a vanilla Slot. Accept only
+        // a fresh tooltip snapshot from the exact screen currently receiving the key.
+        if ((target == null || target.isEmpty()) && lastTooltipScreen == screen
+                && System.currentTimeMillis() - lastTooltipAtMs <= 1_500L) {
+            target = lastTooltipStack;
+        }
+        if (target != null && !target.isEmpty()) retranslateItem(target);
     }
 
     private void retranslateItem(ItemStack stack) {
@@ -1349,16 +1499,25 @@ public final class MctranslatorNeoForge {
         List<String> sources = lastTooltipStack == stack ? lastTooltipParagraphSources : null;
         if (sources == null) {
             List<Component> lines;
+            int depth = tooltipProbeDepth.get();
+            tooltipProbeDepth.set(depth + 1);
             try {
                 lines = stack.getTooltipLines(mc.player, TooltipFlag.Default.NORMAL);
             } catch (RuntimeException e) {
                 return;
+            } finally {
+                if (depth == 0) tooltipProbeDepth.remove();
+                else tooltipProbeDepth.set(depth);
             }
             TooltipParagraphPlan plan = tooltipParagraphPlan(
                     stack, lines, NeoTextStyle::paragraphRequestText);
             sources = plan.sources();
         }
-        service.retranslate(sources);
+        java.util.LinkedHashSet<String> requests = new java.util.LinkedHashSet<>();
+        String itemName = stack.getHoverName().getString();
+        if (itemName != null && !itemName.isBlank()) requests.add(itemName);
+        if (sources != null) requests.addAll(sources);
+        service.retranslate(List.copyOf(requests));
         NeoTextStyle.clearRenderMemo();
         status(Component.translatable("message.mctranslator.retranslate", stack.getHoverName().getString()).getString());
     }

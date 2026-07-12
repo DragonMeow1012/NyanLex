@@ -96,6 +96,21 @@ class TranslationServiceTest {
     }
 
     @Test
+    void targetLanguageChangeNotifiesVisibleSurfaceOnce() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
+        AtomicInteger changes = new AtomicInteger();
+        s.setTargetLangChangeListener(changes::incrementAndGet);
+
+        s.setTargetLang("ja-JP");
+        assertEquals("ja-JP", s.targetLang());
+        assertEquals(1, changes.get());
+
+        s.setTargetLang("ja-JP");
+        assertEquals(1, changes.get(), "selecting the same target must not reset the page again");
+    }
+
+    @Test
     void actionBarMissCompletesAsynchronouslyAndReusesNumberTemplate() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.actionBarMode = DisplayMode.TRANSLATION;
@@ -167,6 +182,27 @@ class TranslationServiceTest {
         assertTrue(d.changed());
         assertEquals("鑽石劍", d.translated());
         assertEquals(1, calls.get(), "should translate exactly once");
+    }
+
+    @Test
+    void japaneseItemLocaleDisambiguatesAllHanItemWithoutAffectingChat() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("鐵砧", "ja");
+        };
+        TranslationService s = service(cfg, translator, DIRECT);
+        s.setItemSourceLanguage(() -> "ja_jp");
+
+        s.warmNamesBatch(List.of("金床"));
+        assertEquals(1, calls.get());
+        assertTrue(s.translateItemLine("金床").changed());
+
+        assertFalse(s.translateChat("金床").changed(),
+                "the item locale hint must not force free-form Chinese chat through");
+        assertEquals(1, calls.get());
     }
 
     @Test

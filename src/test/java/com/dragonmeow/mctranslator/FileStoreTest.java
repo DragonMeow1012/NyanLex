@@ -133,19 +133,97 @@ class FileStoreTest {
     }
 
     @Test
-    void legacyCacheIsDiscardedInsteadOfMigrated() throws IOException {
+    void schema2CacheIsBackedUpAndMigratedWithoutLosingRows() throws IOException {
         Path file = tempFile();
-        // Schema 2 was one giant JSON line. It may contain recursive debug pollution,
-        // so schema 3 deliberately starts clean instead of migrating it.
+        // Schema 2 was one giant JSON line. Upgrades must preserve its valid rows.
         Files.createDirectories(file.getParent());
         Files.writeString(file, "{\"schema\":2,\"entries\":["
                 + "{\"key\":\"Old\",\"translation\":\"舊譯文\"}]}\n");
+        String original = Files.readString(file);
 
         FileStore store = new FileStore(file, false);
-        assertNull(store.get("Old"));
+        assertTrue(store.get("Old") != null);
         assertNull(store.get("Two"));
+        assertEquals(1, store.size());
+        assertTrue(Files.exists(file));
+        Path backup = file.resolveSibling(file.getFileName() + ".schema2.bak");
+        assertTrue(Files.exists(backup));
+        assertEquals(original, Files.readString(backup),
+                "migration is authorized only by a byte-for-byte backup of schema 2");
+        assertEquals(3, JsonParser.parseString(Files.readAllLines(file).get(0))
+                .getAsJsonObject().get("schema").getAsInt());
+    }
+
+    @Test
+    void mismatchedSchema2BackupBlocksAutomaticMigration() throws IOException {
+        Path file = tempFile();
+        String original = "{\"schema\":2,\"entries\":["
+                + "{\"key\":\"Old\",\"translation\":\"legacy\"}]}\n";
+        Files.writeString(file, original);
+        Path backup = file.resolveSibling(file.getFileName() + ".schema2.bak");
+        Files.writeString(backup, "backup from a different cache\n");
+
+        FileStore store = new FileStore(file, false);
+        assertEquals("legacy", store.get("Old"), "valid legacy rows remain usable in memory");
+        assertEquals(original, Files.readString(file),
+                "a stale backup must not authorize replacing the schema-2 source");
+
+        store.put("New", "translation");
+        assertEquals(original, Files.readString(file),
+                "later writes remain disk-blocked while no matching backup exists");
+        assertEquals("backup from a different cache\n", Files.readString(backup));
+    }
+
+    @Test
+    void unknownSchemaIsPreservedInsteadOfDeleted() throws IOException {
+        Path file = tempFile();
+        Files.createDirectories(file.getParent());
+        String original = "{\"schema\":99,\"entries\":[{\"key\":\"Future\",\"translation\":\"keep\"}]}\n";
+        Files.writeString(file, original);
+
+        FileStore store = new FileStore(file, false);
         assertEquals(0, store.size());
-        assertFalse(Files.exists(file), "legacy schemas are replaced by a clean v3 cache");
+        assertTrue(Files.exists(file));
+        assertEquals(original, Files.readString(file));
+        assertEquals(original, Files.readString(
+                file.resolveSibling(file.getFileName() + ".unreadable.bak")));
+
+        store.put("New", "translation");
+        assertEquals(original, Files.readString(
+                file.resolveSibling(file.getFileName() + ".unreadable.bak")));
+        assertEquals(3, JsonParser.parseString(Files.readAllLines(file).get(0))
+                .getAsJsonObject().get("schema").getAsInt());
+    }
+
+    @Test
+    void mismatchedUnreadableBackupBlocksLaterPersistence() throws IOException {
+        Path file = tempFile();
+        String original = "{\"schema\":99,\"entries\":[]}\n";
+        Files.writeString(file, original);
+        Path backup = file.resolveSibling(file.getFileName() + ".unreadable.bak");
+        Files.writeString(backup, "older unreadable cache\n");
+
+        FileStore store = new FileStore(file, false);
+        store.put("New", "translation");
+
+        assertEquals(original, Files.readString(file));
+        assertEquals("older unreadable cache\n", Files.readString(backup));
+    }
+
+    @Test
+    void failedUnreadableBackupBlocksLaterPersistence() throws IOException {
+        Path file = tempFile();
+        String original = "not a JSON header\n";
+        Files.writeString(file, original);
+        Path backup = file.resolveSibling(file.getFileName() + ".unreadable.bak");
+        Files.createDirectory(backup);
+
+        FileStore store = new FileStore(file, false);
+        store.put("New", "translation");
+
+        assertEquals(original, Files.readString(file),
+                "the source must survive when the safety-copy destination cannot be written");
+        assertTrue(Files.isDirectory(backup));
     }
 
     @Test
@@ -156,12 +234,23 @@ class FileStoreTest {
                 + "{\"key\":\"Forest\",\"translation\":\"森林\"}\n"
                 + "{truncated garbage\n"
                 + "{\"key\":\"Village\",\"translation\":\"村莊\"}\n");
+        String original = Files.readString(file);
 
         FileStore store = new FileStore(file, false);
         assertEquals("森林", store.get("Forest"));
         assertEquals("村莊", store.get("Village"));
         assertEquals(2, store.size());
         assertTrue(Files.exists(file));
+        Path backup = file.resolveSibling(file.getFileName() + ".unreadable.bak");
+        assertEquals(original, Files.readString(backup),
+                "damaged JSONL must be preserved before a later canonical rewrite");
+
+        store.put("New", "translation");
+        assertEquals(original, Files.readString(backup));
+        FileStore reopened = new FileStore(file, false);
+        assertEquals("森林", reopened.get("Forest"));
+        assertEquals("村莊", reopened.get("Village"));
+        assertEquals("translation", reopened.get("New"));
     }
 
     @Test

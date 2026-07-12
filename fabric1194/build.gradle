@@ -15,6 +15,12 @@ tasks.named('remapJar') {
     archiveClassifier = "Fabric-${project.minecraft_version}"
 }
 
+tasks.named('jar') {
+    from('../LICENSE') {
+        rename { 'LICENSE_MinecraftTranslator' }
+    }
+}
+
 repositories {
     mavenCentral()
     maven { url = 'https://maven.fabricmc.net/' }
@@ -27,7 +33,7 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
 
-// MC 1.20.1 targets Java 17. We compile to 17 bytecode; Gradle itself runs on JDK 21 (no JDK 17 toolchain needed).
+// MC 1.19.4 targets Java 17. We compile to 17 bytecode while Gradle itself runs on JDK 21.
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 17

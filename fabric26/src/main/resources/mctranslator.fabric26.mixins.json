@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "OptionsScreenMixin",
+    "ScreenRenderScopeMixin",
     "AbstractContainerScreenAccessor",
     "ChatComponentAccessor",
     "FontSplitMixin",

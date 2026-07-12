@@ -12,6 +12,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -61,6 +62,195 @@ class TranslationCacheCoalescingTest {
         assertEquals(1, t.requests.get(), "both strings must share one request");
         assertEquals("T:Alpha", cache.getCached("Alpha"));
         assertEquals("T:Beta", cache.getCached("Beta"));
+    }
+
+    @Test
+    void configuredWindowCollectsUntilItsDeadline() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        long[] now = {1_000L};
+        TranslationCache cache = new TranslationCache(
+                t, "zh-TW", DIRECT, 100, 10_000L, () -> now[0]);
+        cache.setBatchWindowMs(() -> 5_000);
+
+        cache.requestBatched("Alpha");
+        cache.flushBatch();
+        now[0] += 4_999L;
+        cache.requestBatched("Beta");
+        cache.flushBatch();
+        assertEquals(0, t.requests.get());
+
+        now[0] += 1L;
+        cache.flushBatch();
+        assertEquals(1, t.requests.get());
+        assertEquals(List.of("Alpha", "Beta"), t.batches.get(0));
+    }
+
+    @Test
+    void backgroundWarmupsAlsoJoinTheConfiguredWindow() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        long[] now = {1_000L};
+        TranslationCache cache = new TranslationCache(
+                t, "zh-TW", DIRECT, 100, 10_000L, () -> now[0]);
+        cache.setBatchWindowMs(() -> 5_000);
+
+        cache.warmBatchAsync(List.of("Witch Hazel Boat"));
+        now[0] += 1_000L;
+        cache.warmBatchAsync(List.of("Zelkova Stairs"));
+        cache.flushBatch();
+        assertEquals(0, t.requests.get());
+
+        now[0] = 6_000L;
+        cache.flushBatch();
+        assertEquals(1, t.requests.get());
+        assertEquals(List.of("Witch Hazel Boat", "Zelkova Stairs"),
+                t.batches.get(0));
+    }
+
+    @Test
+    void zeroConfiguredWindowSendsOnNextTick() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        TranslationCache cache = new TranslationCache(t, "zh-TW", DIRECT, 100);
+        cache.setBatchWindowMs(() -> 0);
+
+        cache.requestBatched("Alpha");
+        cache.flushBatch();
+
+        assertEquals(1, t.requests.get());
+    }
+
+    @Test
+    void characterBudgetFlushesBeforeDeadline() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        TranslationCache cache = new TranslationCache(t, "zh-TW", DIRECT, 100);
+        cache.setBatchWindowMs(() -> 10_000);
+
+        cache.requestBatched("A".repeat(700));
+        cache.requestBatched("B".repeat(700));
+        cache.flushBatch();
+
+        assertEquals(1, t.requests.get());
+        assertEquals(1, t.batches.get(0).size(),
+                "the collector must cut between entries before exceeding the safety budget");
+        assertEquals("A".repeat(700), t.batches.get(0).get(0));
+        assertEquals(1, cache.pendingCount(), "the next complete entry remains queued, not truncated");
+
+        cache.setBatchWindowMs(() -> 0);
+        cache.flushBatch();
+        assertEquals(2, t.requests.get());
+        assertEquals(List.of("B".repeat(700)), t.batches.get(1));
+    }
+
+    @Test
+    void singleEntryOverBudgetIsStillSentWhole() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        TranslationCache cache = new TranslationCache(t, "zh-TW", DIRECT, 100);
+        cache.setBatchWindowMs(() -> 5_000);
+        String completeName = "A".repeat(1_501);
+
+        cache.requestBatched(completeName);
+        cache.flushBatch();
+
+        assertEquals(1, t.requests.get());
+        assertEquals(List.of(completeName), t.batches.get(0),
+                "an oversized item name is atomic and must never be truncated");
+    }
+
+    @Test
+    void shortEntriesAreNotSplitAtTheOldSixtyFourItemLimit() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        TranslationCache cache = new TranslationCache(t, "zh-TW", DIRECT, 200);
+        cache.setBatchWindowMs(() -> 5_000);
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < 65; i++) {
+            String name = "x" + (char) (0x0100 + i);
+            names.add(name);
+            cache.requestBatched(name);
+        }
+
+        cache.setBatchWindowMs(() -> 0);
+        cache.flushBatch();
+
+        assertEquals(1, t.requests.get());
+        assertEquals(names, t.batches.get(0));
+    }
+
+    @Test
+    void hoveredEntryFlushesPendingCollectorFirstInOneRequest() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        TranslationCache cache = new TranslationCache(t, "zh-TW", DIRECT, 100);
+        cache.setBatchWindowMs(() -> 5_000);
+
+        cache.warmBatchAsync(List.of("Normal A", "Normal B"));
+        cache.warmBatchAsyncHigh(List.of("Hovered item"), List.of("Hovered item"));
+        assertEquals(0, t.requests.get(), "hover waits only until the next client tick");
+
+        cache.flushBatch();
+
+        assertEquals(1, t.requests.get(), "hover must not buy a second HTTP batch");
+        assertEquals(List.of("Hovered item", "Normal A", "Normal B"), t.batches.get(0));
+    }
+
+    @Test
+    void failedSurfaceDoesNotRetryAfterItDisappears() {
+        AtomicInteger requests = new AtomicInteger();
+        long[] now = {0L};
+        Translator offline = (text, target) -> {
+            requests.incrementAndGet();
+            throw new TranslationException("offline");
+        };
+        TranslationCache cache = new TranslationCache(
+                offline, "zh-TW", DIRECT, 100, 1_000L, () -> now[0]);
+        cache.setBatchWindowMs(() -> 0);
+
+        cache.requestBatchedPassive("Visible once");
+        cache.flushBatch();
+        assertEquals(1, requests.get());
+
+        now[0] = 10_000L;
+        cache.flushBatch();
+        cache.flushBatch();
+        assertEquals(1, requests.get(),
+                "ticks alone must not resurrect a vanished tooltip failure");
+
+        cache.requestBatchedPassive("Visible once");
+        cache.flushBatch();
+        assertEquals(2, requests.get(), "seeing the same surface again permits one retry");
+    }
+
+    @Test
+    void synchronousBatchReportsPartialFailure() {
+        Translator partial = new Translator() {
+            @Override
+            public TranslationResult translate(String text, String targetLang) {
+                return new TranslationResult("T:" + text, "en");
+            }
+
+            @Override
+            public List<TranslationResult> translateBatch(List<String> texts, String targetLang) {
+                return List.of(new TranslationResult("T:" + texts.get(0), "en"),
+                        new TranslationResult(texts.get(1), "en"));
+            }
+        };
+        TranslationCache cache = new TranslationCache(partial, "zh-TW", DIRECT, 100);
+
+        assertFalse(cache.warmBatch(List.of("Alpha", "Beta")));
+    }
+
+    @Test
+    void queueHasAHardEntryLimit() {
+        CountingBatchTranslator t = new CountingBatchTranslator();
+        TranslationCache cache = new TranslationCache(t, "zh-TW", DIRECT, 1_000);
+        cache.setBatchWindowMs(() -> 10_000);
+
+        for (int i = 0; i < 2_000; i++) {
+            String unique = "Dynamic row "
+                    + (char) ('A' + i / (26 * 26) % 26)
+                    + (char) ('A' + i / 26 % 26)
+                    + (char) ('A' + i % 26);
+            cache.requestBatched(unique);
+        }
+
+        assertEquals(TranslationCache.MAX_QUEUED_ENTRIES, cache.pendingCount());
     }
 
     /** A continuously-growing buffer is force-flushed after the wait cap. */

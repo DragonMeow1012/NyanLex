@@ -10,9 +10,12 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: mctranslator-1.0.0-Fabric-26.2.jar (name-version-loader-mcversion)
+// Final jar name: mctranslator-1.0.2-Fabric-26.1.2.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     archiveClassifier = "Fabric-${project.minecraft_version}"
+    from('../LICENSE') {
+        rename { 'LICENSE_MinecraftTranslator' }
+    }
 }
 
 repositories {
@@ -28,7 +31,7 @@ dependencies {
 }
 
 java {
-    // Compile with a JDK 25 toolchain (MC 26.2 needs Java 25), so the Gradle-running JVM may differ.
+    // Compile with a JDK 25 toolchain (MC 26.1.2 needs Java 25), so the Gradle-running JVM may differ.
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }

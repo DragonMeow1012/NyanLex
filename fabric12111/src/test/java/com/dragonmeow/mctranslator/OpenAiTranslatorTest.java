@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,13 +22,46 @@ class OpenAiTranslatorTest {
 
     /** Inline fake transport: returns canned chat-completions JSON; records the request. */
     private static String chatJson(String content) {
+        return rawChatJson(anchorNumberedFixture(content));
+    }
+
+    private static String rawChatJson(String content) {
         // content is embedded with escaped newlines
         return "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\""
                 + content.replace("\n", "\\n") + "\"}}]}";
     }
 
+    private static String anchorNumberedFixture(String content) {
+        java.util.regex.Pattern numbered = java.util.regex.Pattern.compile(
+                "^(\\d+)\\s*[.)、]\\s*(.*)$");
+        StringBuilder out = new StringBuilder();
+        int current = -1;
+        StringBuilder value = null;
+        for (String raw : content.split("\\n", -1)) {
+            String line = raw.strip();
+            if (line.isEmpty()) continue;
+            java.util.regex.Matcher matcher = numbered.matcher(line);
+            if (matcher.matches()) {
+                if (current >= 0) appendAnchoredFixture(out, current, value.toString());
+                current = Integer.parseInt(matcher.group(1));
+                value = new StringBuilder(matcher.group(2).strip());
+            } else if (value != null) {
+                if (value.length() > 0) value.append(' ');
+                value.append(line);
+            }
+        }
+        if (current >= 0) appendAnchoredFixture(out, current, value.toString());
+        return out.toString();
+    }
+
+    private static void appendAnchoredFixture(StringBuilder out, int number, String value) {
+        if (out.length() > 0) out.append('\n');
+        int open = OpenAiTranslator.BATCH_ANCHOR_BASE + (number - 1) * 2;
+        out.append(open).append(value).append(open + 1);
+    }
+
     @Test
-    void translateBatchSendsNumberedPromptAndParsesNumberedReply() throws Exception {
+    void translateBatchSendsStrictAnchoredPromptAndParsesAnchoredReply() throws Exception {
         List<String> sentBodies = new ArrayList<>();
         HttpTransport fake = new HttpTransport() {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
@@ -46,9 +80,8 @@ class OpenAiTranslatorTest {
         assertEquals(2, out.size());
         assertEquals("你好", out.get(0).translatedText());
         assertEquals("世界", out.get(1).translatedText());
-        // the request carried both lines (context) numbered
-        assertTrue(sentBodies.get(0).contains("1. Hello"), sentBodies.get(0));
-        assertTrue(sentBodies.get(0).contains("2. World"), sentBodies.get(0));
+        assertTrue(sentBodies.get(0).contains("86001 Hello 86002"), sentBodies.get(0));
+        assertTrue(sentBodies.get(0).contains("86003 World 86004"), sentBodies.get(0));
         assertTrue(sentBodies.get(0).contains("gpt-4o-mini"));
     }
 
@@ -95,11 +128,13 @@ class OpenAiTranslatorTest {
     }
 
     @Test
-    void tooFewLinesArePaddedNotThrown() throws Exception {
+    void missingAnchoredItemIsBisectedWithoutShiftingTheFollowingCacheKey() throws Exception {
         HttpTransport fake = new HttpTransport() {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
             @Override public String post(String url, String body, Map<String, String> headers) {
-                return chatJson("1. 只有一行"); // only one line for a two-line request
+                if (body.contains("86003 b 86004")) return chatJson("1. 只有一行");
+                if (body.contains("86001 a 86002")) return chatJson("1. 只有一行");
+                return rawChatJson("missing anchors");
             }
         };
         OpenAiTranslator t = new OpenAiTranslator(fake,
@@ -481,16 +516,20 @@ class OpenAiTranslatorTest {
     }
 
     @Test
-    void parseNumberedStripsVariousNumberFormats() {
-        List<String> r = OpenAiTranslator.parseNumbered("1. A\n2) B\n3、C\n\n", 3);
+    void strictAnchorsExtractEveryCompleteItemInOrder() {
+        List<String> r = OpenAiTranslator.extractAnchoredBatch(
+                " 86001A86002\n86003B86004\n86005C86006 ", 3,
+                OpenAiTranslator.BATCH_ANCHOR_BASE);
         assertEquals(List.of("A", "B", "C"), r);
     }
 
     @Test
-    void parseNumberedUsesActualIdsAndLeavesMissingSlotsEmpty() {
-        List<String> r = OpenAiTranslator.parseNumbered("3. C\n1. A", 3);
-        assertEquals(List.of("A", "", "C"), r,
-                "a missing item must not shift later translations onto the wrong cache key");
+    void strictAnchorsRejectCrossedAndExteriorText() {
+        int base = OpenAiTranslator.BATCH_ANCHOR_BASE;
+        assertNull(OpenAiTranslator.extractAnchoredBatch(
+                "86001A8600386002B86004", 2, base));
+        assertNull(OpenAiTranslator.extractAnchoredBatch(
+                "commentary\n86001A86002", 1, base));
     }
 
     @Test
@@ -520,11 +559,11 @@ class OpenAiTranslatorTest {
         assertTrue(body.contains("[L3:STAT] Gear Score: 558"),
                 "RPG equipment scores must be classified as stats: " + body);
         assertTrue(body.contains("visible block"), "prompt must identify the shared visible block: " + body);
-        assertTrue(body.contains("ONLY the numbered units"),
+        assertTrue(body.contains("ONLY the strictly anchored units"),
                 "prompt must forbid translating the context block itself: " + body);
-        assertTrue(body.contains("1. Recipes"), "the todo line must still be numbered: " + body);
-        assertTrue(!body.contains("2. "), "ONLY todo lines may be numbered, never context lines: " + body);
-        assertTrue(!body.contains("1. Iron Pickaxe"), "context lines must not be numbered: " + body);
+        assertTrue(body.contains("86001 Recipes 86002"), body);
+        assertTrue(!body.contains("86003"), body);
+        assertTrue(!body.contains("86001 Iron Pickaxe"), body);
     }
 
     @Test
@@ -565,7 +604,7 @@ class OpenAiTranslatorTest {
         t.translate("Skill Book, Recipe Book, Recipes", "zh-TW");
 
         String body = sentBodies.get(0);
-        assertTrue(body.contains("1. Skill Book, Recipe Book, Recipes"), body);
+        assertTrue(body.contains("86001 Skill Book, Recipe Book, Recipes 86002"), body);
         assertTrue(!body.contains("Skill Book → 技能書"), body);
         assertTrue(!body.contains("Recipe / Recipes → 配方"), body);
         assertTrue(!body.contains("Recipe Book → 配方書"), body);

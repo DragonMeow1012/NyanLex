@@ -9,6 +9,9 @@ base { archivesName = 'mctranslator' }
 
 tasks.named('jar') {
     archiveClassifier = 'NeoForge-26.2'
+    from('../LICENSE') {
+        rename { 'LICENSE_MinecraftTranslator' }
+    }
 }
 
 repositories {

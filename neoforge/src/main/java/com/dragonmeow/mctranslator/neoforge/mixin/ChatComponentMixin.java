@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator.neoforge.mixin;
 
 import com.dragonmeow.mctranslator.translate.InternalRenderGuard;
+import com.dragonmeow.mctranslator.neoforge.ChatComponentAccess;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.GuiMessage;
 import net.minecraft.client.gui.components.ChatComponent;
@@ -12,8 +13,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /** Prevent the broad screen-text hook from translating the chat HUD while another screen is open. */
 @Mixin(ChatComponent.class)
-public abstract class ChatComponentMixin {
+public abstract class ChatComponentMixin implements ChatComponentAccess {
     @Accessor("allMessages")
+    @Override
     public abstract java.util.List<GuiMessage> mctranslator$getAllMessages();
 
     @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIIZ)V",

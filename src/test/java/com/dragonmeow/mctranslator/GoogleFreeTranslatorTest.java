@@ -107,6 +107,28 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
+    void interleavedOuterAnchorsAreRejectedAndBisectedWithoutCrossItemLeakage() {
+        AtomicReference<Integer> calls = new AtomicReference<>(0);
+        HttpTransport inline = url -> {
+            calls.set(calls.get() + 1);
+            String q = qOf(url);
+            if (q.contains("a") && q.contains("b")) {
+                // Both pairs occur exactly once, but they overlap. The old extractor
+                // accepted this and wrote the neighbouring anchor/text into each key.
+                return googleResponse("70001甲70003乙7000270004");
+            }
+            return googleResponse(q.equals("a") ? "甲" : "乙");
+        };
+        GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
+
+        List<TranslationResult> out = assertDoesNotThrowResult(
+                () -> t.translateBatch(List.of("a", "b"), "zh-TW"));
+
+        assertEquals(List.of("甲", "乙"), out.stream().map(TranslationResult::translatedText).toList());
+        assertEquals(3, calls.get(), "an overlapping batch must retry each isolated item");
+    }
+
+    @Test
     void hugeBatchIsChunkedByCharacterBudget() {
         // Each request must stay within the char budget; alignment is echoed back
         // by translating each joined chunk into the same number of lines.
@@ -247,17 +269,15 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
-    void batchRoutesTokenLinesPerLineAndKeepsTokensOffTheWire() throws Exception {
-        // A chunk containing token lines is translated line by line through the whole-line
-        // sentinel path (tokens never ride the joined newline request). CS markers are
-        // restored into the values so exact colours can be rebuilt.
+    void batchKeepsTokenLinesInOneRequestAndKeepsTokensOffTheWire() throws Exception {
+        // Outer sentinels isolate complete cache items; inner sentinels protect each CS
+        // token. The provider receives one joined request and no private marker glyphs.
         List<String> sent = new java.util.ArrayList<>();
         HttpTransport inline = url -> {
             String q = qOf(url);
             sent.add(q);
-            String translated = q.startsWith("7000")
-                    ? q.substring(0, 5) + "譯" + q.substring(5)
-                    : "譯" + q;
+            String translated = q.replace("red", "譯red")
+                    .replace("blue", "譯blue").replace("plain", "譯plain");
             return "[[[\"" + translated + "\",\"" + q + "\",null,null]],null,\"en\"]";
         };
         GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
@@ -268,9 +288,30 @@ class GoogleFreeTranslatorTest {
         assertEquals("⟦CS0⟧譯red", out.get(0).translatedText());
         assertEquals("⟦CS1⟧譯blue", out.get(1).translatedText());
         assertEquals("譯plain", out.get(2).translatedText());
+        assertEquals(1, sent.size(), "the whole timed batch must use one GT HTTP request");
         for (String q : sent) {
             assertFalse(q.contains("⟦") || q.contains("⟧"), "the endpoint must never see ⟦⟧: " + q);
         }
+    }
+
+    @Test
+    void batchProtectsHardParagraphBreaksWithoutSplittingRequests() throws Exception {
+        AtomicReference<Integer> calls = new AtomicReference<>(0);
+        HttpTransport inline = url -> {
+            calls.set(calls.get() + 1);
+            String q = qOf(url);
+            return googleResponse(q.replace("First paragraph", "第一段")
+                    .replace("Second paragraph", "第二段")
+                    .replace("Another item", "另一項"));
+        };
+        GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
+
+        List<TranslationResult> out = t.translateBatch(
+                List.of("First paragraph\nSecond paragraph", "Another item"), "zh-TW");
+
+        assertEquals(1, calls.get());
+        assertEquals("第一段\n第二段", out.get(0).translatedText());
+        assertEquals("另一項", out.get(1).translatedText());
     }
 
     private interface ResultSupplier {

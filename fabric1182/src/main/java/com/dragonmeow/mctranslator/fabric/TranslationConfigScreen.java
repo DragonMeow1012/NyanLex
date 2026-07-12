@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator.fabric;
 
 import com.dragonmeow.mctranslator.config.DisplayMode;
+import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -61,7 +62,11 @@ public final class TranslationConfigScreen extends Screen {
         y += 6;
         this.addRenderableWidget(com.dragonmeow.mctranslator.fabric.LegacyButton.builder(langLabel(cfg),
                         b -> this.minecraft.setScreen(new TranslationLanguageScreen(this)))
-                .bounds(left, y, full, 20).build());
+                .bounds(left, y, rowWidth, 20).build());
+        this.addRenderableWidget(com.dragonmeow.mctranslator.fabric.LegacyButton.builder(
+                        machineProviderLabel(cfg),
+                        b -> this.minecraft.setScreen(new TranslationMachineProviderScreen(this)))
+                .bounds(right, y, rowWidth, 20).build());
         y += 22;
         this.addRenderableWidget(com.dragonmeow.mctranslator.fabric.LegacyButton.builder(cooldownLabel(cfg), b -> {
             cfg.requestCooldownMs = nextCooldown(cfg.requestCooldownMs);
@@ -79,7 +84,12 @@ public final class TranslationConfigScreen extends Screen {
             cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
             MctranslatorFabric.saveConfig();
             b.setMessage(aiFallbackLabel(cfg));
-        }).bounds(left, y, full, 18).build());
+        }).bounds(left, y, rowWidth, 18).build());
+        this.addRenderableWidget(com.dragonmeow.mctranslator.fabric.LegacyButton.builder(batchWindowLabel(cfg), b -> {
+            cfg.batchWindowMs = nextBatchWindow(cfg.batchWindowMs);
+            MctranslatorFabric.saveConfig();
+            b.setMessage(batchWindowLabel(cfg));
+        }).bounds(right, y, rowWidth, 18).build());
         y += 20;
         // Engine for the "translate current screen" (P) hotkey: 機翻 (Google) or AI 精翻.
         this.addRenderableWidget(com.dragonmeow.mctranslator.fabric.LegacyButton.builder(screenScanEngineLabel(cfg), b -> {
@@ -124,11 +134,19 @@ public final class TranslationConfigScreen extends Screen {
         return new net.minecraft.network.chat.TranslatableComponent("config.mctranslator.language", target);
     }
 
+    private static Component machineProviderLabel(TranslatorConfig cfg) {
+        MachineTranslationProvider provider = MachineTranslationProvider.fromId(
+                cfg.machineTranslationProvider);
+        return new net.minecraft.network.chat.TranslatableComponent(
+                "config.mctranslator.machine_provider",
+                TranslationMachineProviderScreen.providerLabel(provider));
+    }
+
     private static Component screenScanEngineLabel(TranslatorConfig cfg) {
         return new net.minecraft.network.chat.TranslatableComponent("config.mctranslator.screen_scan_engine", aiText(cfg.aiScreenScan));
     }
 
-    private static final int[] COOLDOWN_STEPS = {0, 200, 400, 600, 800, 1000, 1500, 2000};
+    private static final int[] COOLDOWN_STEPS = {0, 1000, 2000, 4000, 6000, 8000, 10000};
     private static int nextCooldown(int current) {
         for (int value : COOLDOWN_STEPS) if (value > current) return value;
         return 0;
@@ -139,6 +157,17 @@ public final class TranslationConfigScreen extends Screen {
     }
     private static Component debugLabel(TranslatorConfig cfg) {
         return new net.minecraft.network.chat.TranslatableComponent("config.mctranslator.debug", new net.minecraft.network.chat.TranslatableComponent(cfg.debugTranslationOverlay ? "options.on" : "options.off"));
+    }
+    private static final int[] BATCH_WINDOW_STEPS = {0, 1000, 2000, 3000, 5000, 8000, 10000};
+    private static int nextBatchWindow(int current) {
+        for (int value : BATCH_WINDOW_STEPS) if (value > current) return value;
+        return 0;
+    }
+    private static Component batchWindowLabel(TranslatorConfig cfg) {
+        Component state = cfg.batchWindowMs <= 0
+                ? new net.minecraft.network.chat.TranslatableComponent("config.mctranslator.batch_window.off")
+                : new net.minecraft.network.chat.TextComponent(cfg.batchWindowMs / 1000F + " s");
+        return new net.minecraft.network.chat.TranslatableComponent("config.mctranslator.batch_window", state);
     }
     private static Component aiFallbackLabel(TranslatorConfig cfg) {
         return new net.minecraft.network.chat.TranslatableComponent("config.mctranslator.ai.disable_gt_fallback",

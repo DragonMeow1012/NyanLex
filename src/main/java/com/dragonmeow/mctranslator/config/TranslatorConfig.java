@@ -76,6 +76,9 @@ public final class TranslatorConfig {
     /** Google source language. {@code auto} lets Google detect it. */
     public String sourceLang = "auto";
 
+    /** Key-free machine source: google, youdao, deepl, or microsoft. */
+    public String machineTranslationProvider = MachineTranslationProvider.GOOGLE.id();
+
     /**
      * Mask online player names before sending text to the translator, so names are
      * not sent out and stay verbatim (untranslated) in the result.
@@ -93,7 +96,13 @@ public final class TranslatorConfig {
      * requests of the SAME engine (Google and AI each pace independently). Proactive
      * spacing so the free endpoints don't see request bursts; 0 disables pacing.
      */
-    public int requestCooldownMs = 2000;
+    public int requestCooldownMs = 6000;
+
+    /**
+     * Collect ordinary render/chat misses for this long before sending one batch.
+     * {@code 0} disables the collection window (the next client tick sends it).
+     */
+    public int batchWindowMs = 5000;
 
     /**
      * After a failed translation, suppress retries of the same string for this
@@ -147,6 +156,7 @@ public final class TranslatorConfig {
     public TranslatorConfig normalized() {
         if (targetLang == null || targetLang.isBlank()) targetLang = "zh-TW";
         if (sourceLang == null || sourceLang.isBlank()) sourceLang = "auto";
+        machineTranslationProvider = MachineTranslationProvider.normalize(machineTranslationProvider);
         if (chatMode == null) chatMode = DisplayMode.BOTH;
         if (tooltipMode == null) tooltipMode = DisplayMode.TRANSLATION;
         if (scoreboardMode == null) scoreboardMode = DisplayMode.TRANSLATION;
@@ -165,7 +175,9 @@ public final class TranslatorConfig {
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
-        if (requestCooldownMs < 0) requestCooldownMs = 2000; // 0 is valid: pacing off
+        if (requestCooldownMs < 0) requestCooldownMs = 6000; // 0 is valid: pacing off
+        if (batchWindowMs < 0) batchWindowMs = 5000; // 0 is valid: batching off
+        if (batchWindowMs > 60_000) batchWindowMs = 60_000;
         if (failureBackoffMs < 0) failureBackoffMs = 10000;
         if (cacheMaxSize <= 0) cacheMaxSize = 5000;
         if (churnVariantThreshold < 2) churnVariantThreshold = 4;

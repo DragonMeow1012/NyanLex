@@ -30,6 +30,8 @@
   "config.mctranslator.ai.disable_gt_fallback": "Disable GT fallback for AI: %s",
   "config.mctranslator.request_cooldown": "Request cooldown: %s",
   "config.mctranslator.request_cooldown.off": "Off",
+  "config.mctranslator.batch_window": "Batch window: %s",
+  "config.mctranslator.batch_window.off": "Off",
   "config.mctranslator.ai.open": "AI settings (Model / API key)...",
   "config.mctranslator.keybind.open": "Keybind settings...",
   "config.mctranslator.cache.clear": "Clear cache for current language",
@@ -78,4 +80,13 @@
   ,"debug.mctranslator.empty": "no result"
   ,"debug.mctranslator.source": "source: "
   ,"debug.mctranslator.translation": "translation: "
+  ,"config.mctranslator.machine_provider": "Machine source: %s"
+  ,"screen.mctranslator.provider.title": "Machine Translation Source"
+  ,"screen.mctranslator.provider.search": "Search source name..."
+  ,"screen.mctranslator.provider.google": "Google Free"
+  ,"screen.mctranslator.provider.youdao": "Youdao Web"
+  ,"screen.mctranslator.provider.deepl": "DeepL Web"
+  ,"screen.mctranslator.provider.microsoft": "Microsoft / Bing Web"
+  ,"screen.mctranslator.provider.experimental_name": "%s (Experimental)"
+  ,"screen.mctranslator.provider.warning": "Experimental web sources may change or stop working; Google is the stable default."
 }

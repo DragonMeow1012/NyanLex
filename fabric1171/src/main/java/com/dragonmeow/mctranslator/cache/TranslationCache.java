@@ -21,6 +21,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
@@ -37,10 +38,23 @@ import java.util.regex.Pattern;
  * and concurrent surfaces all converge at those two structures.</p>
  */
 public final class TranslationCache {
-    private static final int MAX_BATCH = 64;
+    /** The character budget is the real provider safety limit. Keep the count ceiling
+     * only as a final guard, so short complete entries are not split at an arbitrary 64. */
+    private static final int MAX_BATCH = 512;
+    /** Hard protection against render hooks discovering unbounded dynamic/background text. */
+    public static final int MAX_QUEUED_ENTRIES = 512;
     private static final int MAX_SETTLE_TICKS = 3;
+    /** Approximate input budget for one high-level batch. Entries are atomic: the
+     * collector cuts only between entries, never through an item name or paragraph. */
+    /** Kept below GoogleFreeTranslator's 1600-char URL budget (including anchors),
+     * so a normal token-free collected batch remains one physical GT HTTP request. */
+    static final int MAX_BATCH_CHARS = 1400;
+    private static final int BATCH_ITEM_OVERHEAD = 16;
     private static final int CONTENT_FAILURE_LIMIT = 3;
     private static final int MAX_FINAL_WAITER_FAMILIES = 512;
+    /** Explicit/chat requests may keep healing during this session. Passive item
+     * warmups are deliberately excluded and retry only while re-observed. */
+    private static final int MAX_SESSION_RETRY_DEMANDS = 512;
     /** Durable negative-cache value. It is never shown; reads return the original key. */
     private static final String KEEP_ORIGINAL = "\u0000MT_KEEP_ORIGINAL2";
     /** Pre-1.0.3 sentinel. Old builds also learned it from genuine provider failures
@@ -73,6 +87,8 @@ public final class TranslationCache {
             Pattern.compile("\\u27E6\\s*MT\\s*(\\d+)\\s*\\u27E7");
     private static final Pattern PARAGRAPH_BREAK_TOKEN =
             Pattern.compile("\\u27E6\\s*PB\\s*(\\d+)\\s*\\u27E7");
+    private static final Pattern NON_CS_SLOT =
+            Pattern.compile("\\u27E6\\s*(?:MT|WS|PB)\\s*\\d+\\s*\\u27E7");
 
     private final Translator translator;
     private volatile String targetLang;
@@ -106,11 +122,18 @@ public final class TranslationCache {
     /** Failed requests remain scheduled (with backoff) until success or confirmed identity. */
     private final Map<String, TranslationTemplate.Snapshot> retrySnapshots = new ConcurrentHashMap<>();
     private final Map<String, Flight> flights = new ConcurrentHashMap<>();
+    private final Object retryDemandLock = new Object();
+    private final java.util.LinkedHashSet<String> sessionRetryDemand =
+            new java.util.LinkedHashSet<>();
 
     private final Object queueLock = new Object();
     private final LinkedHashMap<String, Queued> queue = new LinkedHashMap<>();
     private boolean queueGrew;
     private int settleTicks;
+    private long queueStartedAtMs = -1L;
+    private int queuedChars;
+    /** Null preserves the legacy short settle window for standalone embedders/tests. */
+    private volatile IntSupplier batchWindowMs;
 
     private final Set<String> provisional = ConcurrentHashMap.newKeySet();
     private final Set<String> provisionalRetrying = ConcurrentHashMap.newKeySet();
@@ -169,7 +192,6 @@ public final class TranslationCache {
     public void setFallback(TranslationCache fallback, boolean asProvisional) {
         this.fallback = fallback == this ? null : fallback;
         this.fallbackHitsProvisional = fallback != null && fallback != this && asProvisional;
-        resumeFailureFallbacks();
     }
 
     /** Live policy switch used by strict-AI mode; existing cache wiring need not be rebuilt. */
@@ -224,16 +246,6 @@ public final class TranslationCache {
                 restoreTemporaryFailure(entry.getKey());
             }
         }
-        resumeFailureFallbacks();
-    }
-
-    private void resumeFailureFallbacks() {
-        if (!isFallbackEnabled() || !fallbackHitsProvisional || fallback == null) return;
-        for (Map.Entry<String, TranslationTemplate.Snapshot> entry : retrySnapshots.entrySet()) {
-            if (!entry.getKey().startsWith(STYLE_FAILURE_PREFIX)) {
-                requestFallback(entry.getValue());
-            }
-        }
     }
 
     private void migrateProvisionalRows() {
@@ -248,6 +260,11 @@ public final class TranslationCache {
     public void setDebugLog(String engine, TranslationDebugLog log) {
         this.debugEngine = engine == null || engine.isBlank() ? "translator" : engine;
         this.debugLog = log;
+    }
+
+    /** Install a live batching-window setting. Zero means send on the next tick. */
+    public void setBatchWindowMs(IntSupplier supplier) {
+        this.batchWindowMs = supplier;
     }
 
     // -------------------------------------------------------------------------
@@ -326,9 +343,16 @@ public final class TranslationCache {
                 if (styleHit != null && plainHit != null && sameSemanticText(styleHit, plainHit)) {
                     return styleHit;
                 }
-                if (styleHit != null && plainHit != null
-                        && provisional(styleProjectionKey(snapshot))) {
-                    if (!allowStyleFallback) {
+                if (styleHit != null && plainHit != null) {
+                    boolean provisionalStyle = provisional(styleProjectionKey(snapshot));
+                    if (!allowStyleFallback && !provisionalStyle) {
+                        // A one-shot rich consumer asked specifically for this verified
+                        // topology. Its final wording may legitimately differ from the
+                        // older canonical plain row; keep both instead of deleting the
+                        // only exact colour projection.
+                        return styleHit;
+                    }
+                    if (!allowStyleFallback && provisionalStyle) {
                         removeStored(styleProjectionKey(snapshot));
                         return null;
                     }
@@ -337,7 +361,14 @@ public final class TranslationCache {
                     // buy cosmetic topology supplements in the background.
                     return TextFilter.markStyleFallback(plainHit);
                 }
-                if (styleHit != null) removeStored(styleProjectionKey(snapshot));
+                if (styleHit != null) {
+                    if (!allowStyleFallback && !provisional(styleProjectionKey(snapshot))) {
+                        return styleHit;
+                    }
+                    if (provisional(styleProjectionKey(snapshot))) {
+                        removeStored(styleProjectionKey(snapshot));
+                    }
+                }
                 // Meaning must not wait for presentation.  The renderer can safely project
                 // a semantic hit onto the current component (keeping verbatim numeric/value
                 // anchors in their exact colours) while an exact CS topology is unavailable.
@@ -397,7 +428,7 @@ public final class TranslationCache {
         String stored = owner.read(key);
         if (stored == null) return null;
         String restored = snapshot.restore(stored);
-        if (!usable(restored)) {
+        if (!usable(restored) || !matchingCsShape(snapshot.source(), restored)) {
             owner.removeStored(key);
             return null;
         }
@@ -609,6 +640,7 @@ public final class TranslationCache {
         }
 
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
+        markSessionRetryDemand(snapshot);
         Callback cb = new Callback(snapshot, callback, always, false);
         if (!snapshot.hasTranslatableContent() || backingOff(snapshot.key())
                 || suppressed(snapshot.key())) {
@@ -664,8 +696,19 @@ public final class TranslationCache {
     // -------------------------------------------------------------------------
 
     public void requestBatched(String source) {
+        requestBatched(source, true);
+    }
+
+    /** Passive visible-item request. It joins the same collector, but a later failure
+     * is retried only if the loader observes and submits the item again. */
+    public void requestBatchedPassive(String source) {
+        requestBatched(source, false);
+    }
+
+    private void requestBatched(String source, boolean keepRetryingThisSession) {
         if (source == null || getCached(source) != null) return;
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
+        if (keepRetryingThisSession) markSessionRetryDemand(snapshot);
         if (!eligible(snapshot)) return;
         enqueue(snapshot, null);
     }
@@ -694,6 +737,7 @@ public final class TranslationCache {
         }
 
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
+        markSessionRetryDemand(snapshot);
         // Requiring an exact style projection has no effect on plain text.
         exactStyle &= hasCsMarkers(snapshot.key());
         Callback cb = new Callback(snapshot, callback, always, exactStyle);
@@ -769,15 +813,80 @@ public final class TranslationCache {
                 && !suppressed(snapshot.key());
     }
 
+    private void markSessionRetryDemand(TranslationTemplate.Snapshot snapshot) {
+        if (snapshot == null) return;
+        synchronized (retryDemandLock) {
+            addSessionRetryDemand(snapshot.key());
+            addSessionRetryDemand(provisionalSemanticKey(snapshot.key()));
+        }
+    }
+
+    private void addSessionRetryDemand(String key) {
+        if (key == null || key.isBlank()) return;
+        sessionRetryDemand.remove(key);
+        sessionRetryDemand.add(key);
+        while (sessionRetryDemand.size() > MAX_SESSION_RETRY_DEMANDS) {
+            var oldest = sessionRetryDemand.iterator();
+            if (!oldest.hasNext()) break;
+            oldest.next();
+            oldest.remove();
+        }
+    }
+
+    private boolean sessionRetryDemanded(String stateKey,
+                                          TranslationTemplate.Snapshot snapshot) {
+        synchronized (retryDemandLock) {
+            return sessionRetryDemand.contains(stateKey)
+                    || (snapshot != null && (sessionRetryDemand.contains(snapshot.key())
+                    || sessionRetryDemand.contains(provisionalSemanticKey(snapshot.key()))));
+        }
+    }
+
     private void enqueue(TranslationTemplate.Snapshot snapshot, Callback callback) {
+        enqueue(snapshot, callback, null, false);
+    }
+
+    private void enqueue(TranslationTemplate.Snapshot snapshot, Callback callback,
+                         List<String> surfaceContext) {
+        enqueue(snapshot, callback, surfaceContext, false);
+    }
+
+    private void enqueue(TranslationTemplate.Snapshot snapshot, Callback callback,
+                         List<String> surfaceContext, boolean highPriority) {
+        boolean rejected = false;
         synchronized (queueLock) {
             Queued item = queue.get(snapshot.key());
             if (item == null) {
-                item = new Queued(snapshot);
-                queue.put(snapshot.key(), item);
-                queueGrew = true;
+                if (queue.size() >= MAX_QUEUED_ENTRIES) {
+                    rejected = true;
+                } else {
+                    item = new Queued(snapshot);
+                    queue.put(snapshot.key(), item);
+                    queueGrew = true;
+                    queuedChars += batchChars(snapshot.key());
+                    if (queueStartedAtMs < 0L) queueStartedAtMs = clock.getAsLong();
+                }
             }
-            if (callback != null) item.callbacks.add(callback);
+            if (!rejected) {
+                item.highPriority |= highPriority;
+                item.mergeContext(surfaceContext);
+                if (callback != null) item.callbacks.add(callback);
+            }
+        }
+        if (rejected) deliver(callback, null);
+    }
+
+    private static int batchChars(String text) {
+        return (text == null ? 0 : text.length()) + BATCH_ITEM_OVERHEAD;
+    }
+
+    private int configuredBatchWindowMs() {
+        IntSupplier supplier = batchWindowMs;
+        if (supplier == null) return -1;
+        try {
+            return Math.max(0, Math.min(60_000, supplier.getAsInt()));
+        } catch (RuntimeException ignored) {
+            return 0;
         }
     }
 
@@ -789,6 +898,9 @@ public final class TranslationCache {
 
     /** Called once per client tick. */
     public void flushBatch() {
+        // Durable failures are passive. They retry only when their text is observed
+        // again through a live surface; loading a world must not resurrect vanished
+        // tooltips from the failure ledger as background requests.
         enqueueDueRetries();
         // A provisional result may have arrived while the AI's 429 gate was closed.
         // Final-only widget callbacks remain registered, so re-check their bounded
@@ -799,21 +911,55 @@ public final class TranslationCache {
             if (queue.isEmpty()) {
                 settleTicks = 0;
                 queueGrew = false;
+                queueStartedAtMs = -1L;
+                queuedChars = 0;
                 return;
             }
-            boolean grew = queueGrew;
-            queueGrew = false;
-            if (grew && settleTicks < MAX_SETTLE_TICKS) {
-                settleTicks++;
-                return;
+            int windowMs = configuredBatchWindowMs();
+            if (windowMs < 0) {
+                boolean grew = queueGrew;
+                queueGrew = false;
+                if (grew && settleTicks < MAX_SETTLE_TICKS) {
+                    settleTicks++;
+                    return;
+                }
+            } else {
+                queueGrew = false;
+                long age = Math.max(0L, clock.getAsLong() - queueStartedAtMs);
+                boolean urgent = queue.values().stream().anyMatch(item -> item.highPriority);
+                boolean full = queue.size() >= MAX_BATCH || queuedChars >= MAX_BATCH_CHARS;
+                if (!urgent && !full && windowMs > 0 && age < windowMs) return;
             }
             settleTicks = 0;
             drained = new ArrayList<>(Math.min(MAX_BATCH, queue.size()));
-            var iterator = queue.entrySet().iterator();
-            while (iterator.hasNext() && drained.size() < MAX_BATCH) {
-                drained.add(iterator.next().getValue());
-                iterator.remove();
+            int drainedChars = 0;
+            boolean budgetFull = false;
+            // Hovered entries are first, but share this request with as many already
+            // collected normal entries as the safety budget permits.
+            for (int pass = 0; pass < 2 && !budgetFull; pass++) {
+                boolean highPass = pass == 0;
+                var iterator = queue.entrySet().iterator();
+                while (iterator.hasNext() && drained.size() < MAX_BATCH) {
+                    Queued next = iterator.next().getValue();
+                    if (next.highPriority != highPass) continue;
+                    int nextChars = batchChars(next.snapshot.key());
+                    // Entries are atomic. A single oversized entry is sent whole; a
+                    // following entry waits rather than being sliced to fit.
+                    if (!drained.isEmpty() && drainedChars + nextChars > MAX_BATCH_CHARS) {
+                        budgetFull = true;
+                        break;
+                    }
+                    drained.add(next);
+                    drainedChars += nextChars;
+                    iterator.remove();
+                    if (drainedChars >= MAX_BATCH_CHARS) {
+                        budgetFull = true;
+                        break;
+                    }
+                }
             }
+            queuedChars = Math.max(0, queuedChars - drainedChars);
+            queueStartedAtMs = queue.isEmpty() ? -1L : clock.getAsLong();
         }
 
         List<TranslationTemplate.Snapshot> send = new ArrayList<>();
@@ -846,13 +992,16 @@ public final class TranslationCache {
 
         long expectedGeneration = generation.get();
         Map<String, Long> expectedRevisions = revisions(send);
-        executeHigh(() -> {
+        List<String> requestContext = commonContext(drained);
+        Runnable task = () -> {
             try {
-                translateBatch(send, null, expectedGeneration, expectedRevisions);
+                translateBatch(send, requestContext, expectedGeneration, expectedRevisions);
             } finally {
                 owned.forEach(this::finishFlight);
             }
-        });
+        };
+        if (drained.stream().anyMatch(item -> item.highPriority)) executeHigh(task);
+        else executeLow(task);
     }
 
     // -------------------------------------------------------------------------
@@ -873,7 +1022,26 @@ public final class TranslationCache {
     }
 
     public void warmBatchAsync(List<String> sources, List<String> surfaceLines) {
+        warmBatchAsync(sources, surfaceLines, false);
+    }
+
+    /** Visible/hovered work: promote these complete entries inside the timed collector
+     * and flush it next tick on the priority executor. This avoids buying a separate
+     * HTTP request beside an already-pending normal batch. */
+    public void warmBatchAsyncHigh(List<String> sources, List<String> surfaceLines) {
+        warmBatchAsync(sources, surfaceLines, true);
+    }
+
+    private void warmBatchAsync(List<String> sources, List<String> surfaceLines,
+                                boolean highPriority) {
         List<TranslationTemplate.Snapshot> candidates = prepareMissing(sources, true);
+        List<String> requestContext = context(surfaceLines);
+        if (batchWindowMs != null) {
+            for (TranslationTemplate.Snapshot snapshot : candidates) {
+                enqueue(snapshot, null, requestContext, highPriority);
+            }
+            return;
+        }
         List<TranslationTemplate.Snapshot> send = new ArrayList<>();
         Map<String, Flight> owned = new LinkedHashMap<>();
         for (TranslationTemplate.Snapshot snapshot : candidates) {
@@ -885,16 +1053,17 @@ public final class TranslationCache {
         }
         if (send.isEmpty()) return;
 
-        List<String> requestContext = context(surfaceLines);
         long expectedGeneration = generation.get();
         Map<String, Long> expectedRevisions = revisions(send);
-        executeLow(() -> {
+        Runnable task = () -> {
             try {
                 translateBatch(send, requestContext, expectedGeneration, expectedRevisions);
             } finally {
                 owned.forEach(this::finishFlight);
             }
-        });
+        };
+        if (highPriority) executeHigh(task);
+        else executeLow(task);
     }
 
     public void translateAllAsync(List<String> sources, Consumer<List<String>> onResults) {
@@ -1002,7 +1171,7 @@ public final class TranslationCache {
                         : TranslationDebugLog.Status.SUCCESS);
             }
             debugCompleted(debugId, debugTranslations, debugStatuses);
-            return true;
+            return allSucceeded;
         } catch (TranslationException | RuntimeException e) {
             for (TranslationTemplate.Snapshot snapshot : todo) {
                 if (current(snapshot.key(), expectedGeneration,
@@ -1186,6 +1355,7 @@ public final class TranslationCache {
         if (translated == null || !hasCsMarkers(translated)) return false;
         String value = TextFilter.stripSectionCodes(translated);
         if (CS_RESIDUE.matcher(value).find() && !CS_MARKER.matcher(value).find()) return false;
+        if (!matchingCsShape(snapshot.source(), value)) return false;
         write(styleProjectionKey(snapshot), value, isProvisional, writes);
         return true;
     }
@@ -1594,7 +1764,12 @@ public final class TranslationCache {
         // A CS projection is presentation only. If the AI semantic wording already
         // succeeded, a marker-topology failure must retry AI but must not buy GT.
         if (hasFinalSemantic(snapshot)) return;
-        if (hasCsMarkers(snapshot.key())) {
+        boolean activeRetry = sessionRetryDemanded(snapshot.key(), snapshot);
+        if (!activeRetry) {
+            // Item/tooltip warmups finish their already-observed fallback once, but a
+            // failed lower tier remains passive after the surface disappears.
+            lower.warmBatchAsync(List.of(snapshot.source()));
+        } else if (hasCsMarkers(snapshot.key())) {
             lower.requestCoalescedExactStyle(snapshot.source(), ignored -> { }, false);
         } else {
             lower.requestBatched(snapshot.source());
@@ -1612,7 +1787,8 @@ public final class TranslationCache {
         return STYLE_FAILURE_PREFIX + (snapshot == null ? "" : snapshot.key());
     }
 
-    /** Re-enqueue durable failures once their backoff expires, even if the surface vanished. */
+    /** Re-enqueue only failures explicitly demanded during this process. Persisted
+     * item tooltip debt is passive until the item is visible and submitted again. */
     private void enqueueDueRetries() {
         for (Map.Entry<String, TranslationTemplate.Snapshot> entry : retrySnapshots.entrySet()) {
             String stateKey = entry.getKey();
@@ -1636,6 +1812,7 @@ public final class TranslationCache {
                 discardRetryState(stateKey, snapshot);
                 continue;
             }
+            if (!sessionRetryDemanded(stateKey, snapshot)) continue;
             if (pendingPrimary) {
                 retryProvisional(stateKey);
                 continue;
@@ -1747,10 +1924,32 @@ public final class TranslationCache {
     private static final class Queued {
         final TranslationTemplate.Snapshot snapshot;
         final List<Callback> callbacks = new ArrayList<>();
+        List<String> surfaceContext;
+        boolean conflictingContext;
+        boolean highPriority;
 
         Queued(TranslationTemplate.Snapshot snapshot) {
             this.snapshot = snapshot;
         }
+
+        void mergeContext(List<String> context) {
+            if (context == null || conflictingContext) return;
+            if (surfaceContext == null) surfaceContext = List.copyOf(context);
+            else if (!surfaceContext.equals(context)) {
+                surfaceContext = null;
+                conflictingContext = true;
+            }
+        }
+    }
+
+    private static List<String> commonContext(List<Queued> items) {
+        List<String> common = null;
+        for (Queued item : items) {
+            if (item.surfaceContext == null) return null;
+            if (common == null) common = item.surfaceContext;
+            else if (!common.equals(item.surfaceContext)) return null;
+        }
+        return common;
     }
 
     // -------------------------------------------------------------------------
@@ -1854,7 +2053,9 @@ public final class TranslationCache {
         String open = null;
         int cursor = 0;
         while (matcher.find()) {
-            if (CS_RESIDUE.matcher(text.substring(cursor, matcher.start())).find()) return null;
+            String between = text.substring(cursor, matcher.start());
+            if (CS_RESIDUE.matcher(between).find()) return null;
+            if (open == null && !outsideCsIsLayoutOnly(between)) return null;
             boolean closing = !matcher.group(1).isEmpty();
             String index = matcher.group(2);
             if (!closing) {
@@ -1867,9 +2068,18 @@ public final class TranslationCache {
             }
             cursor = matcher.end();
         }
-        if (CS_RESIDUE.matcher(text.substring(cursor)).find()) return null;
+        String tail = text.substring(cursor);
+        if (CS_RESIDUE.matcher(tail).find()) return null;
+        if (open == null && !outsideCsIsLayoutOnly(tail)) return null;
         if (open != null) return null;
         return pairs.toString();
+    }
+
+    /** A valid rich projection keeps every semantic character inside a CS pair. */
+    private static boolean outsideCsIsLayoutOnly(String text) {
+        if (text == null || text.isEmpty()) return true;
+        String withoutSlots = NON_CS_SLOT.matcher(TextFilter.stripSectionCodes(text)).replaceAll("");
+        return TextFilter.isLayoutOrPunctuationOnly(withoutSlots);
     }
 
     private void removeStored(String key) {
@@ -1911,6 +2121,13 @@ public final class TranslationCache {
         reset(true);
     }
 
+    /** Switch a live backend/store partition without deleting any provider cache file. */
+    public void reloadProviderPartition() {
+        reset(false);
+        migrateProvisionalRows();
+        hydrateFailureStore();
+    }
+
     /** Drop only session state; optionally delete the active language's disk file. */
     private void reset(boolean clearStore) {
         generation.incrementAndGet();
@@ -1924,6 +2141,9 @@ public final class TranslationCache {
         provisionalRetryAttempts.clear();
         retrySnapshots.clear();
         finalWaiters.clear();
+        synchronized (retryDemandLock) {
+            sessionRetryDemand.clear();
+        }
         List<Callback> cancelled = new ArrayList<>();
         for (Flight flight : flights.values()) cancelled.addAll(flight.close());
         flights.clear();
@@ -1932,6 +2152,8 @@ public final class TranslationCache {
             queue.clear();
             queueGrew = false;
             settleTicks = 0;
+            queueStartedAtMs = -1L;
+            queuedChars = 0;
         }
         cancelled.forEach(callback -> deliver(callback, null));
         if (clearStore) {
@@ -1981,13 +2203,21 @@ public final class TranslationCache {
             if (flight != null) cancelled.addAll(flight.close());
             removeStored(key);
         }
+        synchronized (retryDemandLock) {
+            sessionRetryDemand.removeAll(keys);
+        }
         synchronized (queueLock) {
             for (String key : keys) {
                 Queued removed = queue.remove(key);
                 if (removed != null) cancelled.addAll(removed.callbacks);
             }
             queueGrew = !queue.isEmpty();
-            if (queue.isEmpty()) settleTicks = 0;
+            queuedChars = 0;
+            for (Queued queued : queue.values()) queuedChars += batchChars(queued.snapshot.key());
+            if (queue.isEmpty()) {
+                settleTicks = 0;
+                queueStartedAtMs = -1L;
+            }
         }
         cancelled.forEach(callback -> deliver(callback, null));
     }

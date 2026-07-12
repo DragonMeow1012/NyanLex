@@ -133,19 +133,25 @@ class FileStoreTest {
     }
 
     @Test
-    void legacyCacheIsDiscardedInsteadOfMigrated() throws IOException {
+    void schema2CacheIsBackedUpAndMigratedWithoutLosingRows() throws IOException {
         Path file = tempFile();
-        // Schema 2 was one giant JSON line. It may contain recursive debug pollution,
-        // so schema 3 deliberately starts clean instead of migrating it.
+        // Schema 2 was one giant JSON line. Upgrades must preserve its valid rows.
         Files.createDirectories(file.getParent());
         Files.writeString(file, "{\"schema\":2,\"entries\":["
                 + "{\"key\":\"Old\",\"translation\":\"舊譯文\"}]}\n");
+        String original = Files.readString(file);
 
         FileStore store = new FileStore(file, false);
-        assertNull(store.get("Old"));
+        assertEquals("舊譯文", store.get("Old"));
         assertNull(store.get("Two"));
-        assertEquals(0, store.size());
-        assertFalse(Files.exists(file), "legacy schemas are replaced by a clean v3 cache");
+        assertEquals(1, store.size());
+        assertTrue(Files.exists(file));
+        Path backup = file.resolveSibling(file.getFileName() + ".schema2.bak");
+        assertTrue(Files.exists(backup));
+        assertEquals(original, Files.readString(backup),
+                "migration is authorized only by a byte-for-byte backup of schema 2");
+        assertEquals(3, JsonParser.parseString(Files.readAllLines(file).get(0))
+                .getAsJsonObject().get("schema").getAsInt());
     }
 
     @Test

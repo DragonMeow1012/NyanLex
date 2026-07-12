@@ -1,8 +1,9 @@
 # Minecraft Translator 1.0.2 packaging
 
-Release JARs are under `mods-jar/1.0.2`, grouped by loader. Each JAR is pinned to
-the Minecraft version printed in its filename; it is not a universal cross-version
-binary.
+Local release JARs are collected under `mods-jar/1.0.2`, grouped by loader. This
+generated directory is ignored by Git; published binaries belong on the GitHub
+Release. Each JAR is pinned to the Minecraft version printed in its filename; it
+is not a universal cross-version binary.
 
 ## Version matrix
 
@@ -25,8 +26,36 @@ binary.
 Java 8 compatibility ports use a reduced implementation focused on chat and item
 tooltips. Fabric 1.14.4-1.16.5 also include the target-language settings list and
 search. Forge 1.12.2-1.13.2 use the G hotkey and do not have the complete modern
-settings screen. Fabric 1.21.11 omits boss-bar, entity-name and scoreboard direct
-render hooks because those rendering APIs changed in that release.
+settings screen.
+
+## Building
+
+Install a Gradle release compatible with the plugin used by the selected project.
+The release builds were verified with Gradle 8.10 for stable Loom projects,
+Gradle 8.13 for NeoForge 1.20.1/1.21.1, and Gradle 9.5 for the 1.21.11/26.x
+projects. Forge 1.12.2 and 1.13.2
+carry their own wrapper. Select the JDK shown in the matrix before invoking a
+project; configured Java toolchains may provision the compile JDK when supported.
+
+From PowerShell, the build shape is:
+
+```powershell
+# Root project: Fabric 1.21.1
+gradle clean build
+
+# Other Fabric and NeoForge projects
+gradle -p fabric120 clean build
+gradle -p neoforge120 clean build
+
+# Legacy Forge wrappers
+Push-Location forge1122
+.\gradlew.bat clean build
+Pop-Location
+```
+
+Replace the `-p` directory with any project shown in the matrix. The release JAR
+is the remapped, non-`-dev`, non-`-sources` file under that project's `build/libs`.
+Run `test` instead of `build` for unit-only verification where tests are present.
 
 ## Release layout
 
@@ -35,7 +64,30 @@ mods-jar/1.0.2/
   forge/
   fabric/
   neoforge/
+  MinecraftTranslator-1.0.2-all-versions.zip
 ```
+
+Copy each final JAR into its loader directory, then create the ZIP from exactly
+those 16 files. The generated package directory stays outside source control and
+is uploaded as GitHub Release assets.
+
+## Verification and publishing
+
+Before publishing:
+
+```powershell
+$jars = Get-ChildItem mods-jar\1.0.2 -Recurse -Filter *.jar
+$jars.Count                         # must be 16
+$jars | Get-FileHash -Algorithm SHA256
+$jars | ForEach-Object { jar tf $_.FullName | Select-String 'LICENSE_MinecraftTranslator' }
+git diff --check
+```
+
+Also confirm each archive contains the correct loader metadata and exact
+Minecraft dependency, and compare every packaged JAR hash with its matching
+`build/libs` output. Publish the 16 individual JARs plus the all-versions ZIP;
+release notes must state the final batch window, cooldown defaults, providers,
+and experimental-provider warning.
 
 Before publishing, test the matching JAR in a clean client with the matching
 loader/API dependency. Compilation and remapping verify the build toolchain, but

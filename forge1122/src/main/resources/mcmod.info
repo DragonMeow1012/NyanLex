@@ -2,7 +2,7 @@
   {
     "modid": "mctranslator",
     "name": "Minecraft Translator",
-    "description": "Client-side asynchronous translation for Minecraft 1.12.2.",
+    "description": "Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation.",
     "version": "1.0.2",
     "mcversion": "1.12.2",
     "authorList": ["DragonMeow"],

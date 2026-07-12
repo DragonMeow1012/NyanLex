@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator;
 
 import com.dragonmeow.mctranslator.config.DisplayMode;
+import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +19,7 @@ class TranslatorConfigTest {
         TranslatorConfig cfg = new TranslatorConfig();
         assertEquals("zh-TW", cfg.targetLang);
         assertEquals("auto", cfg.sourceLang);
+        assertEquals(MachineTranslationProvider.GOOGLE.id(), cfg.machineTranslationProvider);
         assertEquals("gemini-3.1-flash-lite", cfg.aiModel);
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
@@ -26,19 +28,42 @@ class TranslatorConfigTest {
         assertEquals(4, cfg.churnVariantThreshold);
         assertEquals(60, cfg.churnWindowSeconds);
         assertEquals(300, cfg.churnCooldownSeconds);
-        assertEquals(2000, cfg.requestCooldownMs, "事前冷卻預設 400ms");
+        assertEquals(5000, cfg.batchWindowMs);
+        assertEquals(6000, cfg.requestCooldownMs, "事前冷卻安全預設 6000ms");
     }
 
     @Test
     void requestCooldownNormalizesNegativeButKeepsZero() {
-        // Negative is invalid → back to the 2000ms default; 0 is a VALID value (pacing off).
+        // Negative is invalid → back to the 6000ms safe default; 0 is a VALID value (pacing off).
         TranslatorConfig negative = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": -1 }"));
-        assertEquals(2000, negative.requestCooldownMs);
+        assertEquals(6000, negative.requestCooldownMs);
 
         TranslatorConfig off = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": 0 }"));
         assertEquals(0, off.requestCooldownMs, "0 = 關閉節流，不得被回填");
+    }
+
+    @Test
+    void batchWindowNormalizesNegativeButKeepsZero() {
+        TranslatorConfig negative = TranslatorConfig.fromReader(
+                new StringReader("{ \"batchWindowMs\": -1 }"));
+        assertEquals(5000, negative.batchWindowMs);
+
+        TranslatorConfig off = TranslatorConfig.fromReader(
+                new StringReader("{ \"batchWindowMs\": 0 }"));
+        assertEquals(0, off.batchWindowMs);
+    }
+
+    @Test
+    void machineProviderNormalizesUnknownValuesToGoogle() {
+        TranslatorConfig valid = TranslatorConfig.fromReader(
+                new StringReader("{ \"machineTranslationProvider\": \"deepl\" }"));
+        assertEquals(MachineTranslationProvider.DEEPL.id(), valid.machineTranslationProvider);
+
+        TranslatorConfig invalid = TranslatorConfig.fromReader(
+                new StringReader("{ \"machineTranslationProvider\": \"baidu\" }"));
+        assertEquals(MachineTranslationProvider.GOOGLE.id(), invalid.machineTranslationProvider);
     }
 
     @Test

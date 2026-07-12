@@ -6,7 +6,7 @@ modId="mctranslator"
 version="${file.jarVersion}"
 displayName="Minecraft Translator"
 authors="DragonMeow"
-description='''Client-side asynchronous translation for Minecraft 1.13.2.'''
+description='''Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation.'''
 
 [[dependencies.mctranslator]]
 modId="forge"

@@ -26,3 +26,10 @@ Thumbs.db
 .localtest/
 .downloads/
 .jdks/
+
+# Generated packages and runtime diagnostics
+/mods-jar/
+/logs/
+/.agents/
+/pi/
+/*.png
