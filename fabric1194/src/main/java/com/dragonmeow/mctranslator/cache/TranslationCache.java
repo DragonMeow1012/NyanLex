@@ -739,10 +739,19 @@ public final class TranslationCache {
         }
 
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
-        markSessionRetryDemand(snapshot);
         // Requiring an exact style projection has no effect on plain text.
         exactStyle &= hasCsMarkers(snapshot.key());
         Callback cb = new Callback(snapshot, callback, always, exactStyle);
+        if (exactStyle && backingOffState(styleFailureKey(snapshot))) {
+            // The semantic wording is already usable; only this colour topology failed.
+            // Do not let repeated chat messages bypass the style-debt cooldown. The
+            // service will read and display the semantic style fallback after this null
+            // completion, while a later occurrence (or manual invalidation) may try the
+            // exact projection again.
+            deliver(cb, null);
+            return;
+        }
+        markSessionRetryDemand(snapshot);
         if (!eligible(snapshot)) {
             deliver(cb, null);
             return;
@@ -1241,8 +1250,9 @@ public final class TranslationCache {
         if (hasCsMarkers(snapshot.key())) {
             boolean projected = writeStyleProjection(snapshot, translated, isProvisional, writes);
             // A semantic success whose projection could not be written (markers eaten,
-            // residue) must leave a style-ledger debt, or the missing projection would
-            // never be retried and exact-style chat would starve forever.
+            // residue) leaves a passive style-ledger debt. Chat can immediately render
+            // the semantic fallback; buying the exact colours again requires another
+            // observation after backoff (or an explicit manual retry).
             if (!projected && !isProvisional && read(styleProjectionKey(snapshot)) == null) {
                 failStyleProjection(snapshot);
             }
@@ -1532,7 +1542,9 @@ public final class TranslationCache {
         contentFailures.remove(stateKey);
         int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
         failTemporarilyState(stateKey, attempt);
-        retrySnapshots.put(stateKey, snapshot);
+        // Presentation-only debt is deliberately passive. Automatically retaining this
+        // snapshot made flushBatch() rebuy the same CS topology forever when a provider
+        // consistently dropped markers, even though the translated wording was cached.
     }
 
     /**
@@ -1739,9 +1751,9 @@ public final class TranslationCache {
                 provisionalRetryAttempts.putIfAbsent(key, attempt);
             }
             failedUntil.putIfAbsent(key, until);
-            String retrySource = key.startsWith(STYLE_FAILURE_PREFIX)
-                    ? key.substring(STYLE_FAILURE_PREFIX.length()) : key;
-            retrySnapshots.putIfAbsent(key, templates.prepare(retrySource));
+            if (!key.startsWith(STYLE_FAILURE_PREFIX)) {
+                retrySnapshots.putIfAbsent(key, templates.prepare(key));
+            }
             return until;
         } catch (RuntimeException damaged) {
             failures.remove(key);
@@ -1795,22 +1807,20 @@ public final class TranslationCache {
         return STYLE_FAILURE_PREFIX + (snapshot == null ? "" : snapshot.key());
     }
 
-    /** Re-enqueue only failures explicitly demanded during this process. Persisted
-     * item tooltip debt is passive until the item is visible and submitted again. */
+    /** Re-enqueue only semantic/content failures explicitly demanded during this
+     * process. Presentation-only CS debts are passive: their semantic fallback is
+     * already displayable, so only another observation/manual retry may rebuy them. */
     private void enqueueDueRetries() {
         for (Map.Entry<String, TranslationTemplate.Snapshot> entry : retrySnapshots.entrySet()) {
             String stateKey = entry.getKey();
             TranslationTemplate.Snapshot snapshot = entry.getValue();
-            if (snapshot == null || keepsOriginal(stateKey)) {
-                discardRetryState(stateKey, snapshot);
+            if (stateKey.startsWith(STYLE_FAILURE_PREFIX)) {
+                // Defensive cleanup for a snapshot created before style debts became
+                // passive; retain its ledger/backoff row for the next real observation.
+                retrySnapshots.remove(stateKey, snapshot);
                 continue;
             }
-            // A style retry is done once the projection row exists. Its snapshot key may
-            // carry §-codes, so projectionKey != snapshot.key() and lookupSnapshot below
-            // cannot see the projection row — without this check the retry would rebuy
-            // the same marked key forever.
-            if (stateKey.startsWith(STYLE_FAILURE_PREFIX)
-                    && read(styleProjectionKey(snapshot)) != null) {
+            if (snapshot == null || keepsOriginal(stateKey)) {
                 discardRetryState(stateKey, snapshot);
                 continue;
             }

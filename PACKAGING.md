@@ -64,12 +64,17 @@ mods-jar/1.0.2/
   forge/
   fabric/
   neoforge/
+  MinecraftTranslator-1.0.2-Fabric.zip
+  MinecraftTranslator-1.0.2-Forge.zip
+  MinecraftTranslator-1.0.2-NeoForge.zip
   MinecraftTranslator-1.0.2-all-versions.zip
 ```
 
-Copy each final JAR into its loader directory, then create the ZIP from exactly
-those 16 files. The generated package directory stays outside source control and
-is uploaded as GitHub Release assets.
+Copy each final JAR into its loader directory. Create one loader ZIP from each
+directory, then create the all-versions ZIP with the `fabric/`, `forge/`, and
+`neoforge/` directories intact. The generated package directory stays outside
+source control. Publish the 16 individual JARs, the three loader ZIPs, and the
+all-versions ZIP as GitHub Release assets.
 
 ## Verification and publishing
 
@@ -80,6 +85,8 @@ $jars = Get-ChildItem mods-jar\1.0.2 -Recurse -Filter *.jar
 $jars.Count                         # must be 16
 $jars | Get-FileHash -Algorithm SHA256
 $jars | ForEach-Object { jar tf $_.FullName | Select-String 'LICENSE_MinecraftTranslator' }
+$zips = Get-ChildItem mods-jar\1.0.2 -File -Filter *.zip
+$zips.Count                         # must be 4
 git diff --check
 ```
 

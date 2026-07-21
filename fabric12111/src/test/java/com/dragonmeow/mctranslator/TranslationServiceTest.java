@@ -902,7 +902,7 @@ class TranslationServiceTest {
                 "the second callback lets the loader replace the same displayed chat row");
     }
 
-    // ---- chat back-fill: style-fallback ships first, the exact projection replaces later ----
+    // ---- chat back-fill: style debt stays passive until the text is seen again ----
 
     /** Fake AI: eats the CS markers on the first marked round, restores them on the
      *  second; plain semantic keys always translate cleanly. */
@@ -918,7 +918,7 @@ class TranslationServiceTest {
     }
 
     @Test
-    void exactStyleChatShipsSemanticFallbackFirstThenExactProjectionBackfills() {
+    void exactStyleChatDoesNotRetryInBackgroundAndHealsWhenSeenAgain() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -928,7 +928,8 @@ class TranslationServiceTest {
             gtCalls.incrementAndGet();
             throw new TranslationException("GT must not be consulted");
         }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
-        TranslationCache ai = new TranslationCache(markerEatingThenHealingAi(new AtomicInteger()),
+        AtomicInteger markedRound = new AtomicInteger();
+        TranslationCache ai = new TranslationCache(markerEatingThenHealingAi(markedRound),
                 cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
         TranslationService s = new TranslationService(cfg, gt, ai);
         String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
@@ -947,9 +948,20 @@ class TranslationServiceTest {
         assertEquals("你好 世界", TextFilter.stripStyleFallback(delivered.get(0)));
 
         now[0] = 10_000L;
-        pump(s);                          // retry succeeds with exact markers
-        assertEquals(2, delivered.size(), "the late exact projection must back-fill the row");
+        pump(s);
+        assertEquals(1, markedRound.get(),
+                "an expired colour debt must not spend another request in the background");
+        assertEquals(1, delivered.size(), "the semantic fallback remains the final shown row");
+
+        s.translateChatAsync(marked, t -> {             // a new occurrence may retry once
+            if (t != null) delivered.add(t);
+        });
+        pump(s);
+        assertEquals(2, markedRound.get());
+        assertEquals(3, delivered.size(),
+                "the healed projection updates both the older waiter and the new chat row");
         assertEquals("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", delivered.get(1));
+        assertEquals(delivered.get(1), delivered.get(2));
         assertFalse(TextFilter.isStyleFallback(delivered.get(1)));
         assertEquals(0, gtCalls.get(), "a style-only projection debt must never buy GT");
     }

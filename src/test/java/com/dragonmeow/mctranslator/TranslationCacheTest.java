@@ -2217,14 +2217,12 @@ class TranslationCacheTest {
         }
     }
 
-    // ---- chat back-fill root causes: style-projection debts must survive and retire ----
+    // ---- chat back-fill: style debts are passive and heal on a later observation ----
 
-    /** Root cause #2A: a plain semantic success used to uproot the pending CS-marked
-     *  retry entirely (clearFailureState removed the shared family retry snapshot),
-     *  so the missing projection was never bought again. It must transfer to the
-     *  style ledger and be re-bought after backoff. */
+    /** A plain semantic success transfers the missing CS projection to a passive style
+     *  ledger. Tick flushes must not spend requests; a later occurrence may retry it. */
     @Test
-    void plainSemanticSuccessTransfersPendingMarkedRetryToStyleLedger() {
+    void plainSemanticSuccessLeavesPassiveStyleDebtUntilObservedAgain() {
         String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
         long[] now = {0L};
         List<String> sent = new ArrayList<>();
@@ -2250,21 +2248,24 @@ class TranslationCacheTest {
 
         now[0] = 5_000L;                               // style-ledger backoff expired
         for (int i = 0; i < 4; i++) cache.flushBatch();
-        assertEquals(2, sent.stream().filter(marked::equals).count(),
-                "the surviving style debt must re-buy the marked key after backoff");
+        assertEquals(1, sent.stream().filter(marked::equals).count(),
+                "tick flushes must not re-buy a presentation-only debt");
 
         java.util.concurrent.atomic.AtomicReference<String> exact =
                 new java.util.concurrent.atomic.AtomicReference<>();
         cache.requestCoalescedExactStyle(marked, exact::set, false);
+        for (int i = 0; i < 4; i++) cache.flushBatch();
+        assertEquals(2, sent.stream().filter(marked::equals).count(),
+                "seeing the same rich text again may buy one exact projection");
         assertEquals("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", exact.get(),
-                "the late retry success must materialise the exact projection");
+                "the newly observed retry must materialise the exact projection");
     }
 
     /** Root cause #2B: writeStyleProjection can silently skip its row (here: stripping
      *  §-codes destroys every §-adjacent marker, leaving bare residue). The semantic
-     *  store must then record a style-ledger debt so the projection keeps retrying. */
+     *  store records a passive debt instead of starting an unbounded retry loop. */
     @Test
-    void unwritableStyleProjectionAfterSemanticStoreLeavesRetryDebt() {
+    void unwritableStyleProjectionStaysPassiveUntilObservedAgain() {
         String marked = "⟦CS0⟧Hello world⟦/CS0⟧";
         long[] now = {0L};
         List<String> sent = new ArrayList<>();
@@ -2282,15 +2283,24 @@ class TranslationCacheTest {
 
         now[0] = 1_000L;
         for (int i = 0; i < 4; i++) cache.flushBatch();
+        assertEquals(1, sent.stream().filter(marked::equals).count(),
+                "an unwritable colour projection must not retry itself");
+
+        cache.requestCoalescedExactStyle(marked, ignored -> { }, true);
+        for (int i = 0; i < 4; i++) cache.flushBatch();
         assertEquals(2, sent.stream().filter(marked::equals).count(),
-                "a semantic store without a projection row must leave a retryable style debt");
+                "a later observation gets one new attempt");
+
+        now[0] = 10_000L;
+        for (int i = 0; i < 6; i++) cache.flushBatch();
+        assertEquals(2, sent.stream().filter(marked::equals).count(),
+                "the second failure must return to passive state");
     }
 
-    /** Root cause #2C: a style retry whose snapshot key carries §-codes uses a
-     *  projection key that lookupSnapshot cannot see; once the projection exists the
-     *  retry must be discarded instead of re-buying the same marked key forever. */
+    /** A passive debt whose key carries §-codes can still reuse a compatible projection
+     *  produced by a later real observation. */
     @Test
-    void styleRetryIsDiscardedOnceProjectionExistsIncludingSectionCodeKeys() {
+    void passiveStyleDebtUsesLaterSharedProjectionIncludingSectionCodeKeys() {
         String sectionMarked = "⟦CS0⟧§eHello⟦/CS0⟧ ⟦CS1⟧§aWorld⟦/CS1⟧";
         String cleanMarked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
         long[] now = {0L};
@@ -2308,9 +2318,9 @@ class TranslationCacheTest {
         TranslationCache cache = new TranslationCache(
                 translator, "zh-TW", DIRECT, 100, 1_000L, () -> now[0]);
 
-        cache.requestAsync(sectionMarked);             // damaged -> pending marked retry
+        cache.requestAsync(sectionMarked);             // damaged -> passive marked debt
         now[0] = 1_000L;
-        cache.requestAsync("Hello World");             // transfer debt to the style ledger
+        cache.requestAsync("Hello World");             // semantic wording becomes final
         cache.requestCoalescedExactStyle(cleanMarked, ignored -> { }, true);
         for (int i = 0; i < 4; i++) cache.flushBatch(); // writes the shared projection row
 
@@ -2326,10 +2336,10 @@ class TranslationCacheTest {
                 "the §-code variant is served from the shared projection row");
     }
 
-    /** Root cause #3 core chain: an exact-style final waiter must be reached by
-     *  notifyFinalWaiters when the projection lands via the retry queue. */
+    /** An exact-style final waiter remains eligible for notification when a later
+     *  occurrence explicitly retries and lands the projection. */
     @Test
-    void exactStyleFinalWaiterIsNotifiedByLateRetrySuccess() {
+    void exactStyleFinalWaiterIsNotifiedByLaterObservedSuccess() {
         String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
         long[] now = {0L};
         AtomicInteger markedRound = new AtomicInteger();
@@ -2357,8 +2367,12 @@ class TranslationCacheTest {
 
         now[0] = 5_000L;
         for (int i = 0; i < 4; i++) cache.flushBatch();
+        assertNull(delivered.get(), "tick flushes alone must not retry colour debt");
+
+        cache.requestCoalescedExactStyle(marked, ignored -> { }, true);
+        for (int i = 0; i < 4; i++) cache.flushBatch();
         assertEquals("⟦CS0⟧你好⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", delivered.get(),
-                "the retry-driven late success must notify the exact-style waiter");
+                "the later observed success must notify the exact-style waiter");
     }
 
     /** Regression lock: waiter families stay LRU-bounded at 512. */
