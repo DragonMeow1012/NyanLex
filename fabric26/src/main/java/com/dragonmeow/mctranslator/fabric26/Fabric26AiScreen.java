@@ -1,5 +1,7 @@
 package com.dragonmeow.mctranslator.fabric26;
 
+import com.dragonmeow.mctranslator.config.CodexAccountDisplay;
+import com.dragonmeow.mctranslator.config.CodexModelCatalog;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.translate.CodexAppServerClient;
 import com.dragonmeow.mctranslator.translate.CodexAppServerClient.AccountSnapshot;
@@ -17,7 +19,6 @@ import net.minecraft.util.Util;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public final class Fabric26AiScreen extends Screen {
     private static final String OPENAI_API_URL = "https://api.openai.com/v1";
@@ -368,41 +369,14 @@ public final class Fabric26AiScreen extends Screen {
 
     private void normalizeCodexSelection(List<ModelOption> models) {
         TranslatorConfig cfg = MctranslatorFabric26.config();
-        if (models == null || models.isEmpty()) {
-            cfg.codexModel = TranslatorConfig.DEFAULT_CODEX_MODEL;
-            cfg.codexReasoningEffort = TranslatorConfig.DEFAULT_CODEX_REASONING_EFFORT;
-            MctranslatorFabric26.saveConfig();
-            return;
-        }
-        ModelOption selected = models.stream()
-                .filter(option -> option.model().equals(cfg.codexModel))
-                .findFirst()
-                .orElseGet(() -> models.stream().filter(ModelOption::isDefault)
-                        .findFirst().orElse(models.get(0)));
-        cfg.codexModel = selected.model();
-        normalizeEffort(cfg, selected);
+        CodexModelCatalog.normalizeSelection(cfg, models);
         MctranslatorFabric26.saveConfig();
-    }
-
-    static void normalizeEffort(TranslatorConfig cfg, ModelOption selected) {
-        List<String> efforts = selected.reasoningEfforts();
-        if (efforts.isEmpty()) {
-            cfg.codexReasoningEffort = "";
-            return;
-        }
-        if (efforts.contains(cfg.codexReasoningEffort)) return;
-        String defaultEffort = selected.defaultReasoningEffort();
-        cfg.codexReasoningEffort = defaultEffort != null && efforts.contains(defaultEffort)
-                ? defaultEffort : efforts.get(0);
     }
 
     private java.util.Optional<ModelOption> selectedModel() {
         CodexAppServerClient client = MctranslatorFabric26.codexClient();
-        if (client == null) return java.util.Optional.empty();
-        String selected = MctranslatorFabric26.config().codexModel;
-        return client.cachedModels().stream()
-                .filter(option -> option.model().equals(selected))
-                .findFirst();
+        List<ModelOption> models = client == null ? List.of() : client.cachedModels();
+        return CodexModelCatalog.selected(MctranslatorFabric26.config(), models);
     }
 
     private Component modelLabel() {
@@ -507,8 +481,8 @@ public final class Fabric26AiScreen extends Screen {
             return;
         }
         Component line1 = Component.translatable("screen.mctranslator.ai.codex.signed_in");
-        Component line2 = Component.literal(maskEmail(account.email()));
-        Component line3 = Component.literal(formatPlan(account.planType()));
+        Component line2 = Component.literal(CodexAccountDisplay.maskEmail(account.email()));
+        Component line3 = Component.literal(CodexAccountDisplay.formatPlan(account.planType()));
         drawRight(graphics, line1, 5, 0xFF80FF80);
         drawRight(graphics, line2, 16, 0xFFFFFFFF);
         drawRight(graphics, line3, 27, 0xFFA0A0A0);
@@ -516,35 +490,6 @@ public final class Fabric26AiScreen extends Screen {
 
     private void drawRight(GuiGraphicsExtractor graphics, Component text, int y, int color) {
         graphics.text(this.font, text, this.width - this.font.width(text) - 6, y, color, false);
-    }
-
-    static String maskEmail(String email) {
-        if (email == null || email.isBlank()) return "*****";
-        String value = email.trim();
-        int at = value.indexOf('@');
-        if (at <= 0 || at == value.length() - 1) {
-            return value.length() <= 2 ? "*****"
-                    : value.substring(0, 1) + "***" + value.substring(value.length() - 1);
-        }
-        String local = value.substring(0, at);
-        String domain = value.substring(at);
-        if (local.length() == 1) return local + "***" + domain;
-        if (local.length() == 2) return local.substring(0, 1) + "***" + domain;
-        return local.substring(0, Math.min(2, local.length() - 1))
-                + "***" + local.substring(local.length() - 1) + domain;
-    }
-
-    private static String formatPlan(String plan) {
-        if (plan == null || plan.isBlank()) return "ChatGPT";
-        String normalized = plan.trim().replace('_', ' ').replace('-', ' ');
-        StringBuilder title = new StringBuilder();
-        for (String part : normalized.split("\\s+")) {
-            if (part.isEmpty()) continue;
-            if (!title.isEmpty()) title.append(' ');
-            title.append(part.substring(0, 1).toUpperCase(Locale.ROOT));
-            if (part.length() > 1) title.append(part.substring(1).toLowerCase(Locale.ROOT));
-        }
-        return "ChatGPT " + title;
     }
 
     private static String providerLabel(String label, boolean selected) {

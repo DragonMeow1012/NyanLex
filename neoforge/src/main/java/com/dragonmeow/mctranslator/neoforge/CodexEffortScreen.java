@@ -1,5 +1,6 @@
 package com.dragonmeow.mctranslator.neoforge;
 
+import com.dragonmeow.mctranslator.config.CodexModelCatalog;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.translate.CodexAppServerClient;
 import com.dragonmeow.mctranslator.translate.CodexAppServerClient.ModelOption;
@@ -75,13 +76,8 @@ public final class CodexEffortScreen extends OptionsSubScreen {
 
     private List<String> supportedEfforts() {
         CodexAppServerClient client = MctranslatorNeoForge.codexClient();
-        if (client == null) return List.of();
-        String selectedModel = MctranslatorNeoForge.config().codexModel;
-        return client.cachedModels().stream()
-                .filter(option -> option.model().equals(selectedModel))
-                .findFirst()
-                .map(ModelOption::reasoningEfforts)
-                .orElse(List.of());
+        List<ModelOption> models = client == null ? List.of() : client.cachedModels();
+        return CodexModelCatalog.supportedEfforts(MctranslatorNeoForge.config(), models);
     }
 
     private final class EffortSelectionList

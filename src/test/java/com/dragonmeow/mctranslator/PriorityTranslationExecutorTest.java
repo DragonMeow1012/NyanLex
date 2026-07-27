@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PriorityTranslationExecutorTest {
 
     @Test
-    void interactiveTaskOvertakesQueuedBackgroundWarmup() throws Exception {
+    void interactiveTaskOvertakesQueuedBackgroundWork() throws Exception {
         PriorityTranslationExecutor executor = new PriorityTranslationExecutor(1, r -> {
             Thread thread = new Thread(r, "priority-test");
             thread.setDaemon(true);

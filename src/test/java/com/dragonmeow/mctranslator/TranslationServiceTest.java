@@ -196,7 +196,8 @@ class TranslationServiceTest {
         TranslationService s = service(cfg, translator, DIRECT);
         s.setItemSourceLanguage(() -> "ja_jp");
 
-        s.warmNamesBatch(List.of("金床"));
+        assertFalse(s.translateItemLine("金床").changed());
+        pump(s);
         assertEquals(1, calls.get());
         assertTrue(s.translateItemLine("金床").changed());
 
@@ -364,7 +365,7 @@ class TranslationServiceTest {
     }
 
     @Test
-    void warmNamesBatchSendsNoSurfaceContextButWarmTooltipBatchDoes() {
+    void warmTooltipBatchCarriesItsSurfaceContext() {
         List<List<String>> seenContexts = new ArrayList<>();
         Translator fake = new Translator() {
             @Override public TranslationResult translate(String text, String targetLang) {
@@ -382,16 +383,9 @@ class TranslationServiceTest {
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         TranslationService s = service(cfg, fake, DIRECT);
 
-        // Unrelated container item names: NO tooltip surface context may reach the translator.
-        s.warmNamesBatch(List.of("Diamond Sword", "Ender Pearl"));
-        assertEquals(1, seenContexts.size(), "one batched request for the names");
-        assertEquals(null, seenContexts.get(0),
-                "warmNamesBatch must not attach any surface context");
-
-        // Contrast: a real tooltip batch DOES carry its full line list as context.
         s.warmTooltipBatch(List.of("Iron Pickaxe", "Used in smelting"));
-        assertEquals(2, seenContexts.size());
-        assertEquals(List.of("Iron Pickaxe", "Used in smelting"), seenContexts.get(1),
+        assertEquals(1, seenContexts.size());
+        assertEquals(List.of("Iron Pickaxe", "Used in smelting"), seenContexts.get(0),
                 "warmTooltipBatch keeps sending the whole tooltip as context");
     }
 
@@ -755,7 +749,7 @@ class TranslationServiceTest {
         };
         TranslationService s = service(cfg, contextAware, DIRECT);
 
-        s.warmNamesBatch(List.of("Aspect of the End"));
+        assertFalse(s.translateHeld("Aspect of the End").changed());
         pump(s);
         assertEquals("末影之視", s.translateHeld("Aspect of the End").translated());
 

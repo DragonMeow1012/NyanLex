@@ -11,14 +11,11 @@ import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
-import com.dragonmeow.mctranslator.translate.AiSettings;
+import com.dragonmeow.mctranslator.translate.AiTranslationRuntime;
 import com.dragonmeow.mctranslator.translate.CodexAppServerClient;
-import com.dragonmeow.mctranslator.translate.CodexAppServerTransport;
-import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.RequestPacer;
 import com.dragonmeow.mctranslator.translate.SessionTokenUsage;
-import com.dragonmeow.mctranslator.translate.SwitchingAiTranslator;
 import com.dragonmeow.mctranslator.translate.SwitchingMachineTranslator;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
@@ -70,11 +67,8 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     private static TranslatorConfig config;
     private static TranslationService service;
     private static Path configPath;
-    private static UrlHttpTransport transport;
-    private static CodexAppServerClient codexClient;
-    private static CodexAppServerTransport codexTransport;
+    private static AiTranslationRuntime aiRuntime;
     private static TranslationDebugLog debugLog;
-    private static final SessionTokenUsage tokenUsage = new SessionTokenUsage();
     private static final ThreadLocal<Integer> internalOverlayDepth =
             ThreadLocal.withInitial(() -> 0);
     private static final ThreadLocal<Integer> tooltipProbeDepth =
@@ -353,14 +347,14 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     }
 
     public static CodexAppServerClient codexClient() {
-        return codexClient;
+        return aiRuntime == null ? null : aiRuntime.codexClient();
     }
 
     public static TranslationDebugLog debugLog() {
         return debugLog;
     }
     public static SessionTokenUsage.Snapshot tokenUsageSnapshot() {
-        return tokenUsage.snapshot();
+        return aiRuntime == null ? SessionTokenUsage.Snapshot.EMPTY : aiRuntime.tokenUsage();
     }
 
 
@@ -561,7 +555,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     }
 
     /**
-     * Name-tag entry (R7/R15 guard, string fallback): a REAL online player — one the TAB
+     * Name-tag entry (string fallback): a REAL online player — one the TAB
      * player list shows, i.e. in {@code getListedOnlinePlayers()} — keeps the ORIGINAL name
      * tag (player IDs are names, not text; "最偉大的迪加" must never happen). The mixin
      * passes the render state, so real Avatar entities are rejected authoritatively.
@@ -633,33 +627,21 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         ExecutorService executor = new com.dragonmeow.mctranslator.translate.PriorityTranslationExecutor(
                 workers, threadFactory);
 
-        transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
+        UrlHttpTransport httpTransport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         // 事前冷卻節流：one pacer PER ENGINE so Google and AI space their own requests
         // without blocking each other. The cooldown is read live from config.
-        SwitchingMachineTranslator google = new SwitchingMachineTranslator(transport,
+        SwitchingMachineTranslator google = new SwitchingMachineTranslator(httpTransport,
                 () -> config.sourceLang,
                 () -> config.machineTranslationProvider,
                 new RequestPacer(() -> config.requestCooldownMs));
-        OpenAiTranslator apiAi = new OpenAiTranslator(transport,
-                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
-                new RequestPacer(() -> config.requestCooldownMs));
-        apiAi.setTokenUsage(tokenUsage);
-        codexClient = new CodexAppServerClient(
+        aiRuntime = new AiTranslationRuntime(
+                config,
+                httpTransport,
                 configDir.resolve(MOD_ID + "-codex-home"),
                 configDir.resolve(MOD_ID + "-codex-workspace"));
-        codexClient.setTokenUsage(tokenUsage);
-        codexTransport = new CodexAppServerTransport(codexClient,
-                () -> config.codexReasoningEffort);
-        OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,
-                () -> new AiSettings("codex://app-server", config.codexModel,
-                        List.of(), config.aiGlossary),
-                new RequestPacer(() -> config.requestCooldownMs));
-        SwitchingAiTranslator ai = new SwitchingAiTranslator(
-                apiAi, codexAi, () -> config.aiUseCodex);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            CodexAppServerClient client = codexClient;
-            if (client != null) client.close();
-        }, "mctranslator-codex-shutdown"));
+        AiTranslationRuntime runtime = aiRuntime;
+        Runtime.getRuntime().addShutdownHook(
+                new Thread(runtime::close, "mctranslator-codex-shutdown"));
         PersistentStore googleStore = new ProviderLanguageFileStore(
                 configDir, MOD_ID + "-cache", config.targetLang,
                 () -> config.machineTranslationProvider);
@@ -672,7 +654,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
                 configDir, MOD_ID + "-failures", config.targetLang);
         TranslationCache cache = new TranslationCache(google, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
-        TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
+        TranslationCache aiCache = new TranslationCache(aiRuntime, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
         cache.setFailureStore(new DynamicNamespacedStore(failureStore,
                 () -> "gt-" + MachineTranslationProvider.normalize(config.machineTranslationProvider)));
@@ -683,16 +665,9 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         debugLog = new TranslationDebugLog(() -> config != null && config.debugTranslationOverlay);
         cache.setDebugLog("GT", debugLog);
         aiCache.setDebugLog("AI", debugLog);
-        // GT 暫代 → AI 補翻: provisional (fallback-produced) entries in the AI cache are
-        // re-asked of the AI on a later hit, but only when keys are configured AND the
-        // global 429 gate has reopened. Only the AI cache gets a gate — the Google cache
-        // never stores provisional values.
+        // Retry provisional machine translations only while the active AI backend is ready.
         aiCache.setProvisionalRetryGate(() ->
-                (config.aiUseCodex
-                        ? codexClient != null && codexClient.isSignedInCached()
-                                && config.codexModel != null && !config.codexModel.isBlank()
-                        : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
-                        && !ai.isRateLimited());
+                aiRuntime.isConfigured() && !aiRuntime.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
@@ -1480,58 +1455,41 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         status(Component.translatable("message.mctranslator.retranslate", stack.getHoverName().getString()).getString());
     }
 
-    public static void testAi(String baseUrl, String model, List<String> keys, java.util.function.Consumer<String> onResult) {
-        if (transport == null) {
-            onResult.accept(Component.translatable("message.mctranslator.not_initialized").getString());
-            return;
-        }
-        Thread t = new Thread(() -> {
-            String msg;
-            try {
-                OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys),
-                        new RequestPacer(() -> config == null ? 0L : config.requestCooldownMs));
-                ai.setTokenUsage(tokenUsage);
-                String out = ai.translate("Hello, world", "zh-TW").translatedText();
-                msg = Component.translatable("message.mctranslator.success", "Hello, world → " + out).getString();
-            } catch (Exception e) {
-                msg = Component.translatable("message.mctranslator.failed", e.getMessage()).getString();
-            }
-            final String result = msg;
-            Minecraft mc = Minecraft.getInstance();
-            if (mc != null) mc.execute(() -> onResult.accept(result));
-            else onResult.accept(result);
-        }, "mctranslator-aitest");
-        t.setDaemon(true);
-        t.start();
+    public static void testAi(String baseUrl, String model, List<String> keys,
+                              java.util.function.Consumer<String> onResult) {
+        runAiTest("mctranslator-ai-test", onResult,
+                () -> aiRuntime.testApi(baseUrl, model, keys));
     }
 
     public static void testCodex(java.util.function.Consumer<String> onResult) {
-        if (codexTransport == null || config == null) {
+        runAiTest("mctranslator-codex-test", onResult, () -> aiRuntime.testCodex());
+    }
+
+    private static void runAiTest(String threadName,
+                                  java.util.function.Consumer<String> onResult,
+                                  java.util.concurrent.Callable<com.dragonmeow.mctranslator.translate.TranslationResult> test) {
+        if (aiRuntime == null) {
             onResult.accept(Component.translatable("message.mctranslator.not_initialized").getString());
             return;
         }
-        Thread t = new Thread(() -> {
-            String msg;
+        Thread thread = new Thread(() -> {
+            String message;
             try {
-                OpenAiTranslator ai = new OpenAiTranslator(codexTransport,
-                        () -> new AiSettings("codex://app-server", config.codexModel,
-                                List.of(), config.aiGlossary),
-                        new RequestPacer(() -> config.requestCooldownMs));
-                String out = ai.translate("Hello, world", "zh-TW").translatedText();
-                msg = Component.translatable("message.mctranslator.success",
-                        "Hello, world → " + out).getString();
+                String translated = test.call().translatedText();
+                message = Component.translatable("message.mctranslator.success",
+                        "Hello, world → " + translated).getString();
             } catch (Exception e) {
-                msg = Component.translatable("message.mctranslator.failed", e.getMessage()).getString();
+                message = Component.translatable(
+                        "message.mctranslator.failed", e.getMessage()).getString();
             }
-            final String result = msg;
-            Minecraft mc = Minecraft.getInstance();
-            if (mc != null) mc.execute(() -> onResult.accept(result));
+            String result = message;
+            Minecraft client = Minecraft.getInstance();
+            if (client != null) client.execute(() -> onResult.accept(result));
             else onResult.accept(result);
-        }, "mctranslator-codex-test");
-        t.setDaemon(true);
-        t.start();
+        }, threadName);
+        thread.setDaemon(true);
+        thread.start();
     }
-
     private void status(String msg) {
         Minecraft mc = Minecraft.getInstance();
         if (mc != null && mc.player != null) {

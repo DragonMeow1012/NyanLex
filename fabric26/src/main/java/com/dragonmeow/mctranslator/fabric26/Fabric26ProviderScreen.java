@@ -58,7 +58,7 @@ public final class Fabric26ProviderScreen extends OptionsSubScreen {
         LinearLayout footer = this.layout.addToFooter(LinearLayout.vertical()).spacing(8);
         footer.defaultCellSetting().alignHorizontallyCenter();
         footer.addChild(new StringWidget(
-                Component.translatable("screen.mctranslator.provider.warning"), this.font));
+                Component.translatable("screen.mctranslator.provider.experimental_warning"), this.font));
         footer.addChild(Button.builder(CommonComponents.GUI_DONE, b -> onDone()).build());
     }
 
@@ -90,7 +90,7 @@ public final class Fabric26ProviderScreen extends OptionsSubScreen {
     static Component providerName(MachineTranslationProvider provider) {
         Component base = Component.translatable("screen.mctranslator.provider." + provider.id());
         return provider.experimental()
-                ? Component.translatable("screen.mctranslator.provider.experimental_name", base)
+                ? Component.translatable("screen.mctranslator.provider.experimental", base)
                 : base;
     }
 

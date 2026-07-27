@@ -28,6 +28,15 @@ tooltips. Fabric 1.14.4-1.16.5 also include the target-language settings list an
 search. Forge 1.12.2-1.13.2 use the G hotkey and do not have the complete modern
 settings screen.
 
+## Source layout
+
+The current Fabric 26.2 (`fabric26`) and NeoForge 1.21.1 (`neoforge`) targets
+compile loader-independent Java and language resources directly from `src`.
+Their own source trees contain only loader/version integration. Historical
+targets keep version-pinned snapshots and must be ported and verified
+individually; there is no mechanical cross-version overwrite step. See
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Building
 
 Install a Gradle release compatible with the plugin used by the selected project.

@@ -1,5 +1,6 @@
 package com.dragonmeow.mctranslator.fabric26;
 
+import com.dragonmeow.mctranslator.config.CodexModelCatalog;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.translate.CodexAppServerClient;
 import com.dragonmeow.mctranslator.translate.CodexAppServerClient.ModelOption;
@@ -18,7 +19,6 @@ import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
-import java.util.Locale;
 
 /** Searchable Codex model picker matching the translation-language selection UI. */
 public final class Fabric26CodexModelScreen extends OptionsSubScreen {
@@ -82,8 +82,7 @@ public final class Fabric26CodexModelScreen extends OptionsSubScreen {
 
     private void choose(ModelOption option) {
         TranslatorConfig cfg = MctranslatorFabric26.config();
-        cfg.codexModel = option.model();
-        Fabric26AiScreen.normalizeEffort(cfg, option);
+        CodexModelCatalog.select(cfg, option);
         MctranslatorFabric26.saveConfig();
         Fabric26TextStyle.clearRenderMemo();
         this.minecraft.setScreenAndShow(this.lastScreen);
@@ -98,13 +97,9 @@ public final class Fabric26CodexModelScreen extends OptionsSubScreen {
         }
 
         private void filterEntries(String filter) {
-            String needle = filter == null ? "" : filter.strip().toLowerCase(Locale.ROOT);
             CodexAppServerClient client = MctranslatorFabric26.codexClient();
             List<ModelOption> models = client == null ? List.of() : client.cachedModels();
-            List<Entry> entries = models.stream()
-                    .filter(option -> needle.isEmpty()
-                            || option.model().toLowerCase(Locale.ROOT).contains(needle)
-                            || option.displayName().toLowerCase(Locale.ROOT).contains(needle))
+            List<Entry> entries = CodexModelCatalog.filter(models, filter).stream()
                     .map(Entry::new)
                     .toList();
             this.replaceEntries(entries);

@@ -108,7 +108,7 @@ Fabric 1.14.4、1.15.2、1.16.5 提供精簡設定頁與 `G`；Forge 1.12.2、1.
 
 ## 從原始碼建置
 
-16 個目標是彼此獨立的 Gradle 專案，因為不同 Minecraft、Fabric、Forge 與 NeoForge API 不具二進位相容性。專案目錄、JDK、建置與發布驗證方式請見 [PACKAGING.md](PACKAGING.md)。
+16 個目標是彼此獨立的 Gradle 專案，因為不同 Minecraft、Fabric、Forge 與 NeoForge API 不具二進位相容性。共用核心與平台責任邊界請見 [ARCHITECTURE.md](ARCHITECTURE.md)；專案目錄、JDK、建置與發布驗證方式請見 [PACKAGING.md](PACKAGING.md)。
 
 ## 回報問題
 

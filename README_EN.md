@@ -105,7 +105,7 @@ Fabric 1.17.1 through 26.2 and all three NeoForge JARs skip the vanilla Language
 
 ## Building from source
 
-The 16 targets are separate Gradle projects because the Minecraft, Fabric, Forge, and NeoForge APIs are not binary-compatible across these releases. See [PACKAGING.md](PACKAGING.md) for project directories, JDKs, build commands, and release verification.
+The 16 targets are separate Gradle projects because the Minecraft, Fabric, Forge, and NeoForge APIs are not binary-compatible across these releases. See [ARCHITECTURE.md](ARCHITECTURE.md) for common-core and loader boundaries, and [PACKAGING.md](PACKAGING.md) for project directories, JDKs, build commands, and release verification.
 
 ## Reporting issues
 

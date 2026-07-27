@@ -84,9 +84,6 @@ public final class MctranslatorFabric implements ClientModInitializer {
     private static final ThreadLocal<java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen>>
             SCREEN_RENDER_STACK = ThreadLocal.withInitial(java.util.ArrayDeque::new);
 
-    private net.minecraft.client.gui.screens.Screen lastContainerScreen;
-    private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
-    /** Names queued from the local player's hotbar, backpack, armour and off-hand. */
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
@@ -735,8 +732,6 @@ public final class MctranslatorFabric implements ClientModInitializer {
 
     private void onTargetLanguageChanged() {
         FabricTextStyle.clearRenderMemo();
-        lastContainerScreen = null;
-        warmedContainerNames.clear();
         lastTooltipStack = null;
         lastTooltipParagraphSources = null;
         lastTooltipScreen = null;
@@ -1378,11 +1373,6 @@ public final class MctranslatorFabric implements ClientModInitializer {
         if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(mc);
-        warmVisibleHudItems(mc);
-        // R12 (user clarification of R10): the OPEN container is "the current page" — its
-        // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
-        // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
-        warmOpenContainerItems(mc);
     }
 
     private void onScreenKey(net.minecraft.client.gui.screens.Screen screen, int key, int scancode) {
@@ -1439,49 +1429,6 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 collectWidgets(c.children(), out, depth + 1);
             }
         }
-    }
-
-    private void warmOpenContainerItems(Minecraft mc) {
-        if (mc == null || service == null) return;
-        if (service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-        if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) {
-            if (lastContainerScreen != null) {
-                lastContainerScreen = null;
-                warmedContainerNames.clear();
-            }
-            return;
-        }
-        if (screen != lastContainerScreen) {
-            lastContainerScreen = screen;
-            warmedContainerNames.clear();
-        }
-        List<String> newNames = new ArrayList<>();
-        for (Slot slot : screen.getMenu().slots) {
-            if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
-            String name = slot.getItem().getHoverName().getString();
-            if (name != null && !name.isBlank()) {
-                newNames.add(name);
-            }
-        }
-        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
-    }
-
-    private void warmVisibleHudItems(Minecraft mc) {
-        if (mc == null || mc.player == null || service == null
-                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
-        for (int slot = 0; slot < 9; slot++) {
-            ItemStack stack = mc.player.getInventory().getItem(slot);
-            if (stack == null || stack.isEmpty()) continue;
-            String name = stack.getHoverName().getString();
-            if (name != null && !name.isBlank()) names.add(name);
-        }
-        ItemStack offhand = mc.player.getOffhandItem();
-        if (offhand != null && !offhand.isEmpty()) {
-            String name = offhand.getHoverName().getString();
-            if (name != null && !name.isBlank()) names.add(name);
-        }
-        if (!names.isEmpty()) service.warmNamesBatch(List.copyOf(names));
     }
 
     private void retranslatePointedItem(net.minecraft.client.gui.screens.Screen screen) {

@@ -11,15 +11,12 @@ import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
-import com.dragonmeow.mctranslator.translate.AiSettings;
+import com.dragonmeow.mctranslator.translate.AiTranslationRuntime;
 import com.dragonmeow.mctranslator.translate.CodexAppServerClient;
-import com.dragonmeow.mctranslator.translate.CodexAppServerTransport;
-import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.RequestPacer;
 import com.dragonmeow.mctranslator.translate.SwitchingMachineTranslator;
 import com.dragonmeow.mctranslator.translate.SessionTokenUsage;
-import com.dragonmeow.mctranslator.translate.SwitchingAiTranslator;
 import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
@@ -56,7 +53,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * NeoForge (Mojang-mapped) client entry point. Reuses the loader-agnostic core
@@ -74,12 +70,9 @@ public final class MctranslatorNeoForge {
     private static TranslationService service;
     private static TranslationDebugLog debugLog;
     private static Path configPath;
-    private static UrlHttpTransport transport;
 
     private static KeyMapping modeKey;
-    private static CodexAppServerClient codexClient;
-    private static CodexAppServerTransport codexTransport;
-    private static final SessionTokenUsage tokenUsage = new SessionTokenUsage();
+    private static AiTranslationRuntime aiRuntime;
     private static KeyMapping retranslateKey;
     private static KeyMapping screenScanKey;
     private static KeyMapping toggleKey;
@@ -335,11 +328,11 @@ public final class MctranslatorNeoForge {
     public static TranslationDebugLog debugLog() { return debugLog; }
     public static void clearDebugLog() { if (debugLog != null) debugLog.clear(); }
     public static CodexAppServerClient codexClient() {
-        return codexClient;
+        return aiRuntime == null ? null : aiRuntime.codexClient();
     }
 
     public static SessionTokenUsage.Snapshot tokenUsageSnapshot() {
-        return tokenUsage.snapshot();
+        return aiRuntime == null ? SessionTokenUsage.Snapshot.EMPTY : aiRuntime.tokenUsage();
     }
 
 
@@ -660,35 +653,24 @@ public final class MctranslatorNeoForge {
         };
         // LIFO work queue: the most-recently-requested translations — i.e. the page / interface
         // the player is looking at RIGHT NOW — are taken first, jumping ahead of any older
-        // backlog (a previous screen, or the background pre-translation). So the current screen
+        // backlog from a previous screen. So the current screen
         // is never stuck waiting behind a long queue.
         ExecutorService executor = new com.dragonmeow.mctranslator.translate.PriorityTranslationExecutor(
                 workers, threadFactory);
 
-        transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
+        UrlHttpTransport httpTransport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(
-                transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
+                httpTransport, () -> config.sourceLang, () -> config.machineTranslationProvider,
                 new RequestPacer(() -> config.requestCooldownMs));
-        OpenAiTranslator apiAi = new OpenAiTranslator(transport,
-                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
-                new RequestPacer(() -> config.requestCooldownMs));
-        apiAi.setTokenUsage(tokenUsage);
-        codexClient = new CodexAppServerClient(
-                FMLPaths.CONFIGDIR.get().resolve(MOD_ID + "-codex-home"),
-                FMLPaths.CONFIGDIR.get().resolve(MOD_ID + "-codex-workspace"));
-        codexClient.setTokenUsage(tokenUsage);
-        codexTransport = new CodexAppServerTransport(codexClient,
-                () -> config.codexReasoningEffort);
-        OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,
-                () -> new AiSettings("codex://app-server", config.codexModel,
-                        List.of(), config.aiGlossary),
-                new RequestPacer(() -> config.requestCooldownMs));
-        SwitchingAiTranslator ai = new SwitchingAiTranslator(
-                apiAi, codexAi, () -> config.aiUseCodex);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            CodexAppServerClient client = codexClient;
-            if (client != null) client.close();
-        }, "mctranslator-codex-shutdown"));
+        Path configDir = FMLPaths.CONFIGDIR.get();
+        aiRuntime = new AiTranslationRuntime(
+                config,
+                httpTransport,
+                configDir.resolve(MOD_ID + "-codex-home"),
+                configDir.resolve(MOD_ID + "-codex-workspace"));
+        AiTranslationRuntime runtime = aiRuntime;
+        Runtime.getRuntime().addShutdownHook(
+                new Thread(runtime::close, "mctranslator-codex-shutdown"));
         PersistentStore googleStore = new ProviderLanguageFileStore(
                 FMLPaths.CONFIGDIR.get(), MOD_ID + "-cache", config.targetLang,
                 () -> config.machineTranslationProvider);
@@ -699,7 +681,7 @@ public final class MctranslatorNeoForge {
         // Separate caches per engine so a 機翻 and an AI result for the same string never collide.
         TranslationCache cache = new TranslationCache(google, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
-        TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
+        TranslationCache aiCache = new TranslationCache(aiRuntime, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
         cache.setFailureStore(new DynamicNamespacedStore(failureStore, () -> {
             String provider = MachineTranslationProvider.normalize(config.machineTranslationProvider);
@@ -711,13 +693,8 @@ public final class MctranslatorNeoForge {
         debugLog = new TranslationDebugLog(() -> config != null && config.debugTranslationOverlay);
         cache.setDebugLog("GT", debugLog);
         aiCache.setDebugLog("AI", debugLog);
-        aiCache.setProvisionalRetryGate(() -> {
-            boolean configured = config.aiUseCodex
-                    ? codexClient != null && codexClient.isSignedInCached()
-                            && config.codexModel != null && !config.codexModel.isBlank()
-                    : config.aiApiKeys != null && !config.aiApiKeys.isEmpty();
-            return configured && !ai.isRateLimited();
-        });
+        aiCache.setProvisionalRetryGate(() ->
+                aiRuntime.isConfigured() && !aiRuntime.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
@@ -820,7 +797,7 @@ public final class MctranslatorNeoForge {
         if (service == null) return;
         Component current = event.getContent();
         if (current == null) return;
-        // Entity path (R7 guard): TAB-listed real players keep their original tag.
+        // TAB-listed real players keep their original entity name tag.
         Component translated = nameTag(event.getEntity(), current);
         if (translated != null && translated != current) event.setContent(translated);
     }
@@ -1606,60 +1583,41 @@ public final class MctranslatorNeoForge {
         status(Component.translatable("message.mctranslator.retranslate", stack.getHoverName().getString()).getString());
     }
 
-    /** Background AI connection test used by the AI settings screen; result delivered on the client thread. */
-    public static void testAi(String baseUrl, String model, List<String> keys, java.util.function.Consumer<String> onResult) {
-        if (transport == null) {
-            onResult.accept(Component.translatable("message.mctranslator.not_initialized").getString());
-            return;
-        }
-        Thread t = new Thread(() -> {
-            String msg;
-            try {
-                OpenAiTranslator ai = new OpenAiTranslator(transport,
-                        () -> new AiSettings(baseUrl, model, keys),
-                        new RequestPacer(() -> config == null ? 0L : config.requestCooldownMs));
-                ai.setTokenUsage(tokenUsage);
-                String out = ai.translate("Hello, world", "zh-TW").translatedText();
-                msg = Component.translatable("message.mctranslator.success", "Hello, world → " + out).getString();
-            } catch (Exception e) {
-                msg = Component.translatable("message.mctranslator.failed", e.getMessage()).getString();
-            }
-            final String result = msg;
-            Minecraft mc = Minecraft.getInstance();
-            if (mc != null) mc.execute(() -> onResult.accept(result));
-            else onResult.accept(result);
-        }, "mctranslator-aitest");
-        t.setDaemon(true);
-        t.start();
+    public static void testAi(String baseUrl, String model, List<String> keys,
+                              java.util.function.Consumer<String> onResult) {
+        runAiTest("mctranslator-ai-test", onResult,
+                () -> aiRuntime.testApi(baseUrl, model, keys));
     }
+
     public static void testCodex(java.util.function.Consumer<String> onResult) {
-        if (codexTransport == null || config == null) {
+        runAiTest("mctranslator-codex-test", onResult, () -> aiRuntime.testCodex());
+    }
+
+    private static void runAiTest(String threadName,
+                                  java.util.function.Consumer<String> onResult,
+                                  java.util.concurrent.Callable<com.dragonmeow.mctranslator.translate.TranslationResult> test) {
+        if (aiRuntime == null) {
             onResult.accept(Component.translatable("message.mctranslator.not_initialized").getString());
             return;
         }
-        Thread t = new Thread(() -> {
-            String msg;
+        Thread thread = new Thread(() -> {
+            String message;
             try {
-                OpenAiTranslator ai = new OpenAiTranslator(codexTransport,
-                        () -> new AiSettings("codex://app-server", config.codexModel,
-                                List.of(), config.aiGlossary),
-                        new RequestPacer(() -> config.requestCooldownMs));
-                String out = ai.translate("Hello, world", "zh-TW").translatedText();
-                msg = Component.translatable("message.mctranslator.success",
-                        "Hello, world -> " + out).getString();
+                String translated = test.call().translatedText();
+                message = Component.translatable("message.mctranslator.success",
+                        "Hello, world → " + translated).getString();
             } catch (Exception e) {
-                msg = Component.translatable("message.mctranslator.failed", e.getMessage()).getString();
+                message = Component.translatable(
+                        "message.mctranslator.failed", e.getMessage()).getString();
             }
-            final String result = msg;
-            Minecraft mc = Minecraft.getInstance();
-            if (mc != null) mc.execute(() -> onResult.accept(result));
+            String result = message;
+            Minecraft client = Minecraft.getInstance();
+            if (client != null) client.execute(() -> onResult.accept(result));
             else onResult.accept(result);
-        }, "mctranslator-codex-test");
-        t.setDaemon(true);
-        t.start();
+        }, threadName);
+        thread.setDaemon(true);
+        thread.start();
     }
-
-
     private void status(String msg) {
         Minecraft mc = Minecraft.getInstance();
         if (mc != null && mc.player != null) {

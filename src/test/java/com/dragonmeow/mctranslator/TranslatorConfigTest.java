@@ -26,6 +26,9 @@ class TranslatorConfigTest {
         assertEquals("auto", cfg.sourceLang);
         assertEquals(MachineTranslationProvider.GOOGLE.id(), cfg.machineTranslationProvider);
         assertEquals("gemini-3.1-flash-lite", cfg.aiModel);
+        assertFalse(cfg.aiUseCodex);
+        assertEquals("gpt-5.6-terra", cfg.codexModel);
+        assertEquals("low", cfg.codexReasoningEffort);
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
         assertFalse(cfg.debugTranslationOverlay);
