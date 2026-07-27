@@ -12,9 +12,13 @@ import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.AiSettings;
+import com.dragonmeow.mctranslator.translate.CodexAppServerClient;
+import com.dragonmeow.mctranslator.translate.CodexAppServerTransport;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.RequestPacer;
+import com.dragonmeow.mctranslator.translate.SessionTokenUsage;
+import com.dragonmeow.mctranslator.translate.SwitchingAiTranslator;
 import com.dragonmeow.mctranslator.translate.SwitchingMachineTranslator;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
@@ -67,7 +71,10 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     private static TranslationService service;
     private static Path configPath;
     private static UrlHttpTransport transport;
+    private static CodexAppServerClient codexClient;
+    private static CodexAppServerTransport codexTransport;
     private static TranslationDebugLog debugLog;
+    private static final SessionTokenUsage tokenUsage = new SessionTokenUsage();
     private static final ThreadLocal<Integer> internalOverlayDepth =
             ThreadLocal.withInitial(() -> 0);
     private static final ThreadLocal<Integer> tooltipProbeDepth =
@@ -84,10 +91,6 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     private static final java.util.Map<Object, String> FTB_PENDING =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
-    private net.minecraft.client.gui.screens.Screen lastContainerScreen;
-    private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
-    /** Names already queued from the local player's hotbar, backpack, armour and
-     *  off-hand. This is deliberately inventory-scoped; it never scans registries. */
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
@@ -349,9 +352,17 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         return config;
     }
 
+    public static CodexAppServerClient codexClient() {
+        return codexClient;
+    }
+
     public static TranslationDebugLog debugLog() {
         return debugLog;
     }
+    public static SessionTokenUsage.Snapshot tokenUsageSnapshot() {
+        return tokenUsage.snapshot();
+    }
+
 
     public static void clearDebugLog() {
         if (debugLog != null) debugLog.clear();
@@ -609,7 +620,8 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        configPath = FabricLoader.getInstance().getConfigDir().resolve(MOD_ID + ".json");
+        Path configDir = FabricLoader.getInstance().getConfigDir();
+        configPath = configDir.resolve(MOD_ID + ".json");
         config = TranslatorConfig.load(configPath);
 
         int workers = Math.max(1, config.workerThreads);
@@ -628,19 +640,36 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
                 () -> config.sourceLang,
                 () -> config.machineTranslationProvider,
                 new RequestPacer(() -> config.requestCooldownMs));
-        OpenAiTranslator ai = new OpenAiTranslator(transport,
+        OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
+        apiAi.setTokenUsage(tokenUsage);
+        codexClient = new CodexAppServerClient(
+                configDir.resolve(MOD_ID + "-codex-home"),
+                configDir.resolve(MOD_ID + "-codex-workspace"));
+        codexClient.setTokenUsage(tokenUsage);
+        codexTransport = new CodexAppServerTransport(codexClient,
+                () -> config.codexReasoningEffort);
+        OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,
+                () -> new AiSettings("codex://app-server", config.codexModel,
+                        List.of(), config.aiGlossary),
+                new RequestPacer(() -> config.requestCooldownMs));
+        SwitchingAiTranslator ai = new SwitchingAiTranslator(
+                apiAi, codexAi, () -> config.aiUseCodex);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            CodexAppServerClient client = codexClient;
+            if (client != null) client.close();
+        }, "mctranslator-codex-shutdown"));
         PersistentStore googleStore = new ProviderLanguageFileStore(
-                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-cache", config.targetLang,
+                configDir, MOD_ID + "-cache", config.targetLang,
                 () -> config.machineTranslationProvider);
         PersistentStore aiStore = new LanguageFileStore(
-                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-ai-cache", config.targetLang);
+                configDir, MOD_ID + "-ai-cache", config.targetLang);
         // 三檔分離: ai-cache carries only final AI wording; the GT file carries every
         // Google translation (including AI-mode stand-ins); the failure ledger carries
         // permanent echo marks and temporary retry marks for both engines.
         PersistentStore failureStore = new LanguageFileStore(
-                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-failures", config.targetLang);
+                configDir, MOD_ID + "-failures", config.targetLang);
         TranslationCache cache = new TranslationCache(google, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
         TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
@@ -659,7 +688,11 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         // global 429 gate has reopened. Only the AI cache gets a gate — the Google cache
         // never stores provisional values.
         aiCache.setProvisionalRetryGate(() ->
-                config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
+                (config.aiUseCodex
+                        ? codexClient != null && codexClient.isSignedInCached()
+                                && config.codexModel != null && !config.codexModel.isBlank()
+                        : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
+                        && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
@@ -704,8 +737,6 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     private void onTargetLanguageChanged() {
         Fabric26TextStyle.clearRenderMemo();
-        lastContainerScreen = null;
-        warmedContainerNames.clear();
         lastTooltipStack = null;
         lastTooltipParagraphSources = null;
         lastTooltipScreen = null;
@@ -1331,11 +1362,6 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(mc);
-        warmVisibleHudItems(mc);
-        // R12 (user clarification of R10): the OPEN container is "the current page" — its
-        // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
-        // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
-        warmOpenContainerItems(mc);
     }
 
 
@@ -1403,49 +1429,6 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         }
     }
 
-    private void warmOpenContainerItems(Minecraft mc) {
-        if (mc == null || service == null) return;
-        if (service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-        if (!(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)) {
-            if (lastContainerScreen != null) {
-                lastContainerScreen = null;
-                warmedContainerNames.clear();
-            }
-            return;
-        }
-        if (screen != lastContainerScreen) {
-            lastContainerScreen = screen;
-            warmedContainerNames.clear();
-        }
-        List<String> newNames = new ArrayList<>();
-        for (Slot slot : screen.getMenu().slots) {
-            if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
-            String name = slot.getItem().getHoverName().getString();
-            if (name != null && !name.isBlank()) {
-                newNames.add(name);
-            }
-        }
-        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
-    }
-
-    private void warmVisibleHudItems(Minecraft mc) {
-        if (mc == null || mc.player == null || service == null
-                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
-        for (int slot = 0; slot < 9; slot++) {
-            ItemStack stack = mc.player.getInventory().getItem(slot);
-            if (stack == null || stack.isEmpty()) continue;
-            String name = stack.getHoverName().getString();
-            if (name != null && !name.isBlank()) names.add(name);
-        }
-        ItemStack offhand = mc.player.getOffhandItem();
-        if (offhand != null && !offhand.isEmpty()) {
-            String name = offhand.getHoverName().getString();
-            if (name != null && !name.isBlank()) names.add(name);
-        }
-        if (!names.isEmpty()) service.warmNamesBatch(List.copyOf(names));
-    }
-
     private void retranslatePointedItem(net.minecraft.client.gui.screens.Screen screen) {
         ItemStack target = null;
         if (screen instanceof AbstractContainerScreen<?> container
@@ -1507,6 +1490,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
             try {
                 OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys),
                         new RequestPacer(() -> config == null ? 0L : config.requestCooldownMs));
+                ai.setTokenUsage(tokenUsage);
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
                 msg = Component.translatable("message.mctranslator.success", "Hello, world → " + out).getString();
             } catch (Exception e) {
@@ -1517,6 +1501,33 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
             if (mc != null) mc.execute(() -> onResult.accept(result));
             else onResult.accept(result);
         }, "mctranslator-aitest");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    public static void testCodex(java.util.function.Consumer<String> onResult) {
+        if (codexTransport == null || config == null) {
+            onResult.accept(Component.translatable("message.mctranslator.not_initialized").getString());
+            return;
+        }
+        Thread t = new Thread(() -> {
+            String msg;
+            try {
+                OpenAiTranslator ai = new OpenAiTranslator(codexTransport,
+                        () -> new AiSettings("codex://app-server", config.codexModel,
+                                List.of(), config.aiGlossary),
+                        new RequestPacer(() -> config.requestCooldownMs));
+                String out = ai.translate("Hello, world", "zh-TW").translatedText();
+                msg = Component.translatable("message.mctranslator.success",
+                        "Hello, world → " + out).getString();
+            } catch (Exception e) {
+                msg = Component.translatable("message.mctranslator.failed", e.getMessage()).getString();
+            }
+            final String result = msg;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) mc.execute(() -> onResult.accept(result));
+            else onResult.accept(result);
+        }, "mctranslator-codex-test");
         t.setDaemon(true);
         t.start();
     }

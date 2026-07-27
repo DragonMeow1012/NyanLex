@@ -12,10 +12,14 @@ import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.AiSettings;
+import com.dragonmeow.mctranslator.translate.CodexAppServerClient;
+import com.dragonmeow.mctranslator.translate.CodexAppServerTransport;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.RequestPacer;
 import com.dragonmeow.mctranslator.translate.SwitchingMachineTranslator;
+import com.dragonmeow.mctranslator.translate.SessionTokenUsage;
+import com.dragonmeow.mctranslator.translate.SwitchingAiTranslator;
 import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.UrlHttpTransport;
@@ -58,7 +62,7 @@ import java.util.concurrent.Executors;
  * NeoForge (Mojang-mapped) client entry point. Reuses the loader-agnostic core
  * (config / translate / cache / service / style) and provides NeoForge glue:
  * chat + item-tooltip translation via events, plus toggle key binds and a
- * background item pre-translation pass.
+ * on-demand item and tooltip translation.
  */
 @Mod(value = MctranslatorNeoForge.MOD_ID, dist = Dist.CLIENT)
 public final class MctranslatorNeoForge {
@@ -73,6 +77,9 @@ public final class MctranslatorNeoForge {
     private static UrlHttpTransport transport;
 
     private static KeyMapping modeKey;
+    private static CodexAppServerClient codexClient;
+    private static CodexAppServerTransport codexTransport;
+    private static final SessionTokenUsage tokenUsage = new SessionTokenUsage();
     private static KeyMapping retranslateKey;
     private static KeyMapping screenScanKey;
     private static KeyMapping toggleKey;
@@ -87,11 +94,6 @@ public final class MctranslatorNeoForge {
     private static final ThreadLocal<java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen>>
             SCREEN_RENDER_STACK = ThreadLocal.withInitial(java.util.ArrayDeque::new);
 
-    // Pre-translate items in an open container screen: track the open screen and the
-    // item names already warmed, so each distinct item is warmed once (not per tick).
-    private net.minecraft.client.gui.screens.Screen lastContainerScreen;
-    private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
-    /** Names queued from the local player's hotbar, backpack, armour and off-hand. */
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
@@ -332,6 +334,14 @@ public final class MctranslatorNeoForge {
 
     public static TranslationDebugLog debugLog() { return debugLog; }
     public static void clearDebugLog() { if (debugLog != null) debugLog.clear(); }
+    public static CodexAppServerClient codexClient() {
+        return codexClient;
+    }
+
+    public static SessionTokenUsage.Snapshot tokenUsageSnapshot() {
+        return tokenUsage.snapshot();
+    }
+
 
     /** Never feed this mod's own settings, provider URLs, model names or API keys back
      * into either translator. The exclusion covers every settings sub-screen. */
@@ -659,9 +669,26 @@ public final class MctranslatorNeoForge {
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(
                 transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
                 new RequestPacer(() -> config.requestCooldownMs));
-        OpenAiTranslator ai = new OpenAiTranslator(transport,
+        OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
+        apiAi.setTokenUsage(tokenUsage);
+        codexClient = new CodexAppServerClient(
+                FMLPaths.CONFIGDIR.get().resolve(MOD_ID + "-codex-home"),
+                FMLPaths.CONFIGDIR.get().resolve(MOD_ID + "-codex-workspace"));
+        codexClient.setTokenUsage(tokenUsage);
+        codexTransport = new CodexAppServerTransport(codexClient,
+                () -> config.codexReasoningEffort);
+        OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,
+                () -> new AiSettings("codex://app-server", config.codexModel,
+                        List.of(), config.aiGlossary),
+                new RequestPacer(() -> config.requestCooldownMs));
+        SwitchingAiTranslator ai = new SwitchingAiTranslator(
+                apiAi, codexAi, () -> config.aiUseCodex);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            CodexAppServerClient client = codexClient;
+            if (client != null) client.close();
+        }, "mctranslator-codex-shutdown"));
         PersistentStore googleStore = new ProviderLanguageFileStore(
                 FMLPaths.CONFIGDIR.get(), MOD_ID + "-cache", config.targetLang,
                 () -> config.machineTranslationProvider);
@@ -684,8 +711,13 @@ public final class MctranslatorNeoForge {
         debugLog = new TranslationDebugLog(() -> config != null && config.debugTranslationOverlay);
         cache.setDebugLog("GT", debugLog);
         aiCache.setDebugLog("AI", debugLog);
-        aiCache.setProvisionalRetryGate(() ->
-                config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
+        aiCache.setProvisionalRetryGate(() -> {
+            boolean configured = config.aiUseCodex
+                    ? codexClient != null && codexClient.isSignedInCached()
+                            && config.codexModel != null && !config.codexModel.isBlank()
+                    : config.aiApiKeys != null && !config.aiApiKeys.isEmpty();
+            return configured && !ai.isRateLimited();
+        });
         service = new TranslationService(config, cache, aiCache);
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
@@ -750,8 +782,6 @@ public final class MctranslatorNeoForge {
      * the still-open page again. TranslationCache generations reject late old replies. */
     private void onTargetLanguageChanged() {
         NeoTextStyle.clearRenderMemo();
-        lastContainerScreen = null;
-        warmedContainerNames.clear();
         lastTooltipStack = null;
         lastTooltipParagraphSources = null;
         lastTooltipScreen = null;
@@ -1441,11 +1471,6 @@ public final class MctranslatorNeoForge {
         if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(Minecraft.getInstance());
-        warmVisibleHudItems(Minecraft.getInstance());
-        // R12 (user clarification of R10): the OPEN container is "the current page" — its
-        // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
-        // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
-        warmOpenContainerItems(Minecraft.getInstance());
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -1530,61 +1555,6 @@ public final class MctranslatorNeoForge {
         }
     }
 
-    /**
-     * Warm the names of every item in the currently-open container/inventory screen, so
-     * they are translated and ready the instant the player hovers (rather than only on
-     * hover, popping in a frame later). Each distinct item name is warmed once per screen;
-     * the per-tick scan only adds newly-arrived items (servers sync container contents a
-     * tick or two after the screen opens), so it is cheap. The full tooltip (lore) still
-     * warms on hover via {@link #onItemTooltip}.
-     */
-    private void warmOpenContainerItems(Minecraft mc) {
-        if (mc == null || service == null) return;
-        if (service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return; // nothing to warm
-        if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) {
-            // Left the container: reset so the next one warms fresh.
-            if (lastContainerScreen != null) {
-                lastContainerScreen = null;
-                warmedContainerNames.clear();
-            }
-            return;
-        }
-        if (screen != lastContainerScreen) {
-            lastContainerScreen = screen;
-            warmedContainerNames.clear();
-        }
-        List<String> newNames = new ArrayList<>();
-        for (Slot slot : screen.getMenu().slots) {
-            if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
-            String name = slot.getItem().getHoverName().getString();
-            if (name != null && !name.isBlank()) {
-                newNames.add(name);
-            }
-        }
-        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
-    }
-
-    /** The nine hotbar icons and off-hand icon are visible HUD item surfaces even when
-     * no inventory screen is open. Hidden backpack/armour slots are intentionally not
-     * scanned; opening the inventory exposes them through warmOpenContainerItems. */
-    private void warmVisibleHudItems(Minecraft mc) {
-        if (mc == null || mc.player == null || service == null
-                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
-        for (int slot = 0; slot < 9; slot++) {
-            ItemStack stack = mc.player.getInventory().getItem(slot);
-            if (stack == null || stack.isEmpty()) continue;
-            String name = stack.getHoverName().getString();
-            if (name != null && !name.isBlank()) names.add(name);
-        }
-        ItemStack offhand = mc.player.getOffhandItem();
-        if (offhand != null && !offhand.isEmpty()) {
-            String name = offhand.getHoverName().getString();
-            if (name != null && !name.isBlank()) names.add(name);
-        }
-        if (!names.isEmpty()) service.warmNamesBatch(List.copyOf(names));
-    }
-
     private void retranslatePointedItem(net.minecraft.client.gui.screens.Screen screen) {
         ItemStack target = null;
         if (screen instanceof AbstractContainerScreen<?> container
@@ -1645,7 +1615,10 @@ public final class MctranslatorNeoForge {
         Thread t = new Thread(() -> {
             String msg;
             try {
-                OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys));
+                OpenAiTranslator ai = new OpenAiTranslator(transport,
+                        () -> new AiSettings(baseUrl, model, keys),
+                        new RequestPacer(() -> config == null ? 0L : config.requestCooldownMs));
+                ai.setTokenUsage(tokenUsage);
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
                 msg = Component.translatable("message.mctranslator.success", "Hello, world → " + out).getString();
             } catch (Exception e) {
@@ -1659,6 +1632,33 @@ public final class MctranslatorNeoForge {
         t.setDaemon(true);
         t.start();
     }
+    public static void testCodex(java.util.function.Consumer<String> onResult) {
+        if (codexTransport == null || config == null) {
+            onResult.accept(Component.translatable("message.mctranslator.not_initialized").getString());
+            return;
+        }
+        Thread t = new Thread(() -> {
+            String msg;
+            try {
+                OpenAiTranslator ai = new OpenAiTranslator(codexTransport,
+                        () -> new AiSettings("codex://app-server", config.codexModel,
+                                List.of(), config.aiGlossary),
+                        new RequestPacer(() -> config.requestCooldownMs));
+                String out = ai.translate("Hello, world", "zh-TW").translatedText();
+                msg = Component.translatable("message.mctranslator.success",
+                        "Hello, world -> " + out).getString();
+            } catch (Exception e) {
+                msg = Component.translatable("message.mctranslator.failed", e.getMessage()).getString();
+            }
+            final String result = msg;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) mc.execute(() -> onResult.accept(result));
+            else onResult.accept(result);
+        }, "mctranslator-codex-test");
+        t.setDaemon(true);
+        t.start();
+    }
+
 
     private void status(String msg) {
         Minecraft mc = Minecraft.getInstance();

@@ -529,10 +529,6 @@ public final class TranslationService {
         return selected.getCached(masked.text()) != null;
     }
 
-    public void warmNamesBatch(List<String> sources) {
-        warmMasked(sources, false, config.tooltipMode, config.aiTooltip, false, true);
-    }
-
     /**
      * Correct an isolated AI item-name translation when a context-rich tooltip title
      * translated the same name differently. For example, an isolated
