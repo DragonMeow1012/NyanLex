@@ -280,7 +280,7 @@ class TranslationServiceTest {
         s.setProtectedNames(() -> java.util.Set.of("Steve123"));
 
         List<String> got = new ArrayList<>();
-        s.translateChatAsync("Steve123 sold the dragon egg", got::add);
+        s.translateChatAsync("Steve123 sold Bloom Boat with Chest", got::add);
         pump(s);
 
         assertEquals(1, got.size());
@@ -288,6 +288,8 @@ class TranslationServiceTest {
                 "the name must be restored verbatim: " + got.get(0));
         assertFalse(String.join(String.valueOf((char) 0), sent).contains("Steve123"),
                 "the raw name must never be sent to the backend: " + sent);
+        assertTrue(sent.get(0).contains("Bloom Boat with Chest"),
+                "capitalized text not present in TAB must remain literal: " + sent);
     }
 
     @Test

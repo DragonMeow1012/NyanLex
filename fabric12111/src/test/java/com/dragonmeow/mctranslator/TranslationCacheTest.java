@@ -22,6 +22,7 @@ import java.util.function.LongSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -490,7 +491,7 @@ class TranslationCacheTest {
     }
 
     @Test
-    void lobbyJoinVariantsSendOneSharedRequestWithoutPlayerIds() {
+    void unlistedLobbyNamesUseDistinctCacheKeys() {
         AtomicInteger calls = new AtomicInteger();
         List<String> submitted = new ArrayList<>();
         Translator fake = (text, targetLang) -> {
@@ -498,38 +499,20 @@ class TranslationCacheTest {
             submitted.add(text);
             return new TranslationResult(text.replace("joined the lobby!", "加入了大廳！"), "en");
         };
-        Map<String, String> disk = new java.util.HashMap<>();
+        TranslationCache cache = new TranslationCache(fake, "zh-TW", DIRECT, 100);
         String first = "[MVP+] Life joined the lobby!";
         String second = "[VIP] DashieBrot joined the lobby!";
-        disk.put(first, "[MVP+] Life 舊的逐玩家翻譯");
-        TranslationCache cache = new TranslationCache(
-                fake, "zh-TW", DIRECT, 100, 10_000L, () -> 0L, inlineStore(disk));
 
         cache.requestAsync(first);
+        cache.requestAsync(second);
+
+        assertEquals(2, calls.get(), "unlisted names must not be merged by a name heuristic");
+        assertEquals(2, submitted.size());
+        assertTrue(submitted.stream().anyMatch(text -> text.contains("Life")));
+        assertTrue(submitted.stream().anyMatch(text -> text.contains("DashieBrot")));
+        assertNotEquals(TemplateText.prepare(first).text(), TemplateText.prepare(second).text());
         assertEquals("[MVP+] Life 加入了大廳！", cache.getCached(first));
         assertEquals("[VIP] DashieBrot 加入了大廳！", cache.getCached(second));
-
-        cache.requestAsync(second);
-        assertEquals(1, calls.get(), "new ranks and player IDs must reuse the shared event template");
-        assertEquals(1, submitted.size());
-        assertFalse(submitted.get(0).contains("Life"), "player IDs must never reach the backend");
-        assertFalse(submitted.get(0).contains("DashieBrot"), "player IDs must never reach the backend");
-        assertFalse(disk.containsKey(first), "legacy per-player rows must be purged when encountered");
-        assertTrue(disk.containsKey("⟦MT0⟧joined the lobby!"));
-
-        String coloured = "⟦CS0⟧[VIP] DashieBrot ⟦/CS0⟧⟦CS1⟧joined the lobby!⟦/CS1⟧";
-        String projected = cache.getCached(coloured);
-        assertTrue(TextFilter.isStyleFallback(projected),
-                "semantic wording should fill a new presentation topology immediately");
-        assertEquals("[VIP] DashieBrot 加入了大廳！", TextFilter.stripFormatting(projected));
-        assertEquals(1, calls.get(), "colour topology is presentation and costs no AI request");
-        assertFalse(disk.containsKey(TemplateText.prepare(coloured).text()), disk.toString());
-
-        String another = coloured.replace("DashieBrot", "markmitchell95");
-        assertEquals(TemplateText.prepare(coloured).text(), TemplateText.prepare(another).text());
-        assertEquals("[VIP] markmitchell95 加入了大廳！",
-                TextFilter.stripFormatting(cache.getCached(another)));
-        assertEquals(1, calls.get(), "new player IDs reuse the semantic event template");
     }
 
     @Test
@@ -1568,47 +1551,6 @@ class TranslationCacheTest {
         assertEquals("GT:Summer Store Sale", TextFilter.stripFormatting(cache.getCached(marked)));
         assertEquals(2, calls.get(),
                 "the style projection must not launch a second supplement beside the semantic key");
-    }
-
-    @Test
-    void fallbackReadThroughSharesOneSupplementFamilyAcrossAllLobbyPlayers() {
-        TranslationCache gt = new TranslationCache((text, target) ->
-                new TranslationResult("GT:" + text, "en"), "zh-TW", DIRECT, 100);
-        gt.requestAsync("Player0 joined the lobby!");
-
-        AtomicInteger aiCalls = new AtomicInteger();
-        java.util.Set<String> submitted = new java.util.HashSet<>();
-        long[] now = {0L};
-        TranslationCache ai = new TranslationCache((text, target) -> {
-            aiCalls.incrementAndGet();
-            submitted.add(text);
-            throw new TranslationException("AI unavailable");
-        }, "zh-TW", DIRECT, 100, 10_000L, () -> now[0], null);
-        ai.setFallback(gt, true);
-        ai.setProvisionalRetryGate(() -> true);
-
-        assertNull(ai.getCached("Player1 joined the lobby!"));
-        ai.requestAsync("Player1 joined the lobby!");
-        for (int i = 1; i <= 10; i++) {
-            assertNotNull(ai.getCached("Player" + i + " joined the lobby!"));
-        }
-        assertEquals(1, aiCalls.get(),
-                "ten player IDs share one semantic supplement family and its backoff");
-        assertEquals(1, submitted.size(), "only one canonical joined-lobby template is submitted");
-
-        now[0] = 10_000L;                               // family backoff expired
-        assertNotNull(ai.getCached("Player11 joined the lobby!"));
-        ai.flushBatch();
-        ai.flushBatch();
-        assertEquals(2, aiCalls.get(), "the family retries once per expired backoff window");
-        assertEquals(1, submitted.size());
-
-        ai.invalidate("Player99 joined the lobby!");    // manual redo clears mark + backoff
-        assertNull(ai.getCached("Player12 joined the lobby!"),
-                "manual retry returns to strict AI-first ordering");
-        ai.requestAsync("Player12 joined the lobby!");
-        assertNotNull(ai.getCached("Player12 joined the lobby!"));
-        assertEquals(3, aiCalls.get(), "individual R on any variant unlocks the family at once");
     }
 
     @Test

@@ -10,7 +10,7 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: mctranslator-1.0.2-Fabric-26.1.2.jar (name-version-loader-mcversion)
+// Final jar name: mctranslator-1.0.3-Fabric-26.1.2.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     archiveClassifier = "Fabric-${project.minecraft_version}"
     from('../LICENSE') {

@@ -23,7 +23,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 
-@Mod(modid = "mctranslator", name = "Minecraft Translator", version = "1.0.2", clientSideOnly = true)
+@Mod(modid = "mctranslator", name = "Minecraft Translator", version = "1.0.3", clientSideOnly = true)
 public final class MinecraftTranslatorForge {
     private final LegacyTranslator translator = new LegacyTranslator();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();

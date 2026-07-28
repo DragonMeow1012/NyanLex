@@ -228,40 +228,20 @@ class TemplateTextTest {
     }
 
     @Test
-    void rankedLobbyJoinMessagesHidePlayerIdsAndShareOneTemplate() {
-        TemplateText.Prepared first = TemplateText.prepare("[MVP+] Life joined the lobby!");
-        TemplateText.Prepared second = TemplateText.prepare("[VIP] DashieBrot joined the lobby!");
+    void templateTextDoesNotGuessPlayerNames() {
+        TemplateText.Prepared item = TemplateText.prepare("Bloom Boat with Chest");
+        assertFalse(item.changed());
+        assertEquals("Bloom Boat with Chest", item.text());
 
-        assertEquals(first.text(), second.text(), "rank and username variants share one request key");
-        assertFalse(first.text().contains("Life"));
-        assertFalse(second.text().contains("DashieBrot"));
-        assertEquals("[MVP+] Life 加入了大廳！",
-                first.restore("⟦MT0⟧ 加入了大廳！"));
-        assertEquals("[VIP] DashieBrot 加入了大廳！",
-                second.restore("⟦MT0⟧ 加入了大廳！"));
-    }
+        TemplateText.Prepared plain = TemplateText.prepare("You were killed by Steve");
+        assertFalse(plain.changed());
+        assertEquals("You were killed by Steve", plain.text());
 
-    @Test
-    void rainbowMvpPlusPlusJoinMessagesHideTheWholeStyledIdentity() {
-        String first = "⟦CS0⟧>⟦/CS0⟧⟦CS1⟧>⟦/CS1⟧⟦CS2⟧> ⟦/CS2⟧"
-                + "⟦CS3⟧[MVP⟦/CS3⟧⟦CS4⟧++⟦/CS4⟧⟦CS5⟧] Big_Thief_⟦/CS5⟧ "
-                + "⟦CS6⟧joined the lobby!⟦/CS6⟧";
-        String second = first.replace("Big_Thief_", "IGBLF");
-        TemplateText.Prepared a = TemplateText.prepare(first);
-        TemplateText.Prepared b = TemplateText.prepare(second);
-
-        assertEquals(a.text(), b.text(), "rainbow ranks and names must share one backend key");
-        assertFalse(a.text().contains("Big_Thief_"));
-        assertFalse(b.text().contains("IGBLF"));
-        String restored = a.restore(a.text().replace("joined the lobby!", "加入了大廳！"));
-        assertEquals(">>> [MVP++] Big_Thief_ 加入了大廳！",
-                TextFilter.stripFormatting(restored));
-    }
-
-    @Test
-    void tabMaskTimingDoesNotCreateAnotherPlayerEventFamily() {
-        assertEquals(TemplateText.prepare("[MVP++] Big_Thief_ joined the lobby!").text(),
-                TemplateText.prepare("[MVP++] ⟦0⟧ joined the lobby!").text());
+        TemplateText.Prepared ranked = TemplateText.prepare("[MVP+] Life joined the lobby!");
+        assertTrue(ranked.changed(), "the rank badge itself is still a protected slot");
+        assertTrue(ranked.text().contains("Life"),
+                "player names are masked upstream only when they are present in TAB");
+        assertEquals("[MVP+] Life joined the lobby!", ranked.restore(ranked.text()));
     }
 
     @Test

@@ -548,7 +548,7 @@ final class LegacyTranslator {
         HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
         connection.setConnectTimeout(10000);
         connection.setReadTimeout(15000);
-        connection.setRequestProperty("User-Agent", "MinecraftTranslator/1.0.2");
+        connection.setRequestProperty("User-Agent", "MinecraftTranslator/1.0.3");
         try {
             int code = connection.getResponseCode();
             String body = read(connection, code >= 400);

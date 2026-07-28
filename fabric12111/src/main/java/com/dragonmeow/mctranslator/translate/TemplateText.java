@@ -84,34 +84,6 @@ public final class TemplateText {
     // are already NUMBER's. Bonus: "[VIP] x" and "[MVP+] x" share one key.
     private static final Pattern RANK_TAG = Pattern.compile("\\[[A-Z]{2,10}\\+{0,2}\\]");
     private static final Pattern CS_TOKEN = Pattern.compile("\\u27E6\\s*(/?)\\s*CS\\s*\\d+\\s*\\u27E7");
-    // Do not mistake ordinary sentence subjects for usernames. "You received 5 coins"
-    // is an action-bar sentence, not a player event; slotting "You" would leave the
-    // backend unable to translate the sentence correctly.
-    private static final String PLAYER_ID =
-            "(?:(?!(?:you|your|the|this|that|there|someone|everyone|player)\\b)"
-                    + "[A-Za-z_][A-Za-z0-9_]{2,16}|\\u27E6\\d+\\u27E7)";
-    /**
-     * Rank + player identity at the start of an event after optional announcement arrows.
-     * Matching runs on a CS-marker-stripped view, then maps the identity span back to the
-     * original string. This handles Hypixel's MVP++ rainbow layout where [MVP, ++, ] Name
-     * are three separate style runs. NameMasker's temporary ⟦0⟧ form is accepted too, so
-     * TAB-list timing cannot create a second family of cache keys.
-     */
-    private static final Pattern PLAYER_EVENT_IDENTITY = Pattern.compile(
-            "^\\s*(?:[>»]{2,3}\\s*)?"
-                    + "((?:\\[[A-Z]{2,10}\\+{0,2}\\]\\s+)?" + PLAYER_ID + ")"
-                    + "(?=\\s+(?:joined|left|quit|was|has|is|died|fell|burned|drowned|suffocated|blew|tried|hit|lost|won|teleported|moved|voted|claimed|unclaimed|entered|exited|discovered|found|picked|dropped|sold|bought|paid|received|earned|made|completed|reached|killed|slain|shot|whispered|says|said)\\b)",
-            Pattern.CASE_INSENSITIVE);
-    // A player event may start with a rank badge: "[MVP+] Name joined the lobby!".
-    // Capture only the username group; RANK_TAG separately protects the badge, so all
-    // ranks and all names converge to one template and no player ID reaches a backend.
-    private static final Pattern LEADING_PLAYER = Pattern.compile(
-            "^\\s*(?:\\[[A-Z]{2,10}\\+{0,2}\\]\\s+)?"
-                    + "((?!(?:you|your|the|this|that|there|someone|everyone|player)\\b)"
-                    + "[A-Za-z_][A-Za-z0-9_]{2,16})"
-                    + "(?=\\s+(?:joined|left|quit|was|has|is|died|fell|burned|drowned|suffocated|blew|tried|hit|lost|won|teleported|moved|voted|claimed|unclaimed|entered|exited|discovered|found|picked|dropped|sold|bought|paid|received|earned|made|completed|reached|killed|slain|shot|whispered|says|said)\\b)",
-            Pattern.CASE_INSENSITIVE);
-    private static final Pattern TARGET_PLAYER = Pattern.compile("\\b(?:by|from|to|with|for)\\s+([A-Za-z_][A-Za-z0-9_]{2,16})\\b");
     /** Opaque shard/instance id after a Server field (mega33A, alphaShard, xxxxx).
      *  The label gives this field its meaning; its machine-assigned value is volatile
      *  regardless of prefix or whether it happens to contain digits. */
@@ -269,33 +241,20 @@ public final class TemplateText {
         return computed;
     }
 
-    /**
-     * True when the line starts with a Minecraft username followed by a common
-     * player-event verb, optionally after a server rank badge. TranslationCache
-     * uses this to discard legacy per-player cache rows instead of letting them
-     * bypass the new privacy-preserving shared template.
-     */
-    public static boolean isLeadingPlayerEvent(String source) {
-        return source != null && PLAYER_EVENT_IDENTITY.matcher(stripCs(source).strip()).find();
-    }
-
     private static Prepared compute(String source) {
         List<Span> spans = new ArrayList<>();
-        addPattern(source, spans, BAR, 0, false);
-        addPattern(source, spans, URL, 0, false);
-        addPattern(source, spans, UUID, 0, false);
-        addPattern(source, spans, SCOREBOARD_DATE_SHARD, 0, false);
-        addPattern(source, spans, TIME, 0, false);
-        addPattern(source, spans, DURATION_EN, 0, false);
-        addPattern(source, spans, DURATION_CJK, 0, false);
-        addPattern(source, spans, ORDINAL, 0, false);
-        addPlayerEventIdentity(source, spans);
-        addPattern(source, spans, LEADING_PLAYER, 1, false);
-        addPattern(source, spans, TARGET_PLAYER, 1, true);
-        addPattern(source, spans, SERVER_INSTANCE, 1, false);
-        addPattern(source, spans, NUMBER, 0, false);
-        addPattern(source, spans, SYMBOL_RUN, 0, false);
-        addPattern(source, spans, RANK_TAG, 0, false);
+        addPattern(source, spans, BAR, 0);
+        addPattern(source, spans, URL, 0);
+        addPattern(source, spans, UUID, 0);
+        addPattern(source, spans, SCOREBOARD_DATE_SHARD, 0);
+        addPattern(source, spans, TIME, 0);
+        addPattern(source, spans, DURATION_EN, 0);
+        addPattern(source, spans, DURATION_CJK, 0);
+        addPattern(source, spans, ORDINAL, 0);
+        addPattern(source, spans, SERVER_INSTANCE, 1);
+        addPattern(source, spans, NUMBER, 0);
+        addPattern(source, spans, SYMBOL_RUN, 0);
+        addPattern(source, spans, RANK_TAG, 0);
         if (spans.isEmpty()) return new Prepared(source, List.of());
         // Earlier patterns win on overlap (URL beats the numbers inside it, a duration
         // run beats the bare number at its head, etc.): spans are already collected in
@@ -330,87 +289,14 @@ public final class TemplateText {
         return values.isEmpty() ? new Prepared(source, List.of()) : new Prepared(out.toString(), List.copyOf(values));
     }
 
-    private static void addPattern(String source, List<Span> spans, Pattern pattern, int group, boolean capitalizedOnly) {
+    private static void addPattern(String source, List<Span> spans, Pattern pattern, int group) {
         Matcher matcher = pattern.matcher(source);
         while (matcher.find()) {
             int start = matcher.start(group);
             int end = matcher.end(group);
             if (start < 0 || end <= start) continue;
-            if (capitalizedOnly && !looksLikePlayerName(source.substring(start, end))) continue;
             spans.add(new Span(start, end));
         }
-    }
-
-    private static void addPlayerEventIdentity(String source, List<Span> spans) {
-        VisibleText visible = visibleWithoutCs(source);
-        Matcher event = PLAYER_EVENT_IDENTITY.matcher(visible.text());
-        if (!event.find()) return;
-        int visibleStart = event.start(1);
-        int visibleEnd = event.end(1);
-        if (visibleStart < 0 || visibleEnd <= visibleStart) return;
-
-        // Keep the separator whitespace inside the identity slot. In styled chat the
-        // trailing space commonly sits before the CS closing marker; stopping at the
-        // username would leave an orphan ⟦/CS#⟧ in the request key and make every
-        // coloured lobby event fail marker validation forever.
-        while (visibleEnd < visible.text().length()
-                && Character.isWhitespace(visible.text().charAt(visibleEnd))) {
-            visibleEnd++;
-        }
-
-        int start = visible.sourceOffsets().get(visibleStart);
-        int end = visible.sourceOffsets().get(visibleEnd - 1) + 1;
-        // Include the style opener before the first identity character and the closer
-        // after its last character. All intervening CS runs are already inside the span.
-        for (CsRange marker : visible.markers()) {
-            if (!marker.closing() && marker.end() == start) start = marker.start();
-        }
-        boolean expanded;
-        do {
-            expanded = false;
-            for (CsRange marker : visible.markers()) {
-                if (marker.closing() && marker.start() == end) {
-                    end = marker.end();
-                    expanded = true;
-                }
-            }
-        } while (expanded);
-        spans.add(new Span(start, end));
-    }
-
-    private static String stripCs(String source) {
-        return source == null ? "" : CS_TOKEN.matcher(source).replaceAll("");
-    }
-
-    private static VisibleText visibleWithoutCs(String source) {
-        StringBuilder text = new StringBuilder(source.length());
-        List<Integer> offsets = new ArrayList<>(source.length());
-        List<CsRange> markers = new ArrayList<>();
-        Matcher matcher = CS_TOKEN.matcher(source);
-        int cursor = 0;
-        while (matcher.find()) {
-            appendVisible(source, cursor, matcher.start(), text, offsets);
-            markers.add(new CsRange(matcher.start(), matcher.end(), !matcher.group(1).isEmpty()));
-            cursor = matcher.end();
-        }
-        appendVisible(source, cursor, source.length(), text, offsets);
-        return new VisibleText(text.toString(), offsets, markers);
-    }
-
-    private static void appendVisible(String source, int start, int end,
-                                      StringBuilder text, List<Integer> offsets) {
-        for (int i = start; i < end; i++) {
-            text.append(source.charAt(i));
-            offsets.add(i);
-        }
-    }
-
-    private static boolean looksLikePlayerName(String text) {
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (Character.isUpperCase(c) || Character.isDigit(c) || c == '_') return true;
-        }
-        return false;
     }
 
     private static String token(int index) {
@@ -420,10 +306,5 @@ public final class TemplateText {
     private record Span(int start, int end) {
     }
 
-    private record CsRange(int start, int end, boolean closing) {
-    }
 
-    private record VisibleText(String text, List<Integer> sourceOffsets,
-                               List<CsRange> markers) {
-    }
 }

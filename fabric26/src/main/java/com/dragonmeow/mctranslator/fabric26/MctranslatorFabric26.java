@@ -91,13 +91,15 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     private static final java.util.Map<Object, String> FTB_PENDING =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
+    private net.minecraft.client.gui.screens.Screen lastContainerScreen;
+    private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
     private net.minecraft.client.gui.screens.Screen lastTooltipScreen;
     private long lastTooltipAtMs;
 
-    /** Online player names, refreshed once per second on the tick thread; read by the
+    /** TAB-listed player names, refreshed once per second on the tick thread; read by the
      *  service to mask names in chat and to skip "translating" name tags / scoreboards. */
     private static volatile java.util.Set<String> onlineNames = java.util.Set.of();
     private long lastNameRefreshMs;
@@ -139,12 +141,6 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
             return;
         }
         java.util.Set<String> names = new java.util.HashSet<>();
-        if (mc.level != null) {
-            for (var player : mc.level.players()) {
-                String name = player.getGameProfile().name();
-                if (name != null && PLAYER_NAME.matcher(name).matches()) names.add(name);
-            }
-        }
         for (var info : mc.getConnection().getListedOnlinePlayers()) {
             String name = info == null || info.getProfile() == null
                     ? null : info.getProfile().name();
@@ -653,7 +649,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,
                 () -> new AiSettings("codex://app-server", config.codexModel,
                         List.of(), config.aiGlossary),
-                new RequestPacer(() -> config.requestCooldownMs));
+                RequestPacer.disabled());
         SwitchingAiTranslator ai = new SwitchingAiTranslator(
                 apiAi, codexAi, () -> config.aiUseCodex);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -737,6 +733,8 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     private void onTargetLanguageChanged() {
         Fabric26TextStyle.clearRenderMemo();
+        lastContainerScreen = null;
+        warmedContainerNames.clear();
         lastTooltipStack = null;
         lastTooltipParagraphSources = null;
         lastTooltipScreen = null;
@@ -1362,6 +1360,10 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(mc);
+        warmVisibleHudItems(mc);
+        // Queue only names on the current visible container page.
+        warmOpenContainerItems(mc);
+
     }
 
 
@@ -1427,6 +1429,47 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
                 collectWidgets(c.children(), out, depth + 1);
             }
         }
+    }
+
+    private void warmOpenContainerItems(Minecraft mc) {
+        if (mc == null || service == null
+                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
+        if (!(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)) {
+            if (lastContainerScreen != null) {
+                lastContainerScreen = null;
+                warmedContainerNames.clear();
+            }
+            return;
+        }
+        if (screen != lastContainerScreen) {
+            lastContainerScreen = screen;
+            warmedContainerNames.clear();
+        }
+        List<String> names = new ArrayList<>();
+        for (Slot slot : screen.getMenu().slots) {
+            if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
+            String name = slot.getItem().getHoverName().getString();
+            if (name != null && !name.isBlank()) names.add(name);
+        }
+        if (!names.isEmpty()) service.warmNamesBatch(names);
+    }
+
+    private void warmVisibleHudItems(Minecraft mc) {
+        if (mc == null || mc.player == null || service == null
+                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = mc.player.getInventory().getItem(slot);
+            if (stack == null || stack.isEmpty()) continue;
+            String name = stack.getHoverName().getString();
+            if (name != null && !name.isBlank()) names.add(name);
+        }
+        ItemStack offhand = mc.player.getOffhandItem();
+        if (offhand != null && !offhand.isEmpty()) {
+            String name = offhand.getHoverName().getString();
+            if (name != null && !name.isBlank()) names.add(name);
+        }
+        if (!names.isEmpty()) service.warmNamesBatch(List.copyOf(names));
     }
 
     private void retranslatePointedItem(net.minecraft.client.gui.screens.Screen screen) {
@@ -1516,7 +1559,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
                 OpenAiTranslator ai = new OpenAiTranslator(codexTransport,
                         () -> new AiSettings("codex://app-server", config.codexModel,
                                 List.of(), config.aiGlossary),
-                        new RequestPacer(() -> config.requestCooldownMs));
+                        RequestPacer.disabled());
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
                 msg = Component.translatable("message.mctranslator.success",
                         "Hello, world → " + out).getString();

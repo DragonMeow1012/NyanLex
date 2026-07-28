@@ -450,17 +450,6 @@ public final class TranslationCache {
 
     /** Lookup only the immutable forms captured by this request snapshot. */
     private String lookupSnapshot(TranslationTemplate.Snapshot snapshot, TranslationCache owner) {
-        if (TemplateText.isLeadingPlayerEvent(snapshot.normalized())) {
-            // Builds before 1.0.2 persisted one raw row for every player event. Those
-            // rows contain the player ID and would otherwise win before the shared
-            // template lookup. Remove an encountered legacy row once, then use only
-            // the rank/name-slotted template from this build onward.
-            owner.discardLegacyPlayerEvent(snapshot.source());
-            if (!snapshot.normalized().equals(snapshot.source())) {
-                owner.discardLegacyPlayerEvent(snapshot.normalized());
-            }
-            return lookupTemplates(snapshot, owner);
-        }
         // Once a stable template exists, it is the canonical identity. Legacy builds
         // wrote one exact raw row per number/server/gap variant; consulting those first
         // would prevent the shared template from ever being learned.
@@ -503,10 +492,6 @@ public final class TranslationCache {
             }
         }
         return lookupTemplates(snapshot, owner);
-    }
-
-    private void discardLegacyPlayerEvent(String key) {
-        if (key != null && read(key) != null) removeStored(key);
     }
 
     /** Restore deterministic values and the current HUD/layout gaps from one snapshot. */

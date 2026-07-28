@@ -38,6 +38,38 @@ public final class CodexAppServerClient implements AutoCloseable {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration TURN_TIMEOUT = Duration.ofMinutes(3);
     private static final String CLIENT_VERSION = "1.0.3";
+    private static final List<String> DISABLED_TRANSLATION_FEATURES = List.of(
+            "apps",
+            "auth_elicitation",
+            "browser_use",
+            "browser_use_external",
+            "browser_use_full_cdp_access",
+            "code_mode",
+            "code_mode_host",
+            "code_mode_only",
+            "computer_use",
+            "goals",
+            "guardian_approval",
+            "hooks",
+            "image_generation",
+            "in_app_browser",
+            "memories",
+            "mentions_v2",
+            "multi_agent",
+            "multi_agent_v2",
+            "personality",
+            "plugin_sharing",
+            "plugins",
+            "remote_compaction_v2",
+            "remote_plugin",
+            "shell_snapshot",
+            "shell_tool",
+            "skill_mcp_dependency_install",
+            "skill_search",
+            "tool_call_mcp_elicitation",
+            "tool_suggest",
+            "workspace_dependencies");
+
 
     private final Path codexHome;
     private final Path workspace;
@@ -218,10 +250,17 @@ public final class CodexAppServerClient implements AutoCloseable {
                 }
                 String defaultEffort = string(object, "defaultReasoningEffort");
                 if (efforts.isEmpty() && !defaultEffort.isBlank()) efforts.add(defaultEffort);
+                List<String> serviceTiers = new ArrayList<>();
+                for (JsonElement tierElement : array(object, "serviceTiers")) {
+                    if (!tierElement.isJsonObject()) continue;
+                    String id = string(tierElement.getAsJsonObject(), "id");
+                    if (!id.isBlank()) serviceTiers.add(id);
+                }
                 models.add(new ModelOption(
                         model,
                         nonBlank(string(object, "displayName"), model),
                         List.copyOf(efforts),
+                        List.copyOf(serviceTiers),
                         defaultEffort,
                         bool(object, "isDefault")
                 ));
@@ -240,6 +279,7 @@ public final class CodexAppServerClient implements AutoCloseable {
     public String complete(String model, String effort, String systemPrompt, String userPrompt)
             throws IOException {
         if (model == null || model.isBlank()) throw new IOException("No Codex model selected");
+        String serviceTier = preferredServiceTier(model);
 
         JsonObject threadParams = new JsonObject();
         threadParams.addProperty("model", model);
@@ -249,6 +289,7 @@ public final class CodexAppServerClient implements AutoCloseable {
         threadParams.addProperty("ephemeral", true);
         threadParams.addProperty("personality", "none");
         threadParams.addProperty("serviceName", "minecraft_translator");
+        if (serviceTier != null) threadParams.addProperty("serviceTier", serviceTier);
         threadParams.addProperty("baseInstructions",
                 nonBlank(systemPrompt, "Translate the supplied Minecraft text."));
         threadParams.addProperty("developerInstructions",
@@ -270,6 +311,8 @@ public final class CodexAppServerClient implements AutoCloseable {
         turnParams.add("input", input);
         turnParams.addProperty("model", model);
         if (effort != null && !effort.isBlank()) turnParams.addProperty("effort", effort);
+        turnParams.addProperty("summary", "none");
+        if (serviceTier != null) turnParams.addProperty("serviceTier", serviceTier);
         turnParams.add("outputSchema", translationOutputSchema());
 
         JsonObject turnResult = requestObject("turn/start", turnParams, REQUEST_TIMEOUT);
@@ -301,13 +344,9 @@ public final class CodexAppServerClient implements AutoCloseable {
         } finally {
             turnResults.remove(turnId);
             turnMessages.remove(turnId);
-            try {
-                JsonObject unsubscribe = new JsonObject();
-                unsubscribe.addProperty("threadId", threadId);
-                requestObject("thread/unsubscribe", unsubscribe, Duration.ofSeconds(5));
-            } catch (IOException ignored) {
-                // Ephemeral thread; process shutdown is the final cleanup fallback.
-            }
+            JsonObject unsubscribe = new JsonObject();
+            unsubscribe.addProperty("threadId", threadId);
+            sendBestEffortRequest("thread/unsubscribe", unsubscribe);
         }
     }
 
@@ -377,6 +416,18 @@ public final class CodexAppServerClient implements AutoCloseable {
         }
     }
 
+    private void sendBestEffortRequest(String method, JsonObject params) {
+        try {
+            JsonObject request = new JsonObject();
+            request.addProperty("method", method);
+            request.addProperty("id", nextId.getAndIncrement());
+            if (params != null) request.add("params", params);
+            send(request);
+        } catch (IOException ignored) {
+            // Ephemeral threads are also released when app-server stops.
+        }
+    }
+
     private void ensureStarted() throws IOException {
         if (ready && process != null && process.isAlive()) return;
         synchronized (lifecycleLock) {
@@ -389,8 +440,7 @@ public final class CodexAppServerClient implements AutoCloseable {
             if (executable == null || executable.isBlank()) {
                 throw new IOException("Codex executable was not found");
             }
-            ProcessBuilder builder = new ProcessBuilder(
-                    executable, "-c", "features.code_mode_host=true", "app-server");
+            ProcessBuilder builder = new ProcessBuilder(minimalAppServerCommand(executable));
             builder.directory(workspace.toFile());
             builder.environment().put("CODEX_HOME", codexHome.toString());
             process = builder.start();
@@ -670,6 +720,29 @@ public final class CodexAppServerClient implements AutoCloseable {
         return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
+    private String preferredServiceTier(String model) {
+        for (ModelOption option : cachedModels) {
+            if (option.model().equals(model) && option.serviceTiers().contains("priority")) {
+                return "priority";
+            }
+        }
+        return null;
+    }
+
+    private static List<String> minimalAppServerCommand(String executable) {
+        Objects.requireNonNull(executable, "executable");
+        List<String> command = new ArrayList<>(4 + DISABLED_TRANSLATION_FEATURES.size() * 2);
+        command.add(executable);
+        command.add("-c");
+        command.add("web_search=\"disabled\"");
+        for (String feature : DISABLED_TRANSLATION_FEATURES) {
+            command.add("-c");
+            command.add("features." + feature + "=false");
+        }
+        command.add("app-server");
+        return List.copyOf(command);
+    }
+
     private void stopProcess() {
         ready = false;
         BufferedWriter oldWriter = writer;
@@ -774,6 +847,7 @@ public final class CodexAppServerClient implements AutoCloseable {
             String model,
             String displayName,
             List<String> reasoningEfforts,
+            List<String> serviceTiers,
             String defaultReasoningEffort,
             boolean isDefault
     ) {}

@@ -93,7 +93,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
     private net.minecraft.client.gui.screens.Screen lastTooltipScreen;
     private long lastTooltipAtMs;
 
-    /** Online player names, refreshed once per second on the tick thread; read by the
+    /** TAB-listed player names, refreshed once per second on the tick thread; read by the
      *  service to mask names in chat and to skip "translating" name tags / scoreboards. */
     private static volatile java.util.Set<String> onlineNames = java.util.Set.of();
     private long lastNameRefreshMs;
@@ -107,12 +107,6 @@ public final class MctranslatorFabric implements ClientModInitializer {
             return;
         }
         java.util.Set<String> names = new java.util.HashSet<>();
-        if (mc.level != null) {
-            for (var player : mc.level.players()) {
-                String name = player.getGameProfile().getName();
-                if (name != null && PLAYER_NAME.matcher(name).matches()) names.add(name);
-            }
-        }
         for (var info : mc.getConnection().getListedOnlinePlayers()) {
             String name = info == null || info.getProfile() == null
                     ? null : info.getProfile().getName();

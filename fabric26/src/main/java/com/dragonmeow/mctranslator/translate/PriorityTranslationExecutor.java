@@ -9,8 +9,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Translation worker pool with an explicit interactive/background split.
- * Interactive work is inserted at the front; optional background work is
- * appended at the back, so hovering/clicking/chat can overtake queued work.
+ * Interactive work is inserted at the front; container-name prewarming is
+ * appended at the back, so hovering/clicking/chat can overtake queued crawling.
  */
 public final class PriorityTranslationExecutor extends ThreadPoolExecutor {
 
