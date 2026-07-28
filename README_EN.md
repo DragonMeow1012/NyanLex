@@ -9,7 +9,7 @@ Minecraft Translator is a client-side real-time translation mod. It translates t
 - Translates chat, item names, tooltips, scoreboards, name tags, boss bars, titles, action bars, books, and mod screens.
 - Each surface can show original text, translated text, or both.
 - Supports Google, Youdao, DeepL, Microsoft web translation, and OpenAI-compatible APIs.
-- Fabric 26.2 and NeoForge 1.21.1 support ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage.
+- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-5.6-terra` / `medium`.
 - Async batching, priority queues, disk caches, and failure backoff reduce stalls and duplicate requests.
 - Player names are masked only from the TAB list; ordinary item text such as `with Chest` is no longer guessed as a player name.
 
@@ -66,9 +66,11 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 | Google | Not required | Default machine translation source. |
 | Youdao / DeepL / Microsoft | Not required | Experimental web interfaces that may be affected by rate limits or site changes. |
 | OpenAI-compatible API | Depends on service | Configurable Base URL, model, API key, glossary, and GT fallback. |
-| ChatGPT/Codex | ChatGPT sign-in | Available on Fabric 26.2 and NeoForge 1.21.1 with model, effort, and token controls. |
+| ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, effort, and token controls. |
 
 ## Keys
+
+Fabric 1.17.1+ and NeoForge:
 
 | Key | Action |
 | --- | --- |
@@ -77,7 +79,12 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 | `P` | Scan and translate the current screen's buttons and options |
 | Unbound | Open Translation Settings |
 
-Fabric 1.14.4-1.16.5 use a compact settings screen. Forge 1.12.2-1.13.2 use `G` and `config/mctranslator-forge-legacy.json`.
+Legacy UI:
+
+| Targets | Keys |
+| --- | --- |
+| Fabric 1.14.4-1.16.5 | `G` opens Translation Settings |
+| Forge 1.12.2-1.13.2 | `G` opens Translation Settings; `H` enables/disables translation |
 
 ## 1.0.3 highlights
 

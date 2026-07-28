@@ -40,18 +40,28 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     private static LegacyTranslatorMod instance;
     private static LegacyConfig config;
     private static Path configPath;
+    private static LegacyCodexClient codexClient;
     private KeyMapping settingsKey;
 
     @Override public void onInitializeClient() {
         instance = this;
         configPath = FabricLoader.getInstance().getConfigDir().resolve("mctranslator-legacy.json");
         config = loadConfig();
+        Path configDir = configPath.getParent();
+        codexClient = new LegacyCodexClient(
+                configDir.resolve("mctranslator-codex-home"),
+                configDir.resolve("mctranslator-codex-workspace"));
+        TRANSLATOR.setCodexClient(codexClient);
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override public void run() { if (codexClient != null) codexClient.close(); }
+        }, "mctranslator-codex-shutdown"));
         settingsKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.mctranslator.mode", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G,
                 "category.mctranslator"));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             syncLanguage(client);
             TRANSLATOR.flushBatch();
+            warmVisibleItemNames(client);
             while (settingsKey.consumeClick()) client.setScreen(new LegacySettingsScreen(client.screen));
         });
         ItemTooltipCallback.EVENT.register((stack, context, lines) -> translateTooltip(stack, lines));
@@ -73,6 +83,27 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return true;
     }
 
+    private static void warmVisibleItemNames(Minecraft minecraft) {
+        if (minecraft == null || minecraft.player == null || config == null || !config.enabled) return;
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<String>();
+        for (int slot = 0; slot < 9; slot++) addWarmName(names, minecraft.player.inventory.getItem(slot));
+        addWarmName(names, minecraft.player.getOffhandItem());
+        if (minecraft.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) {
+            net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen =
+                    (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) minecraft.screen;
+            for (net.minecraft.world.inventory.Slot slot : screen.getMenu().slots)
+                if (slot != null && slot.isActive() && slot.hasItem()) addWarmName(names, slot.getItem());
+        }
+        final String target = currentTarget(minecraft);
+        for (String name : names) if (TRANSLATOR.cached(name, target, config.aiEnabled, config) == null)
+            TRANSLATOR.translate(name, target, config.aiEnabled, false, config, ignored -> {});
+    }
+
+    private static void addWarmName(java.util.Set<String> names, ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return;
+        String name = stack.getHoverName().getString();
+        if (shouldTranslate(name)) names.add(name);
+    }
     private static void translateTooltip(ItemStack stack, List<Component> lines) {
         Minecraft minecraft = Minecraft.getInstance();
         if (config == null || !config.enabled || stack == null || stack.isEmpty()
@@ -100,6 +131,28 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     }
 
     static LegacyConfig config() { return config; }
+    static LegacyCodexClient codexClient() { return codexClient; }
+    static LegacySessionTokenUsage.Snapshot tokenUsageSnapshot() {
+        return TRANSLATOR.tokenUsageSnapshot();
+    }
+    public static String tokenUsageLine() {
+        LegacySessionTokenUsage.Snapshot tokens = tokenUsageSnapshot();
+        return "TOKENS total " + tokens.totalTokens()
+                + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
+                + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
+                + " | req " + tokens.requests();
+    }
+    static void testAi(final java.util.function.Consumer<String> callback) {
+        final Minecraft client = Minecraft.getInstance();
+        TRANSLATOR.testAi(currentTarget(client), config, new java.util.function.Consumer<String>() {
+            @Override public void accept(final String result) {
+                if (client != null) client.execute(new Runnable() {
+                    @Override public void run() { callback.accept(result); }
+                });
+                else callback.accept(result);
+            }
+        });
+    }
     public static Component translateVisible(Component source) {
         if (source == null || config == null || !config.enabled || INTERNAL_RENDER.get()) return source;
         Minecraft minecraft = Minecraft.getInstance();
@@ -130,6 +183,46 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return translated;
     }
 
+    public static String nameTag(net.minecraft.world.entity.Entity entity, String source) {
+        if (source == null || config == null || !config.enabled) return source;
+        if (entity instanceof net.minecraft.world.entity.player.Player || nameTagMatchesListedPlayer(source))
+            return source;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.level == null || !shouldTranslate(source)) return source;
+        String target = currentTarget(minecraft);
+        String translated = TRANSLATOR.cached(source, target, config.aiEnabled, config);
+        if (translated == null) {
+            TRANSLATOR.translate(source, target, config.aiEnabled, false, config, ignored -> {});
+            return source;
+        }
+        return translated;
+    }
+
+    private static boolean nameTagMatchesListedPlayer(String plain) {
+        if (plain == null || plain.isEmpty()) return false;
+        Minecraft minecraft = Minecraft.getInstance();
+        net.minecraft.client.multiplayer.ClientPacketListener connection = minecraft == null
+                ? null : minecraft.getConnection();
+        if (connection == null) return false;
+        for (net.minecraft.client.multiplayer.PlayerInfo info : connection.getOnlinePlayers()) {
+            String name = info == null || info.getProfile() == null ? null : info.getProfile().getName();
+            if (name == null || name.isEmpty()) continue;
+            int at = plain.indexOf(name);
+            while (at >= 0) {
+                boolean left = at == 0 || !isNameTokenChar(plain.charAt(at - 1));
+                int end = at + name.length();
+                boolean right = end >= plain.length() || !isNameTokenChar(plain.charAt(end));
+                if (left && right) return true;
+                at = plain.indexOf(name, at + 1);
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNameTokenChar(char ch) {
+        return ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z'
+                || ch >= '0' && ch <= '9' || ch == '_';
+    }
     public static boolean beginInternalRender() {
         boolean previous = INTERNAL_RENDER.get();
         INTERNAL_RENDER.set(Boolean.TRUE);

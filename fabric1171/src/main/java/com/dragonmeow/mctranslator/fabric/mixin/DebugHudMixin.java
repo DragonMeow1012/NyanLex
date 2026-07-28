@@ -26,9 +26,17 @@ public abstract class DebugHudMixin {
             var entries = log.snapshot(8);
             int screenWidth = mc.getWindow().getGuiScaledWidth();
             int width = Math.min(520, Math.max(260, screenWidth / 2));
-            int x = 6, y = 6, row = y + 11;
-            GuiComponent.fill(pose, x - 3, y - 3, x + width + 3, y + 14 + entries.size() * 10, 0xB0101010);
+            int x = 6, y = 6, row = y + 22;
+            GuiComponent.fill(pose, x - 3, y - 3, x + width + 3, y + 25 + entries.size() * 10, 0xB0101010);
             font.draw(pose, "MT DEBUG · " + entries.size() + " requests", x, y, 0xFFFFD060);
+
+            var tokens = MctranslatorFabric.tokenUsageSnapshot();
+            String tokenLine = "TOKENS total " + tokens.totalTokens()
+                    + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
+                    + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
+                    + " | req " + tokens.requests();
+            font.draw(pose, tokenLine, x, y + 11, 0xFF80D8FF);
+
             for (TranslationDebugLog.Entry entry : entries) {
                 String state = switch (entry.status()) { case IN_FLIGHT -> "…"; case SUCCESS -> "✓"; case FALLBACK -> "↪"; case KEEP_ORIGINAL -> "="; case RATE_LIMITED -> "429"; case FAILED -> "✗"; };
                 String failureReason = entry.failureReason();

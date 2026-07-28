@@ -31,12 +31,20 @@ public abstract class DebugHudMixin {
     private static void draw(GuiGraphics graphics, Font font, List<TranslationDebugLog.Entry> entries) {
         int width = Math.min(520, Math.max(260, graphics.guiWidth() / 2));
         int x = 6, y = 6, line = 10;
-        graphics.fill(x - 3, y - 3, x + width + 3, y + 14 + entries.size() * line, 0xB0101010);
+        graphics.fill(x - 3, y - 3, x + width + 3, y + 25 + entries.size() * line, 0xB0101010);
         long batches = entries.stream().map(TranslationDebugLog.Entry::requestId).distinct().count();
         graphics.drawString(font, Component.literal(
                 "MT DEBUG · HTTP " + batches + " 批 / " + entries.size() + " 項"),
                 x, y, 0xFFFFD060, false);
-        int row = y + 11;
+
+                var tokens = MctranslatorFabric.tokenUsageSnapshot();
+                String tokenLine = "TOKENS total " + tokens.totalTokens()
+                        + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
+                        + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
+                        + " | req " + tokens.requests();
+                graphics.drawString(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);
+
+        int row = y + 22;
         for (TranslationDebugLog.Entry entry : entries) {
             String state = switch (entry.status()) {
                 case IN_FLIGHT -> "…";

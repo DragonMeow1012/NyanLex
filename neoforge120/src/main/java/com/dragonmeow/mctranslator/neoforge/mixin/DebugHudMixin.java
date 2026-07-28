@@ -25,9 +25,17 @@ public abstract class DebugHudMixin {
             Font font = mc.font;
             var entries = log.snapshot(8);
             int width = Math.min(520, Math.max(260, graphics.guiWidth() / 2));
-            int x = 6, y = 6, row = y + 11;
-            graphics.fill(x - 3, y - 3, x + width + 3, y + 14 + entries.size() * 10, 0xB0101010);
+            int x = 6, y = 6, row = y + 22;
+            graphics.fill(x - 3, y - 3, x + width + 3, y + 25 + entries.size() * 10, 0xB0101010);
             graphics.drawString(font, Component.literal("MT DEBUG · " + entries.size() + " requests"), x, y, 0xFFFFD060, false);
+
+            var tokens = MctranslatorNeoForge.tokenUsageSnapshot();
+            String tokenLine = "TOKENS total " + tokens.totalTokens()
+                    + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
+                    + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
+                    + " | req " + tokens.requests();
+            graphics.drawString(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);
+
             for (TranslationDebugLog.Entry entry : entries) {
                 String state = switch (entry.status()) { case IN_FLIGHT -> "…"; case SUCCESS -> "✓"; case FALLBACK -> "↪"; case KEEP_ORIGINAL -> "="; case RATE_LIMITED -> "429"; case FAILED -> "✗"; };
                 String failureReason = entry.failureReason();

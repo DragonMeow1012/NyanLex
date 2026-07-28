@@ -12,9 +12,13 @@ import com.dragonmeow.mctranslator.config.TranslatorConfig;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.AiSettings;
+import com.dragonmeow.mctranslator.translate.CodexAppServerClient;
+import com.dragonmeow.mctranslator.translate.CodexAppServerTransport;
 import com.dragonmeow.mctranslator.translate.OpenAiTranslator;
 import com.dragonmeow.mctranslator.translate.ParagraphModel;
 import com.dragonmeow.mctranslator.translate.RequestPacer;
+import com.dragonmeow.mctranslator.translate.SessionTokenUsage;
+import com.dragonmeow.mctranslator.translate.SwitchingAiTranslator;
 import com.dragonmeow.mctranslator.translate.SwitchingMachineTranslator;
 import com.dragonmeow.mctranslator.translate.TextFilter;
 import com.dragonmeow.mctranslator.translate.TranslationDebugLog;
@@ -67,6 +71,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
     private static TranslationDebugLog debugLog;
     private static Path configPath;
     private static UrlHttpTransport transport;
+    private static CodexAppServerClient codexClient;
+    private static CodexAppServerTransport codexTransport;
+    private static final SessionTokenUsage tokenUsage = new SessionTokenUsage();
 
     private static KeyMapping modeKey;
     private static KeyMapping retranslateKey;
@@ -313,6 +320,14 @@ public final class MctranslatorFabric implements ClientModInitializer {
 
     public static TranslatorConfig config() {
         return config;
+    }
+
+    public static CodexAppServerClient codexClient() {
+        return codexClient;
+    }
+
+    public static SessionTokenUsage.Snapshot tokenUsageSnapshot() {
+        return tokenUsage.snapshot();
     }
 
     public static TranslationDebugLog debugLog() {
@@ -649,9 +664,27 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 () -> config.sourceLang,
                 () -> config.machineTranslationProvider,
                 new RequestPacer(() -> config.requestCooldownMs));
-        OpenAiTranslator ai = new OpenAiTranslator(transport,
+        OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
+        apiAi.setTokenUsage(tokenUsage);
+        Path codexRoot = configPath.getParent();
+        codexClient = new CodexAppServerClient(
+                codexRoot.resolve(MOD_ID + "-codex-home"),
+                codexRoot.resolve(MOD_ID + "-codex-workspace"));
+        codexClient.setTokenUsage(tokenUsage);
+        codexTransport = new CodexAppServerTransport(codexClient,
+                () -> config.codexReasoningEffort);
+        OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,
+                () -> new AiSettings("codex://app-server", config.codexModel,
+                        java.util.Collections.emptyList(), config.aiGlossary),
+                RequestPacer.disabled());
+        SwitchingAiTranslator ai = new SwitchingAiTranslator(
+                apiAi, codexAi, () -> config.aiUseCodex);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            CodexAppServerClient client = codexClient;
+            if (client != null) client.close();
+        }, "mctranslator-codex-shutdown"));
         PersistentStore googleStore = new ProviderLanguageFileStore(
                 FabricLoader.getInstance().getConfigDir(), MOD_ID + "-cache", config.targetLang,
                 () -> config.machineTranslationProvider);
@@ -680,7 +713,11 @@ public final class MctranslatorFabric implements ClientModInitializer {
         // A GT result shown after AI failure remains provisional from the AI cache's
         // perspective, so AI retries after its global 429 gate reopens.
         aiCache.setProvisionalRetryGate(() ->
-                config.aiApiKeys != null && !config.aiApiKeys.isEmpty() && !ai.isRateLimited());
+                (config.aiUseCodex
+                        ? codexClient != null && codexClient.isSignedInCached()
+                                && config.codexModel != null && !config.codexModel.isBlank()
+                        : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
+                        && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
@@ -1533,6 +1570,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
             try {
                 OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys),
                         new RequestPacer(() -> config == null ? 0L : config.requestCooldownMs));
+                ai.setTokenUsage(tokenUsage);
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
                 msg = Component.translatable("message.mctranslator.success", "Hello, world -> " + out).getString();
             } catch (Exception e) {
@@ -1545,6 +1583,32 @@ public final class MctranslatorFabric implements ClientModInitializer {
         }, "mctranslator-aitest");
         t.setDaemon(true);
         t.start();
+    }
+
+    public static void testCodex(java.util.function.Consumer<String> onResult) {
+        if (codexTransport == null || config == null) {
+            onResult.accept("Codex is not initialized");
+            return;
+        }
+        Thread thread = new Thread(() -> {
+            String result;
+            try {
+                OpenAiTranslator ai = new OpenAiTranslator(codexTransport,
+                        () -> new AiSettings("codex://app-server", config.codexModel,
+                                java.util.Collections.emptyList(), config.aiGlossary),
+                        RequestPacer.disabled());
+                String translated = ai.translate("Hello, world", "zh-TW").translatedText();
+                result = "Hello, world -> " + translated;
+            } catch (Exception error) {
+                result = "Codex: " + (error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+            }
+            final String message = result;
+            Minecraft client = Minecraft.getInstance();
+            if (client != null) client.execute(() -> onResult.accept(message));
+            else onResult.accept(message);
+        }, "mctranslator-codex-test");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void status(String msg) {

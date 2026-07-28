@@ -18,41 +18,40 @@ final class LegacySettingsScreen extends Screen {
 
     @Override protected void init() {
         LegacyConfig cfg = LegacyTranslatorMod.config();
-        addButton(new Button(width / 2 - 155, 38, 310, 20,
+        addButton(new Button(width / 2 - 155, 30, 310, 20,
                 new TranslatableComponent("config.mctranslator.language",
                         cfg.followGameLanguage ? new TranslatableComponent("config.mctranslator.language.follow",
                                 LegacyTranslatorMod.currentTarget(minecraft)) : new TextComponent(cfg.targetLang)),
                 button -> minecraft.setScreen(new LegacyLanguageScreen(this))));
-        addButton(new Button(width / 2 - 155, 62, 310, 20,
+        addButton(new Button(width / 2 - 155, 54, 310, 20,
                 new TranslatableComponent(cfg.enabled ? "config.mctranslator.enabled" : "config.mctranslator.disabled"),
                 button -> { cfg.enabled = !cfg.enabled; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 155, 86, 310, 20,
+        addButton(new Button(width / 2 - 155, 78, 310, 20,
                 new TextComponent(cfg.showOriginal ? "Original + Translation" : "Translation Only"),
                 button -> { cfg.showOriginal = !cfg.showOriginal; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 155, 110, 152, 20,
+        addButton(new Button(width / 2 - 155, 102, 152, 20,
                 new TextComponent("Engine: " + (cfg.aiEnabled ? "AI" : "GT")),
                 button -> { cfg.aiEnabled = !cfg.aiEnabled; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 + 3, 110, 152, 20,
+        addButton(new Button(width / 2 + 3, 102, 152, 20,
                 new TextComponent("AI fallback: " + (cfg.disableGoogleFallbackForAi ? "OFF" : "ON")),
                 button -> { cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 155, 134, 152, 20,
-                cooldownLabel(cfg),
+        addButton(new Button(width / 2 - 155, 126, 310, 20,
+                new TranslatableComponent("screen.mctranslator.ai.title"),
+                button -> minecraft.setScreen(new LegacyAiConfigScreen(this))));
+        addButton(new Button(width / 2 - 155, 150, 152, 20, cooldownLabel(cfg),
                 button -> { cfg.requestCooldownMs = nextCooldown(cfg.requestCooldownMs); init(minecraft, width, height); }));
-        addButton(new Button(width / 2 + 3, 134, 152, 20,
-                batchWindowLabel(cfg),
+        addButton(new Button(width / 2 + 3, 150, 152, 20, batchWindowLabel(cfg),
                 button -> { cfg.batchWindowMs = nextBatchWindow(cfg.batchWindowMs); init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 155, 158, 310, 20,
-                providerLabel(cfg),
+        addButton(new Button(width / 2 - 155, 174, 310, 20, providerLabel(cfg),
                 button -> minecraft.setScreen(new LegacyProviderScreen(this))));
-        addButton(new Button(width / 2 - 155, 182, 310, 20,
+        addButton(new Button(width / 2 - 155, 198, 310, 20,
                 new TextComponent("Debug overlay: " + (cfg.debugTranslationOverlay ? "ON" : "OFF")),
                 button -> { cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
                     if (!cfg.debugTranslationOverlay) LegacyTranslatorMod.TRANSLATOR.clearDebug();
                     init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 100, height - 30, 200, 20,
+        addButton(new Button(width / 2 - 100, height - 22, 200, 20,
                 new TranslatableComponent("gui.done"), button -> onClose()));
     }
-
     private static int nextCooldown(int current) {
         int[] values = {0, 1000, 2000, 4000, 6000, 8000, 10000};
         for (int value : values) if (value > current) return value;

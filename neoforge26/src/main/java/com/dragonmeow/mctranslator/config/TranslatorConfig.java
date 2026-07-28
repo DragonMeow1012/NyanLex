@@ -21,6 +21,8 @@ import java.nio.file.Path;
 public final class TranslatorConfig {
 
     public static final int PACING_DEFAULTS_VERSION = 1;
+    public static final String DEFAULT_CODEX_MODEL = "gpt-5.6-terra";
+    public static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
     private static final int LEGACY_REQUEST_COOLDOWN_MS = 6000;
 
     // Per-surface display mode. Each surface can independently be 原文 (off) /
@@ -60,6 +62,13 @@ public final class TranslatorConfig {
     public String aiModel = "gemini-3.1-flash-lite";
     /** One or more API keys (for the active endpoint); rotated round-robin and on failure. */
     public java.util.List<String> aiApiKeys = new java.util.ArrayList<>();
+
+    /** Use ChatGPT-authenticated Codex through a local app-server. */
+    public boolean aiUseCodex = false;
+    /** Codex model selected from the signed-in account's live catalog. */
+    public String codexModel = DEFAULT_CODEX_MODEL;
+    /** Reasoning effort advertised by the selected Codex model. */
+    public String codexReasoningEffort = DEFAULT_CODEX_REASONING_EFFORT;
 
     /** Remembered keys per endpoint (raw, comma-separated) so switching providers restores its key. */
     public java.util.Map<String, String> aiKeysByEndpoint = new java.util.HashMap<>();
@@ -185,6 +194,10 @@ public final class TranslatorConfig {
         if (aiBaseUrl == null || aiBaseUrl.isBlank()) aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
         if (aiModel == null) aiModel = "";
         if (aiApiKeys == null) aiApiKeys = new java.util.ArrayList<>();
+        if (codexModel == null || codexModel.isBlank()) codexModel = DEFAULT_CODEX_MODEL;
+        if (codexReasoningEffort == null || codexReasoningEffort.isBlank()) {
+            codexReasoningEffort = DEFAULT_CODEX_REASONING_EFFORT;
+        }
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;

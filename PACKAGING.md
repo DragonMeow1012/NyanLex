@@ -58,6 +58,7 @@ mods-jar/1.0.3/
   MinecraftTranslator-1.0.3-NeoForge.zip
   MinecraftTranslator-1.0.3-Forge.zip
   MinecraftTranslator-1.0.3-all-versions.zip
+  SHA256SUMS.txt
 ```
 
 GitHub Release assets are flat, so all 16 JARs are also uploaded individually for README direct-download links. The ZIP files preserve the loader/version directory structure.
@@ -67,7 +68,7 @@ GitHub Release assets are flat, so all 16 JARs are also uploaded individually fo
 Before publishing:
 
 - Build all 16 targets successfully.
-- Confirm exactly 16 packaged JARs and 4 ZIPs.
+- Confirm exactly 16 packaged JARs, 4 ZIPs, and `SHA256SUMS.txt`.
 - Compare each packaged JAR SHA-256 with its matching `build/libs` output.
 - Confirm loader metadata contains version 1.0.3 and the exact Minecraft range.
 - Run `git diff --check` and core unit tests.

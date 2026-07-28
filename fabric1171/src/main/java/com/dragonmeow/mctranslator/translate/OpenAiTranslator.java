@@ -1,6 +1,7 @@
 package com.dragonmeow.mctranslator.translate;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -42,6 +43,7 @@ public final class OpenAiTranslator implements Translator {
     private final AtomicInteger keyCursor = new AtomicInteger();
     private final LongSupplier clock;
     private final RequestPacer pacer;
+    private volatile SessionTokenUsage tokenUsage;
 
     // Per-key health is kept separately from the all-keys gate. A dead/limited key
     // must not be retried on every other round-robin request while another key is
@@ -95,6 +97,10 @@ public final class OpenAiTranslator implements Translator {
         this.settings = settings;
         this.clock = clock;
         this.pacer = pacer == null ? RequestPacer.disabled() : pacer;
+    }
+
+    public void setTokenUsage(SessionTokenUsage tokenUsage) {
+        this.tokenUsage = tokenUsage;
     }
 
     public boolean isConfigured() {
@@ -660,10 +666,57 @@ public final class OpenAiTranslator implements Translator {
             JsonObject msg = choices.get(0).getAsJsonObject().getAsJsonObject("message");
             String content = msg.get("content").getAsString();
             if (content == null) throw new IOException("empty AI content");
+            recordTokenUsage(root);
             return content;
         } catch (RuntimeException e) {
             throw new IOException("bad AI response: " + e.getMessage(), e);
         }
+    }
+
+    private void recordTokenUsage(JsonObject root) {
+        SessionTokenUsage counter = tokenUsage;
+        if (counter == null || root == null) return;
+        JsonObject usage = objectMember(root, "usage");
+        if (usage == null) return;
+
+        long input = firstLong(usage, "prompt_tokens", "input_tokens", "inputTokens");
+        long output = firstLong(usage, "completion_tokens", "output_tokens", "outputTokens");
+        long total = firstLong(usage, "total_tokens", "totalTokens");
+        long cached = firstLong(usage, "cached_input_tokens", "cachedInputTokens");
+        long reasoning = firstLong(usage, "reasoning_output_tokens", "reasoningOutputTokens");
+
+        JsonObject inputDetails = objectMember(usage, "prompt_tokens_details");
+        if (inputDetails == null) inputDetails = objectMember(usage, "input_tokens_details");
+        if (inputDetails != null) {
+            cached = Math.max(cached,
+                    firstLong(inputDetails, "cached_tokens", "cached_input_tokens"));
+        }
+        JsonObject outputDetails = objectMember(usage, "completion_tokens_details");
+        if (outputDetails == null) outputDetails = objectMember(usage, "output_tokens_details");
+        if (outputDetails != null) {
+            reasoning = Math.max(reasoning,
+                    firstLong(outputDetails, "reasoning_tokens", "reasoning_output_tokens"));
+        }
+        counter.recordRequest(input, cached, output, reasoning, total);
+    }
+
+    private static JsonObject objectMember(JsonObject object, String key) {
+        JsonElement value = object.get(key);
+        return value != null && value.isJsonObject() ? value.getAsJsonObject() : null;
+    }
+
+    private static long firstLong(JsonObject object, String... keys) {
+        if (object == null) return 0L;
+        for (String key : keys) {
+            JsonElement value = object.get(key);
+            if (value == null || value.isJsonNull() || !value.isJsonPrimitive()) continue;
+            try {
+                return Math.max(0L, value.getAsLong());
+            } catch (RuntimeException ignored) {
+                // Try the next compatible field spelling.
+            }
+        }
+        return 0L;
     }
 
     private record AiLineSlot(String token, String original) {}

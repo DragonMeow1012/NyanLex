@@ -45,24 +45,35 @@ final class LegacyTranslator {
     }
 
     private static final class Pending {
-        final String key, source, target, sourceLang, machineProvider;
+        final String key, source, target, sourceLang, machineProvider, aiProfile;
         final boolean ai;
         final LegacyConfig config;
         final Consumer<String> callback;
         boolean highPriority;
 
         Pending(String key, String source, String target, String sourceLang,
-                String machineProvider, boolean ai,
+                String machineProvider, String aiProfile, boolean ai,
                 boolean highPriority, LegacyConfig config, Consumer<String> callback) {
-            this.key = key; this.source = source; this.target = target; this.sourceLang = sourceLang;
+            this.key = key;
+            this.source = source;
+            this.target = target;
+            this.sourceLang = sourceLang;
             this.machineProvider = machineProvider;
-            this.ai = ai; this.highPriority = highPriority; this.config = config; this.callback = callback;
+            this.aiProfile = aiProfile;
+            this.ai = ai;
+            this.highPriority = highPriority;
+            this.config = config;
+            this.callback = callback;
         }
     }
 
     private static final class BatchWire {
-        final String text; final int anchorBase;
-        BatchWire(String text, int anchorBase) { this.text = text; this.anchorBase = anchorBase; }
+        final String text;
+        final int anchorBase;
+        BatchWire(String text, int anchorBase) {
+            this.text = text;
+            this.anchorBase = anchorBase;
+        }
     }
 
     private final LinkedBlockingDeque<Runnable> queue = new LinkedBlockingDeque<Runnable>();
@@ -94,24 +105,49 @@ final class LegacyTranslator {
     private final Object paceLock = new Object();
     private long batchStartedAt = -1L;
     private long lastGtRequest, lastAiRequest;
+    private final LegacySessionTokenUsage tokenUsage = new LegacySessionTokenUsage();
+    private volatile LegacyCodexClient codexClient;
 
     LegacyTranslator() { executor.prestartAllCoreThreads(); }
 
+    void setCodexClient(LegacyCodexClient client) {
+        this.codexClient = client;
+        if (client != null) client.setTokenUsage(tokenUsage);
+    }
+
+    LegacyCodexClient codexClient() { return codexClient; }
+    LegacySessionTokenUsage.Snapshot tokenUsageSnapshot() { return tokenUsage.snapshot(); }
+
+    void testAi(final String target, final LegacyConfig config, final Consumer<String> callback) {
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    String translated = requestAi("Purple Stool", target, config);
+                    callback.accept(translated == null || translated.trim().isEmpty()
+                            ? "empty response" : "OK: " + translated.trim());
+                } catch (Exception e) {
+                    callback.accept("Failed: " + failureReason(e));
+                }
+            }
+        });
+    }
+
     String cached(String source, String target, boolean ai) {
-        return cache.get(cacheKey(source, target, ai, "google"));
+        return cache.get(cacheKey(source, target, ai, "google", null));
     }
 
     String cached(String source, String target, boolean ai, LegacyConfig config) {
         String provider = LegacyConfig.normalizeMachineProvider(
                 config == null ? null : config.machineTranslationProvider);
-        return cache.get(cacheKey(source, target, ai, provider));
+        return cache.get(cacheKey(source, target, ai, provider, config));
     }
 
     void translate(final String source, final String target, final boolean ai, final boolean highPriority,
                    final LegacyConfig config, final Consumer<String> callback) {
         final String provider = LegacyConfig.normalizeMachineProvider(
                 config == null ? null : config.machineTranslationProvider);
-        final String key = cacheKey(source, target, ai, provider);
+        final String aiProfile = aiProfile(config);
+        final String key = cacheKey(source, target, ai, provider, config);
         String hit = cache.get(key);
         if (hit != null) { callback.accept(hit); return; }
         Long blocked = failedUntil.get(key);
@@ -127,7 +163,7 @@ final class LegacyTranslator {
         }
         synchronized (batchLock) {
             if (pending.isEmpty()) batchStartedAt = System.currentTimeMillis();
-            pending.put(key, new Pending(key, source, target, config.sourceLang, provider, ai,
+            pending.put(key, new Pending(key, source, target, config.sourceLang, provider, aiProfile, ai,
                     highPriority, config, callback));
         }
     }
@@ -249,6 +285,7 @@ final class LegacyTranslator {
         return first.ai == other.ai && first.target.equals(other.target)
                 && safe(first.sourceLang).equals(safe(other.sourceLang))
                 && first.machineProvider.equals(other.machineProvider)
+                && first.aiProfile.equals(other.aiProfile)
                 && first.config == other.config;
     }
 
@@ -459,6 +496,16 @@ final class LegacyTranslator {
     }
 
     private String requestAi(String text, String target, LegacyConfig config) throws Exception {
+        if (config.aiUseCodex) {
+            LegacyCodexClient client = codexClient;
+            if (client == null) throw new IllegalStateException("Codex not initialized");
+            String model = config.codexModel == null ? "" : config.codexModel.trim();
+            String effort = config.codexReasoningEffort == null ? "" : config.codexReasoningEffort.trim();
+            String systemPrompt = "Translate Minecraft text to " + target
+                    + ". Preserve names, numbers, formatting codes, line breaks, and numeric boundary markers exactly."
+                    + " Return translation only.";
+            return client.complete(model, effort, systemPrompt, text);
+        }
         String baseUrl = config.aiBaseUrl == null ? "" : config.aiBaseUrl.trim();
         String model = config.aiModel == null ? "" : config.aiModel.trim();
         if (baseUrl.isEmpty() || model.isEmpty())
@@ -529,6 +576,7 @@ final class LegacyTranslator {
             if (response == null || response.trim().isEmpty())
                 throw new IllegalStateException("empty response");
             JsonObject parsed = new JsonParser().parse(response).getAsJsonObject();
+            recordTokenUsage(parsed);
             JsonArray choices = parsed.getAsJsonArray("choices");
             if (choices == null || choices.size() == 0)
                 throw new IllegalStateException("no choices in response");
@@ -541,6 +589,41 @@ final class LegacyTranslator {
         } finally { connection.disconnect(); }
     }
 
+    private void recordTokenUsage(JsonObject root) {
+        if (root == null) return;
+        JsonObject usage = objectMember(root, "usage");
+        if (usage == null) return;
+        long input = firstLong(usage, "prompt_tokens", "input_tokens", "inputTokens");
+        long output = firstLong(usage, "completion_tokens", "output_tokens", "outputTokens");
+        long total = firstLong(usage, "total_tokens", "totalTokens");
+        long cached = firstLong(usage, "cached_input_tokens", "cachedInputTokens");
+        long reasoning = firstLong(usage, "reasoning_output_tokens", "reasoningOutputTokens");
+        JsonObject inputDetails = objectMember(usage, "prompt_tokens_details");
+        if (inputDetails == null) inputDetails = objectMember(usage, "input_tokens_details");
+        if (inputDetails != null)
+            cached = Math.max(cached, firstLong(inputDetails, "cached_tokens", "cached_input_tokens"));
+        JsonObject outputDetails = objectMember(usage, "completion_tokens_details");
+        if (outputDetails == null) outputDetails = objectMember(usage, "output_tokens_details");
+        if (outputDetails != null)
+            reasoning = Math.max(reasoning, firstLong(outputDetails, "reasoning_tokens", "reasoning_output_tokens"));
+        tokenUsage.recordRequest(input, cached, output, reasoning, total);
+    }
+
+    private static JsonObject objectMember(JsonObject object, String key) {
+        JsonElement value = object == null ? null : object.get(key);
+        return value != null && value.isJsonObject() ? value.getAsJsonObject() : null;
+    }
+
+    private static long firstLong(JsonObject object, String... keys) {
+        if (object == null) return 0L;
+        for (String key : keys) {
+            JsonElement value = object.get(key);
+            if (value == null || value.isJsonNull() || !value.isJsonPrimitive()) continue;
+            try { return Math.max(0L, value.getAsLong()); }
+            catch (RuntimeException ignored) {}
+        }
+        return 0L;
+    }
     private String requestGoogle(String text, String sourceLang, String target, int cooldown) throws Exception {
         pace(false, cooldown);
         String endpoint = "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl="
@@ -586,14 +669,19 @@ final class LegacyTranslator {
         } finally { reader.close(); }
     }
 
-    private static String cacheKey(String source, String target, boolean ai) {
-        return (ai ? "AI\n" : "GT\n") + target + '\n' + source;
-    }
-    private static String cacheKey(String source, String target, boolean ai, String provider) {
+    private static String cacheKey(String source, String target, boolean ai, String provider,
+                                   LegacyConfig config) {
+        if (ai) return "AI\n" + aiProfile(config) + '\n' + target + '\n' + source;
         String selected = LegacyConfig.normalizeMachineProvider(provider);
-        if ("google".equals(selected)) return cacheKey(source, target, ai);
-        return (ai ? "AI\n" : "GT\n")
-                + selected + '\n' + target + '\n' + source;
+        if ("google".equals(selected)) return "GT\n" + target + '\n' + source;
+        return "GT\n" + selected + '\n' + target + '\n' + source;
+    }
+
+    private static String aiProfile(LegacyConfig config) {
+        if (config == null) return "api";
+        if (config.aiUseCodex) return "codex:" + safe(config.codexModel)
+                + ':' + safe(config.codexReasoningEffort);
+        return "api:" + safe(config.aiBaseUrl) + ':' + safe(config.aiModel);
     }
     private static String safe(String value) { return value == null ? "" : value; }
     private static String enc(String value) throws Exception { return URLEncoder.encode(value, "UTF-8"); }

@@ -1,0 +1,31 @@
+allprojects { project ->
+    afterEvaluate {
+        if (!project.plugins.hasPlugin('java')) return
+        def harness = System.getenv('MCTRANSLATOR_INLINE_HARNESS')
+        def harnessMain = System.getenv('MCTRANSLATOR_INLINE_MAIN')
+        def output = System.getenv('MCTRANSLATOR_INLINE_OUTPUT')
+        def runtime = System.getenv('MCTRANSLATOR_INLINE_RUNTIME')
+        if (harness == null || harnessMain == null || output == null || runtime == null) return
+        project.tasks.create(name: 'inlineSimulationClasses', type: JavaCompile) {
+            source project.file(harness)
+            classpath = project.sourceSets.main.runtimeClasspath
+            if (project.gradle.gradleVersion.tokenize('.')[0].toInteger() >= 9) {
+                destinationDirectory.set(project.file(output))
+            } else {
+                destinationDir = project.file(output)
+            }
+            options.encoding = 'UTF-8'
+        }
+        project.tasks.create(name: 'inlineSimulation', type: JavaExec, dependsOn: ['classes', 'inlineSimulationClasses']) {
+            classpath = project.files(project.file(output)) + project.sourceSets.main.runtimeClasspath
+            if (project.gradle.gradleVersion.tokenize('.')[0].toInteger() >= 9) {
+                mainClass.set(harnessMain)
+            } else {
+                main = harnessMain
+            }
+            args project.file(runtime).absolutePath
+            environment 'MCTRANSLATOR_CODEX_PATH', System.getenv('MCTRANSLATOR_CODEX_PATH')
+            environment 'MCTRANSLATOR_FAKE_LOG', System.getenv('MCTRANSLATOR_FAKE_LOG')
+        }
+    }
+}

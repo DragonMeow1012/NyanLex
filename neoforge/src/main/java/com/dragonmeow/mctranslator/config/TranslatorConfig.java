@@ -22,7 +22,7 @@ public final class TranslatorConfig {
 
     public static final int PACING_DEFAULTS_VERSION = 1;
     public static final String DEFAULT_CODEX_MODEL = "gpt-5.6-terra";
-    public static final String DEFAULT_CODEX_REASONING_EFFORT = "low";
+    public static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
     private static final int LEGACY_REQUEST_COOLDOWN_MS = 6000;
 
     // Per-surface display mode. Each surface can independently be 原文 (off) /

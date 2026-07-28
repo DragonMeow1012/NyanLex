@@ -9,7 +9,7 @@ Minecraft Translator 是純客戶端即時翻譯模組。它只翻譯畫面上�
 - 翻譯聊天、物品名稱、提示框、記分板、名牌、Boss Bar、標題、Action Bar、書本與模組介面。
 - 每個顯示區域可選原文、譯文或原文＋譯文。
 - 支援 Google、Youdao、DeepL、Microsoft 網頁翻譯與 OpenAI 相容 API。
-- Fabric 26.2 與 NeoForge 1.21.1 支援 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示。
+- 所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設使用 `gpt-5.6-terra`／`medium`。
 - 非同步批次、優先佇列、磁碟快取與失敗退避，避免畫面卡頓及重複請求。
 - 玩家名只依 TAB 名單遮罩；物品名稱不再因 `with Chest` 等普通文字被誤判。
 
@@ -66,9 +66,11 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 | Google | 不需要 | 預設機器翻譯來源。 |
 | Youdao／DeepL／Microsoft | 不需要 | 實驗性網頁介面，可能受限流或網站改版影響。 |
 | OpenAI 相容 API | 視服務而定 | 可設定 Base URL、模型、API Key、詞彙表與 GT 回退。 |
-| ChatGPT／Codex | 使用 ChatGPT 登入 | Fabric 26.2、NeoForge 1.21.1 可用；可選模型、推理強度並查看 token。 |
+| ChatGPT／Codex | 使用 ChatGPT 登入 | 所有表列版本均支援；需先安裝 Codex CLI，可選模型、推理強度並查看 token。 |
 
 ## 快捷鍵
+
+Fabric 1.17.1 以上與 NeoForge：
 
 | 按鍵 | 功能 |
 | --- | --- |
@@ -77,7 +79,12 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 | `P` | 掃描並翻譯目前介面的按鈕與選項 |
 | 未綁定 | 開啟翻譯設定 |
 
-舊版 Fabric 1.14.4～1.16.5 使用精簡設定介面；Forge 1.12.2～1.13.2 使用 `G` 與 `config/mctranslator-forge-legacy.json`。
+舊版介面：
+
+| 版本 | 按鍵 |
+| --- | --- |
+| Fabric 1.14.4～1.16.5 | `G` 開啟翻譯設定 |
+| Forge 1.12.2～1.13.2 | `G` 開啟翻譯設定；`H` 啟用／停用翻譯 |
 
 ## 1.0.3 重點
 

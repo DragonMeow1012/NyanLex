@@ -139,7 +139,7 @@ public abstract class HudMixin {
             int lineHeight = 9;
             int x = 6;
             int y = 6;
-            int height = 14 + entries.size() * lineHeight;
+            int height = 25 + entries.size() * lineHeight;
             graphics.fill(x - 3, y - 3, x + maxWidth + 3, y + height, 0xB0101010);
 
             long waiting = entries.stream().filter(e -> e.status()
@@ -152,7 +152,15 @@ public abstract class HudMixin {
                     + "  429×" + rateLimited + "  ✕" + failed;
             graphics.text(font, Component.literal(header), x, y, 0xFFFFD060, false);
 
-            int row = y + 11;
+            var tokens = MctranslatorFabric26.tokenUsageSnapshot();
+            String tokenLine = "TOKENS total " + tokens.totalTokens()
+                    + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
+                    + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
+                    + " | req " + tokens.requests();
+            graphics.text(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);
+
+
+            int row = y + 22;
             for (var entry : entries) {
                 String state = switch (entry.status()) {
                     case IN_FLIGHT -> "…";
