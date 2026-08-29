@@ -244,6 +244,17 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
+    void markerDigitsEmbeddedInsideALargerNumberAreRejected() throws Exception {
+        HttpTransport inline = url -> googleResponse("你贏得了 170001 金幣");
+        GoogleFreeTranslator translator = new GoogleFreeTranslator(inline, "auto");
+
+        TranslationResult result = translator.translate("You won ⟦MT0⟧ coins", "zh-TW");
+
+        assertEquals("", result.translatedText());
+        assertEquals("format/token lost", result.failureReason());
+    }
+
+    @Test
     void httpFailureOnTokenLineStaysATransportFailure() {
         HttpTransport failing = url -> {
             throw new IOException("HTTP 429");

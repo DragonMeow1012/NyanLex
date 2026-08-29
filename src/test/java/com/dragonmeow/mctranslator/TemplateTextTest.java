@@ -2,7 +2,10 @@ package com.dragonmeow.mctranslator;
 
 import com.dragonmeow.mctranslator.translate.TemplateText;
 import com.dragonmeow.mctranslator.translate.TextFilter;
+import com.dragonmeow.mctranslator.translate.TranslationTemplate;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -349,7 +352,75 @@ class TemplateTextTest {
         assertEquals("Server: xxxxx", second.restore(second.text()));
     }
 
-    // ---- NUMBER tokenizer: atomic group + quantity-x suffix (key-shredding fix) ----
+    // ---- NUMBER tokenizer: atomic group + quantity-x prefix/suffix (key-shredding fix) ----
+
+    @Test
+    void quantityPrefixVariantsShareOneKeyAndRestoreTheirOwnValues() {
+        TemplateText.Prepared qty100 = TemplateText.prepare("Reward x100 Diamonds");
+        TemplateText.Prepared qty250 = TemplateText.prepare("Reward X250 Diamonds");
+        TemplateText.Prepared grouped = TemplateText.prepare("Reward x1,000 Diamonds");
+        TemplateText.Prepared decimal = TemplateText.prepare("Reward x1.5 Diamonds");
+        TemplateText.Prepared bare100 = TemplateText.prepare("Reward 100 Diamonds");
+
+        assertEquals("Reward ⟦MT0⟧ Diamonds", qty100.text(),
+                "the whole x-prefixed quantity must be ONE slot");
+        assertEquals(qty100.text(), qty250.text());
+        assertEquals(qty100.text(), grouped.text());
+        assertEquals(qty100.text(), decimal.text());
+        assertEquals(qty100.text(), bare100.text(),
+                "x100 / X250 / x1,000 / 100 variants must fold into one request key");
+        assertEquals(java.util.List.of("x100"), qty100.values());
+        assertEquals("Reward x100 Diamonds", qty100.restore(qty100.text()));
+        assertEquals("Reward X250 Diamonds", qty250.restore(qty250.text()));
+        assertEquals(java.util.List.of("x1,000"), grouped.values(),
+                "a grouped quantity must not be shredded into a partial-number slot");
+        assertEquals("Reward x1,000 Diamonds", grouped.restore(grouped.text()));
+        assertEquals("Reward x1.5 Diamonds", decimal.restore(decimal.text()));
+        assertEquals("Reward 100 Diamonds", bare100.restore(bare100.text()));
+    }
+
+    @Test
+    void literalReservedMtTokenCannotCollideWithGeneratedQuantitySlot() {
+        String source = "Literal ⟦MT0⟧ Reward x1";
+        TemplateText.Prepared prepared = TemplateText.prepare(source);
+
+        assertEquals("Literal ⟦MT0⟧ Reward ⟦MT1⟧", prepared.text());
+        assertEquals(List.of("x1"), prepared.values());
+        assertEquals(List.of(1), prepared.slotIndices());
+        assertEquals("字面 ⟦MT0⟧ 獎勵 x1",
+                prepared.restore("字面 ⟦MT0⟧ 獎勵 ⟦MT1⟧"));
+
+        TranslationTemplate.Snapshot snapshot = new TranslationTemplate().prepare(source);
+        assertEquals("字面 ⟦MT0⟧ 獎勵 ⟦MT1⟧",
+                snapshot.retokenize("字面 ⟦MT0⟧ 獎勵 x1"));
+    }
+
+    @Test
+    void literalMtMarkerVariantsAreProtectedAsCompleteSpans() {
+        for (String literal : java.util.List.of("⟦MT0⟧", "⟦ MT 0 ⟧", "⟦ mt 42 ⟧")) {
+            TemplateText.Prepared literalOnly = TemplateText.prepare(literal);
+            assertFalse(literalOnly.changed(), literalOnly.text());
+            assertEquals(literal, literalOnly.text());
+            assertEquals(literal, literalOnly.restore(literalOnly.text()));
+
+            TemplateText.Prepared withQuantity = TemplateText.prepare(literal + " x100");
+            assertEquals(literal + " ⟦MT" + (literal.contains("42") ? "0" : "1") + "⟧",
+                    withQuantity.text(), withQuantity.text());
+            assertEquals(literal + " x100", withQuantity.restore(withQuantity.text()));
+        }
+    }
+
+    @Test
+    void quantityPrefixesRespectMinecraftStyleBoundaries() {
+        TemplateText.Prepared section = TemplateText.prepare("§ax1,000 Coins");
+        assertEquals("§a⟦MT0⟧ Coins", section.text());
+        assertEquals(java.util.List.of("x1,000"), section.values());
+        assertEquals("§ax1,000 Coins", section.restore(section.text()));
+
+        TemplateText.Prepared cs = TemplateText.prepare("⟦CS1⟧x100⟦/CS1⟧ Coins");
+        assertEquals("⟦CS1⟧⟦MT0⟧⟦/CS1⟧ Coins", cs.text());
+        assertEquals("⟦CS1⟧x100⟦/CS1⟧ Coins", cs.restore(cs.text()));
+    }
 
     @Test
     void quantitySuffixVariantsShareOneKeyAndRestoreTheirOwnValues() {
@@ -372,7 +443,13 @@ class TemplateTextTest {
         // The x suffix guard: hex literals, dimensions and letter-glued runs are prose.
         assertFalse(TemplateText.prepare("0x1F").changed(), TemplateText.prepare("0x1F").text());
         assertFalse(TemplateText.prepare("2x2").changed(), TemplateText.prepare("2x2").text());
+        assertFalse(TemplateText.prepare("1920x1080").changed(), TemplateText.prepare("1920x1080").text());
         assertFalse(TemplateText.prepare("4xp").changed(), TemplateText.prepare("4xp").text());
+        assertFalse(TemplateText.prepare("x100foo").changed(), TemplateText.prepare("x100foo").text());
+        assertFalse(TemplateText.prepare("x100kg").changed(), TemplateText.prepare("x100kg").text());
+        assertFalse(TemplateText.prepare("x100xp").changed(), TemplateText.prepare("x100xp").text());
+        assertFalse(TemplateText.prepare("_x100").changed(), TemplateText.prepare("_x100").text());
+        assertFalse(TemplateText.prepare("box100").changed(), TemplateText.prepare("box100").text());
         // Existing key shapes must not move.
         assertEquals("Balance ⟦MT0⟧", TemplateText.prepare("Balance 10k").text());
         assertEquals("Progress ⟦MT0⟧", TemplateText.prepare("Progress 5%").text());

@@ -29,6 +29,7 @@ import java.util.regex.Pattern;
  * batch anchors before caching any value returned here.</p>
  */
 final class LegacyMachineProvider {
+    private static final int MAX_HTTP_RESPONSE_CHARS = 2_000_000;
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                     + "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0";
@@ -397,8 +398,14 @@ final class LegacyMachineProvider {
                 new InputStreamReader(stream, StandardCharsets.UTF_8));
         try {
             StringBuilder body = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) body.append(line);
+            char[] buffer = new char[4096];
+            int count;
+            while ((count = reader.read(buffer)) >= 0) {
+                if (body.length() + count > MAX_HTTP_RESPONSE_CHARS) {
+                    throw new ProviderException("HTTP response too large");
+                }
+                body.append(buffer, 0, count);
+            }
             return body.toString();
         } finally {
             reader.close();

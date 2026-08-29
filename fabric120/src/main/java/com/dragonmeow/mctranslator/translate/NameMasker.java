@@ -54,39 +54,43 @@ public final class NameMasker {
         if (text == null || text.isEmpty() || names == null || names.isEmpty()) {
             return new Masked(text, List.of());
         }
-        Set<String> nameSet = (names instanceof Set) ? (Set<String>) names : new HashSet<>(names);
+        Set<?> nameSet = names instanceof Set<?> set ? set : new HashSet<>(names);
 
-        List<String> placeholders = new ArrayList<>();     // index -> original term
-        Map<String, Integer> assigned = new HashMap<>();   // term -> placeholder index
-        StringBuilder out = new StringBuilder(text.length() + 8);
+        List<String> placeholders = null;     // index -> original term; allocated on first match
+        Map<String, Integer> assigned = null; // term -> placeholder index; allocated on first match
+        StringBuilder out = null;
         int i = 0;
         int n = text.length();
-        boolean masked = false;
         while (i < n) {
             char c = text.charAt(i);
             if (isNameChar(c)) {
                 int j = i + 1;
                 while (j < n && isNameChar(text.charAt(j))) j++;
-                String token = text.substring(i, j);
-                if (nameSet.contains(token)) {
-                    Integer idx = assigned.get(token);
+                String word = text.substring(i, j);
+                if (nameSet.contains(word)) {
+                    if (out == null) {
+                        placeholders = new ArrayList<>();
+                        assigned = new HashMap<>();
+                        out = new StringBuilder(text.length() + 8);
+                        out.append(text, 0, i);
+                    }
+                    Integer idx = assigned.get(word);
                     if (idx == null) {
                         idx = placeholders.size();
-                        placeholders.add(token);
-                        assigned.put(token, idx);
+                        placeholders.add(word);
+                        assigned.put(word, idx);
                     }
                     out.append(token(idx));
-                    masked = true;
-                } else {
-                    out.append(token);
+                } else if (out != null) {
+                    out.append(text, i, j);
                 }
                 i = j;
             } else {
-                out.append(c);
+                if (out != null) out.append(c);
                 i++;
             }
         }
-        return masked ? new Masked(out.toString(), placeholders) : new Masked(text, List.of());
+        return out == null ? new Masked(text, List.of()) : new Masked(out.toString(), placeholders);
     }
 
     /** Restore the original terms in a translated string. */

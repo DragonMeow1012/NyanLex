@@ -1,18 +1,19 @@
 package com.dragonmeow.mctranslator.legacy;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** In-memory token totals for the current Minecraft process. */
 final class LegacySessionTokenUsage {
+    private static final int MAX_CUMULATIVE_SOURCES = 1024;
     private final AtomicLong inputTokens = new AtomicLong();
     private final AtomicLong cachedInputTokens = new AtomicLong();
     private final AtomicLong outputTokens = new AtomicLong();
     private final AtomicLong reasoningOutputTokens = new AtomicLong();
     private final AtomicLong totalTokens = new AtomicLong();
     private final AtomicLong requests = new AtomicLong();
-    private final ConcurrentHashMap<String, Counters> cumulativeSources =
-            new ConcurrentHashMap<String, Counters>();
+    private final Map<String, Counters> cumulativeSources = new HashMap<String, Counters>();
 
     void recordRequest(long input, long cachedInput, long output,
                        long reasoningOutput, long total) {
@@ -20,26 +21,39 @@ final class LegacySessionTokenUsage {
                 sanitize(reasoningOutput), resolvedTotal(input, output, total), 1L);
     }
 
-    void recordCumulative(String sourceId, long input, long cachedInput, long output,
-                          long reasoningOutput, long total) {
+    synchronized void recordCumulative(String sourceId, long input, long cachedInput, long output,
+                                       long reasoningOutput, long total) {
         if (sourceId == null || sourceId.trim().isEmpty()) return;
-        final Counters current = new Counters(
+        Counters current = new Counters(
                 sanitize(input), sanitize(cachedInput), sanitize(output),
                 sanitize(reasoningOutput), resolvedTotal(input, output, total));
-        cumulativeSources.compute(sourceId, (key, previous) -> {
-            if (previous == null) {
-                add(current.input, current.cachedInput, current.output,
-                        current.reasoningOutput, current.total, 1L);
-            } else {
-                add(delta(current.input, previous.input),
-                        delta(current.cachedInput, previous.cachedInput),
-                        delta(current.output, previous.output),
-                        delta(current.reasoningOutput, previous.reasoningOutput),
-                        delta(current.total, previous.total), 0L);
-            }
-            return current;
-        });
+        Counters previous = cumulativeSources.get(sourceId);
+        if (previous == null) {
+            if (cumulativeSources.size() >= MAX_CUMULATIVE_SOURCES) return;
+            cumulativeSources.put(sourceId, current);
+            add(current.input, current.cachedInput, current.output,
+                    current.reasoningOutput, current.total, 1L);
+            return;
+        }
+        Counters highWater = new Counters(
+                Math.max(current.input, previous.input),
+                Math.max(current.cachedInput, previous.cachedInput),
+                Math.max(current.output, previous.output),
+                Math.max(current.reasoningOutput, previous.reasoningOutput),
+                Math.max(current.total, previous.total));
+        cumulativeSources.put(sourceId, highWater);
+        add(delta(highWater.input, previous.input),
+                delta(highWater.cachedInput, previous.cachedInput),
+                delta(highWater.output, previous.output),
+                delta(highWater.reasoningOutput, previous.reasoningOutput),
+                delta(highWater.total, previous.total), 0L);
     }
+
+    synchronized void finishCumulative(String sourceId) {
+        if (sourceId != null) cumulativeSources.remove(sourceId);
+    }
+
+    synchronized int activeCumulativeSources() { return cumulativeSources.size(); }
 
     Snapshot snapshot() {
         return new Snapshot(inputTokens.get(), cachedInputTokens.get(), outputTokens.get(),

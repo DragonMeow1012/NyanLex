@@ -28,6 +28,7 @@ import java.util.function.Supplier;
  * {@link TranslationCache}.
  */
 public final class TranslationService {
+    private static final int MAX_CONTEXTUAL_ITEM_RETRIES = 512;
     private final TranslatorConfig config;
     private final TranslationCache google;
     private final TranslationCache ai;
@@ -112,8 +113,21 @@ public final class TranslationService {
     private void requestByEngine(boolean useAi, String source, boolean exactStyle,
                                  Consumer<String> callback, boolean always,
                                  boolean followAiRecovery) {
+        requestByEngineDetailed(useAi, source, exactStyle,
+                (value, ignoredFinality) -> callback.accept(value), always, followAiRecovery);
+    }
+
+    @FunctionalInterface
+    private interface EngineResultConsumer {
+        void accept(String value, boolean finalResult);
+    }
+
+    private void requestByEngineDetailed(boolean useAi, String source, boolean exactStyle,
+                                         EngineResultConsumer callback, boolean always,
+                                         boolean followAiRecovery) {
         if (!useAi) {
-            requestCache(google, source, exactStyle, callback, always);
+            requestCache(google, source, exactStyle,
+                    value -> callback.accept(value, true), always);
             return;
         }
 
@@ -124,12 +138,12 @@ public final class TranslationService {
                     && TextFilter.isStyleFallback(finalNow);
             if (finalNow != null && !styleFallbackOnly) {
                 finalAiDelivered.set(true);
-                callback.accept(finalNow);
+                callback.accept(finalNow, true);
                 return;
             }
             Consumer<String> recoveredFinal = recovered -> {
                 if (recovered != null && finalAiDelivered.compareAndSet(false, true)) {
-                    callback.accept(recovered);
+                    callback.accept(recovered, true);
                 }
             };
             if (styleFallbackOnly) {
@@ -138,7 +152,7 @@ public final class TranslationService {
                 // waiter replace it when the projection lands. Delivering BEFORE
                 // registering keeps the exact value last even if the projection is
                 // already present at registration time.
-                callback.accept(finalNow);
+                callback.accept(finalNow, !followAiRecovery);
                 if (followAiRecovery) ai.requestCoalescedExactStyleFinal(source, recoveredFinal);
                 return;
             }
@@ -152,26 +166,26 @@ public final class TranslationService {
             // Subsequent renders retry after the normal failure backoff, and the
             // recovery waiter above delivers a later successful AI result.
             if (config.disableGoogleFallbackForAi) {
-                if (always && !finalAiDelivered.get()) callback.accept(null);
+                if (always && !finalAiDelivered.get()) callback.accept(null, !followAiRecovery);
                 return;
             }
             if (!ai.mayUseFallback(source)) {
-                if (always && !finalAiDelivered.get()) callback.accept(null);
+                if (always && !finalAiDelivered.get()) callback.accept(null, !followAiRecovery);
                 return;
             }
             if (primary != null) {
-                if (!finalAiDelivered.get()) callback.accept(primary);
+                if (!finalAiDelivered.get()) callback.accept(primary, !followAiRecovery);
                 return;
             }
             requestCache(google, source, exactStyle, lower -> {
                 String recovered = ai.getCachedFinal(source);
                 if (recovered != null
                         && (!exactStyle || !TextFilter.isStyleFallback(recovered))) {
-                    if (finalAiDelivered.compareAndSet(false, true)) callback.accept(recovered);
+                    if (finalAiDelivered.compareAndSet(false, true)) callback.accept(recovered, true);
                 } else if (!ai.mayUseFallback(source)) {
-                    if (always && !finalAiDelivered.get()) callback.accept(null);
+                    if (always && !finalAiDelivered.get()) callback.accept(null, !followAiRecovery);
                 } else if (!finalAiDelivered.get() && (lower != null || always)) {
-                    callback.accept(lower);
+                    callback.accept(lower, !followAiRecovery);
                 }
             }, true);
         }, true);
@@ -306,16 +320,35 @@ public final class TranslationService {
         }, false);
     }
 
+    public static final class ChatTranslationResult {
+        private final String text;
+        private final boolean finalResult;
+
+        private ChatTranslationResult(String text, boolean finalResult) {
+            this.text = text;
+            this.finalResult = finalResult;
+        }
+
+        public String text() { return text; }
+        public boolean finalResult() { return finalResult; }
+    }
+
     public void translateChatAsync(String content, Consumer<String> onResult) {
+        translateChatAsyncDetailed(content, result -> onResult.accept(result.text()));
+    }
+
+    /** Chat-only callback that distinguishes a provisional row from its final recovery. */
+    public void translateChatAsyncDetailed(String content,
+                                           Consumer<ChatTranslationResult> onResult) {
         if (!wantsChatTranslation(content)) {
-            onResult.accept(null);
+            onResult.accept(new ChatTranslationResult(null, true));
             return;
         }
         NameMasker.Masked masked = NameMasker.mask(content, names());
         // Chat is inserted once and is not re-rendered after a background cache update.
         // For CS-marked rich text, wait for the exact semantic style projection instead
         // of permanently displaying the marker-free fallback with guessed colours.
-        requestByEngine(config.aiChat, masked.text(), true, translated -> {
+        requestByEngineDetailed(config.aiChat, masked.text(), true, (translated, finalResult) -> {
             // Strip the style-fallback prefix before unmask/layout: NameMasker and
             // LayoutPreserver treat the NUL prefix as content, so outer whitespace
             // would land BEFORE the prefix and break startsWith detection downstream.
@@ -323,11 +356,13 @@ public final class TranslationService {
             String semantic = TextFilter.stripStyleFallback(translated);
             String restored = NameMasker.unmask(semantic, masked.names());
             if (!meaningful(content, restored)) {
-                onResult.accept(null);
+                onResult.accept(new ChatTranslationResult(null, finalResult));
                 return;
             }
             String laidOut = LayoutPreserver.matchOuterWhitespace(content, restored);
-            onResult.accept(styleFallback ? TextFilter.markStyleFallback(laidOut) : laidOut);
+            onResult.accept(new ChatTranslationResult(
+                    styleFallback ? TextFilter.markStyleFallback(laidOut) : laidOut,
+                    finalResult));
         }, true, true);
     }
 
@@ -486,7 +521,8 @@ public final class TranslationService {
             else selected.requestBatched(masked.text());
             return TranslationDecision.unchanged(original);
         }
-        return decide(original, NameMasker.unmask(translated, masked.names()), mode);
+        return decide(original, NameMasker.unmask(translated, masked.names()), mode,
+                masked.hasMasks());
     }
 
     public boolean warmUp(String source) {
@@ -588,16 +624,27 @@ public final class TranslationService {
             // Remove a possible GT fallback copy, then atomically replace the AI key.
             google.invalidate(maskedName.text());
             if (selected.replaceFinal(maskedName.text(), authoritative)) {
-                contextualItemNameRetries.add(retryKey);
+                rememberContextualItemRetry(retryKey);
                 return;
             }
         }
 
-        if (!contextualItemNameRetries.add(retryKey)) return;
+        if (!rememberContextualItemRetry(retryKey)) return;
         // Clear both tiers so the AI request cannot be short-circuited by a GT fallback
         // copy of the same isolated name.
         invalidateBoth(maskedName.text());
         selected.warmBatchAsync(List.of(maskedName.text()), context);
+    }
+
+    private boolean rememberContextualItemRetry(String key) {
+        synchronized (contextualItemNameRetries) {
+            if (contextualItemNameRetries.contains(key)) return false;
+            if (contextualItemNameRetries.size() >= MAX_CONTEXTUAL_ITEM_RETRIES) {
+                var oldest = contextualItemNameRetries.iterator();
+                if (oldest.hasNext()) contextualItemNameRetries.remove(oldest.next());
+            }
+            return contextualItemNameRetries.add(key);
+        }
     }
 
     private static String contextualPrefix(String wholeTranslation, String suffixTranslation) {
@@ -656,14 +703,15 @@ public final class TranslationService {
         }
     }
 
-    private TranslationDecision decide(String original, String translated, DisplayMode mode) {
+    private TranslationDecision decide(String original, String translated, DisplayMode mode,
+                                       boolean hadProtectedNames) {
         boolean styleFallback = TextFilter.isStyleFallback(translated);
         String semantic = TextFilter.stripStyleFallback(translated);
         if (!meaningful(original, semantic)
                 || TextFilter.isPartialTransliteration(original, semantic)) {
             return TranslationDecision.unchanged(original);
         }
-        if (!protectedNamesSurvive(original, semantic)) {
+        if (hadProtectedNames && !protectedNamesSurvive(original, semantic)) {
             invalidateMangledOnce(original);
             return TranslationDecision.unchanged(original);
         }
@@ -681,7 +729,7 @@ public final class TranslationService {
     private boolean protectedNamesSurvive(String original, String translated) {
         Collection<String> current = names();
         if (current.isEmpty()) return true;
-        Set<String> protectedSet = new HashSet<>(current);
+        Set<?> protectedSet = current instanceof Set<?> set ? set : new HashSet<>(current);
         for (int i = 0; i < original.length(); ) {
             if (!nameCharacter(original.charAt(i))) {
                 i++;

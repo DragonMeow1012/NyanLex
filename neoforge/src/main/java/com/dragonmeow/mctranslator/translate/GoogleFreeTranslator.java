@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * {@link Translator} backed by the free (unofficial) Google endpoint
@@ -118,19 +120,15 @@ public final class GoogleFreeTranslator implements Translator {
             return new TranslationResult("", r == null ? null : r.detectedSourceLang(),
                     false, "empty response");
         }
-        // Every sentinel must survive EXACTLY once, or the slot mapping would lie.
+        // Every sentinel must survive EXACTLY once as a complete numeric marker.
+        // Substrings such as 170001 must never impersonate marker 70001.
+        Map<String, String> replacements = new LinkedHashMap<>();
         for (int i = 0; i < slots.size(); i++) {
-            String sentinel = Integer.toString(SENTINEL_BASE + i);
-            int first = translated.indexOf(sentinel);
-            if (first < 0 || translated.indexOf(sentinel, first + sentinel.length()) >= 0) {
-                return new TranslationResult("", r.detectedSourceLang(),
-                        false, "format/token lost");
-            }
+            replacements.put(Integer.toString(SENTINEL_BASE + i), slots.get(i));
         }
-        String out = translated;
-        for (int i = 0; i < slots.size(); i++) {
-            out = out.replace(Integer.toString(SENTINEL_BASE + i), slots.get(i));
-        }
+        String out = NumericMarkerCodec.restoreExactlyOnce(translated, replacements);
+        if (out == null) return new TranslationResult("", r.detectedSourceLang(),
+                false, "format/token lost");
         if (!preservesTokens(text, out)) { // belt: the MT/mask multiset must match
             return new TranslationResult("", r.detectedSourceLang(),
                     false, "format/token lost");
@@ -193,7 +191,8 @@ public final class GoogleFreeTranslator implements Translator {
         }
         TranslationResult combined = requestOnce(joined.toString(), targetLang);
         List<String> parts = extractAnchoredBatch(
-                combined == null ? null : combined.translatedText(), texts.size(), anchorBase);
+                combined == null ? null : combined.translatedText(), texts.size(),
+                anchorBase, sentinelCount);
         if (parts != null) {
             for (int i = 0; i < parts.size(); i++) {
                 String src = texts.get(i);
@@ -280,15 +279,11 @@ public final class GoogleFreeTranslator implements Translator {
 
     private static String restoreBatchPart(String translated, BatchMasked masked) {
         if (translated == null || masked == null) return null;
-        String restored = translated;
+        Map<String, String> replacements = new LinkedHashMap<>();
         for (BatchSlot slot : masked.slots()) {
-            int first = restored.indexOf(slot.sentinel());
-            if (first < 0 || restored.indexOf(slot.sentinel(), first + slot.sentinel().length()) >= 0) {
-                return null;
-            }
-            restored = restored.replace(slot.sentinel(), slot.original());
+            replacements.put(slot.sentinel(), slot.original());
         }
-        return restored;
+        return NumericMarkerCodec.restoreExactlyOnce(translated, replacements);
     }
 
     private static int batchSentinelBase(List<String> texts, int sentinelCount) {
@@ -308,24 +303,9 @@ public final class GoogleFreeTranslator implements Translator {
         }
     }
 
-    private static List<String> extractAnchoredBatch(String translated, int count, int base) {
-        if (translated == null) return null;
-        List<String> out = new ArrayList<>(count);
-        int cursor = 0;
-        for (int i = 0; i < count; i++) {
-            String open = Integer.toString(base + i * 2);
-            String close = Integer.toString(base + i * 2 + 1);
-            int start = translated.indexOf(open, cursor);
-            if (start < 0 || translated.indexOf(open, start + open.length()) >= 0) return null;
-            if (!translated.substring(cursor, start).isBlank()) return null;
-            start += open.length();
-            int end = translated.indexOf(close, start);
-            if (end < start || translated.indexOf(close, end + close.length()) >= 0) return null;
-            out.add(translated.substring(start, end).strip());
-            cursor = end + close.length();
-        }
-        if (!translated.substring(cursor).isBlank()) return null;
-        return out;
+    private static List<String> extractAnchoredBatch(String translated, int count,
+                                                     int base, int markerCount) {
+        return NumericMarkerCodec.extractAnchored(translated, count, base, markerCount);
     }
 
     /** True unless any source token (CS style boundary, MT slot, or name mask) was lost

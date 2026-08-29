@@ -108,6 +108,28 @@ class TranslationCacheTest {
     }
 
     @Test
+    void oversizedSingleContextRowIsSkippedBeforeTemplating() {
+        List<List<String>> seenContexts = new ArrayList<>();
+        Translator fake = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang) {
+                return new TranslationResult("T:" + text, null);
+            }
+            @Override public List<TranslationResult> translateBatch(
+                    List<String> texts, String targetLang, List<String> surfaceContext) {
+                seenContexts.add(surfaceContext == null ? null : new ArrayList<>(surfaceContext));
+                return texts.stream().map(text -> new TranslationResult("T:" + text, null)).toList();
+            }
+        };
+        TranslationCache cache = new TranslationCache(fake, "zh-TW", DIRECT, 100);
+
+        cache.warmBatchAsync(List.of("Needs translation"),
+                List.of("x".repeat(8_193), "Useful context"));
+
+        assertEquals(List.of(List.of("Useful context")), seenContexts,
+                "an optional oversized row must not be retained by the queued request");
+    }
+
+    @Test
     void reorderedParagraphBreaksAreRejectedInsteadOfFillingWrongRows() {
         Translator bad = (text, target) -> new TranslationResult(
                 text.replace("⟦PB0⟧", "⟦TMP⟧")
@@ -179,8 +201,10 @@ class TranslationCacheTest {
     void invalidationRejectsAnOlderInFlightResponseAndStartsFreshWork() {
         Deque<Runnable> tasks = new ArrayDeque<>();
         AtomicInteger calls = new AtomicInteger();
-        Translator translator = (text, target) -> new TranslationResult(
-                calls.incrementAndGet() == 1 ? "舊飛行結果" : "全新結果", "en");
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("全新結果", "en");
+        };
         TranslationCache cache = new TranslationCache(translator, "zh-TW", tasks::addLast, 100);
 
         cache.requestAsync("Hello");                 // old request is queued but not run
@@ -191,18 +215,22 @@ class TranslationCacheTest {
         tasks.removeFirst().run();
         assertNull(cache.getCached("Hello"),
                 "the response started before invalidate must never refill the cache");
+        assertEquals(0, calls.get(),
+                "a queued obsolete revision must cancel before reaching the backend");
 
         tasks.removeFirst().run();
         assertEquals("全新結果", cache.getCached("Hello"));
-        assertEquals(2, calls.get());
+        assertEquals(1, calls.get());
     }
 
     @Test
     void globalClearDetachesFlightsAndCannotBeRefilledByTheirOldResponses() {
         Deque<Runnable> tasks = new ArrayDeque<>();
         AtomicInteger calls = new AtomicInteger();
-        Translator translator = (text, target) -> new TranslationResult(
-                calls.incrementAndGet() == 1 ? "清除前舊結果" : "清除後新結果", "en");
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("清除後新結果", "en");
+        };
         TranslationCache cache = new TranslationCache(translator, "zh-TW", tasks::addLast, 100);
 
         cache.requestAsync("Hello");
@@ -212,8 +240,11 @@ class TranslationCacheTest {
 
         tasks.removeFirst().run();
         assertNull(cache.getCached("Hello"));
+        assertEquals(0, calls.get(),
+                "a queued obsolete generation must cancel before reaching the backend");
         tasks.removeFirst().run();
         assertEquals("清除後新結果", cache.getCached("Hello"));
+        assertEquals(1, calls.get());
     }
 
     @Test
@@ -748,6 +779,54 @@ class TranslationCacheTest {
     }
 
     @Test
+    void rateLimitedBatchMarksEveryDebugRowAs429() {
+        Translator rateLimited = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang)
+                    throws TranslationException {
+                throw new TranslationException("provider wrapper",
+                        new java.io.IOException("HTTP 429: too many requests"));
+            }
+
+            @Override public List<TranslationResult> translateBatch(List<String> texts, String targetLang)
+                    throws TranslationException {
+                throw new TranslationException("provider wrapper",
+                        new java.io.IOException("HTTP 429: too many requests"));
+            }
+        };
+        TranslationDebugLog debug = new TranslationDebugLog(() -> true);
+        TranslationCache cache = new TranslationCache(rateLimited, "zh-TW", DIRECT, 100);
+        cache.setDebugLog("AI", debug);
+
+        cache.warmBatch(List.of("First item", "Second item"));
+
+        List<TranslationDebugLog.Entry> entries = debug.snapshot(10);
+        assertEquals(2, entries.size());
+        assertTrue(entries.stream().allMatch(entry ->
+                entry.status() == TranslationDebugLog.Status.RATE_LIMITED));
+        assertTrue(entries.stream().allMatch(entry ->
+                "429 rate limit".equals(entry.failureReason())));
+    }
+
+    @Test
+    void debugFailurePrefersBackendReasonThenInfersShapeDamage() {
+        Translator backendReason = (text, targetLang) ->
+                new TranslationResult("", null, false, "anchor/order damaged");
+        TranslationDebugLog explicitDebug = new TranslationDebugLog(() -> true);
+        TranslationCache explicit = new TranslationCache(backendReason, "zh-TW", DIRECT, 100);
+        explicit.setDebugLog("AI", explicitDebug);
+        explicit.translateBlocking("Visible item");
+        assertEquals("anchor/order damaged", explicitDebug.snapshot(1).get(0).failureReason());
+
+        Translator damagedParagraph = (text, targetLang) ->
+                new TranslationResult("翻譯成同一行", null);
+        TranslationDebugLog inferredDebug = new TranslationDebugLog(() -> true);
+        TranslationCache inferred = new TranslationCache(damagedParagraph, "zh-TW", DIRECT, 100);
+        inferred.setDebugLog("AI", inferredDebug);
+        inferred.translateBlocking("First paragraph\nSecond paragraph");
+        assertEquals("paragraph lost", inferredDebug.snapshot(1).get(0).failureReason());
+    }
+
+    @Test
     void inFlightLocationRequestsStayBoundToTheirOwnSemanticKeys() {
         List<String> sent = new ArrayList<>();
         Translator fake = (text, targetLang) -> {
@@ -995,6 +1074,20 @@ class TranslationCacheTest {
                 "a marker-damaged response is never cached or displayed");
         assertNull(cache.getCached("⟦CS0⟧Hello World⟦/CS0⟧"),
                 "a residue-carrying value must not seed the stripped tier");
+    }
+
+    @Test
+    void semanticTextOutsideCompleteCsPairsIsRejected() {
+        String marked = "\u27E6CS0\u27E7Hello\u27E6/CS0\u27E7 \u27E6CS1\u27E7World\u27E6/CS1\u27E7";
+        Translator boundaryDrift = (text, target) -> new TranslationResult(
+                "\u27E6CS0\u27E7\u4F60\u597D\u27E6/CS0\u27E7\u8DD1\u51FA\u6A19\u8A18"
+                        + "\u27E6CS1\u27E7\u4E16\u754C\u27E6/CS1\u27E7", "en");
+        TranslationCache cache = new TranslationCache(boundaryDrift, "zh-TW", DIRECT, 100);
+
+        cache.requestAsync(marked);
+
+        assertNull(cache.getCached(marked),
+                "semantic prose outside a complete CS pair must never enter the style cache");
     }
 
     @Test
@@ -1439,6 +1532,39 @@ class TranslationCacheTest {
     }
 
     @Test
+    void purePrefixQuantityReturnsOriginalWithoutBackendRequest() {
+        AtomicInteger calls = new AtomicInteger();
+        TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);
+        java.util.List<String> callbacks = new java.util.ArrayList<>();
+
+        cache.requestAsync("x100", callbacks::add);
+        cache.requestAsync("§ax100", callbacks::add);
+
+        assertEquals(java.util.List.of("x100", "§ax100"), callbacks);
+        assertEquals("x100", cache.getCached("x100"));
+        assertEquals("§ax100", cache.getCached("§ax100"));
+        assertEquals(0, calls.get(), "pure x-prefixed quantities must never reach a backend");
+    }
+
+    @Test
+    void memoryEvictionDropsTheSessionProvisionalBit() {
+        Map<String, String> disk = new java.util.HashMap<>();
+        java.util.Set<String> prov = new java.util.HashSet<>();
+        Translator fallback = (text, target) ->
+                new TranslationResult("GT:" + text, "en", true);
+        TranslationCache cache = new TranslationCache(
+                fallback, "zh-TW", DIRECT, 1, 10_000L, () -> 0L,
+                provisionalStore(disk, prov));
+
+        assertEquals("GT:Alpha", cache.translateBlocking("Alpha"));
+        assertEquals("GT:Beta", cache.translateBlocking("Beta")); // evicts Alpha from memory
+        assertTrue(prov.remove("Alpha"), "the backing row starts provisional");
+
+        assertEquals("GT:Alpha", cache.getCachedFinal("Alpha"),
+                "an evicted session bit must not misclassify a now-final backing row");
+    }
+
+    @Test
     void provisionalHitTriggersAiRedoThatOverwritesUnmarksAndRebuildsCopies() {
         boolean[] aiUp = {false};
         AtomicInteger calls = new AtomicInteger();
@@ -1475,11 +1601,7 @@ class TranslationCacheTest {
         AtomicInteger calls = new AtomicInteger();
         Translator alwaysFallback = (text, target) -> {
             calls.incrementAndGet();
-            int firstMarkerEnd = text == null ? -1 : text.indexOf('\u27E7');
-            String translated = firstMarkerEnd < 0
-                    ? "GT:" + text
-                    : text.substring(0, firstMarkerEnd + 1) + "GT:" + text.substring(firstMarkerEnd + 1);
-            return new TranslationResult(translated, "en", true);
+            return new TranslationResult("GT:" + text, "en", true);
         };
         long[] now = {0L};
         TranslationCache cache = new TranslationCache(
@@ -1658,6 +1780,30 @@ class TranslationCacheTest {
                 "the configured GT fallback becomes visible after AI actually fails");
         assertNull(ai.getCachedFinal("Damage: 209"),
                 "context-rich AI surfaces must keep the original until AI is final");
+    }
+
+    @Test
+    void validatedAiContentFailureAlsoStartsGtFallback() {
+        TranslationCache gt = new TranslationCache(
+                (text, target) -> new TranslationResult("可見物品", "en"),
+                "zh-TW", DIRECT, 100);
+        TranslationCache ai = new TranslationCache(
+                (text, target) -> new TranslationResult(
+                        "", null, false, "anchor/order damaged"),
+                "zh-TW", DIRECT, 100, 1_000L, () -> 0L);
+        ai.setFallback(gt, true);
+        ai.setProvisionalRetryGate(() -> false);
+
+        ai.requestAsync("Visible item");
+        gt.flushBatch();
+        gt.flushBatch();
+
+        assertTrue(ai.hasFailureState("Visible item"));
+        assertTrue(ai.mayUseFallback("Visible item"));
+        assertEquals("可見物品", ai.getCached("Visible item"),
+                "a rejected AI payload must start the same GT fallback as a transport failure");
+        assertNull(ai.getCachedFinal("Visible item"),
+                "GT remains provisional while the AI result is structurally invalid");
     }
 
     @Test
@@ -1904,6 +2050,28 @@ class TranslationCacheTest {
     }
 
     @Test
+    void restoredItemFailureDoesNotSendUntilTheItemIsVisibleAgain() {
+        AtomicInteger calls = new AtomicInteger();
+        Map<String, String> failures = new java.util.HashMap<>();
+        failures.put("Old tooltip item", "temporary:3:0");
+        TranslationCache restarted = new TranslationCache((text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("已修復", "en");
+        }, "zh-TW", DIRECT, 100, 1_000L, () -> 10_000L, null);
+        restarted.setFailureStore(inlineStore(failures));
+        restarted.setBatchWindowMs(() -> 0);
+
+        restarted.flushBatch();
+        restarted.flushBatch();
+        assertEquals(0, calls.get(),
+                "world ticks must not revive historical tooltip debt in the background");
+
+        restarted.requestBatchedPassive("Old tooltip item");
+        restarted.flushBatch();
+        assertEquals(1, calls.get(), "re-observing the item unlocks exactly one retry");
+    }
+
+    @Test
     void zeroBackoffFailuresAreStillDurableAndQueuedUntilSuccess() {
         AtomicInteger calls = new AtomicInteger();
         boolean[] available = {false};
@@ -1927,6 +2095,42 @@ class TranslationCacheTest {
         assertEquals("修復完成", cache.getCached("Hello world"));
         assertFalse(failures.containsKey("Hello world"));
         assertEquals(2, calls.get());
+    }
+
+    @Test
+    void boundedRetrySnapshotScanKeepsEvictedSessionDemandPassive() {
+        AtomicInteger dormantCalls = new AtomicInteger();
+        boolean[] recovered = {false};
+        Translator translator = (text, target) -> {
+            if ("Dormant row".equals(text)) {
+                dormantCalls.incrementAndGet();
+                if (!recovered[0]) throw new TranslationException("offline");
+                return new TranslationResult("Recovered", "en");
+            }
+            return new TranslationResult("T:" + text, "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 1_024, 0L, () -> 0L, null);
+
+        cache.requestAsync("Dormant row");
+        assertEquals(1, dormantCalls.get());
+        // Demand is independently LRU-bounded at 512. Successful observations do not
+        // create retry snapshots, so the tick scan should remain one dormant entry and
+        // must still honour the fact that its original surface disappeared.
+        for (int i = 0; i < 513; i++) {
+            String key = "Fresh demand " + (char) ('A' + i / 26) + (char) ('A' + i % 26);
+            cache.requestAsync(key);
+        }
+
+        recovered[0] = true;
+        cache.flushBatch();
+        cache.flushBatch();
+        assertEquals(1, dormantCalls.get(),
+                "iterating retry snapshots must not revive one whose demand was evicted");
+
+        cache.requestAsync("Dormant row");
+        assertEquals(2, dormantCalls.get(), "a new observation reactivates the dormant retry");
+        assertEquals("Recovered", cache.getCached("Dormant row"));
     }
 
     @Test
@@ -2239,17 +2443,34 @@ class TranslationCacheTest {
     @Test
     void styleProjectionSupplementNeverRewritesFinalSemanticRow() {
         String marked = "⟦CS0⟧Hello⟦/CS0⟧ ⟦CS1⟧World⟦/CS1⟧";
-        Translator translator = (text, target) -> text.contains("⟦CS")
-                ? new TranslationResult("⟦CS0⟧嗨呀⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en")
-                : new TranslationResult("你好 世界", "en");
+        AtomicInteger calls = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return text.contains("⟦CS")
+                    ? new TranslationResult("⟦CS0⟧嗨呀⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", "en")
+                    : new TranslationResult("你好 世界", "en");
+        };
         TranslationCache cache = new TranslationCache(translator, "zh-TW", DIRECT, 100);
 
         cache.requestAsync("Hello World");
         assertEquals("你好 世界", cache.getCached("Hello World"));
 
-        cache.requestCoalescedExactStyle(marked, ignored -> { }, true);
+        java.util.concurrent.atomic.AtomicReference<String> exact =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        cache.requestCoalescedExactStyle(marked, exact::set, true);
         for (int i = 0; i < 4; i++) cache.flushBatch(); // buys the differently worded projection
         assertEquals("你好 世界", cache.getCached("Hello World"),
                 "first final semantic wording wins; a style supplement adds rows only");
+        assertEquals("⟦CS0⟧嗨呀⟦/CS0⟧ ⟦CS1⟧世界⟦/CS1⟧", exact.get(),
+                "the exact rich consumer receives its verified colour projection");
+
+        int callsAfterProjection = calls.get();
+        java.util.concurrent.atomic.AtomicReference<String> cachedExact =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        cache.requestCoalescedExactStyle(marked, cachedExact::set, true);
+        assertEquals(exact.get(), cachedExact.get(),
+                "a differently worded final projection remains available from cache");
+        assertEquals(callsAfterProjection, calls.get(),
+                "reading the exact projection again must not buy another request");
     }
 }

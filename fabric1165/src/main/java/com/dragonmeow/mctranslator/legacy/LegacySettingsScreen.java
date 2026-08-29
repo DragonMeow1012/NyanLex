@@ -44,10 +44,16 @@ final class LegacySettingsScreen extends Screen {
                 button -> { cfg.batchWindowMs = nextBatchWindow(cfg.batchWindowMs); init(minecraft, width, height); }));
         addButton(new Button(width / 2 - 155, 174, 310, 20, providerLabel(cfg),
                 button -> minecraft.setScreen(new LegacyProviderScreen(this))));
-        addButton(new Button(width / 2 - 155, 198, 310, 20,
-                new TextComponent("Debug overlay: " + (cfg.debugTranslationOverlay ? "ON" : "OFF")),
+        addButton(new Button(width / 2 - 155, 198, 152, 20,
+                new TranslatableComponent("config.mctranslator.debug.short",
+                        cfg.debugTranslationOverlay ? "ON" : "OFF"),
                 button -> { cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
                     if (!cfg.debugTranslationOverlay) LegacyTranslatorMod.TRANSLATOR.clearDebug();
+                    init(minecraft, width, height); }));
+        addButton(new Button(width / 2 + 3, 198, 152, 20,
+                chatDeliveryLabel(cfg),
+                button -> { cfg.deliverChatTranslationsInOrder =
+                        !cfg.deliverChatTranslationsInOrder;
                     init(minecraft, width, height); }));
         addButton(new Button(width / 2 - 100, height - 22, 200, 20,
                 new TranslatableComponent("gui.done"), button -> onClose()));
@@ -82,6 +88,13 @@ final class LegacySettingsScreen extends Screen {
         String provider = LegacyConfig.normalizeMachineProvider(cfg.machineTranslationProvider);
         return new TranslatableComponent("config.mctranslator.provider",
                 new TranslatableComponent("screen.mctranslator.provider." + provider));
+    }
+
+    private static Component chatDeliveryLabel(LegacyConfig cfg) {
+        Component mode = new TranslatableComponent(cfg.deliverChatTranslationsInOrder
+                ? "config.mctranslator.chat_delivery.ordered"
+                : "config.mctranslator.chat_delivery.ready_first");
+        return new TranslatableComponent("config.mctranslator.chat_delivery.short", mode);
     }
 
     @Override public void render(PoseStack pose, int mouseX, int mouseY, float delta) {

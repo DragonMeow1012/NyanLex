@@ -21,9 +21,13 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public final class LegacyTranslatorMod implements ClientModInitializer {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final int MAX_PENDING_CHATS = 512;
+    private static final long CHAT_TRANSLATION_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(15L);
+    private static final long ITEM_WARM_SCAN_INTERVAL_NANOS = TimeUnit.MILLISECONDS.toNanos(350L);
     private static final ThreadLocal<Boolean> INTERNAL_CHAT = new ThreadLocal<Boolean>() {
         @Override protected Boolean initialValue() { return Boolean.FALSE; }
     };
@@ -42,6 +46,41 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     private static Path configPath;
     private static LegacyCodexClient codexClient;
     private KeyMapping settingsKey;
+    private final LegacyChatDeliveryQueue<PendingChat> pendingChats =
+            new LegacyChatDeliveryQueue<PendingChat>();
+    private Object chatConnection;
+    private Object chatWorld;
+    private long chatEpoch;
+    private LegacyChatRequestProfile chatRequestProfile;
+    private final java.util.Set<String> warmedItemNames = new java.util.HashSet<String>();
+    private Object warmedContainerScreen;
+    private LegacyChatRequestProfile itemWarmProfile;
+    private long nextItemWarmScanAtNanos;
+
+    private static final class PendingChat {
+        final long epoch;
+        final Object connection;
+        final Object world;
+        final LegacyChatRequestProfile requestProfile;
+        final Component original;
+        final String source;
+        final boolean showOriginal;
+        final long queuedAtNanos = System.nanoTime();
+        String translated;
+        boolean displayed;
+
+        PendingChat(long epoch, Object connection, Object world,
+                    LegacyChatRequestProfile requestProfile, Component original,
+                    String source, boolean showOriginal) {
+            this.epoch = epoch;
+            this.connection = connection;
+            this.world = world;
+            this.requestProfile = requestProfile;
+            this.original = original;
+            this.source = source;
+            this.showOriginal = showOriginal;
+        }
+    }
 
     @Override public void onInitializeClient() {
         instance = this;
@@ -60,7 +99,11 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
                 "category.mctranslator"));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             syncLanguage(client);
-            TRANSLATOR.flushBatch();
+            instance.syncChatSession(client);
+            instance.syncChatRequestProfile(client);
+            if (config != null && config.enabled) TRANSLATOR.flushBatch();
+            else TRANSLATOR.cancelPending();
+            instance.flushPendingChats(client);
             warmVisibleItemNames(client);
             while (settingsKey.consumeClick()) client.setScreen(new LegacySettingsScreen(client.screen));
         });
@@ -68,35 +111,193 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     }
 
     public static boolean interceptChat(final Component message) {
-        if (instance == null || config == null || !config.enabled || INTERNAL_CHAT.get()
-                || message == null || !shouldTranslate(message.getString())) return false;
+        if (instance == null || INTERNAL_CHAT.get()) return false;
         final Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null) {
+            instance.pendingChats.clear();
+            return false;
+        }
+        instance.syncChatSession(minecraft);
+        instance.syncChatRequestProfile(minecraft);
+        if (config == null || minecraft.gui == null || message == null) {
+            instance.pendingChats.clear();
+            return false;
+        }
+        if (!config.enabled) {
+            instance.flushAllOriginals(minecraft);
+            return false;
+        }
         final String source = message.getString();
+        final boolean shouldTranslate = shouldTranslate(source);
+        if (!shouldTranslate && instance.pendingChats.isEmpty()) return false;
+        final PendingChat chat = new PendingChat(instance.chatEpoch, instance.chatConnection,
+                instance.chatWorld, instance.chatRequestProfile, message, source,
+                config.showOriginal);
+        instance.enqueueChat(minecraft, chat);
+        if (!shouldTranslate) {
+            instance.pendingChats.markReady(chat);
+            instance.drainReadyChats(minecraft);
+            return true;
+        }
         final String target = currentTarget(minecraft);
-        TRANSLATOR.translate(source, target, config.aiEnabled, false, config, translated -> minecraft.execute(() -> {
-            Component output = new TextComponent(translated).setStyle(message.getStyle());
-            if (config.showOriginal && !translated.equals(source)) {
-                output = message.copy().append(new TextComponent("\n")).append(output);
-            }
-            addInternal(minecraft, output);
-        }));
+        TRANSLATOR.translate(source, target, config.aiEnabled, false, config,
+                translated -> minecraft.execute(() -> instance.completeChat(minecraft, chat, translated)));
         return true;
     }
 
-    private static void warmVisibleItemNames(Minecraft minecraft) {
-        if (minecraft == null || minecraft.player == null || config == null || !config.enabled) return;
+    private void enqueueChat(Minecraft minecraft, PendingChat chat) {
+        while (pendingChats.size() >= MAX_PENDING_CHATS) {
+            PendingChat evicted = pendingChats.removeFirst();
+            displayOriginal(minecraft, evicted);
+        }
+        pendingChats.addLast(chat);
+    }
+
+    private void completeChat(Minecraft minecraft, PendingChat chat, String translated) {
+        syncChatSession(minecraft);
+        syncChatRequestProfile(minecraft);
+        if (chat.epoch != chatEpoch || chat.connection != chatConnection || chat.world != chatWorld) return;
+        if (!chat.requestProfile.equals(chatRequestProfile)) return;
+        if (config == null || minecraft == null || minecraft.gui == null) {
+            pendingChats.clear();
+            return;
+        }
+        if (!config.enabled) {
+            flushAllOriginals(minecraft);
+            return;
+        }
+        chat.translated = translated;
+        if (chat.displayed) return;
+        if (!pendingChats.contains(chat)) return;
+        pendingChats.markReady(chat);
+        drainReadyChats(minecraft);
+    }
+
+    private void flushPendingChats(Minecraft minecraft) {
+        if (minecraft == null) {
+            pendingChats.clear();
+            return;
+        }
+        syncChatSession(minecraft);
+        syncChatRequestProfile(minecraft);
+        if (config == null || minecraft.gui == null) {
+            pendingChats.clear();
+            return;
+        }
+        if (!config.enabled) {
+            flushAllOriginals(minecraft);
+            return;
+        }
+        drainReadyChats(minecraft);
+        long now = System.nanoTime();
+        PendingChat oldest = pendingChats.peekFirst();
+        while (oldest != null
+                && now - oldest.queuedAtNanos >= CHAT_TRANSLATION_TIMEOUT_NANOS) {
+            pendingChats.removeFirst();
+            displayOriginal(minecraft, oldest);
+            drainReadyChats(minecraft);
+            oldest = pendingChats.peekFirst();
+        }
+    }
+
+    private void syncChatSession(Minecraft minecraft) {
+        Object connection = minecraft == null ? null : minecraft.getConnection();
+        Object world = minecraft == null ? null : minecraft.level;
+        if (connection == chatConnection && world == chatWorld) return;
+        pendingChats.clear();
+        chatConnection = connection;
+        chatWorld = world;
+        chatEpoch++;
+        TRANSLATOR.cancelPending();
+    }
+
+    private void syncChatRequestProfile(Minecraft minecraft) {
+        String target = config == null ? "" : currentTarget(minecraft);
+        LegacyChatRequestProfile current = LegacyChatRequestProfile.capture(config, target);
+        if (chatRequestProfile == null) {
+            chatRequestProfile = current;
+            return;
+        }
+        if (chatRequestProfile.equals(current)) return;
+        chatRequestProfile = current;
+        chatEpoch++;
+        if (minecraft != null && minecraft.gui != null) flushAllOriginals(minecraft);
+        else pendingChats.clear();
+        TRANSLATOR.cancelPending();
+    }
+
+    private void drainReadyChats(Minecraft minecraft) {
+        boolean ordered = config == null || config.deliverChatTranslationsInOrder;
+        for (PendingChat chat : pendingChats.drainReady(ordered)) {
+            chat.displayed = true;
+            addInternal(minecraft, output(chat));
+        }
+    }
+
+    private void flushAllOriginals(Minecraft minecraft) {
+        while (!pendingChats.isEmpty()) {
+            PendingChat chat = pendingChats.removeFirst();
+            displayOriginal(minecraft, chat);
+        }
+    }
+
+    private static void displayOriginal(Minecraft minecraft, PendingChat chat) {
+        chat.displayed = true;
+        addInternal(minecraft, chat.original);
+    }
+
+    private static Component output(PendingChat chat) {
+        if (chat.translated == null || chat.translated.equals(chat.source)) return chat.original;
+        Component translated = new TextComponent(chat.translated).setStyle(chat.original.getStyle());
+        return chat.showOriginal
+                ? chat.original.copy().append(new TextComponent("\n")).append(translated)
+                : translated;
+    }
+
+    private void warmVisibleItemNames(Minecraft minecraft) {
+        if (minecraft == null || minecraft.player == null || config == null || !config.enabled) {
+            clearItemWarmState();
+            return;
+        }
+        final String target = currentTarget(minecraft);
+        LegacyChatRequestProfile profile = LegacyChatRequestProfile.capture(config, target);
+        Object containerScreen = minecraft.screen instanceof
+                net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>
+                ? minecraft.screen : null;
+        if (containerScreen != warmedContainerScreen || !profile.equals(itemWarmProfile)) {
+            warmedContainerScreen = containerScreen;
+            itemWarmProfile = profile;
+            warmedItemNames.clear();
+            nextItemWarmScanAtNanos = 0L;
+        }
+        long now = System.nanoTime();
+        if (now < nextItemWarmScanAtNanos) return;
+        nextItemWarmScanAtNanos = now + ITEM_WARM_SCAN_INTERVAL_NANOS;
+
         java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<String>();
         for (int slot = 0; slot < 9; slot++) addWarmName(names, minecraft.player.inventory.getItem(slot));
         addWarmName(names, minecraft.player.getOffhandItem());
-        if (minecraft.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) {
+        if (containerScreen != null) {
             net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen =
-                    (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) minecraft.screen;
+                    (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) containerScreen;
             for (net.minecraft.world.inventory.Slot slot : screen.getMenu().slots)
                 if (slot != null && slot.isActive() && slot.hasItem()) addWarmName(names, slot.getItem());
         }
-        final String target = currentTarget(minecraft);
-        for (String name : names) if (TRANSLATOR.cached(name, target, config.aiEnabled, config) == null)
-            TRANSLATOR.translate(name, target, config.aiEnabled, false, config, ignored -> {});
+        for (String name : names) {
+            if (!warmedItemNames.contains(name)
+                    && TRANSLATOR.cached(name, target, config.aiEnabled, config) == null) {
+                TRANSLATOR.prefetch(name, target, config.aiEnabled, false, config);
+            }
+        }
+        warmedItemNames.clear();
+        warmedItemNames.addAll(names);
+    }
+
+    private void clearItemWarmState() {
+        warmedItemNames.clear();
+        warmedContainerScreen = null;
+        itemWarmProfile = null;
+        nextItemWarmScanAtNanos = 0L;
     }
 
     private static void addWarmName(java.util.Set<String> names, ItemStack stack) {
@@ -116,7 +317,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
             if (!shouldTranslate(source)) continue;
             String translated = TRANSLATOR.cached(source, target, config.aiEnabled, config);
             if (translated == null) {
-                TRANSLATOR.translate(source, target, config.aiEnabled, true, config, ignored -> {});
+                TRANSLATOR.prefetch(source, target, config.aiEnabled, true, config);
             } else if (!translated.equals(source)) {
                 lines.set(i, new TextComponent(translated).setStyle(line.getStyle()));
             }
@@ -163,7 +364,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         String target = currentTarget(minecraft);
         String translated = TRANSLATOR.cached(plain, target, config.aiEnabled, config);
         if (translated == null) {
-            TRANSLATOR.translate(plain, target, config.aiEnabled, false, config, ignored -> {});
+            TRANSLATOR.prefetch(plain, target, config.aiEnabled, false, config);
             return source;
         }
         return translated.equals(plain) ? source : new TextComponent(translated).setStyle(source.getStyle());
@@ -177,7 +378,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         String target = currentTarget(minecraft);
         String translated = TRANSLATOR.cached(source, target, config.aiEnabled, config);
         if (translated == null) {
-            TRANSLATOR.translate(source, target, config.aiEnabled, false, config, ignored -> {});
+            TRANSLATOR.prefetch(source, target, config.aiEnabled, false, config);
             return source;
         }
         return translated;
@@ -192,7 +393,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         String target = currentTarget(minecraft);
         String translated = TRANSLATOR.cached(source, target, config.aiEnabled, config);
         if (translated == null) {
-            TRANSLATOR.translate(source, target, config.aiEnabled, false, config, ignored -> {});
+            TRANSLATOR.prefetch(source, target, config.aiEnabled, false, config);
             return source;
         }
         return translated;

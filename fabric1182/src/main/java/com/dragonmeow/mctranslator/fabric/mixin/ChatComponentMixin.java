@@ -10,11 +10,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Exposes the 1.19.4 chat history so an asynchronous translation can replace its source row. */
+/** Exposes the version-native chat history for a late rich-message replacement. */
 @Mixin(ChatComponent.class)
 public abstract class ChatComponentMixin {
     @Accessor("allMessages")
-    public abstract java.util.List<GuiMessage> mctranslator$getAllMessages();
+    public abstract java.util.List<GuiMessage<Component>> mctranslator$getAllMessages();
 
     @Inject(method = "addMessage(Lnet/minecraft/network/chat/Component;)V",
             at = @At("HEAD"), cancellable = true)

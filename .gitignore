@@ -33,3 +33,15 @@ Thumbs.db
 /.agents/
 /pi/
 /*.png
+
+# Verification harness run output (kept local; harness scripts are tracked)
+/verification/.inline-*/
+/verification/forge-codex-run-*/
+/verification/forge-core-run-*/
+/verification/forge-glue-*/
+/verification/inline-run-*/
+/verification/jdk*-smoke*/
+/verification/jdk*-inline-smoke*/
+/verification/legacy-error-*/
+/verification/matrix-run-*/
+/verification/target-forge-srg-*/

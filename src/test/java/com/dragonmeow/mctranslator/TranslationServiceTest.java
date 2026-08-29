@@ -11,10 +11,13 @@ import com.dragonmeow.mctranslator.translate.TranslationResult;
 import com.dragonmeow.mctranslator.translate.Translator;
 import org.junit.jupiter.api.Test;
 
+import java.util.AbstractSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -327,6 +330,55 @@ class TranslationServiceTest {
         assertTrue(d.changed());
         assertTrue(d.translated().contains("Steve123"), "player name restored verbatim: " + d.translated());
         assertFalse(String.join(" ", sent).contains("Steve123"), "name never sent to the backend: " + sent);
+    }
+
+    @Test
+    void cacheHitWithoutAProtectedNameDoesNotRescanProtectedNames() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        AtomicInteger nameSnapshots = new AtomicInteger();
+        TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
+        s.setProtectedNames(() -> {
+            nameSnapshots.incrementAndGet();
+            return Set.of("Steve123");
+        });
+        s.translateUi("Lone Adventurer");
+        pump(s);
+        nameSnapshots.set(0);
+
+        assertTrue(s.translateUi("Lone Adventurer").changed());
+        assertEquals(1, nameSnapshots.get(),
+                "a no-mask cache hit must use only the masking snapshot");
+    }
+
+    @Test
+    void protectedNameVerificationReusesTheSuppliedSet() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        Set<String> containsOnly = new AbstractSet<>() {
+            @Override
+            public Iterator<String> iterator() {
+                throw new AssertionError("the supplied Set must not be copied");
+            }
+
+            @Override
+            public int size() {
+                return 1;
+            }
+
+            @Override
+            public boolean contains(Object value) {
+                return "Steve123".equals(value);
+            }
+        };
+        Translator echo = (text, target) -> new TranslationResult("T:" + text, "en");
+        TranslationService s = service(cfg, echo, DIRECT);
+        s.setProtectedNames(() -> containsOnly);
+
+        s.translateUi("Steve123 guards the village");
+        pump(s);
+        TranslationDecision decision = s.translateUi("Steve123 guards the village");
+
+        assertTrue(decision.changed());
+        assertTrue(decision.translated().contains("Steve123"));
     }
 
     @Test

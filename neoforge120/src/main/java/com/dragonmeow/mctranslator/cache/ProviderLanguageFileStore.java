@@ -3,9 +3,9 @@ package com.dragonmeow.mctranslator.cache;
 import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
@@ -18,15 +18,28 @@ public final class ProviderLanguageFileStore implements PersistentStore {
     private final Path directory;
     private final String basePrefix;
     private final Supplier<String> provider;
-    private final Map<String, LanguageFileStore> stores = new ConcurrentHashMap<>();
+    private final int maxEntries;
+    /** Normalized provider ids are a fixed four-value domain. */
+    private final Set<String> legacyMigrationConsidered = new HashSet<>();
     private volatile String language;
+    private volatile ActivePartition active;
 
     public ProviderLanguageFileStore(Path directory, String basePrefix,
                                      String initialLanguage, Supplier<String> provider) {
+        this(directory, basePrefix, initialLanguage, provider, FileStore.DEFAULT_MAX_ENTRIES);
+    }
+
+    public ProviderLanguageFileStore(Path directory, String basePrefix,
+                                     String initialLanguage, Supplier<String> provider, int maxEntries) {
         this.directory = directory;
         this.basePrefix = basePrefix;
         this.language = initialLanguage;
         this.provider = provider;
+        this.maxEntries = maxEntries;
+        // Open the initial partition during service construction, where
+        // migration/startup compaction belongs, rather than on the first UI
+        // cache lookup.
+        current();
     }
 
     private String providerId() {
@@ -38,17 +51,36 @@ public final class ProviderLanguageFileStore implements PersistentStore {
 
     private LanguageFileStore current() {
         String id = providerId();
-        return stores.computeIfAbsent(id, key -> new LanguageFileStore(
-                directory,
-                MachineTranslationProvider.GOOGLE.id().equals(key)
-                        ? basePrefix : basePrefix + "-" + key,
-                language));
+        ActivePartition current = active;
+        if (current != null && id.equals(current.providerId())) {
+            return current.store();
+        }
+        synchronized (this) {
+            current = active;
+            if (current == null || !id.equals(current.providerId())) {
+                boolean allowLegacyMigration = legacyMigrationConsidered.add(id);
+                LanguageFileStore next = new LanguageFileStore(
+                        directory,
+                        MachineTranslationProvider.GOOGLE.id().equals(id)
+                                ? basePrefix : basePrefix + "-" + id,
+                        language,
+                        maxEntries,
+                        allowLegacyMigration);
+                current = new ActivePartition(id, next);
+                active = current;
+            }
+            return current.store();
+        }
     }
 
     @Override public synchronized void setLanguage(String targetLanguage) {
         language = targetLanguage;
-        for (LanguageFileStore store : stores.values()) store.setLanguage(targetLanguage);
+        ActivePartition current = active;
+        if (current != null) current.store().setLanguage(targetLanguage);
     }
+
+    /** Diagnostic used by regression tests for the bounded retention contract. */
+    public int retainedStoreCount() { return active == null ? 0 : 1; }
 
     @Override public String get(String key) { return current().get(key); }
     @Override public void put(String key, String value) { current().put(key, value); }
@@ -64,4 +96,7 @@ public final class ProviderLanguageFileStore implements PersistentStore {
     @Override public Map<String, String> provisionalEntries() { return current().provisionalEntries(); }
     @Override public Map<String, String> entries() { return current().entries(); }
     @Override public void clear() { current().clear(); }
+
+    private record ActivePartition(String providerId, LanguageFileStore store) {
+    }
 }

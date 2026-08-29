@@ -10,7 +10,7 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: mctranslator-1.0.3-Fabric-1.21.1.jar (mirrors the NeoForge classifier scheme).
+// Final jar name: mctranslator-1.0.4-Fabric-1.21.1.jar (mirrors the NeoForge classifier scheme).
 tasks.named('remapJar') {
     archiveClassifier = 'Fabric-1.21.1'
 }

@@ -64,6 +64,16 @@ class TextFilterTest {
     }
 
     @Test
+    void japaneseAndKoreanTextAreNotMistakenForAlreadyChinese() {
+        assertTrue(TextFilter.shouldTranslate("錆止めされた酸化した銅の金網", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("チェリーボート", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("산화된 구리 창살", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("金床", "zh-TW", "ja_jp"));
+        assertFalse(TextFilter.shouldTranslate("金床", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("防鏽氧化銅網", "zh-TW"));
+    }
+
+    @Test
     void internalMarkersNumbersAndBareUrlsDoNotTurnChineseBackIntoEnglish() {
         assertFalse(TextFilter.shouldTranslate(
                 "⟦CS0⟧人氣鑽石: ⟦MT0⟧/⟦MT1⟧⟦/CS0⟧", "zh-TW"));

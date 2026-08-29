@@ -107,6 +107,28 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
+    void interleavedOuterAnchorsAreRejectedAndBisectedWithoutCrossItemLeakage() {
+        AtomicReference<Integer> calls = new AtomicReference<>(0);
+        HttpTransport inline = url -> {
+            calls.set(calls.get() + 1);
+            String q = qOf(url);
+            if (q.contains("a") && q.contains("b")) {
+                // Both pairs occur exactly once, but they overlap. The old extractor
+                // accepted this and wrote the neighbouring anchor/text into each key.
+                return googleResponse("70001甲70003乙7000270004");
+            }
+            return googleResponse(q.equals("a") ? "甲" : "乙");
+        };
+        GoogleFreeTranslator t = new GoogleFreeTranslator(inline, "auto");
+
+        List<TranslationResult> out = assertDoesNotThrowResult(
+                () -> t.translateBatch(List.of("a", "b"), "zh-TW"));
+
+        assertEquals(List.of("甲", "乙"), out.stream().map(TranslationResult::translatedText).toList());
+        assertEquals(3, calls.get(), "an overlapping batch must retry each isolated item");
+    }
+
+    @Test
     void hugeBatchIsChunkedByCharacterBudget() {
         // Each request must stay within the char budget; alignment is echoed back
         // by translating each joined chunk into the same number of lines.
@@ -218,6 +240,18 @@ class GoogleFreeTranslatorTest {
 
         TranslationResult r = t.translate("You won ⟦MT0⟧ coins", "zh-TW");
         assertEquals("", r.translatedText());
+        assertEquals("format/token lost", r.failureReason());
+    }
+
+    @Test
+    void markerDigitsEmbeddedInsideALargerNumberAreRejected() throws Exception {
+        HttpTransport inline = url -> googleResponse("你贏得了 170001 金幣");
+        GoogleFreeTranslator translator = new GoogleFreeTranslator(inline, "auto");
+
+        TranslationResult result = translator.translate("You won ⟦MT0⟧ coins", "zh-TW");
+
+        assertEquals("", result.translatedText());
+        assertEquals("format/token lost", result.failureReason());
     }
 
     @Test

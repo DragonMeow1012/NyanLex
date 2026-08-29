@@ -11,10 +11,13 @@ import com.dragonmeow.mctranslator.translate.TranslationResult;
 import com.dragonmeow.mctranslator.translate.Translator;
 import org.junit.jupiter.api.Test;
 
+import java.util.AbstractSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -96,6 +99,21 @@ class TranslationServiceTest {
     }
 
     @Test
+    void targetLanguageChangeNotifiesVisibleSurfaceOnce() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
+        AtomicInteger changes = new AtomicInteger();
+        s.setTargetLangChangeListener(changes::incrementAndGet);
+
+        s.setTargetLang("ja-JP");
+        assertEquals("ja-JP", s.targetLang());
+        assertEquals(1, changes.get());
+
+        s.setTargetLang("ja-JP");
+        assertEquals(1, changes.get(), "selecting the same target must not reset the page again");
+    }
+
+    @Test
     void actionBarMissCompletesAsynchronouslyAndReusesNumberTemplate() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.actionBarMode = DisplayMode.TRANSLATION;
@@ -167,6 +185,27 @@ class TranslationServiceTest {
         assertTrue(d.changed());
         assertEquals("鑽石劍", d.translated());
         assertEquals(1, calls.get(), "should translate exactly once");
+    }
+
+    @Test
+    void japaneseItemLocaleDisambiguatesAllHanItemWithoutAffectingChat() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("鐵砧", "ja");
+        };
+        TranslationService s = service(cfg, translator, DIRECT);
+        s.setItemSourceLanguage(() -> "ja_jp");
+
+        s.warmNamesBatch(List.of("金床"));
+        assertEquals(1, calls.get());
+        assertTrue(s.translateItemLine("金床").changed());
+
+        assertFalse(s.translateChat("金床").changed(),
+                "the item locale hint must not force free-form Chinese chat through");
+        assertEquals(1, calls.get());
     }
 
     @Test
@@ -291,6 +330,55 @@ class TranslationServiceTest {
         assertTrue(d.changed());
         assertTrue(d.translated().contains("Steve123"), "player name restored verbatim: " + d.translated());
         assertFalse(String.join(" ", sent).contains("Steve123"), "name never sent to the backend: " + sent);
+    }
+
+    @Test
+    void cacheHitWithoutAProtectedNameDoesNotRescanProtectedNames() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        AtomicInteger nameSnapshots = new AtomicInteger();
+        TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
+        s.setProtectedNames(() -> {
+            nameSnapshots.incrementAndGet();
+            return Set.of("Steve123");
+        });
+        s.translateUi("Lone Adventurer");
+        pump(s);
+        nameSnapshots.set(0);
+
+        assertTrue(s.translateUi("Lone Adventurer").changed());
+        assertEquals(1, nameSnapshots.get(),
+                "a no-mask cache hit must use only the masking snapshot");
+    }
+
+    @Test
+    void protectedNameVerificationReusesTheSuppliedSet() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        Set<String> containsOnly = new AbstractSet<>() {
+            @Override
+            public Iterator<String> iterator() {
+                throw new AssertionError("the supplied Set must not be copied");
+            }
+
+            @Override
+            public int size() {
+                return 1;
+            }
+
+            @Override
+            public boolean contains(Object value) {
+                return "Steve123".equals(value);
+            }
+        };
+        Translator echo = (text, target) -> new TranslationResult("T:" + text, "en");
+        TranslationService s = service(cfg, echo, DIRECT);
+        s.setProtectedNames(() -> containsOnly);
+
+        s.translateUi("Steve123 guards the village");
+        pump(s);
+        TranslationDecision decision = s.translateUi("Steve123 guards the village");
+
+        assertTrue(decision.changed());
+        assertTrue(decision.translated().contains("Steve123"));
     }
 
     @Test
@@ -810,6 +898,41 @@ class TranslationServiceTest {
         assertEquals("人工精翻", service.translateChat("Hello world").translated(),
                 "AI is always the final display priority after recovery");
         assertEquals(1, gtCalls.get(), "AI recovery must not rebuy GT");
+    }
+
+    @Test
+    void strictAiModeNeverFallsBackToGtAndRecoversOnAi() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.aiChat = true;
+        cfg.disableGoogleFallbackForAi = true;
+        long[] now = {0L};
+        boolean[] aiUp = {false};
+        AtomicInteger aiCalls = new AtomicInteger();
+        AtomicInteger gtCalls = new AtomicInteger();
+        TranslationCache gt = new TranslationCache((text, target) -> {
+            gtCalls.incrementAndGet();
+            return new TranslationResult("GT result", "en");
+        }, cfg.targetLang, DIRECT, 100);
+        TranslationCache ai = new TranslationCache((text, target) -> {
+            aiCalls.incrementAndGet();
+            if (!aiUp[0]) throw new TranslationException("AI offline");
+            return new TranslationResult("AI result", "en");
+        }, cfg.targetLang, DIRECT, 100, 1_000L, () -> now[0]);
+        ai.setProvisionalRetryGate(() -> true);
+        TranslationService service = new TranslationService(cfg, gt, ai);
+
+        service.translateChat("Hello world");
+        pump(service);
+        assertEquals(1, aiCalls.get());
+        assertEquals(0, gtCalls.get(), "strict AI mode must not start GT after AI failure");
+        assertFalse(service.translateChat("Hello world").changed());
+
+        aiUp[0] = true;
+        now[0] = 1_000L;
+        pump(service);
+        assertEquals("AI result", service.translateChat("Hello world").translated());
+        assertEquals(0, gtCalls.get());
     }
 
     @Test

@@ -26,6 +26,8 @@ allprojects { project ->
             args project.file(runtime).absolutePath
             environment 'MCTRANSLATOR_CODEX_PATH', System.getenv('MCTRANSLATOR_CODEX_PATH')
             environment 'MCTRANSLATOR_FAKE_LOG', System.getenv('MCTRANSLATOR_FAKE_LOG')
+            environment 'MCTRANSLATOR_FAKE_EARLY_TURN', System.getenv('MCTRANSLATOR_FAKE_EARLY_TURN')
+            environment 'MCTRANSLATOR_FAKE_COMPLETED_FIRST', System.getenv('MCTRANSLATOR_FAKE_COMPLETED_FIRST')
         }
     }
 }

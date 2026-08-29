@@ -86,7 +86,8 @@ final class ExperimentalWebTranslator implements Translator {
         WireBatch wire = buildWire(texts);
         TranslationResult combined = request(wire.text(), targetLang);
         List<String> parts = extractAnchoredBatch(
-                combined == null ? null : combined.translatedText(), texts.size(), wire.base());
+                combined == null ? null : combined.translatedText(), texts.size(),
+                wire.base(), wire.markerCount());
         if (parts == null) {
             if (texts.size() == 1) {
                 out.add(new TranslationResult("", combined == null ? null : combined.detectedSourceLang()));
@@ -292,7 +293,7 @@ final class ExperimentalWebTranslator implements Translator {
             joined.append(base + i * 2).append(masked.get(i).wire())
                     .append(base + i * 2 + 1);
         }
-        return new WireBatch(joined.toString(), base, List.copyOf(masked));
+        return new WireBatch(joined.toString(), base, sentinelCount, List.copyOf(masked));
     }
 
     private static int protectedCount(String text) {
@@ -342,32 +343,16 @@ final class ExperimentalWebTranslator implements Translator {
 
     private static String restorePart(String translated, MaskedItem item) {
         if (translated == null) return null;
-        String restored = translated;
+        Map<String, String> replacements = new LinkedHashMap<>();
         for (Slot slot : item.slots()) {
-            int first = restored.indexOf(slot.sentinel());
-            if (first < 0 || restored.indexOf(slot.sentinel(), first + slot.sentinel().length()) >= 0) return null;
-            restored = restored.replace(slot.sentinel(), slot.original());
+            replacements.put(slot.sentinel(), slot.original());
         }
-        return restored;
+        return NumericMarkerCodec.restoreExactlyOnce(translated, replacements);
     }
 
-    private static List<String> extractAnchoredBatch(String translated, int count, int base) {
-        if (translated == null) return null;
-        List<String> out = new ArrayList<>(count);
-        int cursor = 0;
-        for (int i = 0; i < count; i++) {
-            String open = Integer.toString(base + i * 2);
-            String close = Integer.toString(base + i * 2 + 1);
-            int start = translated.indexOf(open, cursor);
-            if (start < 0 || translated.indexOf(open, start + open.length()) >= 0) return null;
-            if (!translated.substring(cursor, start).isBlank()) return null;
-            start += open.length();
-            int end = translated.indexOf(close, start);
-            if (end < start || translated.indexOf(close, end + close.length()) >= 0) return null;
-            out.add(translated.substring(start, end).strip());
-            cursor = end + close.length();
-        }
-        return translated.substring(cursor).isBlank() ? out : null;
+    private static List<String> extractAnchoredBatch(String translated, int count,
+                                                     int base, int markerCount) {
+        return NumericMarkerCodec.extractAnchored(translated, count, base, markerCount);
     }
 
     private static int sentinelBase(List<String> texts, int count) {
@@ -461,7 +446,7 @@ final class ExperimentalWebTranslator implements Translator {
 
     private record Slot(String sentinel, String original) { }
     private record MaskedItem(String wire, List<Slot> slots) { }
-    private record WireBatch(String text, int base, List<MaskedItem> items) { }
+    private record WireBatch(String text, int base, int markerCount, List<MaskedItem> items) { }
     private record BingRequest(String url, long key, String token) { }
     private record BingSession(long key, String token, long expiryMs, long issuedAt,
                                String ig, String iid, int counter) {

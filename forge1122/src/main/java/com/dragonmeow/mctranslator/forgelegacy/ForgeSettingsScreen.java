@@ -19,8 +19,9 @@ final class ForgeSettingsScreen extends GuiScreen{
         addButton(new GuiButton(6,x,126,310,20,I18n.format("screen.mctranslator.ai.title")));
         addButton(new GuiButton(7,x,150,152,20,"Cooldown: "+(c.requestCooldownMs<=0?"OFF":c.requestCooldownMs+" ms")));
         addButton(new GuiButton(8,x+158,150,152,20,"Batch: "+(c.batchWindowMs<=0?"OFF":c.batchWindowMs/1000F+" s")));
-        addButton(new GuiButton(9,x,174,310,20,"Machine provider: "+LegacyConfig.normalizeMachineProvider(c.machineTranslationProvider)));
-        addButton(new GuiButton(10,x,198,310,20,"Debug + token HUD: "+(c.debugTranslationOverlay?"ON":"OFF")));
+        addButton(new GuiButton(9,x,174,152,20,"Machine: "+LegacyConfig.normalizeMachineProvider(c.machineTranslationProvider)));
+        addButton(new GuiButton(10,x+158,174,152,20,"Debug HUD: "+(c.debugTranslationOverlay?"ON":"OFF")));
+        addButton(new GuiButton(11,x,198,310,20,chatDeliveryLabel(c)));
         addButton(new GuiButton(0,width/2-100,height-22,200,20,I18n.format("gui.done")));
     }
     @Override protected void actionPerformed(GuiButton b)throws IOException{
@@ -61,12 +62,19 @@ final class ForgeSettingsScreen extends GuiScreen{
             c.debugTranslationOverlay=!c.debugTranslationOverlay;
             if(!c.debugTranslationOverlay)MinecraftTranslatorForge.TRANSLATOR.clearDebug();
         }
+        if(b.id==11)c.deliverChatTranslationsInOrder=!c.deliverChatTranslationsInOrder;
         buttonList.clear();
         initGui();
     }
     private static int next(int c,int[] a){
         for(int v:a)if(v>c)return v;
         return 0;
+    }
+    private static String chatDeliveryLabel(LegacyConfig c){
+        String mode=I18n.format(c.deliverChatTranslationsInOrder
+                ?"config.mctranslator.chat_delivery.ordered"
+                :"config.mctranslator.chat_delivery.ready_first");
+        return I18n.format("config.mctranslator.chat_delivery",mode);
     }
     @Override public void drawScreen(int x,int y,float d){
         drawDefaultBackground();

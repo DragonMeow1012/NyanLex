@@ -108,6 +108,28 @@ class TranslationCacheTest {
     }
 
     @Test
+    void oversizedSingleContextRowIsSkippedBeforeTemplating() {
+        List<List<String>> seenContexts = new ArrayList<>();
+        Translator fake = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang) {
+                return new TranslationResult("T:" + text, null);
+            }
+            @Override public List<TranslationResult> translateBatch(
+                    List<String> texts, String targetLang, List<String> surfaceContext) {
+                seenContexts.add(surfaceContext == null ? null : new ArrayList<>(surfaceContext));
+                return texts.stream().map(text -> new TranslationResult("T:" + text, null)).toList();
+            }
+        };
+        TranslationCache cache = new TranslationCache(fake, "zh-TW", DIRECT, 100);
+
+        cache.warmBatchAsync(List.of("Needs translation"),
+                List.of("x".repeat(8_193), "Useful context"));
+
+        assertEquals(List.of(List.of("Useful context")), seenContexts,
+                "an optional oversized row must not be retained by the queued request");
+    }
+
+    @Test
     void reorderedParagraphBreaksAreRejectedInsteadOfFillingWrongRows() {
         Translator bad = (text, target) -> new TranslationResult(
                 text.replace("⟦PB0⟧", "⟦TMP⟧")
@@ -179,8 +201,10 @@ class TranslationCacheTest {
     void invalidationRejectsAnOlderInFlightResponseAndStartsFreshWork() {
         Deque<Runnable> tasks = new ArrayDeque<>();
         AtomicInteger calls = new AtomicInteger();
-        Translator translator = (text, target) -> new TranslationResult(
-                calls.incrementAndGet() == 1 ? "舊飛行結果" : "全新結果", "en");
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("全新結果", "en");
+        };
         TranslationCache cache = new TranslationCache(translator, "zh-TW", tasks::addLast, 100);
 
         cache.requestAsync("Hello");                 // old request is queued but not run
@@ -191,18 +215,22 @@ class TranslationCacheTest {
         tasks.removeFirst().run();
         assertNull(cache.getCached("Hello"),
                 "the response started before invalidate must never refill the cache");
+        assertEquals(0, calls.get(),
+                "a queued obsolete revision must cancel before reaching the backend");
 
         tasks.removeFirst().run();
         assertEquals("全新結果", cache.getCached("Hello"));
-        assertEquals(2, calls.get());
+        assertEquals(1, calls.get());
     }
 
     @Test
     void globalClearDetachesFlightsAndCannotBeRefilledByTheirOldResponses() {
         Deque<Runnable> tasks = new ArrayDeque<>();
         AtomicInteger calls = new AtomicInteger();
-        Translator translator = (text, target) -> new TranslationResult(
-                calls.incrementAndGet() == 1 ? "清除前舊結果" : "清除後新結果", "en");
+        Translator translator = (text, target) -> {
+            calls.incrementAndGet();
+            return new TranslationResult("清除後新結果", "en");
+        };
         TranslationCache cache = new TranslationCache(translator, "zh-TW", tasks::addLast, 100);
 
         cache.requestAsync("Hello");
@@ -212,8 +240,11 @@ class TranslationCacheTest {
 
         tasks.removeFirst().run();
         assertNull(cache.getCached("Hello"));
+        assertEquals(0, calls.get(),
+                "a queued obsolete generation must cancel before reaching the backend");
         tasks.removeFirst().run();
         assertEquals("清除後新結果", cache.getCached("Hello"));
+        assertEquals(1, calls.get());
     }
 
     @Test
@@ -1501,6 +1532,39 @@ class TranslationCacheTest {
     }
 
     @Test
+    void purePrefixQuantityReturnsOriginalWithoutBackendRequest() {
+        AtomicInteger calls = new AtomicInteger();
+        TranslationCache cache = new TranslationCache(countingUpper(calls), "zh-TW", DIRECT, 100);
+        java.util.List<String> callbacks = new java.util.ArrayList<>();
+
+        cache.requestAsync("x100", callbacks::add);
+        cache.requestAsync("§ax100", callbacks::add);
+
+        assertEquals(java.util.List.of("x100", "§ax100"), callbacks);
+        assertEquals("x100", cache.getCached("x100"));
+        assertEquals("§ax100", cache.getCached("§ax100"));
+        assertEquals(0, calls.get(), "pure x-prefixed quantities must never reach a backend");
+    }
+
+    @Test
+    void memoryEvictionDropsTheSessionProvisionalBit() {
+        Map<String, String> disk = new java.util.HashMap<>();
+        java.util.Set<String> prov = new java.util.HashSet<>();
+        Translator fallback = (text, target) ->
+                new TranslationResult("GT:" + text, "en", true);
+        TranslationCache cache = new TranslationCache(
+                fallback, "zh-TW", DIRECT, 1, 10_000L, () -> 0L,
+                provisionalStore(disk, prov));
+
+        assertEquals("GT:Alpha", cache.translateBlocking("Alpha"));
+        assertEquals("GT:Beta", cache.translateBlocking("Beta")); // evicts Alpha from memory
+        assertTrue(prov.remove("Alpha"), "the backing row starts provisional");
+
+        assertEquals("GT:Alpha", cache.getCachedFinal("Alpha"),
+                "an evicted session bit must not misclassify a now-final backing row");
+    }
+
+    @Test
     void provisionalHitTriggersAiRedoThatOverwritesUnmarksAndRebuildsCopies() {
         boolean[] aiUp = {false};
         AtomicInteger calls = new AtomicInteger();
@@ -2031,6 +2095,42 @@ class TranslationCacheTest {
         assertEquals("修復完成", cache.getCached("Hello world"));
         assertFalse(failures.containsKey("Hello world"));
         assertEquals(2, calls.get());
+    }
+
+    @Test
+    void boundedRetrySnapshotScanKeepsEvictedSessionDemandPassive() {
+        AtomicInteger dormantCalls = new AtomicInteger();
+        boolean[] recovered = {false};
+        Translator translator = (text, target) -> {
+            if ("Dormant row".equals(text)) {
+                dormantCalls.incrementAndGet();
+                if (!recovered[0]) throw new TranslationException("offline");
+                return new TranslationResult("Recovered", "en");
+            }
+            return new TranslationResult("T:" + text, "en");
+        };
+        TranslationCache cache = new TranslationCache(
+                translator, "zh-TW", DIRECT, 1_024, 0L, () -> 0L, null);
+
+        cache.requestAsync("Dormant row");
+        assertEquals(1, dormantCalls.get());
+        // Demand is independently LRU-bounded at 512. Successful observations do not
+        // create retry snapshots, so the tick scan should remain one dormant entry and
+        // must still honour the fact that its original surface disappeared.
+        for (int i = 0; i < 513; i++) {
+            String key = "Fresh demand " + (char) ('A' + i / 26) + (char) ('A' + i % 26);
+            cache.requestAsync(key);
+        }
+
+        recovered[0] = true;
+        cache.flushBatch();
+        cache.flushBatch();
+        assertEquals(1, dormantCalls.get(),
+                "iterating retry snapshots must not revive one whose demand was evicted");
+
+        cache.requestAsync("Dormant row");
+        assertEquals(2, dormantCalls.get(), "a new observation reactivates the dormant retry");
+        assertEquals("Recovered", cache.getCached("Dormant row"));
     }
 
     @Test

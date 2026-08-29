@@ -7,6 +7,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NameMaskerTest {
@@ -53,6 +54,25 @@ class NameMaskerTest {
         assertFalse(m.hasMasks());
         // With no masks, unmask returns the translated text unchanged.
         assertEquals("你好世界", NameMasker.unmask("你好世界", m.names()));
+    }
+
+    @Test
+    void nonEmptyNamesWithoutAMatchReturnsTheOriginalString() {
+        String original = "Welcome to the village";
+
+        NameMasker.Masked m = NameMasker.mask(original, java.util.Set.of("Steve123"));
+
+        assertSame(original, m.text(), "the no-match path must not build a replacement string");
+        assertFalse(m.hasMasks());
+    }
+
+    @Test
+    void firstLateMatchPreservesTheUncopiedPrefixAndSuffix() {
+        NameMasker.Masked m = NameMasker.mask(
+                "Welcome, Steve123, to the village", java.util.Set.of("Steve123"));
+
+        assertEquals("Welcome, Steve123, to the village", NameMasker.unmask(m.text(), m.names()));
+        assertEquals(List.of("Steve123"), m.names());
     }
 
     @Test

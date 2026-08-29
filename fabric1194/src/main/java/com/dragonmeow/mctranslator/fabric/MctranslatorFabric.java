@@ -9,6 +9,9 @@ import com.dragonmeow.mctranslator.cache.TranslationCache;
 import com.dragonmeow.mctranslator.config.DisplayMode;
 import com.dragonmeow.mctranslator.config.MachineTranslationProvider;
 import com.dragonmeow.mctranslator.config.TranslatorConfig;
+import com.dragonmeow.mctranslator.service.ChatDeliverySession;
+import com.dragonmeow.mctranslator.service.ChatRequestProfile;
+import com.dragonmeow.mctranslator.service.RecoveryAssembly;
 import com.dragonmeow.mctranslator.service.TranslationDecision;
 import com.dragonmeow.mctranslator.service.TranslationService;
 import com.dragonmeow.mctranslator.translate.AiSettings;
@@ -55,6 +58,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Fabric (Mojang-mapped) client entry point. Shares the loader-agnostic core and the
@@ -88,9 +92,14 @@ public final class MctranslatorFabric implements ClientModInitializer {
     private static final ThreadLocal<java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen>>
             SCREEN_RENDER_STACK = ThreadLocal.withInitial(java.util.ArrayDeque::new);
 
+    private static final long ITEM_WARM_SCAN_INTERVAL_NANOS = 350_000_000L;
     private net.minecraft.client.gui.screens.Screen lastContainerScreen;
+    /** Previous scan's distinct names; replaced after every scan so it stays menu-bounded. */
     private final java.util.Set<String> warmedContainerNames = new java.util.HashSet<>();
-    /** Names queued from the local player's hotbar, backpack, armour and off-hand. */
+    private long nextContainerWarmScanAtNanos;
+    /** Previous hotbar/off-hand scan; at most ten distinct names. */
+    private final java.util.Set<String> warmedHudNames = new java.util.HashSet<>();
+    private long nextHudWarmScanAtNanos;
     /** Last late tooltip snapshot, including lines appended by other tooltip callbacks. */
     private ItemStack lastTooltipStack;
     private List<String> lastTooltipParagraphSources;
@@ -122,32 +131,53 @@ public final class MctranslatorFabric implements ClientModInitializer {
     private static final java.util.regex.Pattern PLAYER_NAME =
             java.util.regex.Pattern.compile("[A-Za-z0-9_]{3,16}");
 
-    private final java.util.ArrayDeque<PendingChat> pendingChats = new java.util.ArrayDeque<>();
-    private final java.util.Map<Long, PendingChat> pendingChatById = new java.util.LinkedHashMap<>();
+    private final ChatDeliverySession<PendingChat> chatDelivery =
+            new ChatDeliverySession<>(pending -> pending.id,
+                    pending -> pending.displayedMessage != null, 512);
+    private final ChatDeliverySession.BatchBudget announcementBudget =
+            new ChatDeliverySession.BatchBudget(BLOCK_MAX_LINES, BLOCK_MAX_CHARS);
     private long nextChatId = 1L;
 
     private static final class PendingChat {
         final long id;
         final Component message;
         final net.minecraft.network.chat.ChatType.Bound params;
-        final long queuedAtMs = System.currentTimeMillis();
+        final long queuedAtNanos = System.nanoTime();
+        long epoch;
         DisplayMode mode;
         java.util.function.Supplier<Component> builder;
-        boolean ready;
-        boolean flushedOriginal; // original already shown (slow translation); append it alone later
         boolean framedByServer;  // inside a server ────── announcement frame: skip our magenta wrap
         Component displayedMessage;
-        int translationCompletions;
+        PendingBlock block;
+        private final RecoveryAssembly.ResultProgress<java.util.function.Supplier<Component>>
+                recoveryProgress = new RecoveryAssembly.ResultProgress<>();
 
         PendingChat(long id, Component message, net.minecraft.network.chat.ChatType.Bound params) {
             this.id = id;
             this.message = message;
             this.params = params;
         }
+
+        void configureRecovery(int requestCount, boolean recoveryPossible) {
+            recoveryProgress.configure(requestCount, recoveryPossible);
+        }
+
+        boolean acceptResult(int requestSlot, boolean finalResult) {
+            return recoveryProgress.accept(requestSlot, finalResult);
+        }
+
+        java.util.function.Supplier<Component> retainBuilder(
+                java.util.function.Supplier<Component> candidate) {
+            builder = recoveryProgress.retainNonNull(candidate);
+            return builder;
+        }
+
+        boolean mayReceiveRecovery() { return recoveryProgress.mayReceiveRecovery(); }
     }
 
     /** How long a chat line may wait for its translation before the original is shown anyway. */
-    private static final long CHAT_MAX_WAIT_MS = 15_000L; // safety net only: 原文＋翻譯 output together
+    private static final long CHAT_MAX_WAIT_NANOS = TimeUnit.SECONDS.toNanos(15L);
+    private static final long DISPLAYED_CHAT_RETENTION_NANOS = TimeUnit.MINUTES.toNanos(5L);
 
     private boolean insideServerFrame;
     private long frameOpenedAtMs;
@@ -163,14 +193,43 @@ public final class MctranslatorFabric implements ClientModInitializer {
         final PendingChat holder;                     // the queue slot keeping chat order
         final DisplayMode mode;
         final List<Component> lines = new ArrayList<>();
-        final java.util.Map<Integer, Component> translations = new java.util.HashMap<>();
+        final ChatDeliverySession.BatchBudget budget;
+        int reservedItems;
+        int reservedChars;
+        boolean budgetReleased;
         final long openedAtMs = System.currentTimeMillis();
-        int awaiting;
+        List<Integer> paragraphStarts = List.of();
+        RecoveryAssembly<List<Component>> recovery;
         boolean closed;
+        boolean retired;
 
-        PendingBlock(PendingChat holder, DisplayMode mode) {
+        PendingBlock(PendingChat holder, DisplayMode mode,
+                     ChatDeliverySession.BatchBudget budget) {
             this.holder = holder;
             this.mode = mode;
+            this.budget = budget;
+        }
+
+        boolean addLine(Component line) {
+            if (line == null) return false;
+            int chars = line.getString().length();
+            if (!budget.tryReserve(chars)) return false;
+            lines.add(line);
+            reservedItems++;
+            reservedChars += chars;
+            return true;
+        }
+
+        void addReservedLine(Component line, int chars) {
+            lines.add(line);
+            reservedItems++;
+            reservedChars += chars;
+        }
+
+        void releaseBudget() {
+            if (budgetReleased) return;
+            budgetReleased = true;
+            budget.release(reservedItems, reservedChars);
         }
     }
 
@@ -178,22 +237,30 @@ public final class MctranslatorFabric implements ClientModInitializer {
     /** An announcement's lines arrive within a tick or two; a frame still open after
      *  this long is treated as a decorative lone separator and closed as-is. */
     private static final long BLOCK_MAX_OPEN_MS = 3_000L;
+    private static final int BLOCK_MAX_LINES = 512;
+    private static final int BLOCK_MAX_CHARS = 1_000_000;
 
     /** Collect framed SYSTEM announcements into one combined message. Returns true if
      *  the line was absorbed into a block (vanilla display must be cancelled). */
-    private boolean handleAnnouncementBlock(Component message, net.minecraft.network.chat.ChatType.Bound params,
-                                            DisplayMode mode, String full) {
+    private boolean handleAnnouncementBlock(Component message,
+                                            net.minecraft.network.chat.ChatType.Bound params,
+                                            boolean isSystem, DisplayMode mode, String full) {
         boolean isSep = FabricTextStyle.isSeparatorText(full);
         if (activeBlock == null) {
-            if (!isSep || params != null) return false; // only system messages open a frame
+            int openerChars = full.length();
+            if (!isSep || !isSystem || !announcementBudget.tryReserve(openerChars)) return false;
             PendingChat holder = queueChat(message, params);
             holder.mode = DisplayMode.TRANSLATION;      // builder emits the whole block verbatim
-            activeBlock = new PendingBlock(holder, mode);
-            activeBlock.lines.add(message);
+            activeBlock = new PendingBlock(holder, mode, announcementBudget);
+            holder.block = activeBlock;
+            activeBlock.addReservedLine(message, openerChars);
             return true;
         }
         PendingBlock block = activeBlock;
-        block.lines.add(message);
+        if (!isSystem || !block.addLine(message)) {
+            closeAnnouncementBlock(block);
+            return false;
+        }
         if (isSep) {
             block.closed = true;
             activeBlock = null;
@@ -201,6 +268,13 @@ public final class MctranslatorFabric implements ClientModInitializer {
             return true;
         }
         return true;
+    }
+
+    private void closeAnnouncementBlock(PendingBlock block) {
+        if (block == null || block.retired) return;
+        if (activeBlock == block) activeBlock = null;
+        block.closed = true;
+        translateBlockParagraphs(block);
     }
 
     /** Translate a collected frame only after its closing separator has arrived. */
@@ -236,22 +310,29 @@ public final class MctranslatorFabric implements ClientModInitializer {
             requests.add(ParagraphModel.join(rows));
         }
 
-        block.awaiting = groups.size();
+        block.holder.configureRecovery(groups.size(), config.aiChat);
         if (groups.isEmpty()) {
-            maybeFinishBlock(block);
+            maybeFinishBlock(block, -1, true, List.of());
             return;
         }
+        block.paragraphStarts = List.copyOf(starts);
+        block.recovery = new RecoveryAssembly<>(groups.size());
         for (int paragraph = 0; paragraph < groups.size(); paragraph++) {
             int start = starts.get(paragraph);
             List<FabricTextStyle.ChatLinePlan> plans = groups.get(paragraph);
             String request = requests.get(paragraph);
-            service.translateChatAsync(request, translated -> {
+            final int requestSlot = paragraph;
+            service.translateChatAsyncDetailed(request, result -> {
+                String translated = result.text();
                 Minecraft mc = Minecraft.getInstance();
                 if (mc == null) return;
                 mc.execute(() -> {
+                    if (!noteChatResultOnClient(mc, block.holder,
+                            requestSlot, result.finalResult())) return;
                     List<String> rows = validatedParagraphRows(translated, plans.size());
+                    List<Component> paragraphLines = null;
                     if (!rows.isEmpty()) {
-                        List<Component> paragraphLines = new ArrayList<>(plans.size());
+                        paragraphLines = new ArrayList<>(plans.size());
                         for (int row = 0; row < plans.size(); row++) {
                             Component rebuilt = FabricTextStyle.rebuildChatLine(plans.get(row), rows.get(row));
                             Component source = block.lines.get(start + row);
@@ -259,31 +340,36 @@ public final class MctranslatorFabric implements ClientModInitializer {
                                     ? Component.empty().append(source).append(Component.literal("\n")).append(rebuilt)
                                     : rebuilt);
                         }
-                        for (int row = 0; row < paragraphLines.size(); row++) {
-                            block.translations.put(start + row, paragraphLines.get(row));
-                        }
                     }
-                    block.awaiting--;
-                    maybeFinishBlock(block);
+                    RecoveryAssembly.Update<List<Component>> update = block.recovery.accept(
+                            requestSlot,
+                            paragraphLines == null ? null : List.copyOf(paragraphLines),
+                            result.finalResult());
+                    if (update.accepted() && update.ready()) {
+                        maybeFinishBlock(block, requestSlot, result.finalResult(), update.values());
+                    }
                 });
             });
         }
     }
 
-    private void maybeFinishBlock(PendingBlock block) {
-        if (!block.closed || block.awaiting > 0 || block.holder.ready) return;
-        block.holder.builder = () -> {
-            net.minecraft.network.chat.MutableComponent out = Component.empty();
-            for (int i = 0; i < block.lines.size(); i++) {
-                if (i > 0) out.append(Component.literal("\n"));
-                Component translated = block.translations.get(i);
-                out.append(translated != null ? translated : block.lines.get(i));
-            }
-            return out;
-        };
-        block.holder.ready = true;
+    private void maybeFinishBlock(PendingBlock block, int requestSlot, boolean finalResult,
+                                  List<List<Component>> snapshot) {
+        if (!block.closed || block.retired) return;
+        List<Component> assembledLines = new ArrayList<>(block.lines);
+        for (int slot = 0; slot < snapshot.size(); slot++) {
+            List<Component> translated = snapshot.get(slot);
+            if (translated == null) continue;
+            int start = block.paragraphStarts.get(slot);
+            for (int row = 0; row < translated.size(); row++) assembledLines.set(start + row, translated.get(row));
+        }
+        Component assembled = FabricTextStyle.joinStyledLines(assembledLines);
         Minecraft mc = Minecraft.getInstance();
-        if (mc != null && mc.gui != null) flushReadyChats(mc);
+        if (mc != null && mc.gui != null) {
+            completeChatOnClient(mc, block.holder.id, block.holder.epoch,
+                    DisplayMode.TRANSLATION, () -> assembled, requestSlot, finalResult,
+                    requestSlot >= 0);
+        }
     }
 
     /** Close a frame the server never closed (lone decorative separator). */
@@ -357,6 +443,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
         Minecraft mc = Minecraft.getInstance();
         if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return c;
+        if (!s.wantsScreenTextTranslation(c.getString())) return c;
         Component t = FabricTextStyle.renderTranslated("screenText", c, s::translateScreenText);
         return t != null ? t : c;
     }
@@ -616,11 +703,13 @@ public final class MctranslatorFabric implements ClientModInitializer {
         }, "mctranslator-codex-shutdown"));
         PersistentStore googleStore = new ProviderLanguageFileStore(
                 FabricLoader.getInstance().getConfigDir(), MOD_ID + "-cache", config.targetLang,
-                () -> config.machineTranslationProvider);
+                () -> config.machineTranslationProvider, config.persistentCacheMaxEntries);
         PersistentStore aiStore = new LanguageFileStore(
-                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-ai-cache", config.targetLang);
+                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-ai-cache", config.targetLang,
+                config.persistentCacheMaxEntries);
         PersistentStore failureStore = new LanguageFileStore(
-                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-failures", config.targetLang);
+                FabricLoader.getInstance().getConfigDir(), MOD_ID + "-failures", config.targetLang,
+                config.persistentCacheMaxEntries);
         TranslationCache cache = new TranslationCache(google, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
         TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
@@ -692,6 +781,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
         FabricTextStyle.clearRenderMemo();
         lastContainerScreen = null;
         warmedContainerNames.clear();
+        nextContainerWarmScanAtNanos = 0L;
+        warmedHudNames.clear();
+        nextHudWarmScanAtNanos = 0L;
         lastTooltipStack = null;
         lastTooltipParagraphSources = null;
         lastTooltipScreen = null;
@@ -795,6 +887,8 @@ public final class MctranslatorFabric implements ClientModInitializer {
      */
     private boolean translateAndInject(Component message, net.minecraft.network.chat.ChatType.Bound params) {
         if (service == null || message == null) return false;
+        observeChatDeliveryContext(Minecraft.getInstance());
+        final boolean systemMessage = params == null;
         final Component renderedMessage = FabricTextStyle.resolveLegacyCodes(
                 params == null ? message : decorate(params, message));
         if (params != null) params = null;
@@ -805,7 +899,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
             if (activeBlock != null || FabricTextStyle.isSeparatorText(hardLines.get(0).getString())) {
                 List<Component> remainder = new ArrayList<>();
                 for (Component line : hardLines) {
-                    if (!handleAnnouncementBlock(line, params, mode, line.getString())) remainder.add(line);
+                    if (!handleAnnouncementBlock(line, params, systemMessage, mode, line.getString())) {
+                        remainder.add(line);
+                    }
                 }
                 if (!remainder.isEmpty()) {
                     translateHardLineMessage(FabricTextStyle.joinStyledLines(remainder), params, mode, remainder);
@@ -815,7 +911,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
             return translateHardLineMessage(renderedMessage, params, mode, hardLines);
         }
         String full = renderedMessage.getString();
-        if (handleAnnouncementBlock(renderedMessage, params, mode, full)) return true;
+        if (handleAnnouncementBlock(renderedMessage, params, systemMessage, mode, full)) return true;
         boolean framedByServer = trackServerFrame(full);
         int contentStart = com.dragonmeow.mctranslator.translate.ChatSegmenter.contentStart(full);
         boolean hasPrefix = contentStart > 0 && contentStart < full.length();
@@ -824,7 +920,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
             // Untranslatable line (e.g. the "-----" frame of a Hypixel announcement): if
             // translatable lines are still queued ahead of it, it must WAIT IN LINE as a
             // ready pass-through — otherwise the frame prints before its framed content.
-            if (pendingChats.isEmpty()) return false;
+            if (chatDelivery.isQueueEmpty()) return false;
             Component reinjected = renderedMessage;
             if (FabricTextStyle.isSeparatorText(full)) {
                 // Compact-chat mods merge identical frame lines and delete the earlier one;
@@ -836,7 +932,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
             }
             PendingChat passThrough = queueChat(reinjected, params);
             passThrough.mode = DisplayMode.ORIGINAL_ONLY;
-            passThrough.ready = true;
+            chatDelivery.markReady(passThrough);
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null && mc.gui != null) flushReadyChats(mc);
             return true;
         }
 
@@ -845,6 +943,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
         PendingChat pending = queueChat(renderedMessage, params);
         pending.mode = mode;
         pending.framedByServer = framedByServer;
+        pending.configureRecovery(1, config.aiChat);
 
         FabricTextStyle.MarkedChat marked = FabricTextStyle.markChatContent(renderedMessage, cs);
         if (marked.marked()) {
@@ -853,8 +952,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
             // requests than per-segment), then map every marker region back to its style
             // — a red word stays red on its translated word. Click/hover ride along on
             // the segment styles.
-            service.translateChatAsync(marked.text(), translated ->
-                    completeChat(pending.id, mode, translated == null ? null : () -> {
+            service.translateChatAsyncDetailed(marked.text(), result -> {
+                String translated = result.text();
+                    completeChat(pending.id, pending.epoch, mode, translated == null ? null : () -> {
                         Font font = Minecraft.getInstance().font;
                         var core = FabricTextStyle.markedChat(renderedMessage, cs, translated, marked);
                         if (prefix) {
@@ -863,12 +963,16 @@ public final class MctranslatorFabric implements ClientModInitializer {
                                     .append(core);
                         }
                         return core; // core keeps the original's leading whitespace: starts aligned
-                    }));
+                    }, 0, result.finalResult());
+            });
             return true;
         }
-        service.translateChatAsync(content, translated ->
-                completeChat(pending.id, mode, translated == null ? null
-                        : () -> chatLine(Minecraft.getInstance().font, renderedMessage, prefix, cs, translated)));
+        service.translateChatAsyncDetailed(content, result -> {
+            String translated = result.text();
+                completeChat(pending.id, pending.epoch, mode, translated == null ? null
+                        : () -> chatLine(Minecraft.getInstance().font, renderedMessage, prefix, cs, translated),
+                        0, result.finalResult());
+        });
         return true;
     }
 
@@ -899,25 +1003,24 @@ public final class MctranslatorFabric implements ClientModInitializer {
             }
         }
         if (requested.isEmpty()) {
-            if (pendingChats.isEmpty()) return false;
+            if (chatDelivery.isQueueEmpty()) return false;
             PendingChat passThrough = queueChat(original, params);
             passThrough.mode = DisplayMode.ORIGINAL_ONLY;
-            passThrough.ready = true;
+            chatDelivery.markReady(passThrough);
             Minecraft mc = Minecraft.getInstance();
             if (mc != null && mc.gui != null) flushReadyChats(mc);
             return true;
         }
         PendingChat pending = queueChat(original, params);
         pending.mode = mode;
-        java.util.concurrent.atomic.AtomicReferenceArray<Component> rebuilt =
-                new java.util.concurrent.atomic.AtomicReferenceArray<>(hardLines.size());
-        for (int i = 0; i < hardLines.size(); i++) rebuilt.set(i, hardLines.get(i).copy());
-        java.util.concurrent.atomic.AtomicInteger awaiting =
-                new java.util.concurrent.atomic.AtomicInteger(requested.size());
+        pending.configureRecovery(requested.size(), config.aiChat);
+        RecoveryAssembly<List<Component>> recovery = new RecoveryAssembly<>(requested.size());
         for (int paragraph = 0; paragraph < requested.size(); paragraph++) {
             ParagraphModel.Range range = requested.get(paragraph);
             String request = requests.get(paragraph);
-            service.translateChatAsync(request, translated -> {
+            final int requestSlot = paragraph;
+            service.translateChatAsyncDetailed(request, result -> {
+                String translated = result.text();
                 // A style-fallback paragraph arrives as ONE marked string. Strip the
                 // prefix before the row split, then re-mark EVERY row: otherwise only
                 // row 0 carries the prefix and the remaining rows fail
@@ -925,8 +1028,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 boolean styleFallback = TextFilter.isStyleFallback(translated);
                 String semantic = TextFilter.stripStyleFallback(translated);
                 List<String> rows = validatedParagraphRows(semantic, range.size());
+                List<Component> paragraphLines = null;
                 if (!rows.isEmpty()) {
-                    List<Component> paragraphLines = new ArrayList<>(range.size());
+                    paragraphLines = new ArrayList<>(range.size());
                     for (int row = range.start(); row <= range.end(); row++) {
                         String rowText = rows.get(row - range.start());
                         // Only marked rows understand the prefix (markedChat strips it);
@@ -937,24 +1041,31 @@ public final class MctranslatorFabric implements ClientModInitializer {
                         paragraphLines.add(FabricTextStyle.rebuildChatLine(
                                 plans.get(row), rowText));
                     }
-                    for (int row = range.start(); row <= range.end(); row++) {
-                        rebuilt.set(row, paragraphLines.get(row - range.start()));
+                }
+                List<Component> immutableParagraph = paragraphLines == null
+                        ? null : List.copyOf(paragraphLines);
+                Minecraft mc = Minecraft.getInstance();
+                if (mc == null) return;
+                mc.execute(() -> {
+                    if (!noteChatResultOnClient(mc, pending,
+                            requestSlot, result.finalResult())) return;
+                    RecoveryAssembly.Update<List<Component>> update = recovery.accept(
+                            requestSlot, immutableParagraph, result.finalResult());
+                    if (!update.accepted() || !update.ready()) return;
+                    List<Component> ready = new ArrayList<>(hardLines.size());
+                    for (Component line : hardLines) ready.add(line.copy());
+                    for (int slot = 0; slot < update.values().size(); slot++) {
+                        List<Component> translatedLines = update.values().get(slot);
+                        if (translatedLines == null) continue;
+                        ParagraphModel.Range translatedRange = requested.get(slot);
+                        for (int row = translatedRange.start(); row <= translatedRange.end(); row++) {
+                            ready.set(row, translatedLines.get(row - translatedRange.start()));
+                        }
                     }
-                }
-                // <= 0, not == 0: an exact-style recovery waiter may call back a second
-                // time (approx fallback first, exact projection later), driving the
-                // counter negative — each late arrival must still replace the shown row.
-                // Known limit: with several paragraphs each arriving late more than
-                // once, replaces after the 2nd completion are dropped because
-                // completeChat retires the entry (translationCompletions >= 2); a
-                // multi-paragraph CS chat message is rare enough to accept that.
-                if (awaiting.decrementAndGet() <= 0) {
-                    completeChat(pending.id, mode, () -> {
-                        List<Component> ready = new ArrayList<>(rebuilt.length());
-                        for (int row = 0; row < rebuilt.length(); row++) ready.add(rebuilt.get(row));
-                        return FabricTextStyle.joinStyledLines(ready);
-                    });
-                }
+                    Component assembled = FabricTextStyle.joinStyledLines(ready);
+                    completeChatOnClient(mc, pending.id, pending.epoch, mode,
+                            () -> assembled, requestSlot, result.finalResult(), true);
+                });
             });
         }
         return true;
@@ -980,75 +1091,107 @@ public final class MctranslatorFabric implements ClientModInitializer {
     }
 
     private PendingChat queueChat(Component message, net.minecraft.network.chat.ChatType.Bound params) {
-        if (pendingChatById.size() >= 512) {
-            java.util.Iterator<PendingChat> old = pendingChatById.values().iterator();
-            while (old.hasNext()) {
-                if (old.next().displayedMessage != null) {
-                    old.remove();
-                    break;
+        PendingChat pending = new PendingChat(nextChatId++, message, params);
+        ChatDeliverySession.Admission<PendingChat> admission = chatDelivery.add(pending);
+        pending.epoch = admission.epoch();
+        PendingChat evicted = admission.evicted();
+        if (evicted != null) {
+            Component original = admission.evictedWasDisplayed() ? null : pendingOriginal(evicted);
+            retireAnnouncement(evicted);
+            if (original != null) {
+                Minecraft mc = Minecraft.getInstance();
+                if (mc != null && mc.gui != null) {
+                    mc.gui.getChat().addMessage(decorate(evicted.params, original));
                 }
             }
         }
-        PendingChat pending = new PendingChat(nextChatId++, message, params);
-        pendingChats.addLast(pending);
-        pendingChatById.put(pending.id, pending);
         return pending;
     }
 
-    private void completeChat(long id, DisplayMode mode, java.util.function.Supplier<Component> builder) {
+    private void completeChat(long id, long epoch, DisplayMode mode,
+                              java.util.function.Supplier<Component> builder,
+                              int requestSlot, boolean finalResult) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
-        mc.execute(() -> {
-            if (mc.gui == null) return;
-            PendingChat pending = pendingChatById.get(id);
-            if (pending == null) return;
-            if (pending.displayedMessage != null) {
-                Component shown = pendingChatDisplay(pending, mode, builder);
-                Component decorated = decorate(pending.params, shown);
-                if (replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, decorated)) {
-                    pending.displayedMessage = decorated;
-                }
-                pending.translationCompletions++;
-                if (pending.translationCompletions >= 2 || !config.aiChat) pendingChatById.remove(id);
-                return;
-            }
-            pending.mode = mode;
-            pending.builder = builder;
-            pending.ready = true;
-            pending.translationCompletions++;
-            flushReadyChats(mc);
-        });
+        mc.execute(() -> completeChatOnClient(
+                mc, id, epoch, mode, builder, requestSlot, finalResult));
     }
 
-    /** Never hold chat hostage: after {@link #CHAT_MAX_WAIT_MS} the original is shown and the
-     *  translation (when it eventually lands) is appended as its own line. */
+    private void completeChatOnClient(Minecraft mc, long id, long epoch, DisplayMode mode,
+                                      java.util.function.Supplier<Component> builder,
+                                      int requestSlot, boolean finalResult) {
+        completeChatOnClient(mc, id, epoch, mode, builder, requestSlot, finalResult, false);
+    }
+
+    private void completeChatOnClient(Minecraft mc, long id, long epoch, DisplayMode mode,
+                                      java.util.function.Supplier<Component> builder,
+                                      int requestSlot, boolean finalResult,
+                                      boolean resultAlreadyAccepted) {
+        if (mc.gui == null) return;
+        observeChatDeliveryContext(mc);
+        PendingChat pending = chatDelivery.get(id, epoch);
+        if (pending == null) return;
+        if (!resultAlreadyAccepted && !pending.acceptResult(requestSlot, finalResult)) return;
+        builder = pending.retainBuilder(builder);
+        if (pending.displayedMessage != null) {
+            Component translated = builder == null ? null : builder.get();
+            Component shown = pendingChatDisplay(pending, mode, translated);
+            Component decorated = decorate(pending.params, shown);
+            if (replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, decorated)) {
+                pending.displayedMessage = decorated;
+            } else {
+                // The prior line was cleared/trimmed; do not resurrect it at the tail.
+                retirePending(pending);
+                return;
+            }
+            if (!pending.mayReceiveRecovery()) retirePending(pending);
+            return;
+        }
+        pending.mode = mode;
+        pending.builder = builder;
+        chatDelivery.markReady(pending);
+        flushReadyChats(mc);
+    }
+
+    /** Validate the callback's session/profile epoch before mutating recovery state. */
+    private boolean noteChatResultOnClient(Minecraft mc, PendingChat expected,
+                                           int requestSlot, boolean finalResult) {
+        if (mc == null || mc.gui == null) return false;
+        observeChatDeliveryContext(mc);
+        PendingChat live = chatDelivery.get(expected.id, expected.epoch);
+        if (live != expected) return false;
+        return live.acceptResult(requestSlot, finalResult);
+    }
+
+    /** Never hold chat hostage: after the bounded wait the original is shown and the
+     *  late translation replaces or updates the shown original when supported. */
     private void flushStaleChats(Minecraft mc) {
         if (mc == null || mc.gui == null) return;
-        long now = System.currentTimeMillis();
-        pendingChatById.values().removeIf(p -> p.displayedMessage != null
-                && now - p.queuedAtMs > 5 * 60_000L);
-        while (!pendingChats.isEmpty()) {
-            PendingChat head = pendingChats.peekFirst();
-            if (head.ready) {
-                flushReadyChats(mc);
-                continue;
-            }
-            if (System.currentTimeMillis() - head.queuedAtMs < CHAT_MAX_WAIT_MS) break;
-            pendingChats.removeFirst();
-            head.flushedOriginal = true; // stays in pendingChatById for the late translation
+        long now = System.nanoTime();
+        for (PendingChat retired : chatDelivery.retireIf(p -> p.displayedMessage != null
+                && now - p.queuedAtNanos > DISPLAYED_CHAT_RETENTION_NANOS)) {
+            retireAnnouncement(retired);
+        }
+        while (true) {
+            flushReadyChats(mc);
+            if (chatDelivery.isQueueEmpty()) break;
+            PendingChat head = chatDelivery.peekFirstQueued();
+            if (System.nanoTime() - head.queuedAtNanos < CHAT_MAX_WAIT_NANOS) break;
+            chatDelivery.timeoutFirstQueued();
+            Component original = pendingOriginal(head);
             Component shown = head.mode == DisplayMode.BOTH
-                    ? FabricTextStyle.chatBlock(head.message, null) : head.message;
+                    ? FabricTextStyle.chatBlock(original, null) : original;
             Component decorated = decorate(head.params, shown);
             head.displayedMessage = decorated;
             mc.gui.getChat().addMessage(decorated);
+            if (!head.mayReceiveRecovery()) retirePending(head);
         }
     }
 
     private void flushReadyChats(Minecraft mc) {
-        while (!pendingChats.isEmpty() && pendingChats.peekFirst().ready) {
-            PendingChat pending = pendingChats.removeFirst();
+        for (PendingChat pending : chatDelivery.drainReady(config.deliverChatTranslationsInOrder)) {
             addPendingChat(mc, pending);
-            if (!config.aiChat) pendingChatById.remove(pending.id);
+            if (!pending.mayReceiveRecovery()) retirePending(pending);
         }
     }
 
@@ -1056,14 +1199,57 @@ public final class MctranslatorFabric implements ClientModInitializer {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
         mc.execute(() -> {
-            if (mc.gui == null) return;
-            while (!pendingChats.isEmpty()) {
-                PendingChat pending = pendingChats.removeFirst();
-                pendingChatById.remove(pending.id);
-                mc.gui.getChat().addMessage(decorate(pending.params, pending.message));
-            }
-            pendingChatById.clear();
+            applyChatTransition(mc, chatDelivery.forceOriginalOnly());
         });
+    }
+
+    private void observeChatDeliveryContext(Minecraft mc) {
+        if (config == null || service == null) return;
+        Object connection = mc == null ? null : mc.getConnection();
+        Object world = mc == null ? null : mc.level;
+        boolean originalOnly = config.chatMode == DisplayMode.ORIGINAL_ONLY
+                || service.isShowOriginalOnly();
+        applyChatTransition(mc, chatDelivery.observe(connection, world,
+                ChatRequestProfile.capture(config, service.targetLang()), originalOnly));
+    }
+
+    private void applyChatTransition(Minecraft mc,
+                                     ChatDeliverySession.Transition<PendingChat> transition) {
+        if (transition.kind() == ChatDeliverySession.TransitionKind.NONE) return;
+        if (transition.kind() == ChatDeliverySession.TransitionKind.FLUSH_ORIGINALS
+                && mc != null && mc.gui != null) {
+            for (PendingChat pending : transition.originals()) {
+                Component original = pendingOriginal(pending);
+                retireAnnouncement(pending);
+                mc.gui.getChat().addMessage(decorate(pending.params, original));
+            }
+        }
+        for (PendingChat pending : transition.retired()) {
+            if (!transition.originals().contains(pending)) retireAnnouncement(pending);
+        }
+        activeBlock = null;
+        insideServerFrame = false;
+        frameOpenedAtMs = 0L;
+    }
+
+    private Component pendingOriginal(PendingChat pending) {
+        PendingBlock block = pending.block;
+        if (block == null || block.lines.isEmpty()) return pending.message;
+        return FabricTextStyle.joinStyledLines(new ArrayList<>(block.lines));
+    }
+
+    private void retirePending(PendingChat pending) {
+        PendingChat retired = chatDelivery.retire(pending.id, pending.epoch);
+        if (retired != null) retireAnnouncement(retired);
+    }
+
+    private void retireAnnouncement(PendingChat pending) {
+        PendingBlock block = pending.block;
+        if (block == null) return;
+        block.releaseBudget();
+        block.closed = true;
+        block.retired = true;
+        if (activeBlock == block) activeBlock = null;
     }
 
     private void addPendingChat(Minecraft mc, PendingChat pending) {
@@ -1075,7 +1261,11 @@ public final class MctranslatorFabric implements ClientModInitializer {
 
     private static Component pendingChatDisplay(PendingChat pending, DisplayMode mode,
                                                 java.util.function.Supplier<Component> builder) {
-        Component translated = builder == null ? null : builder.get();
+        return pendingChatDisplay(pending, mode, builder == null ? null : builder.get());
+    }
+
+    private static Component pendingChatDisplay(PendingChat pending, DisplayMode mode,
+                                                Component translated) {
         if (mode == DisplayMode.TRANSLATION) return translated != null ? translated : pending.message;
         if (mode == DisplayMode.BOTH) return FabricTextStyle.chatBlock(pending.message, translated);
         return pending.message;
@@ -1089,7 +1279,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
                     ((ChatComponentAccess) (Object) chat).mctranslator$getAllMessages();
             for (int i = 0; i < messages.size(); i++) {
                 net.minecraft.client.GuiMessage old = messages.get(i);
-                if (old.content() != previous && !old.content().equals(previous)) continue;
+                if (old.content() != previous) continue;
                 messages.set(i, new net.minecraft.client.GuiMessage(old.addedTime(), replacement,
                         old.signature(), old.tag()));
                 chat.rescaleChat();
@@ -1312,6 +1502,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
             while (toggleKey.consumeClick()) flipShowOriginal();
         }
         syncGameLanguage(mc);
+        observeChatDeliveryContext(mc);
         refreshOnlineNames(mc);
         if (service != null) service.flushBatches();
         expireStaleBlock();
@@ -1382,46 +1573,91 @@ public final class MctranslatorFabric implements ClientModInitializer {
     }
 
     private void warmOpenContainerItems(Minecraft mc) {
-        if (mc == null || service == null) return;
-        if (service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-        if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) {
+        if (mc == null) return;
+        net.minecraft.client.gui.screens.Screen currentScreen = mc.screen;
+        clearStaleTooltipSnapshot(currentScreen);
+        if (service == null || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) {
+            lastContainerScreen = null;
+            warmedContainerNames.clear();
+            nextContainerWarmScanAtNanos = 0L;
+            return;
+        }
+        if (!(currentScreen instanceof AbstractContainerScreen<?> screen)) {
             if (lastContainerScreen != null) {
                 lastContainerScreen = null;
                 warmedContainerNames.clear();
+                nextContainerWarmScanAtNanos = 0L;
             }
             return;
         }
-        if (screen != lastContainerScreen) {
+        boolean screenChanged = screen != lastContainerScreen;
+        if (screenChanged) {
             lastContainerScreen = screen;
             warmedContainerNames.clear();
         }
+        long now = System.nanoTime();
+        if (!screenChanged && now < nextContainerWarmScanAtNanos) return;
+        nextContainerWarmScanAtNanos = now + ITEM_WARM_SCAN_INTERVAL_NANOS;
+
+        java.util.Set<String> currentNames = new java.util.HashSet<>();
         List<String> newNames = new ArrayList<>();
         for (Slot slot : screen.getMenu().slots) {
             if (slot == null || !slot.isActive() || !slot.hasItem()) continue;
             String name = slot.getItem().getHoverName().getString();
-            if (name != null && !name.isBlank()) {
+            if (name != null && !name.isBlank()
+                    && currentNames.add(name) && !warmedContainerNames.contains(name)) {
                 newNames.add(name);
             }
         }
+        warmedContainerNames.clear();
+        warmedContainerNames.addAll(currentNames);
         if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
+    }
+
+    private void clearStaleTooltipSnapshot(
+            net.minecraft.client.gui.screens.Screen currentScreen) {
+        if (lastTooltipScreen == null) return;
+        if (currentScreen == lastTooltipScreen
+                && System.currentTimeMillis() - lastTooltipAtMs <= 1_500L) return;
+        lastTooltipStack = null;
+        lastTooltipParagraphSources = null;
+        lastTooltipScreen = null;
+        lastTooltipAtMs = 0L;
     }
 
     private void warmVisibleHudItems(Minecraft mc) {
         if (mc == null || mc.player == null || service == null
-                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return;
-        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+                || service.tooltipMode() == DisplayMode.ORIGINAL_ONLY) {
+            warmedHudNames.clear();
+            nextHudWarmScanAtNanos = 0L;
+            return;
+        }
+        long now = System.nanoTime();
+        if (now < nextHudWarmScanAtNanos) return;
+        nextHudWarmScanAtNanos = now + ITEM_WARM_SCAN_INTERVAL_NANOS;
+
+        java.util.Set<String> currentNames = new java.util.LinkedHashSet<>();
+        List<String> newNames = new ArrayList<>();
         for (int slot = 0; slot < 9; slot++) {
             ItemStack stack = mc.player.getInventory().getItem(slot);
             if (stack == null || stack.isEmpty()) continue;
             String name = stack.getHoverName().getString();
-            if (name != null && !name.isBlank()) names.add(name);
+            if (name != null && !name.isBlank()
+                    && currentNames.add(name) && !warmedHudNames.contains(name)) {
+                newNames.add(name);
+            }
         }
         ItemStack offhand = mc.player.getOffhandItem();
         if (offhand != null && !offhand.isEmpty()) {
             String name = offhand.getHoverName().getString();
-            if (name != null && !name.isBlank()) names.add(name);
+            if (name != null && !name.isBlank()
+                    && currentNames.add(name) && !warmedHudNames.contains(name)) {
+                newNames.add(name);
+            }
         }
-        if (!names.isEmpty()) service.warmNamesBatch(List.copyOf(names));
+        warmedHudNames.clear();
+        warmedHudNames.addAll(currentNames);
+        if (!newNames.isEmpty()) service.warmNamesBatch(newNames);
     }
 
     private void retranslatePointedItem(net.minecraft.client.gui.screens.Screen screen) {

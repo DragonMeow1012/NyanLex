@@ -1,0 +1,129 @@
+allprojects { project ->
+    afterEvaluate {
+        if (!project.plugins.hasPlugin('java')) return
+
+        def harnessValue = System.getenv('MCTRANSLATOR_SOURCE_HARNESS')
+        def launcherValue = System.getenv('MCTRANSLATOR_SOURCE_LAUNCHER')
+        def mainValue = System.getenv('MCTRANSLATOR_SOURCE_MAIN')
+        def anchorsValue = System.getenv('MCTRANSLATOR_SOURCE_ANCHORS')
+        def outputValue = System.getenv('MCTRANSLATOR_SOURCE_OUTPUT')
+        def runtimeValue = System.getenv('MCTRANSLATOR_SOURCE_RUNTIME')
+        def javaValue = System.getenv('MCTRANSLATOR_SOURCE_JAVA')
+        def javacValue = System.getenv('MCTRANSLATOR_SOURCE_JAVAC')
+        def releaseValue = System.getenv('MCTRANSLATOR_SOURCE_JAVA_RELEASE')
+        if ([harnessValue, launcherValue, mainValue, anchorsValue, outputValue,
+             runtimeValue, javaValue, javacValue, releaseValue]
+                .any { it == null || it.trim().isEmpty() }) return
+
+        def harness = project.file(harnessValue).canonicalFile
+        def launcher = project.file(launcherValue).canonicalFile
+        def output = project.file(outputValue).canonicalFile
+        def runtime = project.file(runtimeValue).canonicalFile
+        def javaExecutable = project.file(javaValue).canonicalFile
+        def javacExecutable = project.file(javacValue).canonicalFile
+        int release = Integer.parseInt(releaseValue)
+        int gradleMajor = project.gradle.gradleVersion.tokenize('.')[0].toInteger()
+
+        def sourceRuntime = project.sourceSets.main.runtimeClasspath
+        def compileClasspath = sourceRuntime
+        def executionClasspath = project.files(output) + sourceRuntime
+        def classRoots = project.sourceSets.main.output.classesDirs.files.collect {
+            it.canonicalFile
+        }
+        def rootsArgument = classRoots.collect { it.absolutePath }
+                .join(File.pathSeparator)
+
+        def isSameOrWithin = { File candidate, File root ->
+            def candidatePath = candidate.canonicalFile.toPath()
+            def rootPath = root.canonicalFile.toPath()
+            candidatePath.equals(rootPath) || candidatePath.startsWith(rootPath)
+        }
+        def assertSourceClasspath = { collection, String description ->
+            if (!harness.isFile() || !launcher.isFile()) {
+                throw new GradleException("Source inline harness source is missing")
+            }
+            if (!javaExecutable.isFile() || !javacExecutable.isFile()) {
+                throw new GradleException("Exact source-phase Java runtime/compiler is missing")
+            }
+            if (classRoots.isEmpty() || classRoots.any { !it.isDirectory() }) {
+                throw new GradleException("Compiled main class outputs are missing: ${classRoots}")
+            }
+            classRoots.each { root ->
+                def occurrences = collection.files.count {
+                    it.canonicalFile == root
+                }
+                if (occurrences != 1) {
+                    throw new GradleException("${description} contains source class root "
+                            + "${root} ${occurrences} times; expected exactly once")
+                }
+            }
+            def ownLibs = project.file("${project.buildDir}/libs").canonicalFile
+            collection.files.each { candidate ->
+                if (candidate.name.endsWith('.jar')
+                        && isSameOrWithin(candidate.canonicalFile, ownLibs)) {
+                    throw new GradleException("${description} contains a built project JAR "
+                            + "during source-output verification: ${candidate}")
+                }
+            }
+            println "SOURCE_OUTPUT_CLASSPATH_OK phase=${description} roots=${rootsArgument}"
+        }
+
+        def compileTask = project.tasks.create(
+                name: 'sourceOutputInlineClasses', type: JavaCompile) {
+            dependsOn 'classes'
+            source project.files(harness, launcher)
+            classpath = compileClasspath
+            if (gradleMajor >= 9) {
+                destinationDirectory.set(output)
+            } else {
+                destinationDir = output
+            }
+            sourceCompatibility = release <= 8 ? '1.8' : release.toString()
+            targetCompatibility = release <= 8 ? '1.8' : release.toString()
+            options.encoding = 'UTF-8'
+            options.incremental = false
+            options.fork = true
+            options.forkOptions.executable = javacExecutable.absolutePath
+            if (gradleMajor >= 6) {
+                // A project's configureEach(JavaCompile) may have assigned
+                // options.release to this verification task before this block runs.
+                // JDK 8 javac has no --release flag, so explicitly clear that
+                // inherited value and rely on -source/-target for Java 8.
+                options.release.set(release > 8 ? release : (Integer) null)
+            }
+            doFirst {
+                if (release <= 8 && gradleMajor >= 6 && options.release.present) {
+                    throw new GradleException("Java 8 source inline compilation must not use --release")
+                }
+                assertSourceClasspath(classpath, 'compile')
+            }
+        }
+
+        project.tasks.create(
+                name: 'sourceOutputInline', type: JavaExec, dependsOn: [compileTask]) {
+            classpath = executionClasspath
+            if (gradleMajor >= 9) {
+                mainClass.set('SourceOutputHarnessLauncher')
+            } else {
+                main = 'SourceOutputHarnessLauncher'
+            }
+            executable = javaExecutable.absolutePath
+            workingDir = runtime
+            args rootsArgument, anchorsValue, mainValue, runtime.absolutePath
+            environment 'MCTRANSLATOR_CODEX_PATH',
+                    (System.getenv('MCTRANSLATOR_CODEX_PATH') ?: '')
+            environment 'MCTRANSLATOR_FAKE_LOG',
+                    (System.getenv('MCTRANSLATOR_FAKE_LOG') ?: '')
+            environment 'MCTRANSLATOR_FAKE_EARLY_TURN',
+                    (System.getenv('MCTRANSLATOR_FAKE_EARLY_TURN') ?: '')
+            environment 'MCTRANSLATOR_FAKE_COMPLETED_FIRST',
+                    (System.getenv('MCTRANSLATOR_FAKE_COMPLETED_FIRST') ?: '')
+            doFirst {
+                if (!runtime.isDirectory() && !runtime.mkdirs()) {
+                    throw new GradleException("Could not create source inline runtime: ${runtime}")
+                }
+                assertSourceClasspath(classpath, 'execute')
+            }
+        }
+    }
+}

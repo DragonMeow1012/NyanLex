@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Permanent language-partitioned disk cache.
@@ -19,31 +18,50 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class LanguageFileStore implements PersistentStore {
     private final Path directory;
     private final String prefix;
-    private final Map<String, FileStore> stores = new ConcurrentHashMap<>();
+    private final int maxEntries;
+    private final boolean allowLegacyMigration;
     private boolean legacyMigrationConsidered;
-    private volatile String language;
-    private volatile FileStore active;
+    private volatile ActivePartition active;
 
     public LanguageFileStore(Path directory, String prefix, String initialLanguage) {
+        this(directory, prefix, initialLanguage, FileStore.DEFAULT_MAX_ENTRIES);
+    }
+
+    public LanguageFileStore(Path directory, String prefix, String initialLanguage, int maxEntries) {
+        this(directory, prefix, initialLanguage, maxEntries, true);
+    }
+
+    LanguageFileStore(Path directory, String prefix, String initialLanguage, int maxEntries,
+            boolean allowLegacyMigration) {
         this.directory = directory;
         this.prefix = prefix;
+        this.maxEntries = maxEntries;
+        this.allowLegacyMigration = allowLegacyMigration;
         setLanguage(initialLanguage);
     }
 
     @Override
     public synchronized void setLanguage(String targetLanguage) {
         String next = languageTag(targetLanguage);
-        if (next.equals(language) && active != null) return;
-        language = next;
-        active = stores.computeIfAbsent(next, this::open);
+        ActivePartition current = active;
+        if (current != null && next.equals(current.language())) return;
+        // Retain only the active partition. Switching back reloads its journal
+        // from disk instead of pinning every language's full cache in memory.
+        active = new ActivePartition(next, open(next));
     }
 
     public String language() {
-        return language;
+        ActivePartition current = active;
+        return current == null ? languageTag(null) : current.language();
     }
 
     public Path activeFile() {
-        return directory.resolve(prefix + "-" + language + ".json");
+        return directory.resolve(prefix + "-" + language() + ".json");
+    }
+
+    /** Diagnostic used by regression tests for the bounded retention contract. */
+    public int retainedStoreCount() {
+        return active == null ? 0 : 1;
     }
 
     public static String languageTag(String language) {
@@ -55,7 +73,7 @@ public final class LanguageFileStore implements PersistentStore {
     }
 
     private FileStore current() {
-        return active;
+        return active.store();
     }
 
     private FileStore open(String tag) {
@@ -63,7 +81,7 @@ public final class LanguageFileStore implements PersistentStore {
         Path legacy = directory.resolve(prefix + ".json");
         // One-time, non-destructive migration: the old unpartitioned file belongs to
         // the language active during upgrade. Keep the original as a safety backup.
-        boolean initialLanguage = !legacyMigrationConsidered;
+        boolean initialLanguage = allowLegacyMigration && !legacyMigrationConsidered;
         legacyMigrationConsidered = true;
         if (initialLanguage && !Files.exists(target) && Files.isRegularFile(legacy)) {
             try {
@@ -73,7 +91,7 @@ public final class LanguageFileStore implements PersistentStore {
                 // A failed copy simply starts an empty target-language cache.
             }
         }
-        return new FileStore(target, false);
+        return new FileStore(target, false, maxEntries);
     }
 
     @Override public String get(String key) { return current().get(key); }
@@ -96,4 +114,7 @@ public final class LanguageFileStore implements PersistentStore {
 
     /** Clear only the currently selected language. Other language files are permanent. */
     @Override public void clear() { current().clear(); }
+
+    private record ActivePartition(String language, FileStore store) {
+    }
 }

@@ -2,7 +2,6 @@ package com.dragonmeow.mctranslator.forgelegacy;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
-import java.io.IOException;
 final class ForgeSettingsScreen extends GuiScreen implements ForgeButton.Handler{
     private final GuiScreen parent;
     ForgeSettingsScreen(GuiScreen p){
@@ -19,8 +18,9 @@ final class ForgeSettingsScreen extends GuiScreen implements ForgeButton.Handler
         addButton(new ForgeButton(6,x,126,310,20,I18n.format("screen.mctranslator.ai.title"),this));
         addButton(new ForgeButton(7,x,150,152,20,"Cooldown: "+(c.requestCooldownMs<=0?"OFF":c.requestCooldownMs+" ms"),this));
         addButton(new ForgeButton(8,x+158,150,152,20,"Batch: "+(c.batchWindowMs<=0?"OFF":c.batchWindowMs/1000F+" s"),this));
-        addButton(new ForgeButton(9,x,174,310,20,"Machine provider: "+LegacyConfig.normalizeMachineProvider(c.machineTranslationProvider),this));
-        addButton(new ForgeButton(10,x,198,310,20,"Debug + token HUD: "+(c.debugTranslationOverlay?"ON":"OFF"),this));
+        addButton(new ForgeButton(9,x,174,152,20,"Machine: "+LegacyConfig.normalizeMachineProvider(c.machineTranslationProvider),this));
+        addButton(new ForgeButton(10,x+158,174,152,20,"Debug HUD: "+(c.debugTranslationOverlay?"ON":"OFF"),this));
+        addButton(new ForgeButton(11,x,198,310,20,chatDeliveryLabel(c),this));
         addButton(new ForgeButton(0,width/2-100,height-22,200,20,I18n.format("gui.done") ,this));
     }
     @Override public void onForgeButton(GuiButton b){
@@ -61,6 +61,7 @@ final class ForgeSettingsScreen extends GuiScreen implements ForgeButton.Handler
             c.debugTranslationOverlay=!c.debugTranslationOverlay;
             if(!c.debugTranslationOverlay)MinecraftTranslatorForge.TRANSLATOR.clearDebug();
         }
+        if(b.id==11)c.deliverChatTranslationsInOrder=!c.deliverChatTranslationsInOrder;
         buttons.clear();
         children.clear();
         initGui();
@@ -68,6 +69,12 @@ final class ForgeSettingsScreen extends GuiScreen implements ForgeButton.Handler
     private static int next(int c,int[] a){
         for(int v:a)if(v>c)return v;
         return 0;
+    }
+    private static String chatDeliveryLabel(LegacyConfig c){
+        String mode=I18n.format(c.deliverChatTranslationsInOrder
+                ?"config.mctranslator.chat_delivery.ordered"
+                :"config.mctranslator.chat_delivery.ready_first");
+        return I18n.format("config.mctranslator.chat_delivery",mode);
     }
     @Override public void render(int x,int y,float d){
         drawDefaultBackground();

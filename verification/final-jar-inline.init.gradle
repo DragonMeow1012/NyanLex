@@ -1,0 +1,366 @@
+allprojects { project ->
+    afterEvaluate {
+        if (!project.plugins.hasPlugin('java')) return
+
+        def finalJarValue = System.getenv('MCTRANSLATOR_FINAL_JAR')
+        def harnessValue = System.getenv('MCTRANSLATOR_FINAL_HARNESS')
+        def launcherValue = System.getenv('MCTRANSLATOR_FINAL_LAUNCHER')
+        def mainValue = System.getenv('MCTRANSLATOR_FINAL_MAIN')
+        def anchorsValue = System.getenv('MCTRANSLATOR_FINAL_ANCHORS')
+        def outputValue = System.getenv('MCTRANSLATOR_FINAL_OUTPUT')
+        def runtimeValue = System.getenv('MCTRANSLATOR_FINAL_RUNTIME')
+        def javaValue = System.getenv('MCTRANSLATOR_FINAL_JAVA')
+        def javacValue = System.getenv('MCTRANSLATOR_FINAL_JAVAC')
+        def releaseValue = System.getenv('MCTRANSLATOR_FINAL_JAVA_RELEASE')
+        def namespaceValue = System.getenv(
+                'MCTRANSLATOR_FINAL_DEPENDENCY_NAMESPACE')
+        if ([finalJarValue, harnessValue, launcherValue, mainValue, anchorsValue,
+             outputValue, runtimeValue, javaValue, javacValue, releaseValue,
+             namespaceValue]
+                .any { it == null || it.trim().isEmpty() }) return
+
+        def finalJar = project.file(finalJarValue).canonicalFile
+        def harness = project.file(harnessValue).canonicalFile
+        def launcher = project.file(launcherValue).canonicalFile
+        def output = project.file(outputValue).canonicalFile
+        def runtime = project.file(runtimeValue).canonicalFile
+        def javaExecutable = project.file(javaValue).canonicalFile
+        def javacExecutable = project.file(javacValue).canonicalFile
+        int release = Integer.parseInt(releaseValue)
+        int gradleMajor = project.gradle.gradleVersion.tokenize('.')[0].toInteger()
+
+        def dependencyNamespace = namespaceValue.trim()
+        if (!(dependencyNamespace in [
+                'project-runtime', 'forge-srg',
+                'fabric-intermediary', 'fabric-official'])) {
+            throw new GradleException(
+                    "Unknown final-JAR dependency namespace: ${dependencyNamespace}")
+        }
+        def runtimeDependencies = project.configurations.runtimeClasspath
+        def productionClasspathTask = null
+        def loomExtension = project.extensions.findByName('loom')
+        def minecraftConfiguration = project.configurations.findByName('minecraft')
+        def forgeDependencies = minecraftConfiguration == null ? [] :
+                minecraftConfiguration.dependencies.findAll {
+                    it.group == 'net.minecraftforge' && it.name == 'forge' &&
+                            it.version != null
+                }
+        def resolveForgeArtifacts = {
+            if (dependencyNamespace != 'forge-srg') return null
+            // ForgeGradle rewrites the raw dependency to its _mapped_ version
+            // in a later afterEvaluate callback, so inspect it lazily when the
+            // verification task resolves its classpath.
+            def mappedVersions = minecraftConfiguration.dependencies.findAll {
+                it.group == 'net.minecraftforge' && it.name == 'forge' &&
+                        it.version != null && it.version.contains('_mapped_')
+            }.collect { it.version }.unique()
+            if (mappedVersions.size() != 1) {
+                throw new GradleException(
+                        "Forge SRG verification needs one mapped Forge version: " +
+                                mappedVersions)
+            }
+            def mappedVersion = mappedVersions[0]
+            def baseVersion = mappedVersion.replaceFirst(/_mapped_.+$/, '')
+            if (baseVersion == mappedVersion || baseVersion.trim().isEmpty()) {
+                throw new GradleException(
+                        "Could not derive the Forge SRG version from ${mappedVersion}")
+            }
+            def mappedName = "forge-${mappedVersion}.jar"
+            def mappedJars = minecraftConfiguration.files.findAll {
+                it.name == mappedName
+            }.collect { it.canonicalFile }.unique()
+            if (mappedJars.size() != 1) {
+                throw new GradleException(
+                        "Expected one mapped Forge runtime JAR ${mappedName}: " +
+                                mappedJars)
+            }
+            def mappedJar = mappedJars[0]
+            if (mappedJar.parentFile.name != mappedVersion ||
+                    mappedJar.parentFile.parentFile.name != 'forge') {
+                throw new GradleException(
+                        "Unexpected ForgeGradle mapped repository layout: ${mappedJar}")
+            }
+            def srgJar = new File(new File(
+                    mappedJar.parentFile.parentFile, baseVersion),
+                    "forge-${baseVersion}-srg.jar").canonicalFile
+            if (!srgJar.isFile()) {
+                throw new GradleException(
+                        "ForgeGradle SRG runtime is missing: ${srgJar}")
+            }
+            return [mapped: mappedJar, srg: srgJar]
+        }
+        def resolveNamedMinecraftJars = {
+            if (dependencyNamespace != 'fabric-intermediary') return []
+            return loomExtension.namedMinecraftProvider.minecraftJarPaths
+                    .collect { project.file(it).canonicalFile }
+        }
+        def resolveIntermediaryMinecraftJars = {
+            if (dependencyNamespace != 'fabric-intermediary') return []
+            return loomExtension.intermediaryMinecraftProvider.minecraftJarPaths
+                    .collect { project.file(it).canonicalFile }
+        }
+        if (dependencyNamespace.startsWith('fabric-') && loomExtension == null) {
+            throw new GradleException(
+                    "Fabric dependency namespace requires a Loom project")
+        }
+        if (dependencyNamespace == 'project-runtime' && loomExtension != null) {
+            throw new GradleException(
+                    "A Loom project must declare its exact production namespace")
+        }
+        if (dependencyNamespace == 'forge-srg' &&
+                (loomExtension != null || forgeDependencies.isEmpty())) {
+            throw new GradleException(
+                    "Forge SRG verification requires a mapped ForgeGradle project")
+        }
+        if (dependencyNamespace == 'project-runtime' &&
+                !forgeDependencies.isEmpty()) {
+            throw new GradleException(
+                    "A reobfuscated Forge JAR must use the Forge SRG runtime")
+        }
+        def mappingsConfiguration = project.configurations.findByName('mappings')
+        def hasExplicitMappings = mappingsConfiguration != null &&
+                !mappingsConfiguration.dependencies.isEmpty()
+        if (dependencyNamespace == 'fabric-intermediary' && !hasExplicitMappings) {
+            throw new GradleException(
+                    "Fabric intermediary verification requires a mapped Loom project")
+        }
+        if (dependencyNamespace == 'fabric-official' && hasExplicitMappings) {
+            throw new GradleException(
+                    "Fabric official verification requires unobfuscated Loom")
+        }
+        if (dependencyNamespace == 'fabric-intermediary') {
+            // remapJar produces a production JAR in Fabric's intermediary
+            // namespace, while runtimeClasspath contains Loom's named game JAR.
+            // Loom's remap classpath contains the production Minecraft JAR and
+            // original (intermediary) mod dependencies.  A partial substitution
+            // into runtimeClasspath would leave named-remapped Fabric API JARs
+            // mixed with intermediary Minecraft, so use the complete Loom set.
+            // Keep it lazy because Loom finishes provider setup after evaluation.
+            productionClasspathTask = project.tasks.named('generateRemapClasspath')
+            runtimeDependencies = project.files({
+                productionClasspathTask.get().remapClasspath.files
+            })
+        } else if (dependencyNamespace == 'forge-srg') {
+            // ForgeGradle compiles against an MCP-named JAR, then reobfJar emits
+            // SRG member references for the production transformer.  Preserve
+            // every ordinary runtime dependency, but replace that one mapped
+            // Minecraft/Forge JAR with ForgeGradle's generated SRG JAR.
+            runtimeDependencies = project.files({
+                def forgeArtifacts = resolveForgeArtifacts()
+                def originalFiles = project.configurations.runtimeClasspath.files
+                        .collect { it.canonicalFile }
+                if (originalFiles.count {
+                        it == forgeArtifacts.mapped
+                    } != 1) {
+                    throw new GradleException(
+                            "Mapped Forge runtime was not present exactly once: " +
+                                    forgeArtifacts.mapped)
+                }
+                if (originalFiles.contains(forgeArtifacts.srg)) {
+                    throw new GradleException(
+                            "Project runtime unexpectedly mixes mapped and SRG Forge JARs")
+                }
+                originalFiles.findAll {
+                    it != forgeArtifacts.mapped
+                } + forgeArtifacts.srg
+            })
+        }
+
+        def dependencyClasspath = project.files(finalJar) + runtimeDependencies
+        def executionClasspath = project.files(output, finalJar) + runtimeDependencies
+
+        def isSameOrWithin = { File candidate, File root ->
+            def candidatePath = candidate.canonicalFile.toPath()
+            def rootPath = root.canonicalFile.toPath()
+            candidatePath.equals(rootPath) || candidatePath.startsWith(rootPath)
+        }
+        def assertFinalJarClasspath = { collection, String description ->
+            if (!finalJar.isFile() || !finalJar.name.endsWith('.jar')) {
+                throw new GradleException("Final JAR is missing or not a JAR: ${finalJar}")
+            }
+            if (!harness.isFile() || !launcher.isFile()) {
+                throw new GradleException("Inline harness source is missing")
+            }
+            if (!javaExecutable.isFile() || !javacExecutable.isFile()) {
+                throw new GradleException("Exact Java runtime/compiler is missing")
+            }
+            def namedMinecraftJars = resolveNamedMinecraftJars()
+            def intermediaryMinecraftJars = resolveIntermediaryMinecraftJars()
+            def forgeArtifacts = resolveForgeArtifacts()
+            def forgeSrgJars = forgeArtifacts == null ? [] : [forgeArtifacts.srg]
+            def productionFiles = runtimeDependencies.files.collect {
+                it.canonicalFile
+            }
+            if (productionFiles.isEmpty() || productionFiles.any { !it.isFile() }) {
+                throw new GradleException(
+                        "Final-JAR production runtime is missing: ${productionFiles}")
+            }
+            productionFiles.each { dependency ->
+                def occurrences = collection.files.count {
+                    it.canonicalFile == dependency
+                }
+                if (occurrences != 1) {
+                    throw new GradleException("${description} contains production "
+                            + "dependency ${occurrences} times; expected once: ${dependency}")
+                }
+            }
+            if (dependencyNamespace == 'fabric-intermediary') {
+                def loomProductionFiles = productionClasspathTask.get()
+                        .remapClasspath.files.collect { it.canonicalFile } as Set
+                if ((productionFiles as Set) != loomProductionFiles) {
+                    throw new GradleException(
+                            "Mapped Fabric runtime is not Loom's exact remap classpath")
+                }
+                if (intermediaryMinecraftJars.isEmpty()
+                        || intermediaryMinecraftJars.any { !it.isFile() }) {
+                    throw new GradleException(
+                            "Fabric intermediary Minecraft runtime is missing: "
+                                    + intermediaryMinecraftJars)
+                }
+                intermediaryMinecraftJars.each { intermediaryJar ->
+                    def occurrences = collection.files.count {
+                        it.canonicalFile == intermediaryJar
+                    }
+                    if (occurrences != 1) {
+                        throw new GradleException("${description} contains intermediary "
+                                + "Minecraft JAR ${occurrences} times; expected once: "
+                                + intermediaryJar)
+                    }
+                }
+                namedMinecraftJars.each { namedJar ->
+                    if (collection.files.any { it.canonicalFile == namedJar }) {
+                        throw new GradleException("${description} mixes Loom's named "
+                                + "Minecraft JAR with the final intermediary JAR: ${namedJar}")
+                    }
+                }
+            }
+            if (dependencyNamespace == 'forge-srg') {
+                if (collection.files.any {
+                        it.canonicalFile == forgeArtifacts.mapped
+                    }) {
+                    throw new GradleException("${description} mixes ForgeGradle's " +
+                            "MCP mapped JAR with the final SRG JAR: " +
+                            forgeArtifacts.mapped)
+                }
+                def srgOccurrences = collection.files.count {
+                    it.canonicalFile == forgeArtifacts.srg
+                }
+                if (srgOccurrences != 1) {
+                    throw new GradleException("${description} contains the Forge SRG " +
+                            "JAR ${srgOccurrences} times; expected once: " +
+                            forgeArtifacts.srg)
+                }
+                def archive = new java.util.zip.ZipFile(forgeArtifacts.srg)
+                try {
+                    def entry = archive.getEntry(
+                            'net/minecraft/util/text/ITextComponent.class')
+                    if (entry == null) {
+                        throw new GradleException(
+                                "Forge SRG JAR lacks ITextComponent: ${forgeArtifacts.srg}")
+                    }
+                    def stream = archive.getInputStream(entry)
+                    def bytes
+                    try {
+                        bytes = stream.bytes
+                    } finally {
+                        stream.close()
+                    }
+                    def constants = new String(bytes, 'ISO-8859-1')
+                    if (!constants.contains('func_150259_f') ||
+                            constants.contains('createCopy')) {
+                        throw new GradleException(
+                                "Forge production dependency is not in SRG namespace: " +
+                                        forgeArtifacts.srg)
+                    }
+                } finally {
+                    archive.close()
+                }
+            }
+
+            def prohibited = []
+            project.sourceSets.main.output.files.each { prohibited.add(it.canonicalFile) }
+            prohibited.add(project.file("${project.buildDir}/classes").canonicalFile)
+            prohibited.add(project.file("${project.buildDir}/resources").canonicalFile)
+            prohibited.add(project.file("${project.buildDir}/generated").canonicalFile)
+
+            collection.files.each { candidate ->
+                def canonical = candidate.canonicalFile
+                prohibited.each { sourceOutput ->
+                    if (isSameOrWithin(canonical, sourceOutput)) {
+                        throw new GradleException("${description} contains project source "
+                                + "output instead of the final JAR: ${canonical}")
+                    }
+                }
+            }
+            def jarOccurrences = collection.files.count {
+                it.canonicalFile == finalJar
+            }
+            if (jarOccurrences != 1) {
+                throw new GradleException("${description} contains the final JAR "
+                        + "${jarOccurrences} times; expected exactly once")
+            }
+            println "FINAL_JAR_CLASSPATH_OK phase=${description} jar=${finalJar}"
+            println("FINAL_JAR_DEPENDENCY_NAMESPACE_OK phase=${description} "
+                    + "namespace=${dependencyNamespace} productionFiles="
+                    + productionFiles.size() + " minecraft="
+                    + (intermediaryMinecraftJars.size() + forgeSrgJars.size()))
+        }
+
+        def compileTask = project.tasks.create(
+                name: 'finalJarInlineClasses', type: JavaCompile) {
+            source project.files(harness, launcher)
+            classpath = dependencyClasspath
+            if (gradleMajor >= 9) {
+                destinationDirectory.set(output)
+            } else {
+                destinationDir = output
+            }
+            sourceCompatibility = release <= 8 ? '1.8' : release.toString()
+            targetCompatibility = release <= 8 ? '1.8' : release.toString()
+            options.encoding = 'UTF-8'
+            options.incremental = false
+            options.fork = true
+            options.forkOptions.executable = javacExecutable.absolutePath
+            if (gradleMajor >= 6) {
+                // A project's configureEach(JavaCompile) may have assigned
+                // options.release to this verification task before this block runs.
+                // JDK 8 javac has no --release flag, so explicitly clear that
+                // inherited value and rely on -source/-target for Java 8.
+                options.release.set(release > 8 ? release : (Integer) null)
+            }
+            doFirst {
+                if (release <= 8 && gradleMajor >= 6 && options.release.present) {
+                    throw new GradleException("Java 8 final-JAR inline compilation must not use --release")
+                }
+                assertFinalJarClasspath(classpath, 'compile')
+            }
+        }
+
+        project.tasks.create(
+                name: 'finalJarInline', type: JavaExec, dependsOn: [compileTask]) {
+            classpath = executionClasspath
+            if (gradleMajor >= 9) {
+                mainClass.set('FinalJarHarnessLauncher')
+            } else {
+                main = 'FinalJarHarnessLauncher'
+            }
+            executable = javaExecutable.absolutePath
+            workingDir = runtime
+            args finalJar.absolutePath, anchorsValue, mainValue, runtime.absolutePath
+            environment 'MCTRANSLATOR_CODEX_PATH',
+                    (System.getenv('MCTRANSLATOR_CODEX_PATH') ?: '')
+            environment 'MCTRANSLATOR_FAKE_LOG',
+                    (System.getenv('MCTRANSLATOR_FAKE_LOG') ?: '')
+            environment 'MCTRANSLATOR_FAKE_EARLY_TURN',
+                    (System.getenv('MCTRANSLATOR_FAKE_EARLY_TURN') ?: '')
+            environment 'MCTRANSLATOR_FAKE_COMPLETED_FIRST',
+                    (System.getenv('MCTRANSLATOR_FAKE_COMPLETED_FIRST') ?: '')
+            doFirst {
+                if (!runtime.isDirectory() && !runtime.mkdirs()) {
+                    throw new GradleException("Could not create inline runtime: ${runtime}")
+                }
+                assertFinalJarClasspath(classpath, 'execute')
+            }
+        }
+    }
+}

@@ -11,6 +11,7 @@ import com.dragonmeow.mctranslator.translate.PriorityTranslationExecutor;
 import com.dragonmeow.mctranslator.translate.Translator;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +19,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -55,6 +58,13 @@ public final class TranslationCache {
     /** Explicit/chat requests may keep healing during this session. Passive item
      * warmups are deliberately excluded and retry only while re-observed. */
     private static final int MAX_SESSION_RETRY_DEMANDS = 512;
+    /** Session-only failure bookkeeping is lazy and bounded; the durable store remains
+     * authoritative for older entries and is rehydrated only when text is observed. */
+    private static final int MAX_TRACKED_RETRY_STATES = MAX_SESSION_RETRY_DEMANDS;
+    private static final int MAX_TRACKED_KEY_REVISIONS = 4_096;
+    private static final int MAX_CONTEXT_LINES = 64;
+    private static final int MAX_CONTEXT_CHARS = 8_192;
+    private static final int MAX_CALLBACKS_PER_KEY = 64;
     /** Durable negative-cache value. It is never shown; reads return the original key. */
     private static final String KEEP_ORIGINAL = "\u0000MT_KEEP_ORIGINAL2";
     /** Pre-1.0.3 sentinel. Old builds also learned it from genuine provider failures
@@ -128,6 +138,9 @@ public final class TranslationCache {
 
     private final Object queueLock = new Object();
     private final LinkedHashMap<String, Queued> queue = new LinkedHashMap<>();
+    /** One permit per queued entry or active flight. Queue-to-flight transfer keeps
+     * the same permit, so a slow backend cannot free and refill the collector forever. */
+    private final AtomicInteger pendingEntries = new AtomicInteger();
     private boolean queueGrew;
     private int settleTicks;
     private long queueStartedAtMs = -1L;
@@ -174,7 +187,14 @@ public final class TranslationCache {
         this.memory = Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                return size() > capacity;
+                boolean evict = size() > capacity;
+                if (evict) {
+                    // Session provisional state describes the resident value. If the bit
+                    // outlives that value, every historical fallback key stays retained
+                    // and a later final disk row can be misclassified.
+                    provisional.remove(eldest.getKey());
+                }
+                return evict;
             }
         });
     }
@@ -242,8 +262,6 @@ public final class TranslationCache {
         for (Map.Entry<String, String> entry : failures.entries().entrySet()) {
             if (FAILURE_ECHO.equals(entry.getValue())) {
                 keepsOriginal(entry.getKey()); // migrate the old terminal row into this engine cache
-            } else {
-                restoreTemporaryFailure(entry.getKey());
             }
         }
     }
@@ -318,6 +336,11 @@ public final class TranslationCache {
                              boolean includeLowerFallback) {
         if (source == null) return null;
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
+        // A marker-free line whose entire semantic payload is deterministic (for
+        // example x100 or §ax100) is already its own final value. Returning the
+        // source here makes both lookup and callback paths settle immediately without
+        // allowing the literal x to create a backend request.
+        if (!snapshot.hasTranslatableContent() && !hasCsMarkers(snapshot.key())) return source;
         TranslationCache sibling = isFallbackEnabled() ? fallback : null;
 
         // Style is not meaning, but CS markers carry the alignment needed to apply
@@ -640,17 +663,32 @@ public final class TranslationCache {
         String key = snapshot.key();
         Flight ours = new Flight();
         ours.add(callback);
+        Flight active = flights.get(key);
+        if (active != null) {
+            if (active.add(callback) != Flight.AddResult.ADDED) {
+                deliver(callback, lookupSnapshot(snapshot, this));
+            }
+            return;
+        }
+        if (!tryAcquirePendingEntry()) {
+            deliver(callback, null);
+            return;
+        }
         Flight existing = flights.putIfAbsent(key, ours);
         if (existing != null) {
-            if (!existing.add(callback)) deliver(callback, lookupSnapshot(snapshot, this));
+            releasePendingEntry();
+            if (existing.add(callback) != Flight.AddResult.ADDED) {
+                deliver(callback, lookupSnapshot(snapshot, this));
+            }
             return;
         }
 
         long expectedGeneration = generation.get();
         long expectedRevision = keyRevision(key);
-        executeHigh(() -> {
+        Runnable task = () -> {
             long debugId = 0L;
             try {
+                if (!current(key, expectedGeneration, expectedRevision)) return;
                 if (lookupSnapshot(snapshot, this) == null) {
                     debugId = debugSubmitted(List.of(key));
                     TranslationResult result = translator.translate(key, targetLang);
@@ -675,7 +713,8 @@ public final class TranslationCache {
             } finally {
                 finishFlight(key, ours);
             }
-        });
+        };
+        if (!executeHigh(task)) finishFlight(key, ours);
     }
 
     // -------------------------------------------------------------------------
@@ -745,10 +784,18 @@ public final class TranslationCache {
         while (true) {
             Flight flight = flights.get(snapshot.key());
             if (flight == null) break;
-            if (flight.add(cb)) return;
+            Flight.AddResult added = flight.add(cb);
+            if (added == Flight.AddResult.ADDED) return;
             cached = exactStyle ? getCachedExactStyle(source) : lookupSnapshot(snapshot, this);
             if (cached != null) {
                 deliver(cb, cached);
+                return;
+            }
+            if (added == Flight.AddResult.FULL) {
+                // This caller owns no pending-entry permit. Reject it with the same
+                // callback/null contract as a saturated collector instead of spinning
+                // forever on an otherwise healthy, still-open flight.
+                deliver(cb, null);
                 return;
             }
         }
@@ -785,8 +832,10 @@ public final class TranslationCache {
             java.util.Iterator<String> oldest = finalWaiters.keySet().iterator();
             if (oldest.hasNext()) finalWaiters.remove(oldest.next());
         }
-        finalWaiters.computeIfAbsent(family,
-                ignored -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(waiter);
+        java.util.concurrent.CopyOnWriteArrayList<FinalWaiter> familyWaiters =
+                finalWaiters.computeIfAbsent(family,
+                        ignored -> new java.util.concurrent.CopyOnWriteArrayList<>());
+        if (familyWaiters.size() < MAX_CALLBACKS_PER_KEY) familyWaiters.add(waiter);
 
         // Close the registration race with a final store on another worker.
         ready = getCachedFinal(source, exactStyle);
@@ -850,10 +899,11 @@ public final class TranslationCache {
     private void enqueue(TranslationTemplate.Snapshot snapshot, Callback callback,
                          List<String> surfaceContext, boolean highPriority) {
         boolean rejected = false;
+        boolean callbackRejected = false;
         synchronized (queueLock) {
             Queued item = queue.get(snapshot.key());
             if (item == null) {
-                if (queue.size() >= MAX_QUEUED_ENTRIES) {
+                if (!tryAcquirePendingEntry()) {
                     rejected = true;
                 } else {
                     item = new Queued(snapshot);
@@ -866,10 +916,16 @@ public final class TranslationCache {
             if (!rejected) {
                 item.highPriority |= highPriority;
                 item.mergeContext(surfaceContext);
-                if (callback != null) item.callbacks.add(callback);
+                if (callback != null) {
+                    if (item.callbacks.size() < MAX_CALLBACKS_PER_KEY) {
+                        item.callbacks.add(callback);
+                    } else {
+                        callbackRejected = true;
+                    }
+                }
             }
         }
-        if (rejected) deliver(callback, null);
+        if (rejected || callbackRejected) deliver(callback, null);
     }
 
     private static int batchChars(String text) {
@@ -965,20 +1021,25 @@ public final class TranslationCache {
             String cached = lookupSnapshot(item.snapshot, this);
             if (cached != null) {
                 item.callbacks.forEach(cb -> deliver(cb, cachedFor(cb)));
+                releasePendingEntry();
                 continue;
             }
             if (!item.snapshot.hasTranslatableContent() || backingOff(key)) {
                 item.callbacks.forEach(cb -> deliver(cb, null));
+                releasePendingEntry();
                 continue;
             }
 
             Flight ours = new Flight();
-            item.callbacks.forEach(ours::add);
+            for (Callback callback : item.callbacks) ours.add(callback);
             Flight existing = flights.putIfAbsent(key, ours);
             if (existing != null) {
                 for (Callback cb : item.callbacks) {
-                    if (!existing.add(cb)) deliver(cb, cachedFor(cb));
+                    if (existing.add(cb) != Flight.AddResult.ADDED) {
+                        deliver(cb, cachedFor(cb));
+                    }
                 }
+                releasePendingEntry();
             } else {
                 owned.put(key, ours);
                 send.add(item.snapshot);
@@ -991,13 +1052,16 @@ public final class TranslationCache {
         List<String> requestContext = commonContext(drained);
         Runnable task = () -> {
             try {
-                translateBatch(send, requestContext, expectedGeneration, expectedRevisions);
+                if (generation.get() == expectedGeneration) {
+                    translateBatch(send, requestContext, expectedGeneration, expectedRevisions);
+                }
             } finally {
                 owned.forEach(this::finishFlight);
             }
         };
-        if (drained.stream().anyMatch(item -> item.highPriority)) executeHigh(task);
-        else executeLow(task);
+        boolean accepted = drained.stream().anyMatch(item -> item.highPriority)
+                ? executeHigh(task) : executeLow(task);
+        if (!accepted) owned.forEach(this::finishFlight);
     }
 
     // -------------------------------------------------------------------------
@@ -1031,6 +1095,7 @@ public final class TranslationCache {
     private void warmBatchAsync(List<String> sources, List<String> surfaceLines,
                                 boolean highPriority) {
         List<TranslationTemplate.Snapshot> candidates = prepareMissing(sources, true);
+        if (candidates.isEmpty()) return;
         List<String> requestContext = context(surfaceLines);
         if (batchWindowMs != null) {
             for (TranslationTemplate.Snapshot snapshot : candidates) {
@@ -1041,10 +1106,13 @@ public final class TranslationCache {
         List<TranslationTemplate.Snapshot> send = new ArrayList<>();
         Map<String, Flight> owned = new LinkedHashMap<>();
         for (TranslationTemplate.Snapshot snapshot : candidates) {
+            if (!tryAcquirePendingEntry()) break;
             Flight ours = new Flight();
             if (flights.putIfAbsent(snapshot.key(), ours) == null) {
                 owned.put(snapshot.key(), ours);
                 send.add(snapshot);
+            } else {
+                releasePendingEntry();
             }
         }
         if (send.isEmpty()) return;
@@ -1053,17 +1121,24 @@ public final class TranslationCache {
         Map<String, Long> expectedRevisions = revisions(send);
         Runnable task = () -> {
             try {
-                translateBatch(send, requestContext, expectedGeneration, expectedRevisions);
+                if (generation.get() == expectedGeneration) {
+                    translateBatch(send, requestContext, expectedGeneration, expectedRevisions);
+                }
             } finally {
                 owned.forEach(this::finishFlight);
             }
         };
-        if (highPriority) executeHigh(task);
-        else executeLow(task);
+        boolean accepted = highPriority ? executeHigh(task) : executeLow(task);
+        if (!accepted) owned.forEach(this::finishFlight);
     }
 
     public void translateAllAsync(List<String> sources, Consumer<List<String>> onResults) {
-        executeLow(() -> {
+        long expectedGeneration = generation.get();
+        Runnable task = () -> {
+            if (generation.get() != expectedGeneration) {
+                deliverResults(onResults, sources);
+                return;
+            }
             warmBatch(sources);
             List<String> results = new ArrayList<>(sources.size());
             for (String source : sources) {
@@ -1071,7 +1146,42 @@ public final class TranslationCache {
                 results.add(hit == null ? source : hit);
             }
             onResults.accept(results);
-        });
+        };
+        if (!executeLow(task)) deliverResults(onResults, sources);
+    }
+
+    private static void deliverResults(Consumer<List<String>> callback, List<String> sources) {
+        if (callback == null) return;
+        try {
+            callback.accept(sources == null ? List.of() : new ArrayList<>(sources));
+        } catch (RuntimeException ignored) {
+            // A caller callback cannot break render-thread request coordination.
+        }
+    }
+
+    private void rememberRetrySnapshot(String stateKey,
+                                       TranslationTemplate.Snapshot snapshot) {
+        if (stateKey == null || snapshot == null
+                || !sessionRetryDemanded(stateKey, snapshot)) return;
+        retrySnapshots.put(stateKey, snapshot);
+        trimMap(retrySnapshots, MAX_TRACKED_RETRY_STATES);
+    }
+
+    private void trimRetryStateMaps() {
+        trimMap(failedUntil, MAX_TRACKED_RETRY_STATES);
+        trimMap(contentFailures, MAX_TRACKED_RETRY_STATES);
+        trimMap(contentRetryAttempts, MAX_TRACKED_RETRY_STATES);
+        trimMap(provisionalRetryAttempts, MAX_TRACKED_RETRY_STATES);
+        trimMap(retrySnapshots, MAX_TRACKED_RETRY_STATES);
+    }
+
+    private static <K, V> void trimMap(Map<K, V> values, int limit) {
+        int excess = values.size() - limit;
+        if (excess <= 0) return;
+        for (Map.Entry<K, V> entry : values.entrySet()) {
+            if (excess <= 0) break;
+            if (values.remove(entry.getKey(), entry.getValue())) excess--;
+        }
     }
 
     private List<TranslationTemplate.Snapshot> prepareMissing(List<String> sources,
@@ -1096,7 +1206,9 @@ public final class TranslationCache {
 
         List<TranslationTemplate.Snapshot> todo = new ArrayList<>();
         for (TranslationTemplate.Snapshot snapshot : snapshots) {
-            if (lookupSnapshot(snapshot, this) == null
+            if (current(snapshot.key(), expectedGeneration,
+                    expectedRevisions.getOrDefault(snapshot.key(), 0L))
+                    && lookupSnapshot(snapshot, this) == null
                     && snapshot.hasTranslatableContent()
                     && !backingOff(snapshot.key())) {
                 todo.add(snapshot);
@@ -1186,20 +1298,52 @@ public final class TranslationCache {
 
     private List<String> context(List<String> lines) {
         if (lines == null || lines.isEmpty()) return null;
-        List<String> keys = new ArrayList<>(lines.size());
+        List<String> keys = new ArrayList<>(Math.min(lines.size(), MAX_CONTEXT_LINES));
+        int chars = 0;
         for (String line : lines) {
             if (line == null) continue;
+            if (keys.size() >= MAX_CONTEXT_LINES) break;
+            // Context is advisory. Never template or retain one pathological tooltip row;
+            // the actual request text still follows its own atomic batch rules.
+            if (line.length() > MAX_CONTEXT_CHARS) continue;
             String key = templates.prepare(line).key();
+            if (key.length() > MAX_CONTEXT_CHARS) continue;
+            int nextChars = chars + key.length();
+            if (nextChars > MAX_CONTEXT_CHARS) break;
             // Empty tooltip rows are semantic section boundaries (stats / enchants /
             // ability / market).  Keep them so OpenAiTranslator can emit [SECTION]
             // instead of flattening the whole item into an undifferentiated word list.
             keys.add(key);
+            chars = nextChars;
+            if (chars >= MAX_CONTEXT_CHARS) break;
         }
         return keys.isEmpty() ? null : keys;
     }
 
     private long keyRevision(String key) {
         return keyRevisions.getOrDefault(key, 0L);
+    }
+
+    private void recordKeyRevision(String key) {
+        if (key == null) return;
+        long revision = revisionSequence.incrementAndGet();
+        keyRevisions.put(key, revision);
+        if (keyRevisions.size() <= MAX_TRACKED_KEY_REVISIONS) return;
+
+        for (Map.Entry<String, Long> entry : keyRevisions.entrySet()) {
+            if (keyRevisions.size() <= MAX_TRACKED_KEY_REVISIONS) break;
+            String candidate = entry.getKey();
+            if (!flights.containsKey(candidate) && !queued(candidate)) {
+                keyRevisions.remove(candidate, entry.getValue());
+            }
+        }
+        if (keyRevisions.size() > MAX_TRACKED_KEY_REVISIONS) {
+            // All remaining revisions protect live work. A generation bump safely
+            // invalidates it as one group rather than retaining an unbounded table.
+            generation.incrementAndGet();
+            keyRevisions.clear();
+            keyRevisions.put(key, revision);
+        }
     }
 
     private Map<String, Long> revisions(List<TranslationTemplate.Snapshot> snapshots) {
@@ -1454,13 +1598,16 @@ public final class TranslationCache {
             return;
         }
         provisionalRetryAttempts.merge(semanticKey, 1, Integer::sum);
+        trimMap(provisionalRetryAttempts, MAX_TRACKED_RETRY_STATES);
 
         TranslationTemplate.Snapshot snapshot = templates.prepare(semanticKey);
         long expectedGeneration = generation.get();
         long expectedRevision = keyRevision(snapshot.key());
-        executeHigh(() -> {
-            long debugId = debugSubmitted(List.of(snapshot.key()));
+        Runnable task = () -> {
+            long debugId = 0L;
             try {
+                if (!current(snapshot.key(), expectedGeneration, expectedRevision)) return;
+                debugId = debugSubmitted(List.of(snapshot.key()));
                 TranslationResult result = translator.translate(snapshot.key(), targetLang);
                 boolean usableResult = usable(snapshot.key(), result.translatedText());
                 boolean isCurrent = current(snapshot.key(), expectedGeneration, expectedRevision);
@@ -1492,7 +1639,8 @@ public final class TranslationCache {
             } finally {
                 provisionalRetrying.remove(semanticKey);
             }
-        });
+        };
+        if (!executeHigh(task)) provisionalRetrying.remove(semanticKey);
     }
 
     private void fail(String key) {
@@ -1507,25 +1655,41 @@ public final class TranslationCache {
         // malformed-content failure breaks that streak.
         contentFailures.remove(stateKey);
         int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
+        trimRetryStateMaps();
         failTemporarily(stateKey, attempt);
-        retrySnapshots.put(stateKey, snapshot);
+        rememberRetrySnapshot(stateKey, snapshot);
         requestFallback(snapshot);
     }
 
-    private void executeHigh(Runnable task) {
-        if (executor instanceof PriorityTranslationExecutor priority) priority.executeHigh(task);
-        else executor.execute(task);
+    private boolean executeHigh(Runnable task) {
+        if (executor instanceof PriorityTranslationExecutor priority) {
+            return priority.tryExecuteHigh(task);
+        }
+        try {
+            executor.execute(task);
+            return true;
+        } catch (RejectedExecutionException ignored) {
+            return false;
+        }
     }
 
-    private void executeLow(Runnable task) {
-        if (executor instanceof PriorityTranslationExecutor priority) priority.executeLow(task);
-        else executor.execute(task);
+    private boolean executeLow(Runnable task) {
+        if (executor instanceof PriorityTranslationExecutor priority) {
+            return priority.tryExecuteLow(task);
+        }
+        try {
+            executor.execute(task);
+            return true;
+        } catch (RejectedExecutionException ignored) {
+            return false;
+        }
     }
 
     private void failStyleProjection(TranslationTemplate.Snapshot snapshot) {
         String stateKey = styleFailureKey(snapshot);
         contentFailures.remove(stateKey);
         int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
+        trimRetryStateMaps();
         failTemporarilyState(stateKey, attempt);
         // Presentation-only debt is deliberately passive. Automatically retaining this
         // snapshot made flushBatch() rebuy the same CS topology forever when a provider
@@ -1563,6 +1727,7 @@ public final class TranslationCache {
         delay = Math.min(delay, Math.max(failureBackoffMs, MAX_FAILURE_BACKOFF_MS));
         long until = delay >= Long.MAX_VALUE - now ? Long.MAX_VALUE : now + delay;
         failedUntil.put(stateKey, until);
+        trimMap(failedUntil, MAX_TRACKED_RETRY_STATES);
         PersistentStore failures = failureStore;
         if (failures != null) {
             failures.put(stateKey, FAILURE_TEMPORARY_PREFIX + attempt + ":" + until);
@@ -1594,8 +1759,9 @@ public final class TranslationCache {
         String stateKey = contentFailureKey(snapshot);
         contentFailures.remove(stateKey);
         int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
+        trimRetryStateMaps();
         failTemporarily(stateKey, attempt);
-        retrySnapshots.put(stateKey, snapshot);
+        rememberRetrySnapshot(stateKey, snapshot);
         requestFallback(snapshot);
         return false;
     }
@@ -1642,9 +1808,11 @@ public final class TranslationCache {
         }
         PersistentStore failures = failureStore;
         if (failures != null) {
-            failures.remove(snapshot.key());
-            failures.remove(failureKey);
-            if (styleFailure != null) failures.remove(styleFailure);
+            Set<String> cleared = new java.util.LinkedHashSet<>();
+            cleared.add(snapshot.key());
+            cleared.add(failureKey);
+            if (styleFailure != null) cleared.add(styleFailure);
+            failures.removeBatch(cleared);
         }
     }
 
@@ -1663,17 +1831,21 @@ public final class TranslationCache {
         // when its identity still needs two more confirmations.
         contentRetryAttempts.remove(failureKey);
         int count = contentFailures.merge(failureKey, 1, Integer::sum);
+        trimRetryStateMaps();
         if (count < CONTENT_FAILURE_LIMIT) {
             long delay = failureBackoffMs <= 0L ? 0L : Math.min(
                     MAX_FAILURE_BACKOFF_MS, failureBackoffMs * (1L << Math.min(6, count - 1)));
             long now = clock.getAsLong();
             long until = delay >= Long.MAX_VALUE - now ? Long.MAX_VALUE : now + delay;
-            if (delay > 0L) failedUntil.put(failureKey, until);
+            if (delay > 0L) {
+                failedUntil.put(failureKey, until);
+                trimMap(failedUntil, MAX_TRACKED_RETRY_STATES);
+            }
             PersistentStore failures = failureStore;
             if (failures != null) {
                 failures.put(failureKey, FAILURE_IDENTITY_PREFIX + count + ":" + until);
             }
-            retrySnapshots.put(failureKey, snapshot);
+            rememberRetrySnapshot(failureKey, snapshot);
             requestFallback(snapshot);
             return false;
         }
@@ -1736,8 +1908,9 @@ public final class TranslationCache {
                 provisionalRetryAttempts.putIfAbsent(key, attempt);
             }
             failedUntil.putIfAbsent(key, until);
+            trimRetryStateMaps();
             if (!key.startsWith(STYLE_FAILURE_PREFIX)) {
-                retrySnapshots.putIfAbsent(key, templates.prepare(key));
+                rememberRetrySnapshot(key, templates.prepare(key));
             }
             return until;
         } catch (RuntimeException damaged) {
@@ -1796,9 +1969,16 @@ public final class TranslationCache {
      * process. Presentation-only CS debts are passive: their semantic fallback is
      * already displayable, so only another observation/manual retry may rebuy them. */
     private void enqueueDueRetries() {
-        for (Map.Entry<String, TranslationTemplate.Snapshot> entry : retrySnapshots.entrySet()) {
-            String stateKey = entry.getKey();
-            TranslationTemplate.Snapshot snapshot = entry.getValue();
+        // retrySnapshots is bounded and populated only by session-demanded failures.
+        // Walking it makes the common no-failure tick O(1), rather than copying and
+        // scanning every successful key observed earlier in the session.
+        for (Map.Entry<String, TranslationTemplate.Snapshot> retry
+                : retrySnapshots.entrySet()) {
+            String stateKey = retry.getKey();
+            TranslationTemplate.Snapshot snapshot = retry.getValue();
+            // Demand is LRU-bounded independently. A dormant snapshot remains available
+            // for a later observation but must not heal after its surface disappeared.
+            if (!sessionRetryDemanded(stateKey, snapshot)) continue;
             if (stateKey.startsWith(STYLE_FAILURE_PREFIX)) {
                 // Defensive cleanup for a snapshot created before style debts became
                 // passive; retain its ledger/backoff row for the next real observation.
@@ -1815,7 +1995,6 @@ public final class TranslationCache {
                 discardRetryState(stateKey, snapshot);
                 continue;
             }
-            if (!sessionRetryDemanded(stateKey, snapshot)) continue;
             if (pendingPrimary) {
                 retryProvisional(stateKey);
                 continue;
@@ -1892,8 +2071,21 @@ public final class TranslationCache {
     // Flight completion and callbacks
     // -------------------------------------------------------------------------
 
+    private boolean tryAcquirePendingEntry() {
+        while (true) {
+            int current = pendingEntries.get();
+            if (current >= MAX_QUEUED_ENTRIES) return false;
+            if (pendingEntries.compareAndSet(current, current + 1)) return true;
+        }
+    }
+
+    private void releasePendingEntry() {
+        pendingEntries.updateAndGet(current -> current > 0 ? current - 1 : 0);
+    }
+
     private void finishFlight(String key, Flight flight) {
-        flights.remove(key, flight);
+        if (!flights.remove(key, flight)) return;
+        releasePendingEntry();
         for (Callback callback : flight.close()) {
             deliver(callback, cachedFor(callback));
         }
@@ -1925,13 +2117,18 @@ public final class TranslationCache {
     }
 
     private static final class Flight {
+        private enum AddResult { ADDED, CLOSED, FULL }
+
         private final List<Callback> callbacks = new ArrayList<>();
         private boolean closed;
 
-        synchronized boolean add(Callback callback) {
-            if (closed) return false;
-            if (callback != null && callback.consumer != null) callbacks.add(callback);
-            return true;
+        synchronized AddResult add(Callback callback) {
+            if (closed) return AddResult.CLOSED;
+            if (callback != null && callback.consumer != null) {
+                if (callbacks.size() >= MAX_CALLBACKS_PER_KEY) return AddResult.FULL;
+                callbacks.add(callback);
+            }
+            return AddResult.ADDED;
         }
 
         synchronized List<Callback> close() {
@@ -2137,6 +2334,16 @@ public final class TranslationCache {
         // the user explicitly retranslates; an AI cleanup must never delete valid GT data.
     }
 
+    private void removeStoredBatch(Collection<String> keys) {
+        if (keys == null || keys.isEmpty()) return;
+        for (String key : keys) {
+            if (key == null) continue;
+            memory.remove(key);
+            provisional.remove(key);
+        }
+        if (store != null) store.removeBatch(keys);
+    }
+
     public void setTargetLang(String targetLang) {
         String next = targetLang == null || targetLang.isBlank() ? "zh-TW" : targetLang;
         if (next.equals(this.targetLang)) return;
@@ -2190,10 +2397,17 @@ public final class TranslationCache {
             sessionRetryDemand.clear();
         }
         List<Callback> cancelled = new ArrayList<>();
-        for (Flight flight : flights.values()) cancelled.addAll(flight.close());
-        flights.clear();
+        for (Map.Entry<String, Flight> entry : flights.entrySet()) {
+            if (flights.remove(entry.getKey(), entry.getValue())) {
+                releasePendingEntry();
+                cancelled.addAll(entry.getValue().close());
+            }
+        }
         synchronized (queueLock) {
-            for (Queued queued : queue.values()) cancelled.addAll(queued.callbacks);
+            for (Queued queued : queue.values()) {
+                releasePendingEntry();
+                cancelled.addAll(queued.callbacks);
+            }
             queue.clear();
             queueGrew = false;
             settleTicks = 0;
@@ -2229,7 +2443,7 @@ public final class TranslationCache {
         // Bump request revisions before detaching work. Any old HTTP response that
         // races this deletion is rejected even if it completes after the new request.
         for (String key : keys) {
-            if (key != null) keyRevisions.put(key, revisionSequence.incrementAndGet());
+            recordKeyRevision(key);
         }
 
         List<Callback> cancelled = new ArrayList<>();
@@ -2243,18 +2457,24 @@ public final class TranslationCache {
             // Manual retranslation is the designated unlock for every learned failure:
             // echo decisions, temporary marks and their in-session backoff all go.
             failedUntil.remove(key);
-            if (failures != null) failures.remove(key);
             Flight flight = flights.remove(key);
-            if (flight != null) cancelled.addAll(flight.close());
-            removeStored(key);
+            if (flight != null) {
+                releasePendingEntry();
+                cancelled.addAll(flight.close());
+            }
         }
+        if (failures != null) failures.removeBatch(keys);
+        removeStoredBatch(keys);
         synchronized (retryDemandLock) {
             sessionRetryDemand.removeAll(keys);
         }
         synchronized (queueLock) {
             for (String key : keys) {
                 Queued removed = queue.remove(key);
-                if (removed != null) cancelled.addAll(removed.callbacks);
+                if (removed != null) {
+                    releasePendingEntry();
+                    cancelled.addAll(removed.callbacks);
+                }
             }
             queueGrew = !queue.isEmpty();
             queuedChars = 0;
@@ -2296,9 +2516,7 @@ public final class TranslationCache {
     }
 
     public int pendingCount() {
-        synchronized (queueLock) {
-            return flights.size() + queue.size();
-        }
+        return pendingEntries.get();
     }
 
     public int size() {

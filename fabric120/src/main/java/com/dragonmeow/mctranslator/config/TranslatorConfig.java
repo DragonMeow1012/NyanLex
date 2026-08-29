@@ -23,12 +23,18 @@ public final class TranslatorConfig {
     public static final int PACING_DEFAULTS_VERSION = 1;
     public static final String DEFAULT_CODEX_MODEL = "gpt-5.6-terra";
     public static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
+    public static final int MAX_WORKER_THREADS = 8;
+    public static final int MAX_MEMORY_CACHE_ENTRIES = 50_000;
+    public static final int DEFAULT_PERSISTENT_CACHE_ENTRIES = 100_000;
+    public static final int MAX_PERSISTENT_CACHE_ENTRIES = 250_000;
     private static final int LEGACY_REQUEST_COOLDOWN_MS = 6000;
 
     // Per-surface display mode. Each surface can independently be 原文 (off) /
     // 原文＋翻譯 (both) / 只有翻譯 (translation only). Configured via the in-game
     // 翻譯設定 screen.
     public DisplayMode chatMode = DisplayMode.BOTH;              // 聊天：原文+翻譯 stacked (3-way)
+    /** Preserve received chat order; false displays each translation as soon as it is ready. */
+    public boolean deliverChatTranslationsInOrder = true;
     public DisplayMode tooltipMode = DisplayMode.TRANSLATION;    // 物品名稱／說明（提示與手持共用）(3-way)
     public DisplayMode scoreboardMode = DisplayMode.TRANSLATION; // 記分板 (on/off)
     public DisplayMode nameMode = DisplayMode.TRANSLATION;       // 名牌 / 全息 (on/off)
@@ -128,8 +134,11 @@ public final class TranslatorConfig {
      */
     public int failureBackoffMs = 10000;
 
-    /** Maximum hot entries in memory. Disk entries are permanent and unbounded. */
+    /** Maximum hot entries in memory. */
     public int cacheMaxSize = 5000;
+
+    /** Maximum live entries retained in each persistent language/provider partition. */
+    public int persistentCacheMaxEntries = DEFAULT_PERSISTENT_CACHE_ENTRIES;
 
     // ---- 特效字/動畫字防護 (ChurnGuard) ----
     // 記分板倒數、閃爍裝飾字每次微變都是新請求 key；同一「簽名」（去掉數字/符號後的字母骨架）
@@ -210,10 +219,19 @@ public final class TranslatorConfig {
         if (batchWindowMs > 60_000) batchWindowMs = 60_000;
         if (failureBackoffMs < 0) failureBackoffMs = 10000;
         if (cacheMaxSize <= 0) cacheMaxSize = 5000;
+        else if (cacheMaxSize > MAX_MEMORY_CACHE_ENTRIES) {
+            cacheMaxSize = MAX_MEMORY_CACHE_ENTRIES;
+        }
+        if (persistentCacheMaxEntries <= 0) {
+            persistentCacheMaxEntries = DEFAULT_PERSISTENT_CACHE_ENTRIES;
+        } else if (persistentCacheMaxEntries > MAX_PERSISTENT_CACHE_ENTRIES) {
+            persistentCacheMaxEntries = MAX_PERSISTENT_CACHE_ENTRIES;
+        }
         if (churnVariantThreshold < 2) churnVariantThreshold = 4;
         if (churnWindowSeconds <= 0) churnWindowSeconds = 60;
         if (churnCooldownSeconds <= 0) churnCooldownSeconds = 300;
         if (workerThreads <= 0) workerThreads = 2;
+        else if (workerThreads > MAX_WORKER_THREADS) workerThreads = MAX_WORKER_THREADS;
         return this;
     }
 

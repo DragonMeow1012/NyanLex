@@ -27,6 +27,7 @@ class TranslatorConfigTest {
         assertEquals(MachineTranslationProvider.GOOGLE.id(), cfg.machineTranslationProvider);
         assertEquals("gemini-3.1-flash-lite", cfg.aiModel);
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
+        assertTrue(cfg.deliverChatTranslationsInOrder);
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
         assertFalse(cfg.debugTranslationOverlay);
         assertTrue(cfg.churnGuard, "特效字防護預設開啟");
@@ -111,6 +112,33 @@ class TranslatorConfigTest {
     }
 
     @Test
+    void workerThreadsHasASafeUpperBound() {
+        TranslatorConfig invalid = TranslatorConfig.fromReader(
+                new StringReader("{ \"workerThreads\": 0 }"));
+        assertEquals(2, invalid.workerThreads);
+
+        TranslatorConfig excessive = TranslatorConfig.fromReader(
+                new StringReader("{ \"workerThreads\": 1000000 }"));
+        assertEquals(TranslatorConfig.MAX_WORKER_THREADS, excessive.workerThreads);
+    }
+
+    @Test
+    void persistentCacheCapDefaultsAndNormalizesToOneHundredThousand() {
+        assertEquals(TranslatorConfig.DEFAULT_PERSISTENT_CACHE_ENTRIES,
+                new TranslatorConfig().persistentCacheMaxEntries);
+
+        TranslatorConfig invalid = TranslatorConfig.fromReader(
+                new StringReader("{ \"persistentCacheMaxEntries\": 0 }"));
+        assertEquals(TranslatorConfig.DEFAULT_PERSISTENT_CACHE_ENTRIES,
+                invalid.persistentCacheMaxEntries);
+
+        TranslatorConfig excessive = TranslatorConfig.fromReader(
+                new StringReader("{ \"persistentCacheMaxEntries\": 10000000 }"));
+        assertEquals(TranslatorConfig.MAX_PERSISTENT_CACHE_ENTRIES,
+                excessive.persistentCacheMaxEntries);
+    }
+
+    @Test
     void machineProviderNormalizesUnknownValuesToGoogle() {
         TranslatorConfig valid = TranslatorConfig.fromReader(
                 new StringReader("{ \"machineTranslationProvider\": \"deepl\" }"));
@@ -134,6 +162,7 @@ class TranslatorConfigTest {
     void roundTripsThroughJson() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.chatMode = DisplayMode.BOTH;
+        cfg.deliverChatTranslationsInOrder = false;
         cfg.scoreboardMode = DisplayMode.ORIGINAL_ONLY;
         cfg.targetLang = "zh-TW";
 
@@ -142,6 +171,7 @@ class TranslatorConfigTest {
 
         TranslatorConfig loaded = TranslatorConfig.fromReader(new StringReader(out.toString()));
         assertEquals(DisplayMode.BOTH, loaded.chatMode);
+        assertFalse(loaded.deliverChatTranslationsInOrder);
         assertEquals(DisplayMode.ORIGINAL_ONLY, loaded.scoreboardMode);
         assertEquals("zh-TW", loaded.targetLang);
     }
@@ -159,10 +189,19 @@ class TranslatorConfigTest {
     }
 
     @Test
+    void clampsMemoryCacheToSafeMaximum() {
+        TranslatorConfig cfg = TranslatorConfig.fromReader(
+                new StringReader("{ \"cacheMaxSize\": 2147483647 }"));
+
+        assertEquals(TranslatorConfig.MAX_MEMORY_CACHE_ENTRIES, cfg.cacheMaxSize);
+    }
+
+    @Test
     void emptyJsonYieldsDefaults() {
         TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader("{}"));
         assertEquals("zh-TW", cfg.targetLang);
         assertEquals(DisplayMode.BOTH, cfg.chatMode);
+        assertTrue(cfg.deliverChatTranslationsInOrder);
     }
 
     @Test

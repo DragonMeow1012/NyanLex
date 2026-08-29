@@ -8,6 +8,7 @@ final class LegacyConfig {
     boolean enabled = true;
     boolean followGameLanguage = true;
     boolean showOriginal = true;
+    boolean deliverChatTranslationsInOrder = true;
     String targetLang = "zh-TW";
     String sourceLang = "auto";
     /** Key-free machine source: google, youdao, deepl, or microsoft. */
@@ -54,5 +55,36 @@ final class LegacyConfig {
         if (loaded.batchWindowMs < 0) loaded.batchWindowMs = 5000;
         if (loaded.failureBackoffMs < 0) loaded.failureBackoffMs = 10000;
         return loaded;
+    }
+
+    /** Deep request snapshot: queued work never observes later UI mutations. */
+    LegacyConfig snapshotForRequest() {
+        LegacyConfig copy = new LegacyConfig();
+        copy.enabled = enabled;
+        copy.followGameLanguage = followGameLanguage;
+        copy.showOriginal = showOriginal;
+        copy.deliverChatTranslationsInOrder = deliverChatTranslationsInOrder;
+        copy.targetLang = targetLang;
+        copy.sourceLang = sourceLang;
+        copy.machineTranslationProvider = normalizeMachineProvider(machineTranslationProvider);
+        copy.aiEnabled = aiEnabled;
+        copy.disableGoogleFallbackForAi = disableGoogleFallbackForAi;
+        copy.aiBaseUrl = aiBaseUrl;
+        copy.aiModel = aiModel;
+        copy.aiUseCodex = aiUseCodex;
+        copy.codexModel = codexModel;
+        copy.codexReasoningEffort = codexReasoningEffort;
+        copy.aiApiKeys = aiApiKeys == null
+                ? new java.util.ArrayList<String>()
+                : new java.util.ArrayList<String>(aiApiKeys);
+        copy.aiKeysByEndpoint = aiKeysByEndpoint == null
+                ? new java.util.LinkedHashMap<String, String>()
+                : new java.util.LinkedHashMap<String, String>(aiKeysByEndpoint);
+        copy.pacingDefaultsVersion = pacingDefaultsVersion;
+        copy.requestCooldownMs = requestCooldownMs;
+        copy.batchWindowMs = batchWindowMs;
+        copy.failureBackoffMs = failureBackoffMs;
+        copy.debugTranslationOverlay = debugTranslationOverlay;
+        return copy;
     }
 }

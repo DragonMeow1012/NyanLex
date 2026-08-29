@@ -1,10 +1,17 @@
 import json
 import os
 import sys
+import time
 
 log_path = os.environ.get("MCTRANSLATOR_FAKE_LOG", "")
+early_turn = os.environ.get("MCTRANSLATOR_FAKE_EARLY_TURN", "") == "1"
+completed_first = os.environ.get("MCTRANSLATOR_FAKE_COMPLETED_FIRST", "") == "1"
 signed_in = True
 turn_number = 0
+
+if log_path:
+    with open(log_path, "w", encoding="utf-8"):
+        pass
 
 def log(kind, value):
     if not log_path:
@@ -18,7 +25,7 @@ def send(value):
 
 log("argv", sys.argv[1:])
 if "--version" in sys.argv[1:]:
-    print("codex-fake 1.0.3")
+    print("codex-fake 1.0.4")
     raise SystemExit(0)
 
 for raw in sys.stdin:
@@ -71,17 +78,30 @@ for raw in sys.stdin:
         result = {}
     else:
         result = {}
-    if request_id is not None:
+    defer_turn_response = early_turn and method == "turn/start" and request_id is not None
+    if request_id is not None and not defer_turn_response:
         send({"id": request_id, "result": result})
     if method == "account/login/start":
         send({"method": "account/login/completed", "params": {"loginId": "login-inline", "success": True}})
     elif method == "turn/start":
-        send({"method": "item/completed", "params": {
+        item_completed = {"method": "item/completed", "params": {
             "turnId": turn_id,
             "item": {"type": "agentMessage", "text": json.dumps({"translation": "帶有箱子的花船"}, ensure_ascii=False)}
-        }})
+        }}
+        turn_completed = {"method": "turn/completed", "params": {
+            "turn": {"id": turn_id, "status": "completed"}
+        }}
+        if completed_first:
+            send(turn_completed)
+            time.sleep(0.12)
+            send(item_completed)
+        else:
+            send(item_completed)
         send({"method": "thread/tokenUsage/updated", "params": {
             "threadId": "thread-inline",
             "tokenUsage": {"total": {"inputTokens": 10, "cachedInputTokens": 3, "outputTokens": 4, "reasoningOutputTokens": 1, "totalTokens": 14}}
         }})
-        send({"method": "turn/completed", "params": {"turn": {"id": turn_id, "status": "completed"}}})
+        if not completed_first:
+            send(turn_completed)
+        if defer_turn_response:
+            send({"id": request_id, "result": result})

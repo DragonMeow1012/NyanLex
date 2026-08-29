@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -31,6 +32,7 @@ class OpenAiTranslatorTest {
                 + content.replace("\n", "\\n") + "\"}}]}";
     }
 
+    /** Keep legacy fixture strings readable while exercising the real strict protocol. */
     private static String anchorNumberedFixture(String content) {
         java.util.regex.Pattern numbered = java.util.regex.Pattern.compile(
                 "^(\\d+)\\s*[.)、]\\s*(.*)$");
@@ -48,6 +50,9 @@ class OpenAiTranslatorTest {
             } else if (value != null) {
                 if (value.length() > 0) value.append(' ');
                 value.append(line);
+            } else {
+                if (out.length() > 0) out.append('\n');
+                out.append(line);
             }
         }
         if (current >= 0) appendAnchoredFixture(out, current, value.toString());
@@ -80,6 +85,7 @@ class OpenAiTranslatorTest {
         assertEquals(2, out.size());
         assertEquals("你好", out.get(0).translatedText());
         assertEquals("世界", out.get(1).translatedText());
+        // Both complete items share one request and each owns an immutable boundary pair.
         assertTrue(sentBodies.get(0).contains("86001 Hello 86002"), sentBodies.get(0));
         assertTrue(sentBodies.get(0).contains("86003 World 86004"), sentBodies.get(0));
         assertTrue(sentBodies.get(0).contains("gpt-4o-mini"));
@@ -153,9 +159,11 @@ class OpenAiTranslatorTest {
 
     @Test
     void missingAnchoredItemIsBisectedWithoutShiftingTheFollowingCacheKey() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
         HttpTransport fake = new HttpTransport() {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
             @Override public String post(String url, String body, Map<String, String> headers) {
+                calls.incrementAndGet();
                 if (body.contains("86003 b 86004")) return chatJson("1. 只有一行");
                 if (body.contains("86001 a 86002")) return chatJson("1. 只有一行");
                 return rawChatJson("missing anchors");
@@ -167,6 +175,8 @@ class OpenAiTranslatorTest {
         assertEquals(2, r.size());
         assertEquals("只有一行", r.get(0).translatedText());
         assertEquals("", r.get(1).translatedText(), "missing item padded to empty, not whole-batch failure");
+        assertEquals("anchor/order damaged", r.get(1).failureReason());
+        assertEquals(3, calls.get(), "damaged pair must bisect before accepting either sibling");
     }
 
     @Test
@@ -183,6 +193,29 @@ class OpenAiTranslatorTest {
         List<TranslationResult> r = t.translateBatch(List.of("a", "b"), "zh-TW");
         assertEquals("第一段 續行", r.get(0).translatedText());
         assertEquals("第二段", r.get(1).translatedText());
+    }
+
+    @Test
+    void hardNewlineStaysInsideOneAnchoredItemAndIsRestoredExactly() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<String> bodySeen = new AtomicReference<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) {
+                calls.incrementAndGet();
+                bodySeen.set(body);
+                return chatJson("1. 第一段⟦AI_LINE_0_0⟧第二段");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("k")));
+
+        List<TranslationResult> result = t.translateBatch(
+                List.of("First paragraph\nSecond paragraph"), "zh-TW");
+
+        assertEquals(1, calls.get());
+        assertTrue(bodySeen.get().contains("⟦AI_LINE_0_0⟧"));
+        assertEquals("第一段\n第二段", result.get(0).translatedText());
     }
 
     @Test
@@ -353,6 +386,7 @@ class OpenAiTranslatorTest {
                 () -> new AiSettings("https://x/v1", "m", List.of("k")));
         List<TranslationResult> r = t.translateBatch(List.of("Progress to Level ⟦MT0⟧:", "Hello"), "zh-TW");
         assertEquals("", r.get(0).translatedText(), "token-mismatched line must fail, not poison the cache");
+        assertEquals("format/token lost", r.get(0).failureReason());
         assertEquals("你好", r.get(1).translatedText());
     }
 
@@ -370,6 +404,7 @@ class OpenAiTranslatorTest {
                 () -> new AiSettings("https://x/v1", "m", List.of("k")));
         List<TranslationResult> r = t.translateBatch(List.of("Creation Date: Jun ⟦MT0⟧, ⟦MT1⟧ ⟦MT2⟧"), "zh-TW");
         assertEquals("", r.get(0).translatedText());
+        assertEquals("format/token lost", r.get(0).failureReason());
     }
 
     @Test
@@ -540,6 +575,56 @@ class OpenAiTranslatorTest {
     }
 
     @Test
+    void rateLimitedKeyIsQuarantinedWhileHealthyKeyContinues() throws Exception {
+        List<String> used = new ArrayList<>();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                String auth = headers.get("Authorization");
+                used.add(auth);
+                if ("Bearer limited".equals(auth)) throw new IOException("HTTP 429");
+                return chatJson("1. ok");
+            }
+        };
+        long[] now = {0L};
+        OpenAiTranslator t = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("limited", "healthy")), () -> now[0]);
+
+        t.translate("one", "zh-TW");   // limited -> healthy
+        t.translate("two", "zh-TW");   // healthy starts
+        t.translate("three", "zh-TW"); // limited would start, but remains quarantined
+
+        assertEquals(1, used.stream().filter("Bearer limited"::equals).count(),
+                "a 429 key must not be retried on every rotation during its cooldown");
+        assertEquals(3, used.stream().filter("Bearer healthy"::equals).count());
+    }
+
+    @Test
+    void changingProviderSettingsImmediatelyClearsOldAllKeyGate() throws Exception {
+        AtomicReference<AiSettings> settings = new AtomicReference<>(
+                new AiSettings("https://old/v1", "old", List.of("old-key")));
+        AtomicInteger calls = new AtomicInteger();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                calls.incrementAndGet();
+                if ("Bearer old-key".equals(headers.get("Authorization"))) throw new IOException("HTTP 429");
+                return chatJson("1. new-key-works");
+            }
+        };
+        long[] now = {0L};
+        OpenAiTranslator t = new OpenAiTranslator(fake, settings::get, () -> now[0]);
+
+        assertThrows(TranslationException.class, () -> t.translate("first", "zh-TW"));
+        assertTrue(t.isRateLimited());
+        settings.set(new AiSettings("https://new/v1", "new", List.of("new-key")));
+
+        assertEquals("new-key-works", t.translate("second", "zh-TW").translatedText(),
+                "a newly configured endpoint/key must not inherit the old provider's gate");
+        assertEquals(2, calls.get());
+    }
+
+    @Test
     void strictAnchorsExtractEveryCompleteItemInOrder() {
         List<String> r = OpenAiTranslator.extractAnchoredBatch(
                 " 86001A86002\n86003B86004\n86005C86006 ", 3,
@@ -548,10 +633,13 @@ class OpenAiTranslatorTest {
     }
 
     @Test
-    void strictAnchorsRejectCrossedAndExteriorText() {
+    void strictAnchorsRejectMissingCrossedRepeatedAndExteriorText() {
         int base = OpenAiTranslator.BATCH_ANCHOR_BASE;
+        assertNull(OpenAiTranslator.extractAnchoredBatch("86001A86002\n86005C86006", 3, base));
         assertNull(OpenAiTranslator.extractAnchoredBatch(
                 "86001A8600386002B86004", 2, base));
+        assertNull(OpenAiTranslator.extractAnchoredBatch(
+                "86001A8600286001duplicate86002", 1, base));
         assertNull(OpenAiTranslator.extractAnchoredBatch(
                 "commentary\n86001A86002", 1, base));
     }
@@ -585,9 +673,12 @@ class OpenAiTranslatorTest {
         assertTrue(body.contains("visible block"), "prompt must identify the shared visible block: " + body);
         assertTrue(body.contains("ONLY the strictly anchored units"),
                 "prompt must forbid translating the context block itself: " + body);
-        assertTrue(body.contains("86001 Recipes 86002"), body);
-        assertTrue(!body.contains("86003"), body);
-        assertTrue(!body.contains("86001 Iron Pickaxe"), body);
+        assertTrue(body.contains("86001 Recipes 86002"),
+                "the todo line must be bounded as one atomic item: " + body);
+        assertTrue(!body.contains("86003"),
+                "context lines must never receive item boundaries: " + body);
+        assertTrue(!body.contains("86001 Iron Pickaxe"),
+                "context text must stay outside the translatable pair: " + body);
     }
 
     @Test

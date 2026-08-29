@@ -68,7 +68,8 @@ public final class TranslationTemplate {
          * gaps are converted back to their stable tokens for durable plain-cache reuse.
          */
         public String retokenize(String restored) {
-            String withValues = retokenizeValues(restored, base.values());
+            String withValues = retokenizeValues(
+                    restored, base.values(), base.slotIndices());
             if (withValues == null) return null;
             return retokenizeLayout(withValues, layoutGaps);
         }
@@ -187,8 +188,10 @@ public final class TranslationTemplate {
     }
 
     /** Replaces de-styled dynamic values in order while ignoring literal section codes. */
-    private static String retokenizeValues(String restored, List<String> values) {
+    private static String retokenizeValues(String restored, List<String> values,
+                                           List<Integer> slotIndices) {
         if (restored == null || values == null || values.isEmpty()) return restored;
+        if (slotIndices == null || slotIndices.size() != values.size()) return null;
 
         StringBuilder projection = new StringBuilder(restored.length());
         int[] rawIndex = new int[restored.length()];
@@ -212,7 +215,7 @@ public final class TranslationTemplate {
             int rawStart = rawIndex[found];
             int rawEnd = rawIndex[found + value.length() - 1] + 1;
             if (rawEnd - rawStart != value.length()) return null;
-            String token = "\u27E6MT" + i + "\u27E7";
+            String token = "\u27E6MT" + slotIndices.get(i) + "\u27E7";
             result.replace(rawStart + shift, rawEnd + shift, token);
             shift += token.length() - value.length();
             searchFrom = found + value.length();

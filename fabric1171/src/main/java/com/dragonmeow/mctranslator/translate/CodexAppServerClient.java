@@ -15,15 +15,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Minimal client for the official {@code codex app-server} JSONL protocol.
@@ -37,7 +42,16 @@ public final class CodexAppServerClient implements AutoCloseable {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration TURN_TIMEOUT = Duration.ofMinutes(3);
-    private static final String CLIENT_VERSION = "1.0.3";
+    private static final Duration TURN_MESSAGE_GRACE = Duration.ofMillis(500);
+    private static final int MAX_PENDING_REQUESTS = 512;
+    private static final int MAX_LOGIN_RESULTS = 128;
+    private static final int MAX_ACTIVE_TURNS = 512;
+    private static final int MAX_JSONL_CHARS = 1_000_000;
+    private static final int MAX_TURN_MESSAGE_CHARS = 65_536;
+    private static final int MAX_STDERR_LINE_CHARS = 16_384;
+    private static final int MAX_IDENTIFIER_CHARS = 4_096;
+    private static final int MAX_ACTIVE_THREADS = 512;
+    private static final String CLIENT_VERSION = "1.0.4";
     private static final List<String> DISABLED_TRANSLATION_FEATURES = List.of(
             "apps",
             "auth_elicitation",
@@ -73,29 +87,63 @@ public final class CodexAppServerClient implements AutoCloseable {
 
     private final Path codexHome;
     private final Path workspace;
+    private final Duration turnMessageGrace;
     private final Object lifecycleLock = new Object();
     private final Object executableLock = new Object();
     private final Object writeLock = new Object();
+    private final Object pendingStateLock = new Object();
+    private final Object loginStateLock = new Object();
     private final AtomicLong nextId = new AtomicLong(1);
-    private final Map<String, CompletableFuture<JsonElement>> pending = new ConcurrentHashMap<>();
-    private final Map<String, CompletableFuture<Boolean>> loginResults = new ConcurrentHashMap<>();
-    private final Map<String, Boolean> completedLoginResults = new ConcurrentHashMap<>();
-    private final Map<String, CompletableFuture<JsonObject>> turnResults = new ConcurrentHashMap<>();
-    private final Map<String, String> turnMessages = new ConcurrentHashMap<>();
+    private final Map<String, PendingRequest> pending = new HashMap<>();
+    /** Guarded by pendingStateLock. Identifies the child whose initialize request is
+     * currently awaited while ensureStarted owns lifecycleLock. Reader failure for
+     * this generation must wake that request without trying to acquire lifecycleLock. */
+    private Process initializingProcess;
+    /** Guarded by pendingStateLock; first reader-side initialization failure wins. */
+    private IOException initializationFailure;
+    private final Map<String, CompletableFuture<Boolean>> loginResults = new LinkedHashMap<>();
+    private final LinkedHashMap<String, Boolean> completedLoginResults = new LinkedHashMap<>();
+    /** Bounds notifications that race ahead of the {@code turn/start} response. */
+    private static final int MAX_EARLY_TURNS = 512;
+    private static final int MAX_RECENTLY_CLOSED_TURNS = 512;
+    private static final int MAX_RECENTLY_CLOSED_THREADS = 512;
+    private final Object notificationStateLock = new Object();
+    /** Registered, still-active turns. Completion and message arrival are independent. */
+    private final Map<String, ActiveTurnState> turnResults = new HashMap<>();
+    private final LinkedHashMap<String, EarlyTurnState> earlyTurns = new LinkedHashMap<>();
+    private final LinkedHashSet<String> recentlyClosedTurns = new LinkedHashSet<>();
+    private final Set<String> activeThreads = new HashSet<>();
+    private final LinkedHashSet<String> recentlyClosedThreads = new LinkedHashSet<>();
 
     private volatile Process process;
     private volatile BufferedWriter writer;
     private volatile boolean ready;
     private volatile boolean closed;
     private volatile String lastError = "";
+    /** Reader diagnostics are replaced with CAS so a paused old-generation reader
+     * cannot overwrite a newer generation's already-published error. */
+    private final AtomicReference<ProcessError> processError = new AtomicReference<>();
+    private volatile Runnable processErrorHookForTests;
     private volatile String resolvedExecutable;
     private volatile AccountSnapshot cachedAccount = AccountSnapshot.signedOut();
     private volatile List<ModelOption> cachedModels = List.of();
     private volatile SessionTokenUsage tokenUsage;
 
     public CodexAppServerClient(Path codexHome, Path workspace) {
+        this(codexHome, workspace, TURN_MESSAGE_GRACE);
+    }
+
+    CodexAppServerClient(Path codexHome, Path workspace, Duration turnMessageGrace) {
         this.codexHome = Objects.requireNonNull(codexHome, "codexHome").toAbsolutePath().normalize();
         this.workspace = Objects.requireNonNull(workspace, "workspace").toAbsolutePath().normalize();
+        this.turnMessageGrace = Objects.requireNonNull(turnMessageGrace, "turnMessageGrace");
+        if (turnMessageGrace.isNegative() || turnMessageGrace.isZero()) {
+            throw new IllegalArgumentException("turnMessageGrace must be positive");
+        }
+    }
+
+    void setProcessErrorHookForTests(Runnable hook) {
+        processErrorHookForTests = hook;
     }
 
     public Path codexHome() {
@@ -109,13 +157,29 @@ public final class CodexAppServerClient implements AutoCloseable {
     public List<ModelOption> cachedModels() {
         return cachedModels;
     }
+
     public void setTokenUsage(SessionTokenUsage tokenUsage) {
-        this.tokenUsage = tokenUsage;
+        synchronized (notificationStateLock) {
+            SessionTokenUsage previous = this.tokenUsage;
+            if (previous != null && previous != tokenUsage) {
+                activeThreads.forEach(id -> previous.finishCumulative(tokenSource(id)));
+                recentlyClosedThreads.forEach(id -> previous.finishCumulative(tokenSource(id)));
+            }
+            this.tokenUsage = tokenUsage;
+        }
     }
 
-
     public String lastError() {
-        return lastError;
+        while (true) {
+            Process before = process;
+            ProcessError error = processError.get();
+            Process after = process;
+            if (before != after) continue;
+            if (error != null && after == error.generation() && !error.message().isBlank()) {
+                return error.message();
+            }
+            return lastError;
+        }
     }
 
     public boolean isSignedInCached() {
@@ -182,25 +246,20 @@ public final class CodexAppServerClient implements AutoCloseable {
         params.addProperty("type", "chatgpt");
         params.addProperty("useHostedLoginSuccessPage", true);
         params.addProperty("appBrand", "chatgpt");
-        JsonObject result = requestObject("account/login/start", params, REQUEST_TIMEOUT);
+        OwnedResponse response = requestObjectOwned("account/login/start", params, REQUEST_TIMEOUT);
+        JsonObject result = response.result();
         String loginId = string(result, "loginId");
         String authUrl = string(result, "authUrl");
-        if (loginId.isBlank() || authUrl.isBlank()) {
+        if (!validIdentifier(loginId) || authUrl.isBlank()) {
             throw new IOException("Codex login did not return a browser URL");
         }
-        loginResults.putIfAbsent(loginId, new CompletableFuture<>());
+        registerLogin(loginId, response.generation());
         return new LoginStart(loginId, authUrl);
     }
 
     public boolean awaitLogin(String loginId, Duration timeout) throws IOException {
-        Boolean already = completedLoginResults.remove(loginId);
-        if (already != null) {
-            loginResults.remove(loginId);
-            if (already) readAccount(true);
-            return already;
-        }
-        CompletableFuture<Boolean> future =
-                loginResults.computeIfAbsent(loginId, ignored -> new CompletableFuture<>());
+        if (!validIdentifier(loginId)) throw new IOException("Missing or invalid Codex login id");
+        CompletableFuture<Boolean> future = existingLogin(loginId);
         try {
             boolean success = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (success) readAccount(true);
@@ -213,8 +272,70 @@ public final class CodexAppServerClient implements AutoCloseable {
         } catch (TimeoutException e) {
             throw new IOException("Codex login timed out", e);
         } finally {
-            loginResults.remove(loginId);
-            completedLoginResults.remove(loginId);
+            removeLogin(loginId, future);
+        }
+    }
+
+    private CompletableFuture<Boolean> registerLogin(String loginId, Process expectedProcess)
+            throws IOException {
+        if (!validIdentifier(loginId)) throw new IOException("Invalid Codex login id");
+        synchronized (lifecycleLock) {
+            if (!ready || process != expectedProcess || !expectedProcess.isAlive()) {
+                throw new IOException(nonBlank(lastError(),
+                        "Codex app-server stopped before login registration"));
+            }
+            synchronized (loginStateLock) {
+                CompletableFuture<Boolean> existing = loginResults.get(loginId);
+                if (existing != null) return existing;
+                if (loginResults.size() >= MAX_LOGIN_RESULTS) {
+                    throw new IOException("Too many active Codex login attempts");
+                }
+                CompletableFuture<Boolean> created = new CompletableFuture<>();
+                Boolean completed = completedLoginResults.remove(loginId);
+                if (completed != null) created.complete(completed);
+                loginResults.put(loginId, created);
+                return created;
+            }
+        }
+    }
+
+    private CompletableFuture<Boolean> existingLogin(String loginId) throws IOException {
+        synchronized (lifecycleLock) {
+            if (!ready || process == null || !process.isAlive()) {
+                throw new IOException(nonBlank(lastError(),
+                        "Codex app-server stopped before login completion"));
+            }
+            synchronized (loginStateLock) {
+                CompletableFuture<Boolean> future = loginResults.get(loginId);
+                if (future == null) {
+                    throw new IOException("Unknown or expired Codex login id");
+                }
+                return future;
+            }
+        }
+    }
+
+    private void completeLogin(Process expectedProcess, String loginId, boolean success) {
+        if (!validIdentifier(loginId)) return;
+        CompletableFuture<Boolean> future;
+        synchronized (loginStateLock) {
+            // Reader notifications may precede the initialize response while
+            // ensureStarted owns lifecycleLock. Never block stdout progress here.
+            if (process != expectedProcess) return;
+            future = loginResults.get(loginId);
+            if (future == null) {
+                completedLoginResults.remove(loginId);
+                completedLoginResults.put(loginId, success);
+                trimOldest(completedLoginResults, MAX_LOGIN_RESULTS);
+                return;
+            }
+        }
+        future.complete(success);
+    }
+
+    private void removeLogin(String loginId, CompletableFuture<Boolean> expected) {
+        synchronized (loginStateLock) {
+            if (loginResults.get(loginId) == expected) loginResults.remove(loginId);
         }
     }
 
@@ -296,40 +417,50 @@ public final class CodexAppServerClient implements AutoCloseable {
                 "Act only as a text translation engine. Never call tools, inspect files, run commands, "
                         + "browse, edit, or ask questions. Return only the requested translation payload.");
 
-        JsonObject threadResult = requestObject("thread/start", threadParams, REQUEST_TIMEOUT);
+        OwnedResponse threadResponse = requestObjectOwned(
+                "thread/start", threadParams, REQUEST_TIMEOUT);
+        Process owningProcess = threadResponse.generation();
+        JsonObject threadResult = threadResponse.result();
         JsonObject thread = object(threadResult, "thread");
         String threadId = string(thread, "id");
-        if (threadId.isBlank()) throw new IOException("Codex did not create a translation thread");
-
-        JsonObject turnParams = new JsonObject();
-        turnParams.addProperty("threadId", threadId);
-        JsonArray input = new JsonArray();
-        JsonObject text = new JsonObject();
-        text.addProperty("type", "text");
-        text.addProperty("text", userPrompt == null ? "" : userPrompt);
-        input.add(text);
-        turnParams.add("input", input);
-        turnParams.addProperty("model", model);
-        if (effort != null && !effort.isBlank()) turnParams.addProperty("effort", effort);
-        turnParams.addProperty("summary", "none");
-        if (serviceTier != null) turnParams.addProperty("serviceTier", serviceTier);
-        turnParams.add("outputSchema", translationOutputSchema());
-
-        JsonObject turnResult = requestObject("turn/start", turnParams, REQUEST_TIMEOUT);
-        JsonObject turn = object(turnResult, "turn");
-        String turnId = string(turn, "id");
-        if (turnId.isBlank()) throw new IOException("Codex did not start a translation turn");
-
-        CompletableFuture<JsonObject> completed =
-                turnResults.computeIfAbsent(turnId, ignored -> new CompletableFuture<>());
+        if (!validIdentifier(threadId)) {
+            throw new IOException("Codex did not create a valid translation thread");
+        }
+        String turnId = "";
+        boolean threadOpened = false;
         try {
+            openThread(threadId, owningProcess);
+            threadOpened = true;
+            JsonObject turnParams = new JsonObject();
+            turnParams.addProperty("threadId", threadId);
+            JsonArray input = new JsonArray();
+            JsonObject text = new JsonObject();
+            text.addProperty("type", "text");
+            text.addProperty("text", userPrompt == null ? "" : userPrompt);
+            input.add(text);
+            turnParams.add("input", input);
+            turnParams.addProperty("model", model);
+            if (effort != null && !effort.isBlank()) turnParams.addProperty("effort", effort);
+            turnParams.addProperty("summary", "none");
+            if (serviceTier != null) turnParams.addProperty("serviceTier", serviceTier);
+            turnParams.add("outputSchema", translationOutputSchema());
+
+            JsonObject turnResult = requestObjectOnGeneration(
+                    owningProcess, "turn/start", turnParams, REQUEST_TIMEOUT);
+            JsonObject turn = object(turnResult, "turn");
+            turnId = string(turn, "id");
+            if (!validIdentifier(turnId)) {
+                throw new IOException("Codex did not start a valid translation turn");
+            }
+
+            CompletableFuture<JsonObject> completed = registerTurn(turnId, owningProcess);
             JsonObject completedParams = completed.get(TURN_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
             JsonObject completedTurn = object(completedParams, "turn");
             String status = string(completedTurn, "status");
             if (!status.isBlank() && !"completed".equalsIgnoreCase(status)) {
                 throw new IOException("Codex turn ended with status: " + status);
             }
-            String message = turnMessages.get(turnId);
+            String message = awaitTurnMessage(turnId);
             if (message == null || message.isBlank()) {
                 throw new IOException("Codex returned no translation");
             }
@@ -342,11 +473,15 @@ public final class CodexAppServerClient implements AutoCloseable {
         } catch (TimeoutException e) {
             throw new IOException("Codex translation timed out", e);
         } finally {
-            turnResults.remove(turnId);
-            turnMessages.remove(turnId);
-            JsonObject unsubscribe = new JsonObject();
-            unsubscribe.addProperty("threadId", threadId);
-            sendBestEffortRequest("thread/unsubscribe", unsubscribe);
+            closeTurn(turnId, owningProcess);
+            if (threadOpened) closeThread(threadId, owningProcess);
+            // thread/start created an ephemeral server resource even when our local
+            // active-thread cap rejected registration. Always release that owned id.
+            if (validIdentifier(threadId)) {
+                JsonObject unsubscribe = new JsonObject();
+                unsubscribe.addProperty("threadId", threadId);
+                sendBestEffortRequest(owningProcess, "thread/unsubscribe", unsubscribe);
+            }
         }
     }
 
@@ -387,12 +522,26 @@ public final class CodexAppServerClient implements AutoCloseable {
     }
 
     private JsonObject requestObject(String method, JsonObject params, Duration timeout) throws IOException {
-        ensureStarted();
-        JsonElement result = requestOnRunning(method, params, timeout);
-        return result != null && result.isJsonObject() ? result.getAsJsonObject() : new JsonObject();
+        return requestObjectOwned(method, params, timeout).result();
     }
 
-    private JsonElement requestOnRunning(String method, JsonObject params, Duration timeout)
+    private OwnedResponse requestObjectOwned(String method, JsonObject params, Duration timeout)
+            throws IOException {
+        Process generation = ensureStarted();
+        return new OwnedResponse(requestObjectOnGeneration(
+                generation, method, params, timeout), generation);
+    }
+
+    private JsonObject requestObjectOnGeneration(Process generation, String method,
+                                                 JsonObject params, Duration timeout)
+            throws IOException {
+        JsonElement result = requestOnRunning(generation, method, params, timeout);
+        return result != null && result.isJsonObject()
+                ? result.getAsJsonObject() : new JsonObject();
+    }
+
+    private JsonElement requestOnRunning(Process generation, String method,
+                                         JsonObject params, Duration timeout)
             throws IOException {
         String id = Long.toString(nextId.getAndIncrement());
         JsonObject request = new JsonObject();
@@ -400,9 +549,8 @@ public final class CodexAppServerClient implements AutoCloseable {
         request.addProperty("id", Long.parseLong(id));
         if (params != null) request.add("params", params);
         CompletableFuture<JsonElement> future = new CompletableFuture<>();
-        pending.put(id, future);
+        registerAndSendRequest(generation, id, future, request);
         try {
-            send(request);
             return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -412,28 +560,82 @@ public final class CodexAppServerClient implements AutoCloseable {
         } catch (TimeoutException e) {
             throw new IOException(method + " timed out", e);
         } finally {
-            pending.remove(id);
+            removePendingRequest(id, future);
         }
     }
 
-    private void sendBestEffortRequest(String method, JsonObject params) {
-        try {
+    /** Lifecycle -> pending-state -> write is the sole request lock order. Registration
+     * and the matching write are one atomic generation operation, so fail/restart can
+     * never clear the future and then let its request escape onto a newer writer. */
+    private void registerAndSendRequest(Process expectedProcess, String id,
+                                        CompletableFuture<JsonElement> future,
+                                        JsonObject request)
+            throws IOException {
+        // Local encoding/size validation must not tear down a healthy generation or
+        // fail unrelated in-flight requests.
+        String encoded = encodeMessage(request);
+        synchronized (lifecycleLock) {
+            BufferedWriter expectedWriter = writer;
+            if (process != expectedProcess || expectedWriter == null
+                    || !expectedProcess.isAlive()) {
+                throw new IOException(nonBlank(lastError(),
+                        "Codex app-server stopped before request registration"));
+            }
+            synchronized (pendingStateLock) {
+                if (pending.size() >= MAX_PENDING_REQUESTS) {
+                    throw new IOException("Too many pending Codex app-server requests");
+                }
+                if (pending.containsKey(id)) {
+                    throw new IOException("Duplicate Codex app-server request id");
+                }
+                pending.put(id, new PendingRequest(expectedProcess, future));
+            }
+            try {
+                writeEncoded(expectedProcess, expectedWriter, encoded);
+            } catch (IOException failure) {
+                // A broken main request writer is a broken generation. Tear down all
+                // state now so the next request starts cleanly; a partial write must
+                // never leave ready=true or an orphan child behind.
+                stopProcess();
+                failAll(failure);
+                throw failure;
+            }
+        }
+    }
+
+    private void removePendingRequest(String id, CompletableFuture<JsonElement> expected) {
+        synchronized (pendingStateLock) {
+            PendingRequest request = pending.get(id);
+            if (request != null && request.future() == expected) pending.remove(id);
+        }
+    }
+
+    private void sendBestEffortRequest(Process expectedProcess, String method, JsonObject params) {
+        synchronized (lifecycleLock) {
+            BufferedWriter expectedWriter = writer;
+            if (process != expectedProcess || expectedWriter == null
+                    || !expectedProcess.isAlive()) return;
             JsonObject request = new JsonObject();
             request.addProperty("method", method);
             request.addProperty("id", nextId.getAndIncrement());
             if (params != null) request.add("params", params);
-            send(request);
-        } catch (IOException ignored) {
-            // Ephemeral threads are also released when app-server stops.
+            try {
+                sendToWriter(expectedProcess, expectedWriter, request);
+            } catch (IOException ignored) {
+                // Best-effort cleanup must not kill an otherwise usable generation.
+                // Ephemeral threads are also released when app-server stops.
+            }
         }
     }
 
-    private void ensureStarted() throws IOException {
-        if (ready && process != null && process.isAlive()) return;
+    private Process ensureStarted() throws IOException {
+        Process current = process;
+        if (ready && current != null && current.isAlive()) return current;
         synchronized (lifecycleLock) {
-            if (ready && process != null && process.isAlive()) return;
+            current = process;
+            if (ready && current != null && current.isAlive()) return current;
             if (closed) throw new IOException("Codex app-server client is closed");
-            stopProcess();
+            clearStaleGenerationState();
             Files.createDirectories(codexHome);
             Files.createDirectories(workspace);
             String executable = resolveExecutable();
@@ -443,11 +645,18 @@ public final class CodexAppServerClient implements AutoCloseable {
             ProcessBuilder builder = new ProcessBuilder(minimalAppServerCommand(executable));
             builder.directory(workspace.toFile());
             builder.environment().put("CODEX_HOME", codexHome.toString());
-            process = builder.start();
-            writer = new BufferedWriter(new OutputStreamWriter(
-                    process.getOutputStream(), StandardCharsets.UTF_8));
-            startReader(process);
-            startStderrReader(process);
+            Process runningProcess = builder.start();
+            BufferedWriter runningWriter = new BufferedWriter(new OutputStreamWriter(
+                    runningProcess.getOutputStream(), StandardCharsets.UTF_8));
+            process = runningProcess;
+            writer = runningWriter;
+            processError.set(null);
+            synchronized (pendingStateLock) {
+                initializingProcess = runningProcess;
+                initializationFailure = null;
+            }
+            startReader(runningProcess, runningWriter);
+            startStderrReader(runningProcess);
 
             try {
                 JsonObject initialize = new JsonObject();
@@ -456,27 +665,36 @@ public final class CodexAppServerClient implements AutoCloseable {
                 clientInfo.addProperty("title", "Minecraft Translator");
                 clientInfo.addProperty("version", CLIENT_VERSION);
                 initialize.add("clientInfo", clientInfo);
-                requestOnRunning("initialize", initialize, REQUEST_TIMEOUT);
+                requestOnRunning(runningProcess, "initialize", initialize, REQUEST_TIMEOUT);
                 JsonObject initialized = new JsonObject();
                 initialized.addProperty("method", "initialized");
-                send(initialized);
-                ready = true;
+                sendToWriter(runningProcess, runningWriter, initialized);
+                synchronized (pendingStateLock) {
+                    if (initializingProcess != runningProcess) {
+                        throw new IOException("Codex app-server initialization generation changed");
+                    }
+                    if (initializationFailure != null) throw initializationFailure;
+                    ready = true;
+                    initializingProcess = null;
+                }
                 lastError = "";
+                return runningProcess;
             } catch (IOException e) {
                 lastError = e.getMessage() == null ? "Unable to start Codex app-server" : e.getMessage();
                 stopProcess();
+                failAll(e);
                 throw e;
             }
         }
     }
 
-    private void startReader(Process runningProcess) {
+    private void startReader(Process runningProcess, BufferedWriter runningWriter) {
         Thread thread = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                     runningProcess.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
-                while ((line = reader.readLine()) != null) {
-                    handleLine(line);
+                while ((line = readBoundedLine(reader, MAX_JSONL_CHARS)) != null) {
+                    handleLine(runningProcess, runningWriter, line);
                 }
                 failIfCurrent(runningProcess, new IOException("Codex app-server stopped"));
             } catch (IOException e) {
@@ -492,18 +710,48 @@ public final class CodexAppServerClient implements AutoCloseable {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                     runningProcess.getErrorStream(), StandardCharsets.UTF_8))) {
                 String line;
-                while ((line = reader.readLine()) != null) {
-                    if (!line.isBlank()) lastError = line;
+                while ((line = readBoundedLine(reader, MAX_STDERR_LINE_CHARS)) != null) {
+                    recordProcessError(runningProcess, line);
                 }
-            } catch (IOException ignored) {
-                // Process exit closes this stream.
+            } catch (IOException error) {
+                // A dead child can still fail stderr before stdout observes EOF. During
+                // initialize this call must wake the pending request immediately rather
+                // than relying on the other reader (or its full request timeout).
+                failIfCurrent(runningProcess, error);
             }
         }, "mctranslator-codex-stderr");
         thread.setDaemon(true);
         thread.start();
     }
 
-    private void handleLine(String line) {
+    private void recordProcessError(Process expectedProcess, String error) {
+        if (error == null || error.isBlank()) return;
+        // Never take lifecycleLock here: stderr must keep draining while initialize owns
+        // it. The second generation check plus CAS closes the check-then-set race. If a
+        // replacement publishes its own tag while an old reader is paused, the old CAS
+        // fails and the loop exits on generation identity instead of erasing that tag.
+        while (process == expectedProcess) {
+            ProcessError observed = processError.get();
+            Runnable hook = processErrorHookForTests;
+            if (hook != null) hook.run();
+            if (process != expectedProcess) return;
+            if (processError.compareAndSet(observed,
+                    new ProcessError(expectedProcess, error))) return;
+        }
+    }
+
+    private void handleLine(String line) throws IOException {
+        handleLine(process, writer, line);
+    }
+
+    private void handleLine(Process expectedProcess, BufferedWriter expectedWriter, String line)
+            throws IOException {
+        if (line == null) return;
+        if (process != expectedProcess) return;
+        if (line.length() > MAX_JSONL_CHARS) {
+            throw new IOException("Codex app-server JSONL message exceeds "
+                    + MAX_JSONL_CHARS + " characters");
+        }
         final JsonObject message;
         try {
             JsonElement parsed = new JsonParser().parse(line);
@@ -515,9 +763,16 @@ public final class CodexAppServerClient implements AutoCloseable {
 
         JsonElement idElement = message.get("id");
         if (idElement != null && (message.has("result") || message.has("error"))) {
-            String id = idElement.getAsString();
-            CompletableFuture<JsonElement> future = pending.get(id);
-            if (future == null) return;
+            String id = nullableString(message, "id");
+            if (!validIdentifier(id)) return;
+            CompletableFuture<JsonElement> future;
+            synchronized (pendingStateLock) {
+                if (process != expectedProcess) return;
+                PendingRequest request = pending.get(id);
+                if (request == null || request.generation() != expectedProcess) return;
+                pending.remove(id);
+                future = request.future();
+            }
             if (message.has("error")) {
                 JsonObject error = object(message, "error");
                 future.completeExceptionally(new IOException(nonBlank(
@@ -534,54 +789,275 @@ public final class CodexAppServerClient implements AutoCloseable {
             case "account/login/completed" -> {
                 String loginId = nullableString(params, "loginId");
                 boolean success = bool(params, "success");
-                if (loginId != null) {
-                    completedLoginResults.put(loginId, success);
-                    loginResults.computeIfAbsent(loginId, ignored -> new CompletableFuture<>())
-                            .complete(success);
-                }
+                completeLogin(expectedProcess, loginId, success);
                 String error = nullableString(params, "error");
-                if (!success && error != null) lastError = error;
+                if (!success) recordProcessError(expectedProcess, error);
             }
             case "item/completed" -> {
                 JsonObject item = object(params, "item");
                 if ("agentMessage".equals(string(item, "type"))) {
                     String turnId = string(params, "turnId");
                     String text = nullableString(item, "text");
-                    if (!turnId.isBlank() && text != null) turnMessages.put(turnId, text);
+                    if (validIdentifier(turnId) && text != null) {
+                        recordTurnMessage(expectedProcess, turnId, text);
+                    }
                 }
             }
             case "turn/completed" -> {
                 JsonObject turn = object(params, "turn");
                 String turnId = string(turn, "id");
                 if (turnId.isBlank()) turnId = string(params, "turnId");
-                if (!turnId.isBlank()) {
-                    turnResults.computeIfAbsent(turnId, ignored -> new CompletableFuture<>())
-                            .complete(params);
-                }
+                if (validIdentifier(turnId)) completeTurn(expectedProcess, turnId, params);
             }
-            case "thread/tokenUsage/updated" -> recordTokenUsage(params);
+            case "thread/tokenUsage/updated" -> recordTokenUsage(expectedProcess, params);
             default -> {
-                if (idElement != null) rejectServerRequest(idElement, method);
+                if (idElement != null) {
+                    rejectServerRequest(expectedProcess, expectedWriter, idElement, method);
+                }
             }
         }
     }
 
-    private void recordTokenUsage(JsonObject params) {
-        SessionTokenUsage counter = tokenUsage;
-        if (counter == null) return;
-        String threadId = string(params, "threadId");
-        JsonObject total = object(object(params, "tokenUsage"), "total");
-        if (threadId.isBlank() || total.size() == 0) return;
-        counter.recordCumulative(
-                "codex:" + threadId,
-                longValue(total, "inputTokens"),
-                longValue(total, "cachedInputTokens"),
-                longValue(total, "outputTokens"),
-                longValue(total, "reasoningOutputTokens"),
-                longValue(total, "totalTokens"));
+    private static String readBoundedLine(BufferedReader reader, int maximumChars)
+            throws IOException {
+        StringBuilder line = new StringBuilder(Math.min(4096, maximumChars));
+        while (true) {
+            int value = reader.read();
+            if (value < 0) return line.length() == 0 ? null : line.toString();
+            if (value == '\n') return line.toString();
+            if (value == '\r') {
+                reader.mark(1);
+                int following = reader.read();
+                if (following >= 0 && following != '\n') reader.reset();
+                return line.toString();
+            }
+            if (line.length() >= maximumChars) {
+                throw new IOException("Codex app-server line exceeds "
+                        + maximumChars + " characters");
+            }
+            line.append((char) value);
+        }
     }
 
-    private void rejectServerRequest(JsonElement id, String method) {
+    private void recordTurnMessage(Process expectedProcess, String turnId, String message) {
+        if (!validIdentifier(turnId)) return;
+        synchronized (notificationStateLock) {
+            if (process != expectedProcess) return;
+            if (recentlyClosedTurns.contains(turnId)) return;
+            IOException messageFailure = message.length() > MAX_TURN_MESSAGE_CHARS
+                    ? new IOException("Codex translation message exceeds "
+                    + MAX_TURN_MESSAGE_CHARS + " characters")
+                    : null;
+            ActiveTurnState active = turnResults.get(turnId);
+            if (active != null) {
+                active.recordMessage(message, messageFailure);
+                return;
+            }
+            EarlyTurnState early = earlyTurns.get(turnId);
+            if (early != null && (early.message != null || early.messageFailure != null)) return;
+            earlyTurns.put(turnId, new EarlyTurnState(
+                    messageFailure == null ? message : null,
+                    messageFailure,
+                    early == null ? null : early.completedParams));
+            trimEarlyTurns();
+        }
+    }
+
+    private void completeTurn(Process expectedProcess, String turnId, JsonObject params) {
+        if (!validIdentifier(turnId)) return;
+        synchronized (notificationStateLock) {
+            if (process != expectedProcess) return;
+            if (recentlyClosedTurns.contains(turnId)) return;
+            ActiveTurnState active = turnResults.get(turnId);
+            if (active != null) {
+                active.completed.complete(params);
+                return;
+            }
+            EarlyTurnState early = earlyTurns.get(turnId);
+            if (early != null && early.completedParams != null) return;
+            earlyTurns.put(turnId, new EarlyTurnState(
+                    early == null ? null : early.message,
+                    early == null ? null : early.messageFailure,
+                    params));
+            trimEarlyTurns();
+        }
+    }
+
+    private CompletableFuture<JsonObject> registerTurn(String turnId, Process expectedProcess)
+            throws IOException {
+        if (!validIdentifier(turnId)) throw new IOException("Invalid Codex turn id");
+        // Process failure also takes lifecycleLock before it flips ready and clears
+        // active turns. Therefore a future cannot be registered just after failAll()
+        // has missed it.
+        synchronized (lifecycleLock) {
+            if (!ready || process != expectedProcess || expectedProcess == null
+                    || !expectedProcess.isAlive()) {
+                throw new IOException(nonBlank(lastError(),
+                        "Codex app-server stopped before turn registration"));
+            }
+            synchronized (notificationStateLock) {
+                recentlyClosedTurns.remove(turnId);
+                ActiveTurnState existing = turnResults.get(turnId);
+                if (existing != null) return existing.completed;
+                if (turnResults.size() >= MAX_ACTIVE_TURNS) {
+                    throw new IOException("Too many active Codex turns");
+                }
+
+                ActiveTurnState registered = new ActiveTurnState();
+                turnResults.put(turnId, registered);
+                EarlyTurnState early = earlyTurns.remove(turnId);
+                if (early != null) {
+                    if (early.message != null || early.messageFailure != null) {
+                        registered.recordMessage(early.message, early.messageFailure);
+                    }
+                    if (early.completedParams != null) {
+                        registered.completed.complete(early.completedParams);
+                    }
+                }
+                return registered.completed;
+            }
+        }
+    }
+
+    private String awaitTurnMessage(String turnId) throws IOException {
+        CompletableFuture<String> message;
+        synchronized (notificationStateLock) {
+            ActiveTurnState active = turnResults.get(turnId);
+            if (active == null) throw new IOException("Codex turn closed before message delivery");
+            message = active.message;
+        }
+        try {
+            return message.get(turnMessageGrace.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Codex translation interrupted while awaiting its message", e);
+        } catch (ExecutionException e) {
+            throw io("Codex translation message failed", e.getCause());
+        } catch (TimeoutException e) {
+            throw new IOException("Codex turn completed without a translation message within "
+                    + turnMessageGrace.toMillis() + " ms", e);
+        }
+    }
+
+    private void closeTurn(String turnId, Process expectedProcess) {
+        if (!validIdentifier(turnId)) return;
+        synchronized (lifecycleLock) {
+            if (process != expectedProcess) return;
+            synchronized (notificationStateLock) {
+                turnResults.remove(turnId);
+                earlyTurns.remove(turnId);
+                rememberClosed(recentlyClosedTurns, turnId, MAX_RECENTLY_CLOSED_TURNS);
+            }
+        }
+    }
+
+    private void trimEarlyTurns() {
+        while (earlyTurns.size() > MAX_EARLY_TURNS) {
+            var oldest = earlyTurns.entrySet().iterator();
+            if (!oldest.hasNext()) return;
+            oldest.next();
+            oldest.remove();
+        }
+    }
+
+    private void openThread(String threadId, Process expectedProcess) throws IOException {
+        if (!validIdentifier(threadId)) throw new IOException("Invalid Codex thread id");
+        synchronized (lifecycleLock) {
+            if (!ready || process != expectedProcess || expectedProcess == null
+                    || !expectedProcess.isAlive()) {
+                throw new IOException(nonBlank(lastError(),
+                        "Codex app-server stopped before thread registration"));
+            }
+            synchronized (notificationStateLock) {
+                if (!activeThreads.contains(threadId)
+                        && activeThreads.size() >= MAX_ACTIVE_THREADS) {
+                    throw new IOException("Too many active Codex threads");
+                }
+                boolean reused = activeThreads.remove(threadId);
+                reused |= recentlyClosedThreads.remove(threadId);
+                if (reused) {
+                    SessionTokenUsage counter = tokenUsage;
+                    if (counter != null) counter.finishCumulative(tokenSource(threadId));
+                }
+                activeThreads.add(threadId);
+            }
+        }
+    }
+
+    private void closeThread(String threadId, Process expectedProcess) {
+        if (!validIdentifier(threadId)) return;
+        synchronized (lifecycleLock) {
+            if (process != expectedProcess) return;
+            synchronized (notificationStateLock) {
+                activeThreads.remove(threadId);
+                String evicted = rememberClosed(
+                        recentlyClosedThreads, threadId, MAX_RECENTLY_CLOSED_THREADS);
+                SessionTokenUsage counter = tokenUsage;
+                if (counter != null && evicted != null) {
+                    counter.finishCumulative(tokenSource(evicted));
+                }
+            }
+        }
+    }
+
+    private void releaseThreadBaselines() {
+        synchronized (notificationStateLock) {
+            SessionTokenUsage counter = tokenUsage;
+            if (counter != null) {
+                activeThreads.forEach(id -> counter.finishCumulative(tokenSource(id)));
+                recentlyClosedThreads.forEach(id -> counter.finishCumulative(tokenSource(id)));
+            }
+            activeThreads.clear();
+            recentlyClosedThreads.clear();
+        }
+    }
+
+    private static String rememberClosed(LinkedHashSet<String> closed, String id, int limit) {
+        closed.remove(id);
+        closed.add(id);
+        if (closed.size() <= limit) return null;
+        var oldest = closed.iterator();
+        if (!oldest.hasNext()) return null;
+        String evicted = oldest.next();
+        oldest.remove();
+        return evicted;
+    }
+
+    private static <K, V> void trimOldest(LinkedHashMap<K, V> values, int limit) {
+        while (values.size() > limit) {
+            var oldest = values.entrySet().iterator();
+            if (!oldest.hasNext()) return;
+            oldest.next();
+            oldest.remove();
+        }
+    }
+
+    private void recordTokenUsage(Process expectedProcess, JsonObject params) {
+        String threadId = string(params, "threadId");
+        JsonObject total = object(object(params, "tokenUsage"), "total");
+        if (!validIdentifier(threadId) || total.size() == 0) return;
+        synchronized (notificationStateLock) {
+            if (process != expectedProcess) return;
+            if (!activeThreads.contains(threadId)
+                    && !recentlyClosedThreads.contains(threadId)) return;
+            SessionTokenUsage counter = tokenUsage;
+            if (counter == null) return;
+            counter.recordCumulative(
+                    tokenSource(threadId),
+                    longValue(total, "inputTokens"),
+                    longValue(total, "cachedInputTokens"),
+                    longValue(total, "outputTokens"),
+                    longValue(total, "reasoningOutputTokens"),
+                    longValue(total, "totalTokens"));
+        }
+    }
+
+    private static String tokenSource(String threadId) {
+        return "codex:" + threadId;
+    }
+
+    private void rejectServerRequest(Process expectedProcess, BufferedWriter expectedWriter,
+                                     JsonElement id, String method) {
         JsonObject response = new JsonObject();
         response.add("id", id);
         JsonObject error = new JsonObject();
@@ -589,37 +1065,151 @@ public final class CodexAppServerClient implements AutoCloseable {
         error.addProperty("message", "Minecraft Translator does not allow app-server request: " + method);
         response.add("error", error);
         try {
-            send(response);
+            // Reader-side server requests can arrive while ensureStarted holds the
+            // lifecycle monitor awaiting initialize. Reply directly to the captured
+            // generation writer under writeLock; taking lifecycleLock here deadlocks.
+            sendToWriter(expectedProcess, expectedWriter, response);
         } catch (IOException ignored) {
             // The process may already be exiting.
         }
     }
 
-    private void send(JsonObject message) throws IOException {
-        BufferedWriter current = writer;
-        if (current == null) throw new IOException("Codex app-server is not running");
+    private void sendToWriter(Process expectedProcess, BufferedWriter expectedWriter,
+                              JsonObject message) throws IOException {
+        String encoded = encodeMessage(message);
+        writeEncoded(expectedProcess, expectedWriter, encoded);
+    }
+
+    private void writeEncoded(Process expectedProcess, BufferedWriter expectedWriter,
+                              String encoded) throws IOException {
         synchronized (writeLock) {
-            current.write(message.toString());
-            current.newLine();
-            current.flush();
+            if (process != expectedProcess || writer != expectedWriter
+                    || expectedWriter == null || expectedProcess == null
+                    || !expectedProcess.isAlive()) {
+                throw new IOException("Codex app-server generation changed before write");
+            }
+            expectedWriter.write(encoded);
+            expectedWriter.newLine();
+            expectedWriter.flush();
         }
     }
 
+    private static String encodeMessage(JsonObject message) throws IOException {
+        final String encoded;
+        try {
+            encoded = Objects.requireNonNull(message, "message").toString();
+        } catch (RuntimeException failure) {
+            throw new IOException("Unable to encode Codex app-server message", failure);
+        }
+        if (encoded.length() > MAX_JSONL_CHARS) {
+            throw new IOException("Codex app-server outgoing message exceeds "
+                    + MAX_JSONL_CHARS + " characters");
+        }
+        return encoded;
+    }
+
     private void failIfCurrent(Process runningProcess, IOException error) {
+        if (signalInitializationFailure(runningProcess, error)) return;
         synchronized (lifecycleLock) {
             if (process != runningProcess) return;
-            process = null;
-            writer = null;
+            stopProcess();
             failAll(error);
         }
     }
 
+    /**
+     * {@code ensureStarted} deliberately keeps lifecycleLock across initialize so no
+     * caller can observe a half-started generation. A stdout/stderr reader must not
+     * acquire that monitor when the child fails during this interval: doing so would
+     * leave the initialize future unresolved until its full request timeout. Instead,
+     * the reader removes and fails this generation's pending requests under the
+     * pending-state lock and destroys the child. The ensureStarted catch path, which
+     * already owns lifecycleLock, performs the complete stop/failAll cleanup.
+     */
+    private boolean signalInitializationFailure(Process expectedProcess, IOException error) {
+        List<CompletableFuture<JsonElement>> failedRequests = new ArrayList<>();
+        IOException failure;
+        synchronized (pendingStateLock) {
+            if (process != expectedProcess || initializingProcess != expectedProcess) return false;
+            if (initializationFailure == null) initializationFailure = error;
+            failure = initializationFailure;
+            var iterator = pending.entrySet().iterator();
+            while (iterator.hasNext()) {
+                PendingRequest request = iterator.next().getValue();
+                if (request.generation() == expectedProcess) {
+                    failedRequests.add(request.future());
+                    iterator.remove();
+                }
+            }
+        }
+        recordProcessError(expectedProcess, nonBlank(failure.getMessage(),
+                "Codex app-server failed during initialization"));
+        if (expectedProcess.isAlive()) expectedProcess.destroy();
+        failedRequests.forEach(future -> future.completeExceptionally(failure));
+        return true;
+    }
+
+    /** Called with lifecycleLock held before a new child is created. */
+    private void clearStaleGenerationState() {
+        if (process == null && writer == null && !ready && !hasGenerationState()) return;
+        IOException replaced = new IOException("Codex app-server generation was replaced");
+        stopProcess();
+        failAll(replaced);
+    }
+
+    private boolean hasGenerationState() {
+        synchronized (notificationStateLock) {
+            if (!turnResults.isEmpty() || !earlyTurns.isEmpty()
+                    || !recentlyClosedTurns.isEmpty() || !activeThreads.isEmpty()
+                    || !recentlyClosedThreads.isEmpty()) return true;
+        }
+        synchronized (pendingStateLock) {
+            if (!pending.isEmpty()) return true;
+        }
+        synchronized (loginStateLock) {
+            return !loginResults.isEmpty() || !completedLoginResults.isEmpty();
+        }
+    }
+
     private void failAll(IOException error) {
-        ready = false;
-        lastError = error.getMessage() == null ? "Codex app-server stopped" : error.getMessage();
-        pending.values().forEach(future -> future.completeExceptionally(error));
-        turnResults.values().forEach(future -> future.completeExceptionally(error));
-        loginResults.values().forEach(future -> future.completeExceptionally(error));
+        synchronized (lifecycleLock) {
+            ready = false;
+            lastError = error.getMessage() == null ? "Codex app-server stopped" : error.getMessage();
+
+            List<ActiveTurnState> failedTurns;
+            synchronized (notificationStateLock) {
+                failedTurns = new ArrayList<>(turnResults.values());
+                turnResults.clear();
+                earlyTurns.clear();
+                recentlyClosedTurns.clear();
+
+                SessionTokenUsage counter = tokenUsage;
+                if (counter != null) {
+                    activeThreads.forEach(id -> counter.finishCumulative(tokenSource(id)));
+                    recentlyClosedThreads.forEach(id -> counter.finishCumulative(tokenSource(id)));
+                }
+                activeThreads.clear();
+                recentlyClosedThreads.clear();
+            }
+
+            List<CompletableFuture<JsonElement>> failedRequests;
+            synchronized (pendingStateLock) {
+                failedRequests = pending.values().stream()
+                        .map(PendingRequest::future).toList();
+                pending.clear();
+                initializingProcess = null;
+                initializationFailure = null;
+            }
+            List<CompletableFuture<Boolean>> failedLogins;
+            synchronized (loginStateLock) {
+                failedLogins = new ArrayList<>(loginResults.values());
+                loginResults.clear();
+                completedLoginResults.clear();
+            }
+            failedRequests.forEach(future -> future.completeExceptionally(error));
+            failedTurns.forEach(turn -> turn.fail(error));
+            failedLogins.forEach(future -> future.completeExceptionally(error));
+        }
     }
 
     private String resolveExecutable() {
@@ -745,17 +1335,19 @@ public final class CodexAppServerClient implements AutoCloseable {
 
     private void stopProcess() {
         ready = false;
-        BufferedWriter oldWriter = writer;
-        writer = null;
-        if (oldWriter != null) {
-            try {
-                oldWriter.close();
-            } catch (IOException ignored) {
-                // Best effort.
-            }
-        }
         Process oldProcess = process;
         process = null;
+        synchronized (writeLock) {
+            BufferedWriter oldWriter = writer;
+            writer = null;
+            if (oldWriter != null) {
+                try {
+                    oldWriter.close();
+                } catch (IOException ignored) {
+                    // Best effort.
+                }
+            }
+        }
         if (oldProcess != null && oldProcess.isAlive()) {
             oldProcess.destroy();
             try {
@@ -773,6 +1365,7 @@ public final class CodexAppServerClient implements AutoCloseable {
             closed = true;
             stopProcess();
             failAll(new IOException("Codex app-server client closed"));
+            releaseThreadBaselines();
         }
     }
 
@@ -828,12 +1421,41 @@ public final class CodexAppServerClient implements AutoCloseable {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    private static boolean validIdentifier(String value) {
+        return value != null && !value.isBlank() && value.length() <= MAX_IDENTIFIER_CHARS;
+    }
+
     private static IOException io(String prefix, Throwable cause) {
         if (cause instanceof IOException io) return io;
         String message = cause == null || cause.getMessage() == null
                 ? prefix : prefix + ": " + cause.getMessage();
         return new IOException(message, cause);
     }
+
+    private static final class ActiveTurnState {
+        final CompletableFuture<JsonObject> completed = new CompletableFuture<>();
+        final CompletableFuture<String> message = new CompletableFuture<>();
+
+        void recordMessage(String value, IOException failure) {
+            if (failure != null) message.completeExceptionally(failure);
+            else message.complete(value);
+        }
+
+        void fail(IOException failure) {
+            completed.completeExceptionally(failure);
+            message.completeExceptionally(failure);
+        }
+    }
+
+    private record EarlyTurnState(
+            String message, IOException messageFailure, JsonObject completedParams) {}
+
+    private record PendingRequest(
+            Process generation, CompletableFuture<JsonElement> future) {}
+
+    private record ProcessError(Process generation, String message) {}
+
+    private record OwnedResponse(JsonObject result, Process generation) {}
 
     public record AccountSnapshot(boolean signedIn, String email, String planType) {
         public static AccountSnapshot signedOut() {

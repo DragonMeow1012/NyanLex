@@ -56,6 +56,11 @@ public final class TranslationConfigScreen extends Screen {
         row("config.mctranslator.surface.book", right, y, step, true, () -> cfg.bookMode, m -> cfg.bookMode = m, () -> cfg.aiBook, v -> cfg.aiBook = v);
         y += step;
         row("config.mctranslator.surface.screen", left, y, step, true, () -> cfg.screenTextMode, m -> cfg.screenTextMode = m, () -> cfg.aiScreenText, v -> cfg.aiScreenText = v);
+        this.addRenderableWidget(Button.builder(chatDeliveryLabel(cfg), b -> {
+            cfg.deliverChatTranslationsInOrder = !cfg.deliverChatTranslationsInOrder;
+            MctranslatorNeoForge.saveConfig();
+            b.setMessage(chatDeliveryLabel(cfg));
+        }).bounds(right, y, rowWidth, 18).build());
         y += step;
 
         y += 6;
@@ -143,6 +148,13 @@ public final class TranslationConfigScreen extends Screen {
 
     private static Component screenScanEngineLabel(TranslatorConfig cfg) {
         return Component.translatable("config.mctranslator.screen_scan_engine", aiText(cfg.aiScreenScan));
+    }
+
+    private static Component chatDeliveryLabel(TranslatorConfig cfg) {
+        Component mode = Component.translatable(cfg.deliverChatTranslationsInOrder
+                ? "config.mctranslator.chat_delivery.ordered"
+                : "config.mctranslator.chat_delivery.ready_first");
+        return Component.translatable("config.mctranslator.chat_delivery", mode);
     }
 
     /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value). */

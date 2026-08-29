@@ -33,6 +33,18 @@ public final class TextFilter {
             "\\u27E6\\s*(?:MT|WS)\\s*\\d+\\s*\\u27E7";
     private static final java.util.regex.Pattern CS_MARKER =
             java.util.regex.Pattern.compile("\\u27E6\\s*/?\\s*CS\\s*\\d+\\s*\\u27E7");
+    private static final java.util.regex.Pattern AM_PM_AFTER_DIGIT =
+            java.util.regex.Pattern.compile("(?i)(?<=\\d)\\s*[ap]\\.?m\\.?\\b");
+    private static final java.util.regex.Pattern NON_MACHINE_CODE =
+            java.util.regex.Pattern.compile("[^A-Za-z0-9_]");
+    private static final java.util.regex.Pattern SHORT_MACHINE_CODE_WITH_DIGIT =
+            java.util.regex.Pattern.compile("(?i)(?:[a-z]{1,3}_?\\d+|\\d+_?[a-z]{1,3})");
+    private static final java.util.regex.Pattern SHORT_MACHINE_CODE =
+            java.util.regex.Pattern.compile("(?i)[a-z]{1,3}");
+    private static final java.util.regex.Pattern QUOTED_STRUCTURED_KEY =
+            java.util.regex.Pattern.compile("\"[A-Za-z0-9_.:-]+\"\\s*:");
+    private static final java.util.regex.Pattern WHITESPACE =
+            java.util.regex.Pattern.compile("\\s+");
     private static final java.util.regex.Pattern ANCHORED_TEXT_FIELD =
             java.util.regex.Pattern.compile(
                     "(?:" + MT_TOKEN_SOURCE
@@ -155,7 +167,7 @@ public final class TextFilter {
         TemplateText.Prepared prepared = TemplateText.prepare(t);
         String skeleton = MT_TOKEN.matcher(prepared.changed() ? prepared.text() : t).replaceAll("");
         skeleton = stripSectionCodes(stripDecorativeSymbols(skeleton)).strip();
-        skeleton = skeleton.replaceAll("(?i)(?<=\\d)\\s*[ap]\\.?m\\.?\\b", "");
+        skeleton = AM_PM_AFTER_DIGIT.matcher(skeleton).replaceAll("");
         if (!hasLetters(skeleton)) return false;
         return !isOnlyShortMachineCode(skeleton, prepared.values().size());
     }
@@ -164,9 +176,9 @@ public final class TextFilter {
      *  template slot is removed (for example three MT slots plus {@code n6400}). It
      *  contains a letter, but no natural language and must not consume a request. */
     private static boolean isOnlyShortMachineCode(String skeleton, int generatedSlots) {
-        String compact = skeleton.replaceAll("[^A-Za-z0-9_]", "");
-        if (compact.matches("(?i)(?:[a-z]{1,3}_?\\d+|\\d+_?[a-z]{1,3})")) return true;
-        return generatedSlots >= 2 && compact.matches("(?i)[a-z]{1,3}");
+        String compact = NON_MACHINE_CODE.matcher(skeleton).replaceAll("");
+        if (SHORT_MACHINE_CODE_WITH_DIGIT.matcher(compact).matches()) return true;
+        return generatedSlots >= 2 && SHORT_MACHINE_CODE.matcher(compact).matches();
     }
     public static boolean hasLetters(String t) {
         for (int i = 0; i < t.length(); ) {
@@ -213,9 +225,7 @@ public final class TextFilter {
                 || (first == '[' && last == ']')
                 || (first == '(' && last == ')');
         int quotedKeys = 0;
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"[A-Za-z0-9_.:-]+\"\\s*:")
-                .matcher(t);
+        java.util.regex.Matcher m = QUOTED_STRUCTURED_KEY.matcher(t);
         while (m.find()) {
             quotedKeys++;
             if (quotedKeys >= 2) return true;
@@ -260,7 +270,13 @@ public final class TextFilter {
         return text == null ? null : SECTION_CODE.matcher(text).replaceAll("");
     }
 
-    /** Marker-exterior layout/punctuation is safe; words and digits are not. */
+    /**
+     * True when a marker-exterior fragment contains layout and punctuation only.
+     * Translators commonly insert a target-language comma between two reordered colour
+     * spans; accepting punctuation is safe because it carries no translatable wording and
+     * the renderer can attach it to the preceding style. Letters and digits remain
+     * forbidden, so escaped words can never silently inherit the wrong colour.
+     */
     public static boolean isLayoutOrPunctuationOnly(String text) {
         if (text == null || text.isEmpty()) return true;
         for (int i = 0; i < text.length(); ) {
@@ -390,7 +406,7 @@ public final class TextFilter {
         if (!containsCjk(t)) return false;
 
         // Evaluate each whitespace-split source token that is ASCII-letter dominant + long enough.
-        for (String token : s.split("\\s+")) {
+        for (String token : WHITESPACE.split(s)) {
             if (!isAsciiDominantWord(token)) continue;
             if (hasGluedResidueOf(token, t)) return true;
         }

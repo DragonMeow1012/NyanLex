@@ -3,9 +3,11 @@ package com.dragonmeow.mctranslator.translate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -62,6 +64,13 @@ public final class TemplateText {
     // meaning. Keep the suffix inside the slot so 23rd/24th share one cache key.
     private static final Pattern ORDINAL = Pattern.compile(
             "(?i)" + DYNAMIC_START + "\\d+(?:st|nd|rd|th)(?![A-Za-z_\\u27E7])");
+    // Prefix quantities ("x100", "X2,500") change just like ordinary numbers. Keep
+    // the x inside the slot so prefixed, differently cased and bare-number variants
+    // all share one request key. The leading boundary excludes
+    // dimensions/hex ("2x2", "0x1F"); the atomic group and trailing guard exclude
+    // identifiers such as "x100foo" instead of matching only part of them.
+    private static final Pattern PREFIX_QUANTITY = Pattern.compile(DYNAMIC_START
+            + "(?>[xX]\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB])?)(?![A-Za-z_⟧])");
     // Digits adjacent to ⟦…⟧ are inside a NameMasker/TemplateText token — never re-template those.
     // Atomic group (?>…): when the trailing guard rejects ("10kg", "31x?"), the whole match
     // fails instead of backtracking into a half number ("1", "3") that shreds the cache key.
@@ -84,6 +93,8 @@ public final class TemplateText {
     // are already NUMBER's. Bonus: "[VIP] x" and "[MVP+] x" share one key.
     private static final Pattern RANK_TAG = Pattern.compile("\\[[A-Z]{2,10}\\+{0,2}\\]");
     private static final Pattern CS_TOKEN = Pattern.compile("\\u27E6\\s*(/?)\\s*CS\\s*\\d+\\s*\\u27E7");
+    private static final Pattern EXISTING_MT_TOKEN = Pattern.compile(
+            "\\u27E6\\s*MT\\s*(\\d+)\\s*\\u27E7", Pattern.CASE_INSENSITIVE);
     /** Opaque shard/instance id after a Server field (mega33A, alphaShard, xxxxx).
      *  The label gives this field its meaning; its machine-assigned value is volatile
      *  regardless of prefix or whether it happens to contain digits. */
@@ -106,7 +117,19 @@ public final class TemplateText {
     private TemplateText() {
     }
 
-    public record Prepared(String text, List<String> values) {
+    public record Prepared(String text, List<String> values, List<Integer> slotIndices) {
+        public Prepared(String text, List<String> values) {
+            this(text, values, sequentialSlots(values == null ? 0 : values.size()));
+        }
+
+        public Prepared {
+            values = values == null ? List.of() : List.copyOf(values);
+            slotIndices = slotIndices == null ? List.of() : List.copyOf(slotIndices);
+            if (values.size() != slotIndices.size()) {
+                throw new IllegalArgumentException("value/slot count mismatch");
+            }
+        }
+
         public boolean changed() {
             return !values.isEmpty();
         }
@@ -121,6 +144,7 @@ public final class TemplateText {
             if (translated == null || values.isEmpty()) return translated;
             String out = translated;
             for (int i = 0; i < values.size(); i++) {
+                int slotIndex = slotIndices.get(i);
                 String value = values.get(i);
                 String visible = CS_TOKEN.matcher(value).replaceAll("");
                 boolean leadingSpace = !visible.isEmpty()
@@ -128,14 +152,14 @@ public final class TemplateText {
                 boolean trailingSpace = !visible.isEmpty()
                         && Character.isWhitespace(visible.charAt(visible.length() - 1));
                 String regex = (leadingSpace ? "[ \\t\\u00A0]*" : "")
-                        + "\\u27E6\\s*MT\\s*" + i + "\\s*\\u27E7"
+                        + "\\u27E6\\s*MT\\s*" + slotIndex + "\\s*\\u27E7"
                         + (trailingSpace ? "[ \\t\\u00A0]*" : "");
                 String protectedValue = value.replace(' ', SLOT_SPACE)
                         .replace('\t', SLOT_TAB).replace('\u00A0', SLOT_NBSP);
 
                 // Did the TEMPLATE carry horizontal whitespace around this token? Each
                 // token is unique in text() (sequentially numbered), so indexOf is exact.
-                String tok = OPEN + "MT" + i + String.valueOf(CLOSE);
+                String tok = OPEN + "MT" + slotIndex + String.valueOf(CLOSE);
                 int at = text.indexOf(tok);
                 boolean hadSpaceBefore = at > 0 && isHorizontalSpace(text.charAt(at - 1));
                 boolean hadSpaceAfter = at >= 0 && at + tok.length() < text.length()
@@ -243,6 +267,7 @@ public final class TemplateText {
 
     private static Prepared compute(String source) {
         List<Span> spans = new ArrayList<>();
+        List<Span> protectedTokens = existingTokenSpans(source);
         addPattern(source, spans, BAR, 0);
         addPattern(source, spans, URL, 0);
         addPattern(source, spans, UUID, 0);
@@ -252,6 +277,7 @@ public final class TemplateText {
         addPattern(source, spans, DURATION_CJK, 0);
         addPattern(source, spans, ORDINAL, 0);
         addPattern(source, spans, SERVER_INSTANCE, 1);
+        addPattern(source, spans, PREFIX_QUANTITY, 0);
         addPattern(source, spans, NUMBER, 0);
         addPattern(source, spans, SYMBOL_RUN, 0);
         addPattern(source, spans, RANK_TAG, 0);
@@ -263,7 +289,7 @@ public final class TemplateText {
         // the DURATION/UUID span that contains it.
         List<Span> accepted = new ArrayList<>();
         for (Span span : spans) {
-            boolean overlaps = false;
+            boolean overlaps = overlapsAny(span, protectedTokens);
             for (Span existing : accepted) {
                 if (span.start < existing.end && existing.start < span.end) {
                     overlaps = true;
@@ -276,17 +302,24 @@ public final class TemplateText {
         accepted.sort(Comparator.comparingInt(s -> s.start));
         StringBuilder out = new StringBuilder(source.length());
         List<String> values = new ArrayList<>();
+        List<Integer> slotIndices = new ArrayList<>();
+        Set<Integer> occupiedSlots = occupiedSlots(source);
+        int nextSlot = 0;
         int pos = 0;
         for (Span span : accepted) {
             if (span.start < pos) continue;
             out.append(source, pos, span.start);
-            int index = values.size();
+            while (occupiedSlots.contains(nextSlot)) nextSlot++;
+            int slotIndex = nextSlot++;
+            occupiedSlots.add(slotIndex);
             values.add(source.substring(span.start, span.end));
-            out.append(token(index));
+            slotIndices.add(slotIndex);
+            out.append(token(slotIndex));
             pos = span.end;
         }
         out.append(source, pos, source.length());
-        return values.isEmpty() ? new Prepared(source, List.of()) : new Prepared(out.toString(), List.copyOf(values));
+        return values.isEmpty() ? new Prepared(source, List.of())
+                : new Prepared(out.toString(), values, slotIndices);
     }
 
     private static void addPattern(String source, List<Span> spans, Pattern pattern, int group) {
@@ -301,6 +334,43 @@ public final class TemplateText {
 
     private static String token(int index) {
         return OPEN + "MT" + index + CLOSE;
+    }
+
+    private static Set<Integer> occupiedSlots(String source) {
+        Set<Integer> occupied = new HashSet<>();
+        Matcher matcher = EXISTING_MT_TOKEN.matcher(source == null ? "" : source);
+        while (matcher.find()) {
+            try {
+                occupied.add(Integer.parseInt(matcher.group(1)));
+            } catch (NumberFormatException ignored) {
+                // An out-of-range literal token cannot collide with any generated int slot.
+            }
+        }
+        return occupied;
+    }
+
+    /** Existing MT-shaped text is literal input, not a placeholder owned by this
+     * preparation. Protect the complete marker span so its digits cannot be
+     * re-templated into a nested token (including whitespace/case variants). */
+    private static List<Span> existingTokenSpans(String source) {
+        List<Span> spans = new ArrayList<>();
+        Matcher matcher = EXISTING_MT_TOKEN.matcher(source == null ? "" : source);
+        while (matcher.find()) spans.add(new Span(matcher.start(), matcher.end()));
+        return spans;
+    }
+
+    private static boolean overlapsAny(Span span, List<Span> others) {
+        for (Span other : others) {
+            if (span.start < other.end && other.start < span.end) return true;
+        }
+        return false;
+    }
+
+    private static List<Integer> sequentialSlots(int count) {
+        if (count <= 0) return List.of();
+        List<Integer> slots = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) slots.add(i);
+        return List.copyOf(slots);
     }
 
     private record Span(int start, int end) {
