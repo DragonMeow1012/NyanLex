@@ -13,6 +13,35 @@ Minecraft Translator is a client-side real-time translation mod. It translates t
 - Async batching, priority queues, disk caches, and failure backoff reduce stalls and duplicate requests.
 - Player names are masked only from the TAB list; ordinary item text such as `with Chest` is no longer guessed as a player name.
 
+## In-game screenshots
+
+### Hypixel: item tooltips and chat
+
+Read translated item descriptions directly on the server, with text colors, numbers, and formatting preserved. Player names in these screenshots are masked.
+
+| English original | Traditional Chinese translation |
+| --- | --- |
+| ![Original Hypixel item tooltip](docs/images/promo/hypixel-potion-en.png) | ![Translated Hypixel item tooltip](docs/images/promo/hypixel-potion-zh-TW.png) |
+
+Chat can display the original message and its translation together for comparison.
+
+![Bilingual Hypixel server chat with player names masked](docs/images/promo/hypixel-chat-bilingual.png)
+
+### Modpacks: quest descriptions
+
+Before and after translation in Better Minecraft, including the quest title, long descriptions, and colored text. Click an image to view it at full size.
+
+| English original | Traditional Chinese translation |
+| --- | --- |
+| ![Original Better Minecraft quest](docs/images/promo/modpack-quest-en.png) | ![Translated Better Minecraft quest](docs/images/promo/modpack-quest-zh-TW.png) |
+
+<details>
+<summary>Choose a familiar language from the translation language list</summary>
+
+![Translation language selection](docs/images/promo/language-selector.png)
+
+</details>
+
 ## Direct downloads
 
 Each JAR supports only the exact Minecraft version and loader in its filename.

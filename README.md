@@ -13,6 +13,35 @@ Minecraft Translator 是純客戶端即時翻譯模組。它只翻譯畫面上�
 - 非同步批次、優先佇列、磁碟快取與失敗退避，避免畫面卡頓及重複請求。
 - 玩家名只依 TAB 名單遮罩；物品名稱不再因 `with Chest` 等普通文字被誤判。
 
+## 實際遊戲展示
+
+### Hypixel：物品提示與聊天翻譯
+
+直接在伺服器內閱讀翻譯後的物品說明，保留文字顏色、數值與格式。下列圖片中的玩家名稱已打碼。
+
+| 英文原文 | 繁體中文翻譯 |
+| --- | --- |
+| ![Hypixel 物品提示原文](docs/images/promo/hypixel-potion-en.png) | ![Hypixel 物品提示翻譯](docs/images/promo/hypixel-potion-zh-TW.png) |
+
+聊天可以同時顯示原文與譯文，方便閱讀與對照。
+
+![Hypixel 伺服器聊天雙語對照，玩家名稱已打碼](docs/images/promo/hypixel-chat-bilingual.png)
+
+### 模組包：任務說明翻譯
+
+Better Minecraft 任務介面的實際翻譯前後，包含任務標題、長段落說明與彩色文字。點擊圖片可查看完整尺寸。
+
+| 英文原文 | 繁體中文翻譯 |
+| --- | --- |
+| ![Better Minecraft 任務原文](docs/images/promo/modpack-quest-en.png) | ![Better Minecraft 任務翻譯](docs/images/promo/modpack-quest-zh-TW.png) |
+
+<details>
+<summary>多種翻譯目標語言，選擇自己熟悉的語言</summary>
+
+![翻譯目標語言選擇](docs/images/promo/language-selector.png)
+
+</details>
+
 ## 直接下載
 
 每個 JAR 只支援檔名標示的 Minecraft 版本與 Loader，不可混用。
