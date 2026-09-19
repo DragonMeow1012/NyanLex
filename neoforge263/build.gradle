@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'net.neoforged.moddev' version '2.0.141'
+    id 'net.neoforged.moddev' version '2.0.147'
 }
 
 version = project.mod_version
@@ -8,7 +8,7 @@ group = project.maven_group
 base { archivesName = 'mctranslator' }
 
 tasks.named('jar') {
-    archiveClassifier = 'NeoForge-26.2'
+    archiveClassifier = 'NeoForge-26.3'
     from('../LICENSE') {
         rename { 'LICENSE_MinecraftTranslator' }
     }
@@ -47,4 +47,8 @@ processResources {
     }
 }
 
-sourceSets.main.java.srcDir("../platform26/src/main/java")
+// Share translation and loader code; browser integration follows the target API.
+sourceSets.main {
+    java.setSrcDirs(['../neoforge26/src/main/java', '../platform263/src/main/java'])
+    resources.setSrcDirs(['../neoforge26/src/main/resources'])
+}

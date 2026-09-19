@@ -231,7 +231,7 @@ public abstract class HudMixin {
     }
 
     @Redirect(
-            method = "extractSelectedItemName",
+            method = "extractSelectedItemName(Lnet/minecraft/client/gui/GuiGraphicsExtractor;I)V",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;textWithBackdrop"
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),

@@ -17,13 +17,13 @@ displayTest = "IGNORE_ALL_VERSION"
 [[dependencies.mctranslator]]
 modId = "neoforge"
 type = "required"
-versionRange = "[26.2,)"
+versionRange = "${neoforge_range}"
 ordering = "NONE"
 side = "CLIENT"
 
 [[dependencies.mctranslator]]
 modId = "minecraft"
 type = "required"
-versionRange = "[26.2,26.3)"
+versionRange = "${minecraft_range}"
 ordering = "NONE"
 side = "CLIENT"

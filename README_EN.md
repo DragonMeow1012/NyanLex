@@ -19,6 +19,8 @@ Each JAR supports only the exact Minecraft version and loader in its filename.
 
 [Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/MinecraftTranslator-1.0.4-all-versions.zip)
 
+[Download the Minecraft 26.3 supplemental package (Fabric and NeoForge)](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/MinecraftTranslator-1.0.4-26.3.zip)
+
 ### Fabric
 
 Fabric targets require matching Fabric Loader and Fabric API versions.
@@ -36,6 +38,7 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 | 1.21.11 | 21 | [mctranslator-1.0.4-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.21.11.jar) |
 | 26.1.2 | 25 | [mctranslator-1.0.4-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-26.1.2.jar) |
 | 26.2 | 25 | [mctranslator-1.0.4-Fabric-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-26.2.jar) |
+| 26.3 | 25 | [mctranslator-1.0.4-Fabric-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/mctranslator-1.0.4-Fabric-26.3.jar) |
 
 ### NeoForge
 
@@ -44,6 +47,7 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 | 1.20.1 | 17 | [mctranslator-1.0.4-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-1.20.1.jar) |
 | 1.21.1 | 21 | [mctranslator-1.0.4-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-1.21.1.jar) |
 | 26.2 | 25 | [mctranslator-1.0.4-NeoForge-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-26.2.jar) |
+| 26.3 | 25 | [mctranslator-1.0.4-NeoForge-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/mctranslator-1.0.4-NeoForge-26.3.jar) |
 
 ### Forge
 

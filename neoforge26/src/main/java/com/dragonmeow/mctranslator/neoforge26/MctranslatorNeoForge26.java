@@ -51,7 +51,6 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -704,23 +703,23 @@ public final class MctranslatorNeoForge26 {
     private void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         
         
-        modeKey = new KeyMapping("key.mctranslator.mode", InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN, KeyMapping.Category.MISC);
+        modeKey = new KeyMapping("key.mctranslator.mode",
+                InputConstants.UNKNOWN.getValue(), KeyMapping.Category.MISC);
         event.register(modeKey);
         
         
-        retranslateKey = new KeyMapping("key.mctranslator.retranslate", InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_R, KeyMapping.Category.MISC);
+        retranslateKey = new KeyMapping("key.mctranslator.retranslate",
+                InputConstants.KEY_R, KeyMapping.Category.MISC);
         event.register(retranslateKey);
         
         
         
-        screenScanKey = new KeyMapping("key.mctranslator.screenscan", InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_P, KeyMapping.Category.MISC);
+        screenScanKey = new KeyMapping("key.mctranslator.screenscan",
+                InputConstants.KEY_P, KeyMapping.Category.MISC);
         event.register(screenScanKey);
         
-        toggleKey = new KeyMapping("key.mctranslator.toggle", InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_G, KeyMapping.Category.MISC);
+        toggleKey = new KeyMapping("key.mctranslator.toggle",
+                InputConstants.KEY_G, KeyMapping.Category.MISC);
         event.register(toggleKey);
     }
 
@@ -1553,8 +1552,7 @@ public final class MctranslatorNeoForge26 {
                 || screen instanceof Neo26KeybindScreen) return;
         
         
-        net.minecraft.client.input.KeyEvent ke = new net.minecraft.client.input.KeyEvent(
-                event.getKeyCode(), event.getScanCode(), event.getModifiers());
+        net.minecraft.client.input.KeyEvent ke = event.getKeyEvent();
         if (toggleKey != null && toggleKey.matches(ke)) {
             flipShowOriginal();
             return;

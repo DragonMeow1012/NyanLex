@@ -19,6 +19,8 @@ Minecraft Translator 是純客戶端即時翻譯模組。它只翻譯畫面上�
 
 [下載包含全部版本與分類資料夾的 ZIP](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/MinecraftTranslator-1.0.4-all-versions.zip)
 
+[下載 Minecraft 26.3 補充包（Fabric 與 NeoForge）](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/MinecraftTranslator-1.0.4-26.3.zip)
+
 ### Fabric
 
 Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
@@ -36,6 +38,7 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 | 1.21.11 | 21 | [mctranslator-1.0.4-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.21.11.jar) |
 | 26.1.2 | 25 | [mctranslator-1.0.4-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-26.1.2.jar) |
 | 26.2 | 25 | [mctranslator-1.0.4-Fabric-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-26.2.jar) |
+| 26.3 | 25 | [mctranslator-1.0.4-Fabric-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/mctranslator-1.0.4-Fabric-26.3.jar) |
 
 ### NeoForge
 
@@ -44,6 +47,7 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 | 1.20.1 | 17 | [mctranslator-1.0.4-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-1.20.1.jar) |
 | 1.21.1 | 21 | [mctranslator-1.0.4-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-1.21.1.jar) |
 | 26.2 | 25 | [mctranslator-1.0.4-NeoForge-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-26.2.jar) |
+| 26.3 | 25 | [mctranslator-1.0.4-NeoForge-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/mctranslator-1.0.4-NeoForge-26.3.jar) |
 
 ### Forge
 

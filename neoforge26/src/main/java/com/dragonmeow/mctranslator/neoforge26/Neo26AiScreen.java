@@ -12,7 +12,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Util;
+import com.dragonmeow.mctranslator.platform.BrowserLinks;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -304,7 +304,7 @@ public final class Neo26AiScreen extends Screen {
             }
             try {
                 LoginStart login = client.startLogin();
-                onMain(() -> Util.getPlatform().openUri(login.authUrl()));
+                onMain(() -> BrowserLinks.open(login.authUrl()));
                 setStatus(Component.translatable(
                         "screen.mctranslator.ai.codex.waiting_login").getString(), false);
                 boolean success = client.awaitLogin(login.loginId(), Duration.ofMinutes(10));
@@ -443,7 +443,7 @@ public final class Neo26AiScreen extends Screen {
         this.missingPromptShown = true;
         ConfirmScreen confirm = new ConfirmScreen(confirmed -> {
             this.missingPromptShown = false;
-            if (confirmed) Util.getPlatform().openUri(CODEX_DOWNLOAD_URL);
+            if (confirmed) BrowserLinks.open(CODEX_DOWNLOAD_URL);
             if (this.minecraft != null) this.minecraft.setScreenAndShow(this);
         }, Component.translatable("screen.mctranslator.ai.codex.missing_title"),
                 Component.translatable("screen.mctranslator.ai.codex.missing_message"),

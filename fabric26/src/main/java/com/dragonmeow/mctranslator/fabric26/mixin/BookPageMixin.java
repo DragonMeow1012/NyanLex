@@ -27,7 +27,7 @@ import java.util.Optional;
  * Translates opened-book and lectern page text (gated by {@code bookMode}). One mixin covers both
  * cases because {@code LecternScreen extends BookViewScreen}.
  *
- * <p>26.2's {@code BookViewScreen.extractRenderState} lays the current page out via
+ * <p>{@code BookViewScreen.visitText} lays the current page out via
  * {@code this.font.split(page, 114)} and caches it, only re-splitting when
  * {@code cachedPage != currentPage}. So we (1) force a re-split each frame while a book surface is
  * on, so a late async translation appears without a page flip, and (2) redirect the {@code Font.split}
@@ -48,11 +48,11 @@ public abstract class BookPageMixin {
     }
 
     @Redirect(
-            method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+            method = "visitText",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/gui/Font;split"
                             + "(Lnet/minecraft/network/chat/FormattedText;I)Ljava/util/List;"),
-            require = 0)
+            require = 1)
     private List<FormattedCharSequence> mctranslator$translateBookPage(Font font, FormattedText text, int width) {
         TranslationService service = MctranslatorFabric26.service();
         if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY && text != null) {

@@ -50,7 +50,6 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -799,13 +798,13 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     private void registerKeyBinds() {
         modeKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.mctranslator.mode", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, KeyMapping.Category.MISC));
+                "key.mctranslator.mode", InputConstants.UNKNOWN.getValue(), KeyMapping.Category.MISC));
         retranslateKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.mctranslator.retranslate", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, KeyMapping.Category.MISC));
+                "key.mctranslator.retranslate", InputConstants.KEY_R, KeyMapping.Category.MISC));
         screenScanKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.mctranslator.screenscan", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_P, KeyMapping.Category.MISC));
+                "key.mctranslator.screenscan", InputConstants.KEY_P, KeyMapping.Category.MISC));
         toggleKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.mctranslator.toggle", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, KeyMapping.Category.MISC));
+                "key.mctranslator.toggle", InputConstants.KEY_G, KeyMapping.Category.MISC));
     }
 
     

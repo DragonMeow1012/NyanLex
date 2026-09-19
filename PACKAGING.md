@@ -73,3 +73,33 @@ Before publishing:
 - Confirm loader metadata contains version 1.0.4 and the exact Minecraft range.
 - Run `git diff --check` and core unit tests.
 - Upload individual JARs plus the four ZIP files to tag `v1.0.4`.
+
+## Minecraft 26.3 supplemental package
+
+Minecraft 26.3 targets are `fabric263` and `neoforge263`, both using Java 25
+and Gradle 9.5. They share the 26.2 translation/loader sources and resources.
+Keyboard mappings use Minecraft input constants and NeoForge's original
+`KeyEvent`, so SDL and GLFW key codes are never mixed. External browser links
+use the version-specific `platform26` / `platform263` source directory.
+
+```powershell
+.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p fabric263 build
+.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p neoforge263 build
+python verification/package-26.3.py
+```
+
+The supplemental package is separate from the existing 16-target release:
+
+```text
+mods-jar/1.0.4-26.3/
+  fabric/26.3/mctranslator-1.0.4-Fabric-26.3.jar
+  neoforge/26.3/mctranslator-1.0.4-NeoForge-26.3.jar
+  MinecraftTranslator-1.0.4-26.3.zip
+  SHA256SUMS.txt
+```
+
+Fabric requires Fabric Loader 0.19.5 and Fabric API 0.161.0+26.3 for the
+verified configuration. NeoForge was built with 26.3.0.6-beta and ModDevGradle
+2.0.147; older build tooling fails while recompiling Minecraft's `HolderSet`.
+The supplemental packaging script checks metadata and entrypoint classes,
+then verifies the copied JARs and ZIP contents against their build outputs.
