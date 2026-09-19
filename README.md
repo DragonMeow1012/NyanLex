@@ -29,17 +29,17 @@ Fabric 1.17.1 以上與 NeoForge 可互相分享；Fabric 1.14.4～1.16.5 與 Fo
 
 ## 實際遊戲展示
 
-### Hypixel：物品提示與聊天翻譯
+### 物品提示與聊天翻譯
 
 直接在伺服器內閱讀翻譯後的物品說明，保留文字顏色、數值與格式。下列圖片中的玩家名稱已打碼。
 
 | 英文原文 | 繁體中文翻譯 |
 | --- | --- |
-| ![Hypixel 物品提示原文](docs/images/promo/hypixel-potion-en.png) | ![Hypixel 物品提示翻譯](docs/images/promo/hypixel-potion-zh-TW.png) |
+| ![物品提示原文](docs/images/promo/hypixel-potion-en.png) | ![物品提示翻譯](docs/images/promo/hypixel-potion-zh-TW.png) |
 
 聊天可以同時顯示原文與譯文，方便閱讀與對照。
 
-![Hypixel 伺服器聊天雙語對照，玩家名稱已打碼](docs/images/promo/hypixel-chat-bilingual.png)
+![伺服器聊天雙語對照，玩家名稱已打碼](docs/images/promo/hypixel-chat-bilingual.png)
 
 ### 模組包：任務說明翻譯
 

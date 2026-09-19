@@ -15,17 +15,17 @@ Minecraft Translator is a client-side real-time translation mod. It translates t
 
 ## In-game screenshots
 
-### Hypixel: item tooltips and chat
+### Item tooltips and chat translation
 
 Read translated item descriptions directly on the server, with text colors, numbers, and formatting preserved. Player names in these screenshots are masked.
 
 | English original | Traditional Chinese translation |
 | --- | --- |
-| ![Original Hypixel item tooltip](docs/images/promo/hypixel-potion-en.png) | ![Translated Hypixel item tooltip](docs/images/promo/hypixel-potion-zh-TW.png) |
+| ![Original item tooltip](docs/images/promo/hypixel-potion-en.png) | ![Translated item tooltip](docs/images/promo/hypixel-potion-zh-TW.png) |
 
 Chat can display the original message and its translation together for comparison.
 
-![Bilingual Hypixel server chat with player names masked](docs/images/promo/hypixel-chat-bilingual.png)
+![Bilingual server chat with player names masked](docs/images/promo/hypixel-chat-bilingual.png)
 
 ### Modpacks: quest descriptions
 
