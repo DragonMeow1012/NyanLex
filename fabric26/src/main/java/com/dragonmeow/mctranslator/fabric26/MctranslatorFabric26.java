@@ -88,6 +88,12 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     private static KeyMapping modeKey;
     private static KeyMapping retranslateKey;
     private static KeyMapping screenScanKey;
+    private static final com.dragonmeow.mctranslator.translate.ScreenTranslationCapture SCREEN_CAPTURE =
+            new com.dragonmeow.mctranslator.translate.ScreenTranslationCapture();
+    private static final com.dragonmeow.mctranslator.translate.ScreenTranslationCapture TOOLTIP_CAPTURE =
+            new com.dragonmeow.mctranslator.translate.ScreenTranslationCapture();
+    private static net.minecraft.client.gui.screens.Screen screenRefreshRequested;
+
     private static KeyMapping toggleKey;
     private long actionBarSequence;
 
@@ -118,6 +124,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     }
 
     public static void endScreenRender(net.minecraft.client.gui.screens.Screen screen) {
+        finishScreenCapture(screen);
         java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen> stack =
                 SCREEN_RENDER_STACK.get();
         if (!stack.isEmpty() && stack.peek() == screen) stack.pop();
@@ -491,6 +498,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     public static Component screenText(Component c) {
         if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return c;
+        if (c != null && captureScreenText(c)) return c;
         if (drawingInternalOverlay()) return c;
         TranslationService s = service;
         if (s == null || c == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return c;
@@ -507,10 +515,11 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return source;
         if (drawingInternalOverlay()) return source;
         TranslationService s = service;
-        if (widget == null || source == null || s == null
-                || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return source;
+        if (widget == null || source == null || s == null) return source;
         Minecraft mc = Minecraft.getInstance();
         if (!renderingCurrentScreen(mc) && !ftbWidgetOnCurrentScreen(widget, mc)) return source;
+        if (captureScreenText(source, true)) return source;
+        if (s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return source;
         Component resolved = Fabric26TextStyle.resolveLegacyCodes(source);
         Component rendered = Fabric26TextStyle.renderTranslated("ftb", resolved, s::translateScreenText);
         if (rendered != null) {
@@ -536,7 +545,12 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
                 Minecraft client = Minecraft.getInstance();
                 if (client != null) {
                     Component display = ready != null ? ready : resolved;
-                    client.execute(() -> applyFtbText(widget, display));
+                    client.execute(() -> {
+                            synchronized (FTB_PENDING) {
+                                if (!request.equals(FTB_PENDING.get(widget))) return;
+                            }
+                            if (ftbWidgetOnCurrentScreen(widget, client)) applyFtbText(widget, display);
+                        });
                 }
             });
         }
@@ -589,6 +603,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     public static String screenText(String str) {
         if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return str;
+        if (str != null && captureScreenText(Component.literal(str))) return str;
         if (drawingInternalOverlay()) return str;
         TranslationService s = service;
         if (s == null || str == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return str;
@@ -607,6 +622,9 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     public static net.minecraft.util.FormattedCharSequence screenText(net.minecraft.util.FormattedCharSequence fcs) {
         if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return fcs;
+        if (fcs != null && Minecraft.getInstance().gui.screen() != null
+                && Minecraft.getInstance().gui.screen().getClass().getName().startsWith("dev.ftb.")) return fcs;
+        if (fcs != null && captureScreenText(Fabric26TextStyle.toComponent(fcs))) return fcs;
         if (drawingInternalOverlay()) return fcs;
         TranslationService s = service;
         if (s == null || fcs == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return fcs;
@@ -628,6 +646,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     public static net.minecraft.network.chat.FormattedText screenText(net.minecraft.network.chat.FormattedText text) {
         if (com.dragonmeow.mctranslator.translate.InternalRenderGuard.active()) return text;
+        if (text != null && captureScreenText(Fabric26TextStyle.toComponent(text))) return text;
         if (drawingInternalOverlay()) return text;
         TranslationService s = service;
         if (s == null || text == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return text;
@@ -1349,6 +1368,13 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
     
 
     private void onItemTooltip(ItemStack stack, List<Component> lines) {
+        Minecraft captureClient = Minecraft.getInstance();
+        if (captureClient != null && lines != null && TOOLTIP_CAPTURE.active(captureClient.gui.screen())) {
+            for (String source : tooltipParagraphPlan(stack, lines, Fabric26TextStyle::paragraphRequestText).sources()) {
+                TOOLTIP_CAPTURE.record(captureClient.gui.screen(), source);
+            }
+            return;
+        }
         if (service == null) return;
         if (tooltipProbeDepth.get() > 0) return;
         // Search-tree tooltips run on a background executor. A visible tooltip must be
@@ -1530,6 +1556,7 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
 
     private void onClientTick(Minecraft mc) {
         SCREEN_RENDER_STACK.remove();
+        refreshScannedScreen();
         if (modeKey != null) {
             while (modeKey.consumeClick()) {
                 if (mc != null) mc.setScreenAndShow(new Fabric26ConfigScreen(mc.gui.screen()));
@@ -1579,45 +1606,59 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         }
     }
 
+    /** Rescan one render frame without replacing the widgets' original labels. */
     private void scanAndTranslateScreen(net.minecraft.client.gui.screens.Screen screen) {
         if (screen == null || service == null
                 || screen instanceof net.minecraft.client.gui.screens.ChatScreen
+                || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
                 || !screenTranslationAllowed(screen)) return;
-        List<net.minecraft.client.gui.components.AbstractWidget> widgets = new ArrayList<>();
-        collectWidgets(screen.children(), widgets, 0);
-        int requested = 0;
-        for (net.minecraft.client.gui.components.AbstractWidget widget : widgets) {
-            Component raw = widget.getMessage();
-            if (raw == null) continue;
-            final Component source = Fabric26TextStyle.resolveLegacyCodes(raw);
-            List<String> requests = Fabric26TextStyle.requestLines(source);
-            for (String request : requests) {
-                service.requestScreenTextAsync(request, translated -> {
-                    Minecraft mc = Minecraft.getInstance();
-                    if (mc == null) return;
-                    Component ready = Fabric26TextStyle.renderTranslated(
-                            "screenScan", source, service::translateScreenScanText);
-                    Component display = ready != null ? ready : source;
-                    mc.execute(() -> widget.setMessage(display));
-                });
-            }
-            requested += requests.size();
-        }
-        status(Component.translatable("message.mctranslator.screen_scan", requested).getString());
+        SCREEN_CAPTURE.begin(screen);
+        TOOLTIP_CAPTURE.begin(screen);
+        captureScreenText(screen.getTitle(), true);
+        // FTB caches laid-out paragraphs. Rebuild them while capturing their original input.
+        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+        Fabric26TextStyle.clearRenderMemo();
+        refreshCurrentFtbScreen();
     }
 
-    private static void collectWidgets(
-            List<? extends net.minecraft.client.gui.components.events.GuiEventListener> children,
-            List<net.minecraft.client.gui.components.AbstractWidget> out, int depth) {
-        if (children == null || depth > 8) return;
-        for (net.minecraft.client.gui.components.events.GuiEventListener child : children) {
-            if (child instanceof net.minecraft.client.gui.components.AbstractWidget w) {
-                out.add(w);
-            }
-            if (child instanceof net.minecraft.client.gui.components.events.ContainerEventHandler c) {
-                collectWidgets(c.children(), out, depth + 1);
-            }
-        }
+    private static boolean captureScreenText(Component source) {
+        return captureScreenText(source, false);
+    }
+
+    private static boolean captureScreenText(Component source, boolean widgetInput) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || source == null || !SCREEN_CAPTURE.active(mc.gui.screen())) return false;
+        if (!widgetInput && !renderingCurrentScreen(mc)) return false;
+        for (String request : Fabric26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.gui.screen(), request);
+        return true;
+    }
+
+    private static void finishScreenCapture(net.minecraft.client.gui.screens.Screen screen) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        SCREEN_CAPTURE.cancelUnless(mc.gui.screen());
+        TOOLTIP_CAPTURE.cancelUnless(mc.gui.screen());
+        List<String> sources = SCREEN_CAPTURE.finish(screen);
+        if (sources == null || service == null) return;
+        List<String> tooltips = TOOLTIP_CAPTURE.finish(screen);
+        if (tooltips != null) sources.removeAll(tooltips);
+        service.retranslateScreen(sources);
+        if (tooltips != null && !tooltips.isEmpty()) service.retranslate(tooltips);
+        Fabric26TextStyle.clearRenderMemo();
+        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+        screenRefreshRequested = screen;
+        status(Component.translatable("message.mctranslator.screen_scan", sources.size()).getString());
+    }
+
+    private static void refreshScannedScreen() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        SCREEN_CAPTURE.cancelUnless(mc.gui.screen());
+        TOOLTIP_CAPTURE.cancelUnless(mc.gui.screen());
+        if (screenRefreshRequested == null) return;
+        boolean current = screenRefreshRequested == mc.gui.screen();
+        screenRefreshRequested = null;
+        if (current) refreshCurrentFtbScreen();
     }
 
     private void warmOpenContainerItems(Minecraft mc) {
@@ -1811,7 +1852,20 @@ public final class MctranslatorFabric26 implements ClientModInitializer {
         t.start();
     }
 
-    private void status(String msg) {
+    public static void translationFile(boolean importing) {
+        TranslationService currentService = service;
+        if (currentService == null) return;
+        com.dragonmeow.mctranslator.translate.TranslationFileDialog.open(importing,
+                currentService::exportTranslations, currentService::importTranslations, message -> {
+                    Minecraft client = Minecraft.getInstance();
+                    if (client != null) client.execute(() -> {
+                        status(message);
+                        refreshCurrentFtbScreen();
+                    });
+                });
+    }
+
+    private static void status(String msg) {
         Minecraft mc = Minecraft.getInstance();
         if (mc != null && mc.player != null) {
             mc.gui.hud.getChat().addClientSystemMessage(Component.translatable("message.mctranslator.prefix", msg));

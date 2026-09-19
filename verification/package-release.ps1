@@ -8,7 +8,7 @@ Set-StrictMode -Version 2.0
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$releaseVersion = '1.0.4'
+$releaseVersion = '1.0.5'
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $modsJarRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'mods-jar'))
 $releaseRoot = [System.IO.Path]::GetFullPath(
@@ -244,8 +244,8 @@ function Assert-PackageMatchesChecksumLines {
         [Parameter(Mandatory = $true)][string]$Description
     )
 
-    Require ($ChecksumLines.Count -eq 20) `
-        "$Description expected exactly 20 checksum lines"
+    Require ($ChecksumLines.Count -eq 22) `
+        "$Description expected exactly 22 checksum lines"
     $manifestPath = Get-PackagePath $Root 'SHA256SUMS.txt'
     $actualLines = [System.IO.File]::ReadAllLines($manifestPath, $Encoding)
     Require ([string]::Join("`n", $actualLines) -ceq
@@ -521,38 +521,40 @@ function Assert-SourceJar {
 # The source and destination of every publishable JAR are intentionally explicit.
 # Adding a release target requires a reviewed row here and a matching ZIP count below.
 $artifacts = @(
-    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.12.2'; Source = 'forge1122\build\libs\mctranslator-1.0.4-Forge-1.12.2.jar'; Relative = 'forge/1.12.2/mctranslator-1.0.4-Forge-1.12.2.jar'; MetadataKind = 'forge1122'; MinecraftRange = '1.12.2'; MainClass = 'com.dragonmeow.mctranslator.forgelegacy.MinecraftTranslatorForge' },
-    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.13.2'; Source = 'forge1132\build\libs\mctranslator-1.0.4-Forge-1.13.2.jar'; Relative = 'forge/1.13.2/mctranslator-1.0.4-Forge-1.13.2.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = ('$' + '{file.jarVersion}'); MinecraftRange = '[1.13.2]'; LoaderRange = '[25,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[25,)'; MainClass = 'com.dragonmeow.mctranslator.forgelegacy.MinecraftTranslatorForge' },
+    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.12.2'; Source = 'forge1122\build\libs\mctranslator-1.0.5-Forge-1.12.2.jar'; Relative = 'forge/1.12.2/mctranslator-1.0.5-Forge-1.12.2.jar'; MetadataKind = 'forge1122'; MinecraftRange = '1.12.2'; MainClass = 'com.dragonmeow.mctranslator.forgelegacy.MinecraftTranslatorForge' },
+    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.13.2'; Source = 'forge1132\build\libs\mctranslator-1.0.5-Forge-1.13.2.jar'; Relative = 'forge/1.13.2/mctranslator-1.0.5-Forge-1.13.2.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = ('$' + '{file.jarVersion}'); MinecraftRange = '[1.13.2]'; LoaderRange = '[25,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[25,)'; MainClass = 'com.dragonmeow.mctranslator.forgelegacy.MinecraftTranslatorForge' },
 
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.14.4'; Source = 'fabric1144\build\libs\mctranslator-1.0.4-Fabric-1.14.4.jar'; Relative = 'fabric/1.14.4/mctranslator-1.0.4-Fabric-1.14.4.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.14.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.15.2'; Source = 'fabric1152\build\libs\mctranslator-1.0.4-Fabric-1.15.2.jar'; Relative = 'fabric/1.15.2/mctranslator-1.0.4-Fabric-1.15.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.15.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.16.5'; Source = 'fabric1165\build\libs\mctranslator-1.0.4-Fabric-1.16.5.jar'; Relative = 'fabric/1.16.5/mctranslator-1.0.4-Fabric-1.16.5.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.16.5'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.17.1'; Source = 'fabric1171\build\libs\mctranslator-1.0.4-Fabric-1.17.1.jar'; Relative = 'fabric/1.17.1/mctranslator-1.0.4-Fabric-1.17.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.17.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=16'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.18.2'; Source = 'fabric1182\build\libs\mctranslator-1.0.4-Fabric-1.18.2.jar'; Relative = 'fabric/1.18.2/mctranslator-1.0.4-Fabric-1.18.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.18.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.19.4'; Source = 'fabric1194\build\libs\mctranslator-1.0.4-Fabric-1.19.4.jar'; Relative = 'fabric/1.19.4/mctranslator-1.0.4-Fabric-1.19.4.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.19.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.20.1'; Source = 'fabric120\build\libs\mctranslator-1.0.4-Fabric-1.20.1.jar'; Relative = 'fabric/1.20.1/mctranslator-1.0.4-Fabric-1.20.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.20.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.1'; Source = 'build\libs\mctranslator-1.0.4-Fabric-1.21.1.jar'; Relative = 'fabric/1.21.1/mctranslator-1.0.4-Fabric-1.21.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.21.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.11'; Source = 'fabric12111\build\libs\mctranslator-1.0.4-Fabric-1.21.11.jar'; Relative = 'fabric/1.21.11/mctranslator-1.0.4-Fabric-1.21.11.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.21.11'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.1.2'; Source = 'fabric2612\build\libs\mctranslator-1.0.4-Fabric-26.1.2.jar'; Relative = 'fabric/26.1.2/mctranslator-1.0.4-Fabric-26.1.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '26.1.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.2'; Source = 'fabric26\build\libs\mctranslator-1.0.4-Fabric-26.2.jar'; Relative = 'fabric/26.2/mctranslator-1.0.4-Fabric-26.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '26.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.14.4'; Source = 'fabric1144\build\libs\mctranslator-1.0.5-Fabric-1.14.4.jar'; Relative = 'fabric/1.14.4/mctranslator-1.0.5-Fabric-1.14.4.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.14.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.15.2'; Source = 'fabric1152\build\libs\mctranslator-1.0.5-Fabric-1.15.2.jar'; Relative = 'fabric/1.15.2/mctranslator-1.0.5-Fabric-1.15.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.15.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.16.5'; Source = 'fabric1165\build\libs\mctranslator-1.0.5-Fabric-1.16.5.jar'; Relative = 'fabric/1.16.5/mctranslator-1.0.5-Fabric-1.16.5.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.16.5'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.17.1'; Source = 'fabric1171\build\libs\mctranslator-1.0.5-Fabric-1.17.1.jar'; Relative = 'fabric/1.17.1/mctranslator-1.0.5-Fabric-1.17.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.17.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=16'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.18.2'; Source = 'fabric1182\build\libs\mctranslator-1.0.5-Fabric-1.18.2.jar'; Relative = 'fabric/1.18.2/mctranslator-1.0.5-Fabric-1.18.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.18.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.19.4'; Source = 'fabric1194\build\libs\mctranslator-1.0.5-Fabric-1.19.4.jar'; Relative = 'fabric/1.19.4/mctranslator-1.0.5-Fabric-1.19.4.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.19.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.20.1'; Source = 'fabric120\build\libs\mctranslator-1.0.5-Fabric-1.20.1.jar'; Relative = 'fabric/1.20.1/mctranslator-1.0.5-Fabric-1.20.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.20.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.1'; Source = 'build\libs\mctranslator-1.0.5-Fabric-1.21.1.jar'; Relative = 'fabric/1.21.1/mctranslator-1.0.5-Fabric-1.21.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.21.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.11'; Source = 'fabric12111\build\libs\mctranslator-1.0.5-Fabric-1.21.11.jar'; Relative = 'fabric/1.21.11/mctranslator-1.0.5-Fabric-1.21.11.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.21.11'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.1.2'; Source = 'fabric2612\build\libs\mctranslator-1.0.5-Fabric-26.1.2.jar'; Relative = 'fabric/26.1.2/mctranslator-1.0.5-Fabric-26.1.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '26.1.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.2'; Source = 'fabric26\build\libs\mctranslator-1.0.5-Fabric-26.2.jar'; Relative = 'fabric/26.2/mctranslator-1.0.5-Fabric-26.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '26.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.3'; Source = 'fabric263\build\libs\mctranslator-1.0.5-Fabric-26.3.jar'; Relative = 'fabric/26.3/mctranslator-1.0.5-Fabric-26.3.jar'; MetadataKind = 'fabric'; MinecraftRange = '26.3'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' },
 
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.20.1'; Source = 'neoforge120\build\libs\mctranslator-1.0.4-NeoForge-1.20.1.jar'; Relative = 'neoforge/1.20.1/mctranslator-1.0.4-NeoForge-1.20.1.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = '1.0.4'; MinecraftRange = '[1.20.1,1.20.2)'; LoaderRange = '[47,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[47,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' },
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.21.1'; Source = 'neoforge\build\libs\mctranslator-1.0.4-NeoForge-1.21.1.jar'; Relative = 'neoforge/1.21.1/mctranslator-1.0.4-NeoForge-1.21.1.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = '1.0.4'; MinecraftRange = '[1.21.1,1.21.2)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[21.1.0,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' },
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.2'; Source = 'neoforge26\build\libs\mctranslator-1.0.4-NeoForge-26.2.jar'; Relative = 'neoforge/26.2/mctranslator-1.0.4-NeoForge-26.2.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = '1.0.4'; MinecraftRange = '[26.2,26.3)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.2,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge26.MctranslatorNeoForge26' }
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.20.1'; Source = 'neoforge120\build\libs\mctranslator-1.0.5-NeoForge-1.20.1.jar'; Relative = 'neoforge/1.20.1/mctranslator-1.0.5-NeoForge-1.20.1.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = '1.0.5'; MinecraftRange = '[1.20.1,1.20.2)'; LoaderRange = '[47,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[47,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.21.1'; Source = 'neoforge\build\libs\mctranslator-1.0.5-NeoForge-1.21.1.jar'; Relative = 'neoforge/1.21.1/mctranslator-1.0.5-NeoForge-1.21.1.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = '1.0.5'; MinecraftRange = '[1.21.1,1.21.2)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[21.1.0,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.2'; Source = 'neoforge26\build\libs\mctranslator-1.0.5-NeoForge-26.2.jar'; Relative = 'neoforge/26.2/mctranslator-1.0.5-NeoForge-26.2.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = '1.0.5'; MinecraftRange = '[26.2,26.3)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.2,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge26.MctranslatorNeoForge26' },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.3'; Source = 'neoforge263\build\libs\mctranslator-1.0.5-NeoForge-26.3.jar'; Relative = 'neoforge/26.3/mctranslator-1.0.5-NeoForge-26.3.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = '1.0.5'; MinecraftRange = '[26.3,26.4)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.3,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge26.MctranslatorNeoForge26' }
 )
 
 $zipSpecs = @(
-    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.4-Fabric.zip'; Loaders = @('fabric'); ExpectedCount = 11 },
-    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.4-NeoForge.zip'; Loaders = @('neoforge'); ExpectedCount = 3 },
-    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.4-Forge.zip'; Loaders = @('forge'); ExpectedCount = 2 },
-    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.4-all-versions.zip'; Loaders = @('fabric', 'neoforge', 'forge'); ExpectedCount = 16 }
+    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.5-Fabric.zip'; Loaders = @('fabric'); ExpectedCount = 12 },
+    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.5-NeoForge.zip'; Loaders = @('neoforge'); ExpectedCount = 4 },
+    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.5-Forge.zip'; Loaders = @('forge'); ExpectedCount = 2 },
+    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.5-all-versions.zip'; Loaders = @('fabric', 'neoforge', 'forge'); ExpectedCount = 18 }
 )
 
-Require ($artifacts.Count -eq 16) "Artifact map must contain exactly 16 JARs"
-Require (@($artifacts | Where-Object Loader -eq 'fabric').Count -eq 11) `
-    "Artifact map must contain 11 Fabric JARs"
-Require (@($artifacts | Where-Object Loader -eq 'neoforge').Count -eq 3) `
-    "Artifact map must contain 3 NeoForge JARs"
+Require ($artifacts.Count -eq 18) "Artifact map must contain exactly 18 JARs"
+Require (@($artifacts | Where-Object Loader -eq 'fabric').Count -eq 12) `
+    "Artifact map must contain 12 Fabric JARs"
+Require (@($artifacts | Where-Object Loader -eq 'neoforge').Count -eq 4) `
+    "Artifact map must contain 4 NeoForge JARs"
 Require (@($artifacts | Where-Object Loader -eq 'forge').Count -eq 2) `
     "Artifact map must contain 2 Forge JARs"
 Require (@($artifacts | Group-Object Source | Where-Object Count -ne 1).Count -eq 0) `
@@ -564,8 +566,8 @@ Require (@($zipSpecs | Group-Object Relative | Where-Object Count -ne 1).Count -
     "ZIP map contains duplicate destination paths"
 
 $allowed = @($artifacts.Relative) + @($zipSpecs.Relative) + @('SHA256SUMS.txt')
-Require ($allowed.Count -eq 21) `
-    "Release output map must contain 16 JARs, four ZIPs, and SHA256SUMS.txt"
+Require ($allowed.Count -eq 23) `
+    "Release output map must contain 18 JARs, four ZIPs, and SHA256SUMS.txt"
 Require (@($allowed | Group-Object | Where-Object Count -ne 1).Count -eq 0) `
     "Release output map contains duplicate paths"
 
@@ -638,9 +640,9 @@ foreach ($artifact in $artifacts) {
     $sourcePathsByRelative[$artifact.Relative] = $source
     $sourceHashesByRelative[$artifact.Relative] = $hashAfterValidation
 }
-Require ($sourcePathsByRelative.Count -eq 16 -and
-        $sourceHashesByRelative.Count -eq 16) `
-    "Source preflight did not record all 16 artifacts"
+Require ($sourcePathsByRelative.Count -eq 18 -and
+        $sourceHashesByRelative.Count -eq 18) `
+    "Source preflight did not record all 18 artifacts"
 
 $stageCreated = $false
 $commitStarted = $false
@@ -714,20 +716,20 @@ try {
         })
     )
     $checksumTargets = @($checksumTargets | Sort-Object Relative)
-    Require ($checksumTargets.Count -eq 20) `
-        "Checksum target set must contain 16 JARs and four ZIPs"
+    Require ($checksumTargets.Count -eq 22) `
+        "Checksum target set must contain 18 JARs and four ZIPs"
 
     $checksumLines = @($checksumTargets | ForEach-Object {
         (Get-FileSha256Lower $_.Path) + ' *' + $_.Relative
     })
-    Require ($checksumLines.Count -eq 20) `
-        "SHA256SUMS must contain exactly 20 lines"
+    Require ($checksumLines.Count -eq 22) `
+        "SHA256SUMS must contain exactly 22 lines"
     $checksumPath = Get-PackagePath $stageRoot 'SHA256SUMS.txt'
     [System.IO.File]::WriteAllLines(
         $checksumPath, [string[]]$checksumLines, $utf8NoBom)
 
     # No output is installed until the staging tree is the exact, fully
-    # verified 21-file package.
+    # verified 23-file package.
     Assert-ExactPackageTree $stageRoot $allowed 'Staged release'
     foreach ($artifact in $artifacts) {
         $stagedJar = [string]$packagedByRelative[$artifact.Relative]
@@ -780,7 +782,7 @@ try {
     }
 
     $writtenLines = [System.IO.File]::ReadAllLines($checksumPath, $utf8NoBom)
-    Require ($writtenLines.Count -eq 20 -and
+    Require ($writtenLines.Count -eq 22 -and
             [string]::Join("`n", $writtenLines) -ceq
             [string]::Join("`n", $checksumLines)) `
         "Written SHA256SUMS content or ordering is wrong"
@@ -805,8 +807,8 @@ try {
             "SHA256SUMS hash mismatch: $relative"
         $seenChecksums[$relative] = $true
     }
-    Require ($seenChecksums.Count -eq 20) `
-        "SHA256SUMS does not cover all 20 release files"
+    Require ($seenChecksums.Count -eq 22) `
+        "SHA256SUMS does not cover all 22 release files"
     Assert-ExactPackageTree $stageRoot $allowed 'Validated staged release'
     Assert-PackageMatchesChecksumLines `
         $stageRoot $checksumLines $utf8NoBom 'Validated staged release'
@@ -866,9 +868,9 @@ try {
 }
 
 Write-Output ("PACKAGE_RELEASE_OK release={0}" -f $releaseRoot)
-Write-Output 'JARS total=16 fabric=11 neoforge=3 forge=2 source_and_staged_hashes=verified'
-Write-Output 'ZIPS total=4 entries=11,3,2,16 entry_hashes=verified'
-Write-Output 'SHA256SUMS lines=20 format=lowercase-forward-slash verified'
+Write-Output 'JARS total=18 fabric=12 neoforge=4 forge=2 source_and_staged_hashes=verified'
+Write-Output 'ZIPS total=4 entries=12,4,2,18 entry_hashes=verified'
+Write-Output 'SHA256SUMS lines=22 format=lowercase-forward-slash verified'
 foreach ($line in $checksumLines) {
     Write-Output ("SHA256 {0}" -f $line)
 }

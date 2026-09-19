@@ -55,7 +55,11 @@ final class LegacySettingsScreen extends Screen {
                 button -> { cfg.deliverChatTranslationsInOrder =
                         !cfg.deliverChatTranslationsInOrder;
                     init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 100, height - 22, 200, 20,
+        addButton(new Button(width / 2 - 155, height - 22, 100, 20, new TranslatableComponent("config.mctranslator.translations.export").getString(),
+                button -> LegacyTranslatorMod.translationFile(false)));
+        addButton(new Button(width / 2 - 50, height - 22, 100, 20, new TranslatableComponent("config.mctranslator.translations.import").getString(),
+                button -> LegacyTranslatorMod.translationFile(true)));
+        addButton(new Button(width / 2 + 55, height - 22, 100, 20,
                 new TranslatableComponent("gui.done").getString(), button -> onClose()));
     }
     private static int nextCooldown(int current) {

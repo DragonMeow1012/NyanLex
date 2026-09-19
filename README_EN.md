@@ -1,4 +1,4 @@
-# Minecraft Translator 1.0.4
+# Minecraft Translator 1.0.5
 
 [繁體中文](README.md)
 
@@ -46,9 +46,8 @@ Before and after translation in Better Minecraft, including the quest title, lon
 
 Each JAR supports only the exact Minecraft version and loader in its filename.
 
-[Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/MinecraftTranslator-1.0.4-all-versions.zip)
+[Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/MinecraftTranslator-1.0.5-all-versions.zip)
 
-[Download the Minecraft 26.3 supplemental package (Fabric and NeoForge)](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/MinecraftTranslator-1.0.4-26.3.zip)
 
 ### Fabric
 
@@ -56,34 +55,34 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.14.4 | 8 | [mctranslator-1.0.4-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.14.4.jar) |
-| 1.15.2 | 8 | [mctranslator-1.0.4-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.15.2.jar) |
-| 1.16.5 | 8 | [mctranslator-1.0.4-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.16.5.jar) |
-| 1.17.1 | 16 | [mctranslator-1.0.4-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.17.1.jar) |
-| 1.18.2 | 17 | [mctranslator-1.0.4-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.18.2.jar) |
-| 1.19.4 | 17 | [mctranslator-1.0.4-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.19.4.jar) |
-| 1.20.1 | 17 | [mctranslator-1.0.4-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.20.1.jar) |
-| 1.21.1 | 21 | [mctranslator-1.0.4-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.21.1.jar) |
-| 1.21.11 | 21 | [mctranslator-1.0.4-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-1.21.11.jar) |
-| 26.1.2 | 25 | [mctranslator-1.0.4-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-26.1.2.jar) |
-| 26.2 | 25 | [mctranslator-1.0.4-Fabric-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Fabric-26.2.jar) |
-| 26.3 | 25 | [mctranslator-1.0.4-Fabric-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/mctranslator-1.0.4-Fabric-26.3.jar) |
+| 1.14.4 | 8 | [mctranslator-1.0.5-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.14.4.jar) |
+| 1.15.2 | 8 | [mctranslator-1.0.5-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.15.2.jar) |
+| 1.16.5 | 8 | [mctranslator-1.0.5-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.16.5.jar) |
+| 1.17.1 | 16 | [mctranslator-1.0.5-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.17.1.jar) |
+| 1.18.2 | 17 | [mctranslator-1.0.5-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.18.2.jar) |
+| 1.19.4 | 17 | [mctranslator-1.0.5-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.19.4.jar) |
+| 1.20.1 | 17 | [mctranslator-1.0.5-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.20.1.jar) |
+| 1.21.1 | 21 | [mctranslator-1.0.5-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.21.1.jar) |
+| 1.21.11 | 21 | [mctranslator-1.0.5-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-1.21.11.jar) |
+| 26.1.2 | 25 | [mctranslator-1.0.5-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-26.1.2.jar) |
+| 26.2 | 25 | [mctranslator-1.0.5-Fabric-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-26.2.jar) |
+| 26.3 | 25 | [mctranslator-1.0.5-Fabric-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Fabric-26.3.jar) |
 
 ### NeoForge
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.20.1 | 17 | [mctranslator-1.0.4-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-1.20.1.jar) |
-| 1.21.1 | 21 | [mctranslator-1.0.4-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-1.21.1.jar) |
-| 26.2 | 25 | [mctranslator-1.0.4-NeoForge-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-NeoForge-26.2.jar) |
-| 26.3 | 25 | [mctranslator-1.0.4-NeoForge-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4-mc26.3/mctranslator-1.0.4-NeoForge-26.3.jar) |
+| 1.20.1 | 17 | [mctranslator-1.0.5-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-NeoForge-1.20.1.jar) |
+| 1.21.1 | 21 | [mctranslator-1.0.5-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-NeoForge-1.21.1.jar) |
+| 26.2 | 25 | [mctranslator-1.0.5-NeoForge-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-NeoForge-26.2.jar) |
+| 26.3 | 25 | [mctranslator-1.0.5-NeoForge-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-NeoForge-26.3.jar) |
 
 ### Forge
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.12.2 | 8 | [mctranslator-1.0.4-Forge-1.12.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Forge-1.12.2.jar) |
-| 1.13.2 | 8 | [mctranslator-1.0.4-Forge-1.13.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.4/mctranslator-1.0.4-Forge-1.13.2.jar) |
+| 1.12.2 | 8 | [mctranslator-1.0.5-Forge-1.12.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Forge-1.12.2.jar) |
+| 1.13.2 | 8 | [mctranslator-1.0.5-Forge-1.13.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.5/mctranslator-1.0.5-Forge-1.13.2.jar) |
 
 ## Installation
 
@@ -101,7 +100,16 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 | OpenAI-compatible API | Depends on service | Configurable Base URL, model, API key, glossary, and GT fallback. |
 | ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, effort, and token controls. |
 
-## Keys
+## Sharing translations
+
+Use **Export translations** in Translation Settings, then send the JSON file to a friend. Select the same target language and machine provider before importing. Import merges valid missing entries, keeps existing translations, and makes no translation requests. Files contain translation rows only, without API keys, login credentials, or settings.
+
+Fabric 1.17.1+ and NeoForge share one compatible format. Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2 share the legacy format. Files cannot be imported across these two format families. The limit is 32 MiB and 100,000 entries per file.
+
+Legacy clients have an 8,192-entry shared cache limit. An import exceeding the remaining capacity is rejected without replacing existing translations.
+
+
+## Keyboard shortcuts
 
 Fabric 1.17.1+ and NeoForge:
 
@@ -109,15 +117,24 @@ Fabric 1.17.1+ and NeoForge:
 | --- | --- |
 | `G` | Toggle original/translated display |
 | `R` | Retranslate the item under the pointer |
-| `P` | Scan and translate the current screen's buttons and options |
+| `P` | Retranslate visible text and tooltips on the current screen |
 | Unbound | Open Translation Settings |
 
 Legacy UI:
 
 | Targets | Keys |
 | --- | --- |
-| Fabric 1.14.4-1.16.5 | `G` opens Translation Settings |
-| Forge 1.12.2-1.13.2 | `G` opens Translation Settings; `H` enables/disables translation |
+| Fabric 1.14.4-1.16.5 | `G` opens Translation Settings; `P` retranslates the current screen |
+| Forge 1.12.2-1.13.2 | `G` opens Translation Settings; `H` enables/disables translation; `P` retranslates the current screen |
+
+`P` captures currently visible text, including a hovered tooltip; it does not scan off-screen content or activate while typing. Completion time depends on the translation service.
+
+## 1.0.5 highlights
+
+- `P` retranslates visible current-screen text, including mod quest paragraphs and hovered tooltips.
+- Adds translation-file export/import to share existing translations while keeping local entries.
+- Removes repeated validation of modern in-memory cache hits; long-session stutter improvements still need in-game comparison.
+- Includes all 18 Minecraft/loader targets, with 26.3 included in the all-versions ZIP.
 
 ## 1.0.4 highlights
 

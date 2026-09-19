@@ -41,6 +41,7 @@ public final class InlineLegacyCoreSimulation {
     }
 
     public static void main(String[] args) throws Exception {
+        testTranslationSharing();
         testTemplateBoundaries();
         testReservedTemplateTokenCollisions();
         testPureDynamicFastPath();
@@ -73,6 +74,41 @@ public final class InlineLegacyCoreSimulation {
         testCodexStateCapsAndLifecycle();
         testProtocolAndProviderSizeCaps();
         System.out.println("INLINE_LEGACY_CORE_OK x1000=1000/1000 caps=bounded fairness=verified");
+    }
+
+    private static void testTranslationSharing() throws Exception {
+        LegacyTranslator translator = new LegacyTranslator(sources -> {
+            throw new AssertionError("Import must not call a translation backend");
+        });
+        LegacyConfig config = new LegacyConfig();
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("translation-sharing-");
+        try {
+            translator.loadSharedTranslations(dir, "zh-TW", config);
+            com.dragonmeow.mctranslator.translate.TranslationFile first = new com.dragonmeow.mctranslator.translate.TranslationFile(
+                    "legacy-template-v1", "zh-TW", "google", Collections.singletonMap("Hello", "你好"), Collections.emptyMap());
+            check(translator.importTranslations(first, "zh-TW", config) == 1, "import count");
+            check(translator.importTranslations(first, "zh-TW", config) == 0, "duplicate import");
+            check("你好".equals(translator.cached("Hello", "zh-TW", false, config)), "import not reusable");
+            Map<String,String> oversized = new java.util.LinkedHashMap<String,String>();
+            for (int i=0;i<8193;i++) oversized.put("Entry " + i, "翻譯 " + i);
+            try {
+                translator.importTranslations(new com.dragonmeow.mctranslator.translate.TranslationFile(
+                        "legacy-template-v1", "zh-TW", "google", oversized, Collections.emptyMap()), "zh-TW", config);
+                throw new AssertionError("capacity overflow accepted");
+            } catch (IOException expected) { }
+            check(translator.exportTranslations("zh-TW", config).machine.size() == 1, "overflow partially mutated cache");
+            LegacyTranslator restored = new LegacyTranslator(sources -> {throw new AssertionError("network");});
+            try {
+                restored.loadSharedTranslations(dir, "zh-TW", config);
+                check("你好".equals(restored.cached("Hello", "zh-TW", false, config)), "import did not survive restart");
+            } finally { restored.shutdownForTests(); }
+        } finally {
+            translator.shutdownForTests();
+            try (java.nio.file.DirectoryStream<java.nio.file.Path> files = java.nio.file.Files.newDirectoryStream(dir)) {
+                for (java.nio.file.Path file : files) java.nio.file.Files.delete(file);
+            }
+            java.nio.file.Files.delete(dir);
+        }
     }
 
     private static void testTemplateBoundaries() {

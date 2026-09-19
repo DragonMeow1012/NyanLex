@@ -22,7 +22,9 @@ final class ForgeSettingsScreen extends GuiScreen{
         addButton(new GuiButton(9,x,174,152,20,"Machine: "+LegacyConfig.normalizeMachineProvider(c.machineTranslationProvider)));
         addButton(new GuiButton(10,x+158,174,152,20,"Debug HUD: "+(c.debugTranslationOverlay?"ON":"OFF")));
         addButton(new GuiButton(11,x,198,310,20,chatDeliveryLabel(c)));
-        addButton(new GuiButton(0,width/2-100,height-22,200,20,I18n.format("gui.done")));
+        addButton(new GuiButton(12,x,height-22,100,20,I18n.format("config.mctranslator.translations.export")));
+        addButton(new GuiButton(13,x+105,height-22,100,20,I18n.format("config.mctranslator.translations.import")));
+        addButton(new GuiButton(0,x+210,height-22,100,20,I18n.format("gui.done")));
     }
     @Override protected void actionPerformed(GuiButton b)throws IOException{
         LegacyConfig c=MinecraftTranslatorForge.config();
@@ -31,6 +33,7 @@ final class ForgeSettingsScreen extends GuiScreen{
             mc.displayGuiScreen(parent);
             return;
         }
+        if(b.id==12 || b.id==13){ MinecraftTranslatorForge.translationFile(b.id==13); return; }
         if(b.id==1){
             if(c.followGameLanguage){
                 c.followGameLanguage=false;

@@ -539,8 +539,9 @@ public final class TranslationCache {
                 removeStored(key);
                 return null;
             }
-            if (usable(key, value)) return value;
-            removeStored(key);
+            // Memory admits only validated immutable rows. Re-running every token,
+            // style and language regex on each rendered frame creates avoidable GC load.
+            return value;
         }
         if (store == null) return null;
         value = store.get(key);
@@ -1391,7 +1392,8 @@ public final class TranslationCache {
                 write(snapshot.key(), translated, isProvisional, writes);
             } else {
                 write(snapshot.normalized(), translated, isProvisional, writes);
-                if (!snapshot.normalized().equals(snapshot.source())) {
+                if (!snapshot.normalized().equals(snapshot.source())
+                        && usable(snapshot.source(), translated)) {
                     memory.put(snapshot.source(), translated); // whitespace alias, session only
                     markProvisional(snapshot.source(), isProvisional);
                 }
@@ -2173,6 +2175,32 @@ public final class TranslationCache {
     // -------------------------------------------------------------------------
     // Validation and administration
     // -------------------------------------------------------------------------
+
+    /** Final, validated rows from the active language/provider only. */
+    public Map<String, String> exportTranslations() {
+        Map<String, String> rows = new LinkedHashMap<>();
+        if (store != null) rows.putAll(store.entries());
+        synchronized (memory) { rows.putAll(memory); }
+        rows.entrySet().removeIf(e -> provisional(e.getKey())
+                || KEEP_ORIGINAL.equals(e.getValue()) || LEGACY_KEEP_ORIGINAL.equals(e.getValue())
+                || !usable(e.getKey(), e.getValue()));
+        return rows;
+    }
+
+    /** Merge into the active cache without network requests or overwriting final wording. */
+    public int importTranslations(Map<String, String> rows) {
+        WriteBatch writes = new WriteBatch();
+        int imported = 0;
+        for (Map.Entry<String, String> row : rows.entrySet()) {
+            String key = row.getKey(), value = row.getValue();
+            if (!usable(key, value) || keepsOriginal(key) || hasFinalValue(key, writes)) continue;
+            clearFailureState(templates.prepare(key));
+            write(key, value, false, writes);
+            imported++;
+        }
+        writes.flush();
+        return imported;
+    }
 
     private static boolean usable(String translated) {
         return translated != null && !translated.isEmpty()

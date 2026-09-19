@@ -46,6 +46,9 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     private static Path configPath;
     private static LegacyCodexClient codexClient;
     private KeyMapping settingsKey;
+    private static KeyMapping screenScanKey;
+    private static final com.dragonmeow.mctranslator.translate.ScreenTranslationCapture SCREEN_CAPTURE =
+            new com.dragonmeow.mctranslator.translate.ScreenTranslationCapture();
     private final LegacyChatDeliveryQueue<PendingChat> pendingChats =
             new LegacyChatDeliveryQueue<PendingChat>();
     private Object chatConnection;
@@ -97,8 +100,13 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         settingsKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.mctranslator.mode", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G,
                 "category.mctranslator"));
+        screenScanKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.mctranslator.screenscan", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_P,
+                "category.mctranslator"));
+        TRANSLATOR.loadSharedTranslations(configDir, currentTarget(Minecraft.getInstance()), config);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             syncLanguage(client);
+            SCREEN_CAPTURE.cancelUnless(client.screen);
             instance.syncChatSession(client);
             instance.syncChatRequestProfile(client);
             if (config != null && config.enabled) TRANSLATOR.flushBatch();
@@ -355,6 +363,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         });
     }
     public static Component translateVisible(Component source) {
+        if (source != null && captureScreenText(source.getString())) return source;
         if (source == null || config == null || !config.enabled || INTERNAL_RENDER.get()) return source;
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null
@@ -370,6 +379,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return translated.equals(plain) ? source : new TextComponent(translated).setStyle(source.getStyle());
     }
     public static String translateVisibleString(String source) {
+        if (source != null && captureScreenText(source)) return source;
         if (source == null || config == null || !config.enabled || INTERNAL_RENDER.get()) return source;
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null
@@ -424,6 +434,36 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z'
                 || ch >= '0' && ch <= '9' || ch == '_';
     }
+    public static boolean handleScreenKey(int key, int scanCode) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.screen == null || config == null || !config.enabled
+                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen
+                || mc.screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
+                || !screenTranslationAllowed(mc.screen) || screenScanKey == null
+                || !screenScanKey.matches(key, scanCode)) return false;
+        SCREEN_CAPTURE.begin(mc.screen);
+        SCREEN_CAPTURE.record(mc.screen, mc.screen.getTitle().getString());
+        return true;
+    }
+
+    private static boolean captureScreenText(String source) {
+        Minecraft mc = Minecraft.getInstance();
+        if (INTERNAL_RENDER.get() || mc == null || !SCREEN_CAPTURE.active(mc.screen)
+                || !renderingCurrentScreen(mc)) return false;
+        SCREEN_CAPTURE.record(mc.screen, source);
+        return true;
+    }
+
+    static void translationFile(boolean importing) {
+        Minecraft mc = Minecraft.getInstance();
+        final String target = currentTarget(mc);
+        final LegacyConfig snapshot = config.snapshotForRequest();
+        com.dragonmeow.mctranslator.translate.TranslationFileDialog.open(importing,
+                () -> TRANSLATOR.exportTranslations(target, snapshot),
+                file -> TRANSLATOR.importTranslations(file, target, snapshot),
+                message -> mc.execute(() -> mc.gui.getChat().addMessage(new TextComponent(message))));
+    }
+
     public static boolean beginInternalRender() {
         boolean previous = INTERNAL_RENDER.get();
         INTERNAL_RENDER.set(Boolean.TRUE);
@@ -435,7 +475,11 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     }
     public static void endScreenRender() {
         java.util.ArrayDeque<Screen> stack = SCREEN_RENDER_STACK.get();
-        if (!stack.isEmpty()) stack.pop();
+        if (!stack.isEmpty()) {
+            Screen screen = stack.pop();
+            java.util.List<String> sources = SCREEN_CAPTURE.finish(screen);
+            if (sources != null) TRANSLATOR.retranslateScreen(sources, currentTarget(Minecraft.getInstance()), config);
+        }
         if (stack.isEmpty()) SCREEN_RENDER_STACK.remove();
     }
     private static boolean renderingCurrentScreen(Minecraft minecraft) {

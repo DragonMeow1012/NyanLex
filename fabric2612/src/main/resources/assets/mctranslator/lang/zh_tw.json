@@ -29,7 +29,7 @@
   "category.mctranslator": "Minecraft Translator 多語翻譯",
   "key.mctranslator.mode": "開啟翻譯設定",
   "key.mctranslator.retranslate": "重新翻譯指向的物品",
-  "key.mctranslator.screenscan": "翻譯目前介面的按鈕／選項",
+  "key.mctranslator.screenscan": "重新翻譯目前整個介面",
   "key.mctranslator.toggle": "快速切換原文／翻譯",
   "screen.mctranslator.config.title": "翻譯設定",
   "screen.mctranslator.language.title": "選擇翻譯語言",
@@ -79,7 +79,7 @@
   "screen.mctranslator.language.page": "%s / %s",
   "screen.mctranslator.keybind.retranslate": "重新翻譯指向的物品：",
   "screen.mctranslator.keybind.mode": "開啟翻譯設定：",
-  "screen.mctranslator.keybind.screenscan": "翻譯目前介面：",
+  "screen.mctranslator.keybind.screenscan": "重新翻譯目前整個介面: ",
   "screen.mctranslator.keybind.toggle": "切換原文／翻譯：",
   "screen.mctranslator.keybind.reset": "重設為預設值",
   "screen.mctranslator.keybind.listening": "按任意鍵（Esc 取消）",
@@ -119,5 +119,7 @@
   "screen.mctranslator.provider.deepl": "DeepL 網頁翻譯",
   "screen.mctranslator.provider.microsoft": "微軟／Bing 網頁翻譯",
   "screen.mctranslator.provider.experimental_name": "%s（實驗）",
-  "screen.mctranslator.provider.warning": "實驗網頁來源可能改版或失效；Google 為穩定預設。"
+  "screen.mctranslator.provider.warning": "實驗網頁來源可能改版或失效；Google 為穩定預設。",
+  "config.mctranslator.translations.export": "匯出翻譯檔",
+  "config.mctranslator.translations.import": "匯入翻譯檔"
 }

@@ -29,7 +29,7 @@
   "category.mctranslator": "Minecraft Translator",
   "key.mctranslator.mode": "Open Translation Settings",
   "key.mctranslator.retranslate": "Re-translate Pointed Item",
-  "key.mctranslator.screenscan": "Translate Current Screen's Buttons/Options",
+  "key.mctranslator.screenscan": "Retranslate current screen",
   "key.mctranslator.toggle": "Quick Toggle: Original / Translation",
   "screen.mctranslator.config.title": "Translation Settings",
   "screen.mctranslator.language.title": "Select Translation Language",
@@ -88,7 +88,7 @@
   "screen.mctranslator.language.page": "%s / %s",
   "screen.mctranslator.keybind.retranslate": "Re-translate pointed item: ",
   "screen.mctranslator.keybind.mode": "Open translation settings: ",
-  "screen.mctranslator.keybind.screenscan": "Translate current screen: ",
+  "screen.mctranslator.keybind.screenscan": "Retranslate current screen: ",
   "screen.mctranslator.keybind.toggle": "Toggle original / translation: ",
   "screen.mctranslator.keybind.reset": "Reset to Defaults",
   "screen.mctranslator.keybind.listening": "Press any key (Esc to cancel)",
@@ -112,12 +112,14 @@
   "message.mctranslator.not_initialized": "Not initialized",
   "message.mctranslator.success": "Success: %s",
   "message.mctranslator.failed": "Failed: %s",
-  "message.mctranslator.prefix": "[Translator] %s"
-  ,"debug.mctranslator.header": "DEBUG  Recent %s  waiting %s  failed %s"
-  ,"debug.mctranslator.waiting": "waiting"
-  ,"debug.mctranslator.failed": "failed"
-  ,"debug.mctranslator.skipped": "skipped"
-  ,"debug.mctranslator.empty": "no result"
-  ,"debug.mctranslator.source": "source: "
-  ,"debug.mctranslator.translation": "translation: "
+  "message.mctranslator.prefix": "[Translator] %s",
+  "debug.mctranslator.header": "DEBUG  Recent %s  waiting %s  failed %s",
+  "debug.mctranslator.waiting": "waiting",
+  "debug.mctranslator.failed": "failed",
+  "debug.mctranslator.skipped": "skipped",
+  "debug.mctranslator.empty": "no result",
+  "debug.mctranslator.source": "source: ",
+  "debug.mctranslator.translation": "translation: ",
+  "config.mctranslator.translations.export": "Export translations",
+  "config.mctranslator.translations.import": "Import translations"
 }

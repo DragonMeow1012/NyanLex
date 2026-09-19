@@ -39,6 +39,12 @@ public final class MinecraftTranslatorForge {
     private final File configFile = new File("config", "mctranslator-forge-legacy.json");
     private final KeyBinding settingsKey = new KeyBinding("key.mctranslator.mode", GLFW.GLFW_KEY_G, "category.mctranslator");
     private final KeyBinding toggleKey = new KeyBinding("key.mctranslator.toggle", GLFW.GLFW_KEY_H, "category.mctranslator");
+    private final KeyBinding screenScanKey = new KeyBinding("key.mctranslator.screenscan", GLFW.GLFW_KEY_P, "category.mctranslator");
+    private static final com.dragonmeow.mctranslator.translate.ScreenTranslationCapture SCREEN_CAPTURE =
+            new com.dragonmeow.mctranslator.translate.ScreenTranslationCapture();
+    private static net.minecraft.client.gui.GuiScreen renderingScreen, translatedScreen;
+    private static java.util.Set<String> screenSources = java.util.Collections.emptySet();
+    private boolean scanKeyDown;
     private final Map<Integer, ITextComponent> renderedNames = new ConcurrentHashMap<Integer, ITextComponent>();
     private final LegacyChatDeliveryQueue<PendingChat> pendingChats = new LegacyChatDeliveryQueue<PendingChat>();
     private final Map<Long, PendingChat> pendingChatById = new LinkedHashMap<Long, PendingChat>();
@@ -57,6 +63,62 @@ public final class MinecraftTranslatorForge {
     private static final int MAX_PENDING_CHATS = 512;
     private static final long CHAT_MAX_WAIT_NANOS = 15L * 1000L * 1000L * 1000L;
     private static final long ITEM_WARM_SCAN_INTERVAL_NANOS = 350L * 1000L * 1000L;
+
+    private boolean beginScreenScan(net.minecraft.client.gui.GuiScreen screen) {
+        if (screen == null || !config.enabled || screen instanceof net.minecraft.client.gui.GuiChat
+                || screen instanceof net.minecraft.client.gui.GuiControls
+                || screen.getClass().getName().startsWith("com.dragonmeow.mctranslator.")) return false;
+        if (screen.getFocused() instanceof net.minecraft.client.gui.GuiTextField) return false;
+        SCREEN_CAPTURE.begin(screen);
+        translatedScreen = screen;
+        screenSources = java.util.Collections.emptySet();
+        return true;
+    }
+
+    @SubscribeEvent public void beforeScreen(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre event) {
+        renderingScreen = event.getGui();
+    }
+
+    @SubscribeEvent public void afterScreen(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Post event) {
+        java.util.List<String> sources = SCREEN_CAPTURE.finish(event.getGui());
+        renderingScreen = null;
+        if (sources != null) {
+            screenSources = new java.util.HashSet<String>(sources);
+            TRANSLATOR.retranslateScreen(sources, currentTarget(), config);
+        }
+    }
+
+    /** Called by the loader-specific FontRenderer hook before wrapping/drawing. */
+    public static String translateScreenString(String source) {
+        Minecraft mc = Minecraft.getInstance();
+        if (instance == null || source == null || mc == null || renderingScreen == null
+                || renderingScreen != mc.currentScreen || !instance.config.enabled) return source;
+        if (SCREEN_CAPTURE.active(renderingScreen)) {
+            SCREEN_CAPTURE.record(renderingScreen, source);
+            return source;
+        }
+        if (translatedScreen != renderingScreen || !screenSources.contains(source)) return source;
+        String translated = TRANSLATOR.cached(source, currentTarget(), instance.config.aiEnabled, instance.config);
+        return translated == null ? source : translated;
+    }
+
+    static void translationFile(boolean importing) {
+        final Minecraft mc = Minecraft.getInstance();
+        final String target = currentTarget();
+        final LegacyConfig snapshot = instance.config.snapshotForRequest();
+        com.dragonmeow.mctranslator.translate.TranslationFileDialog.open(importing,
+                () -> TRANSLATOR.exportTranslations(target, snapshot),
+                file -> TRANSLATOR.importTranslations(file, target, snapshot),
+                message -> mc.addScheduledTask(() -> mc.ingameGUI.getChatGUI().printChatMessage(new TextComponentString(message))));
+    }
+
+    @SubscribeEvent public void screenKey(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre event) {
+        if (!scanKeyDown && screenScanKey.matchesKey(event.getKeyCode(), event.getScanCode())
+                && beginScreenScan(event.getGui())) { scanKeyDown=true; event.setCanceled(true); }
+    }
+    @SubscribeEvent public void screenKeyReleased(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyReleasedEvent.Pre event) {
+        if (screenScanKey.matchesKey(event.getKeyCode(), event.getScanCode())) scanKeyDown=false;
+    }
 
     private static final class PendingChat {
         final long id;
@@ -99,12 +161,20 @@ public final class MinecraftTranslatorForge {
         }, "mctranslator-codex-shutdown"));
         ClientRegistry.registerKeyBinding(settingsKey);
         ClientRegistry.registerKeyBinding(toggleKey);
+        ClientRegistry.registerKeyBinding(screenScanKey);
+        TRANSLATOR.loadSharedTranslations(configDir, currentTarget(), config);
         MinecraftForge.EVENT_BUS.register(this);
     }
 
     @SubscribeEvent public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         Minecraft minecraft = Minecraft.getInstance();
+        SCREEN_CAPTURE.cancelUnless(minecraft.currentScreen);
+        if (translatedScreen != minecraft.currentScreen) {
+            translatedScreen = null;
+            screenSources = java.util.Collections.emptySet();
+            scanKeyDown = false;
+        }
         syncChatSession(minecraft);
         boolean toggled = false;
         while (toggleKey.isPressed()) {
@@ -422,6 +492,10 @@ public final class MinecraftTranslatorForge {
         if (hasLetters(name)) names.add(name);
     }
     private void translateVisibleLines(List<String> lines, boolean highPriority) {
+        if (SCREEN_CAPTURE.active(renderingScreen)) {
+            for (String source : lines) SCREEN_CAPTURE.record(renderingScreen, source);
+            return;
+        }
         String target = currentTarget();
         for (int i = 0; i < lines.size(); i++) {
             String source = lines.get(i);

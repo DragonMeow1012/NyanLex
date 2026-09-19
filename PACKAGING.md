@@ -1,6 +1,12 @@
-# Minecraft Translator 1.0.4 packaging
+# Minecraft Translator 1.0.5 packaging
 
-The release contains 16 JARs. Each JAR is tied to one Minecraft version and loader.
+The release contains 18 JARs. Each JAR is tied to one Minecraft version and loader.
+
+Minecraft 26.3 is included in the main release (18 total). After rebuilding the current
+screen retranslation and translation-sharing changes, run
+`python verification/verify-translation-features.py` before packaging. This checks
+the feature entry points, native file picker, language labels, legacy Java 8 class
+versions, and Forge font hooks in each built JAR.
 
 ## Project matrix
 
@@ -22,6 +28,8 @@ The release contains 16 JARs. Each JAR is tied to one Minecraft version and load
 | Fabric | 26.1.2 | 25 | `fabric2612` |
 | Fabric | 26.2 | 25 | `fabric26` |
 | NeoForge | 26.2 | 25 | `neoforge26` |
+| Fabric | 26.3 | 25 | `fabric263` |
+| NeoForge | 26.3 | 25 | `neoforge263` |
 
 ## Build
 
@@ -39,42 +47,42 @@ Push-Location forge1122; .\gradlew.bat clean build; Pop-Location
 
 ## Release folders
 
-Generated binaries are ignored by Git and stored under `mods-jar/1.0.4`:
+Generated binaries are ignored by Git and stored under `mods-jar/1.0.5`:
 
 ```text
-mods-jar/1.0.4/
+mods-jar/1.0.5/
   fabric/
-    1.14.4/mctranslator-1.0.4-Fabric-1.14.4.jar
+    1.14.4/mctranslator-1.0.5-Fabric-1.14.4.jar
     ...
-    26.2/mctranslator-1.0.4-Fabric-26.2.jar
+    26.2/mctranslator-1.0.5-Fabric-26.2.jar
   neoforge/
-    1.20.1/mctranslator-1.0.4-NeoForge-1.20.1.jar
-    1.21.1/mctranslator-1.0.4-NeoForge-1.21.1.jar
-    26.2/mctranslator-1.0.4-NeoForge-26.2.jar
+    1.20.1/mctranslator-1.0.5-NeoForge-1.20.1.jar
+    1.21.1/mctranslator-1.0.5-NeoForge-1.21.1.jar
+    26.2/mctranslator-1.0.5-NeoForge-26.2.jar
   forge/
-    1.12.2/mctranslator-1.0.4-Forge-1.12.2.jar
-    1.13.2/mctranslator-1.0.4-Forge-1.13.2.jar
-  MinecraftTranslator-1.0.4-Fabric.zip
-  MinecraftTranslator-1.0.4-NeoForge.zip
-  MinecraftTranslator-1.0.4-Forge.zip
-  MinecraftTranslator-1.0.4-all-versions.zip
+    1.12.2/mctranslator-1.0.5-Forge-1.12.2.jar
+    1.13.2/mctranslator-1.0.5-Forge-1.13.2.jar
+  MinecraftTranslator-1.0.5-Fabric.zip
+  MinecraftTranslator-1.0.5-NeoForge.zip
+  MinecraftTranslator-1.0.5-Forge.zip
+  MinecraftTranslator-1.0.5-all-versions.zip
   SHA256SUMS.txt
 ```
 
-GitHub Release assets are flat, so all 16 JARs are also uploaded individually for README direct-download links. The ZIP files preserve the loader/version directory structure.
+GitHub Release assets are flat, so all 18 JARs are also uploaded individually for README direct-download links. The ZIP files preserve the loader/version directory structure.
 
 ## Verification
 
 Before publishing:
 
-- Build all 16 targets successfully.
+- Build all 18 targets successfully.
 - Confirm exactly 16 packaged JARs, 4 ZIPs, and `SHA256SUMS.txt`.
 - Compare each packaged JAR SHA-256 with its matching `build/libs` output.
-- Confirm loader metadata contains version 1.0.4 and the exact Minecraft range.
+- Confirm loader metadata contains version 1.0.5 and the exact Minecraft range.
 - Run `git diff --check` and core unit tests.
-- Upload individual JARs plus the four ZIP files to tag `v1.0.4`.
+- Upload individual JARs plus the four ZIP files to tag `v1.0.5`.
 
-## Minecraft 26.3 supplemental package
+## Minecraft 26.3 builds
 
 Minecraft 26.3 targets are `fabric263` and `neoforge263`, both using Java 25
 and Gradle 9.5. They share the 26.2 translation/loader sources and resources.
@@ -85,21 +93,13 @@ use the version-specific `platform26` / `platform263` source directory.
 ```powershell
 .\.gradle-local\gradle-9.5.0\bin\gradle.bat -p fabric263 build
 .\.gradle-local\gradle-9.5.0\bin\gradle.bat -p neoforge263 build
-python verification/package-26.3.py
+powershell -File verification/package-release.ps1
 ```
 
-The supplemental package is separate from the existing 16-target release:
-
-```text
-mods-jar/1.0.4-26.3/
-  fabric/26.3/mctranslator-1.0.4-Fabric-26.3.jar
-  neoforge/26.3/mctranslator-1.0.4-NeoForge-26.3.jar
-  MinecraftTranslator-1.0.4-26.3.zip
-  SHA256SUMS.txt
-```
+Both 26.3 JARs are included in the main loader ZIPs and all-versions ZIP.
 
 Fabric requires Fabric Loader 0.19.5 and Fabric API 0.161.0+26.3 for the
 verified configuration. NeoForge was built with 26.3.0.6-beta and ModDevGradle
 2.0.147; older build tooling fails while recompiling Minecraft's `HolderSet`.
-The supplemental packaging script checks metadata and entrypoint classes,
+The main packaging script checks metadata and entrypoint classes,
 then verifies the copied JARs and ZIP contents against their build outputs.

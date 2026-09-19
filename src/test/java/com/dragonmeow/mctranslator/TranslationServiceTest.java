@@ -27,6 +27,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TranslationServiceTest {
 
+    @Test
+    void explicitScreenRescanInvalidatesOnlyCapturedRowsAndUsesScanEngine() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.targetLang = "zh-TW";
+        cfg.screenTextMode = DisplayMode.TRANSLATION;
+        cfg.aiScreenText = false;
+        cfg.aiScreenScan = true;
+        AtomicInteger calls = new AtomicInteger();
+        TranslationCache machine = new TranslationCache(inlineTranslator(new AtomicInteger()), cfg.targetLang, DIRECT, 100);
+        TranslationCache ai = new TranslationCache(inlineTranslator(calls), cfg.targetLang, DIRECT, 100);
+        machine.importTranslations(java.util.Map.of("Hello", "舊譯文", "Diamond Sword", "鑽石劍"));
+        ai.importTranslations(java.util.Map.of("Hello", "舊譯文"));
+        TranslationService service = new TranslationService(cfg, machine, ai);
+        service.retranslateScreen(List.of("Hello"));
+        pump(service);
+        assertEquals(1, calls.get());
+        assertEquals("你好", service.translateScreenText("Hello").translated());
+        assertEquals("鑽石劍", machine.getCached("Diamond Sword"));
+    }
+
     private static final Executor DIRECT = Runnable::run;
 
     /** Inline translator returning a fixed Chinese rendering for known inputs. */

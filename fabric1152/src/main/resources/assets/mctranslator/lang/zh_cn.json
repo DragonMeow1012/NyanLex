@@ -2,7 +2,7 @@
   "category.mctranslator": "Minecraft 翻译",
   "key.mctranslator.mode": "打开翻译设置",
   "key.mctranslator.retranslate": "重新翻译指向的物品",
-  "key.mctranslator.screenscan": "翻译当前屏幕的按钮/选项",
+  "key.mctranslator.screenscan": "重新翻译当前整个界面",
   "key.mctranslator.toggle": "快速切换：原文/译文",
   "screen.mctranslator.config.title": "翻译设置",
   "screen.mctranslator.language.title": "选择翻译语言",
@@ -76,5 +76,7 @@
   "debug.mctranslator.skipped": "已跳过",
   "debug.mctranslator.empty": "无结果",
   "debug.mctranslator.source": "原文：",
-  "debug.mctranslator.translation": "译文："
+  "debug.mctranslator.translation": "译文：",
+  "config.mctranslator.translations.export": "导出翻译档",
+  "config.mctranslator.translations.import": "导入翻译档"
 }

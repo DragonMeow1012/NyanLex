@@ -306,6 +306,103 @@ final class LegacyTranslator {
         }
     }
 
+    private java.nio.file.Path sharedTranslationsDirectory;
+
+    void loadSharedTranslations(java.nio.file.Path directory, String target, LegacyConfig config) {
+        sharedTranslationsDirectory = directory;
+        java.nio.file.Path file = sharedTranslationsPath(target);
+        if (!java.nio.file.Files.isRegularFile(file)) return;
+        try { mergeTranslations(com.dragonmeow.mctranslator.translate.TranslationFile.read(file), target, config); }
+        catch (Exception ignored) { /* An incompatible import must not stop the client. */ }
+    }
+
+    private java.nio.file.Path sharedTranslationsPath(String target) {
+        String tag = target.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9-]", "-");
+        return sharedTranslationsDirectory.resolve("mctranslator-imported-" + tag + ".json");
+    }
+
+    com.dragonmeow.mctranslator.translate.TranslationFile exportTranslations(String target, LegacyConfig config) {
+        String provider = LegacyConfig.normalizeMachineProvider(config.machineTranslationProvider);
+        String machinePrefix = cacheKey("", target, false, provider, config);
+        String aiPrefix = cacheKey("", target, true, provider, config);
+        Map<String,String> machine = new LinkedHashMap<String,String>();
+        Map<String,String> ai = new LinkedHashMap<String,String>();
+        synchronized (cache) {
+            for (Map.Entry<String,String> row : cache.entrySet()) {
+                String key = row.getKey();
+                if (key.startsWith(machinePrefix)) machine.put(key.substring(machinePrefix.length()), row.getValue());
+                else if (key.startsWith(aiPrefix)) ai.put(key.substring(aiPrefix.length()), row.getValue());
+            }
+        }
+        return new com.dragonmeow.mctranslator.translate.TranslationFile("legacy-template-v1", target, provider, machine, ai);
+    }
+
+    int importTranslations(com.dragonmeow.mctranslator.translate.TranslationFile file, String target,
+                           LegacyConfig config) throws java.io.IOException {
+        int count = mergeTranslations(file, target, config);
+        if (sharedTranslationsDirectory != null) {
+            java.nio.file.Files.createDirectories(sharedTranslationsDirectory);
+            exportTranslations(target, config).write(sharedTranslationsPath(target), true);
+        }
+        return count;
+    }
+
+    private int mergeTranslations(com.dragonmeow.mctranslator.translate.TranslationFile file, String target,
+                                  LegacyConfig config) throws java.io.IOException {
+        String provider = LegacyConfig.normalizeMachineProvider(config.machineTranslationProvider);
+        file.requireCompatible("legacy-template-v1", target, provider);
+        Map<String,String> additions = new LinkedHashMap<String,String>();
+        collectImportedRows(file.machine, target, false, provider, config, additions);
+        collectImportedRows(file.ai, target, true, provider, config, additions);
+        synchronized (cache) {
+            additions.keySet().removeAll(cache.keySet());
+            if (cache.size() + additions.size() > MAX_CACHE_ENTRIES)
+                throw new java.io.IOException("Legacy translation capacity exceeded (8192); no rows imported");
+            cache.putAll(additions);
+        }
+        for (String key : additions.keySet()) failedUntil.remove(key);
+        return additions.size();
+    }
+
+    private void collectImportedRows(Map<String,String> rows, String target, boolean ai, String provider,
+                                     LegacyConfig config, Map<String,String> additions) {
+        for (Map.Entry<String,String> row : rows.entrySet()) {
+            if (validationFailureFor(row.getKey(), row.getValue()) != null) continue;
+            String key = cacheKey(row.getKey(), target, ai, provider, config);
+            additions.put(key, row.getValue());
+        }
+    }
+
+    void retranslateScreen(java.util.List<String> sources, String target, LegacyConfig config) {
+        String provider = LegacyConfig.normalizeMachineProvider(config.machineTranslationProvider);
+        List<Waiter> cancelled = new ArrayList<Waiter>();
+        synchronized (dispatchLock) {
+            synchronized (batchLock) {
+                synchronized (flightLock) {
+                    for (String source : sources) {
+                        String prepared = LegacyTemplateText.prepare(source).text();
+                        for (boolean ai : new boolean[]{false, true}) {
+                            String key = cacheKey(prepared, target, ai, provider, config);
+                            cache.remove(key);
+                            failedUntil.remove(key);
+                            pending.remove(key);
+                            Pending item = inFlight.remove(key);
+                            if (item != null && !item.completed) {
+                                item.cancelled = true;
+                                item.completed = true;
+                                cancelled.addAll(item.waiters);
+                                totalWaiters -= item.waiters.size();
+                                item.waiters.clear();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (Waiter waiter : cancelled) accept(waiter.callback, null);
+        for (String source : sources) prefetch(source, target, config.aiEnabled, true, config);
+    }
+
     private final AtomicInteger threadSequence = new AtomicInteger();
     private final ThreadPoolExecutor executor = createExecutor();
     private final ScheduledThreadPoolExecutor retryScheduler = createRetryScheduler();

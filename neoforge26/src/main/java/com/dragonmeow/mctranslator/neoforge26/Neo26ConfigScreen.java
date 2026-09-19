@@ -111,8 +111,13 @@ public final class Neo26ConfigScreen extends Screen {
         this.addRenderableWidget(Button.builder(clearLabel(), this::clearCurrentLanguage)
                 .bounds(right, y, rowWidth, 18).build());
         y += 22;
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
-                .bounds(this.width / 2 - 100, y, 200, 18).build());
+        int fileWidth = (rowWidth * 2 + gap - 8) / 3;
+        this.addRenderableWidget(Button.builder(Component.translatable("config.mctranslator.translations.export"), b -> MctranslatorNeoForge26.translationFile(false))
+                .bounds(left + 0 * (fileWidth + 4), y, fileWidth, 18).build());
+        this.addRenderableWidget(Button.builder(Component.translatable("config.mctranslator.translations.import"), b -> MctranslatorNeoForge26.translationFile(true))
+                .bounds(left + 1 * (fileWidth + 4), y, fileWidth, 18).build());
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
+                .bounds(left + 2 * (fileWidth + 4), y, fileWidth, 18).build());
     }
 
     private Component clearLabel() {

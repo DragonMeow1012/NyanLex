@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-@Mod(modid = "mctranslator", name = "Minecraft Translator", version = "1.0.4", clientSideOnly = true)
+@Mod(modid = "mctranslator", name = "Minecraft Translator", version = "1.0.5", clientSideOnly = true)
 public final class MinecraftTranslatorForge {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static MinecraftTranslatorForge instance;
@@ -40,6 +40,12 @@ public final class MinecraftTranslatorForge {
     private final File configFile = new File("config", "mctranslator-forge-legacy.json");
     private final KeyBinding settingsKey = new KeyBinding("key.mctranslator.mode", Keyboard.KEY_G, "category.mctranslator");
     private final KeyBinding toggleKey = new KeyBinding("key.mctranslator.toggle", Keyboard.KEY_H, "category.mctranslator");
+    private final KeyBinding screenScanKey = new KeyBinding("key.mctranslator.screenscan", Keyboard.KEY_P, "category.mctranslator");
+    private static final com.dragonmeow.mctranslator.translate.ScreenTranslationCapture SCREEN_CAPTURE =
+            new com.dragonmeow.mctranslator.translate.ScreenTranslationCapture();
+    private static net.minecraft.client.gui.GuiScreen renderingScreen, translatedScreen;
+    private static java.util.Set<String> screenSources = java.util.Collections.emptySet();
+    private boolean scanKeyDown;
     private final Map<Integer, String> renderedNames = new ConcurrentHashMap<Integer, String>();
     private final LegacyChatDeliveryQueue<PendingChat> pendingChats = new LegacyChatDeliveryQueue<PendingChat>();
     private final Map<Long, PendingChat> pendingChatById = new LinkedHashMap<Long, PendingChat>();
@@ -58,6 +64,68 @@ public final class MinecraftTranslatorForge {
     private static final int MAX_PENDING_CHATS = 512;
     private static final long CHAT_MAX_WAIT_NANOS = 15L * 1000L * 1000L * 1000L;
     private static final long ITEM_WARM_SCAN_INTERVAL_NANOS = 350L * 1000L * 1000L;
+
+    private boolean beginScreenScan(net.minecraft.client.gui.GuiScreen screen) {
+        if (screen == null || !config.enabled || screen instanceof net.minecraft.client.gui.GuiChat
+                || screen instanceof net.minecraft.client.gui.GuiControls
+                || screen.getClass().getName().startsWith("com.dragonmeow.mctranslator.")) return false;
+        for (Class<?> type=screen.getClass(); type!=null; type=type.getSuperclass()) {
+            for (java.lang.reflect.Field field:type.getDeclaredFields()) {
+                if (!net.minecraft.client.gui.GuiTextField.class.isAssignableFrom(field.getType())) continue;
+                try {
+                    field.setAccessible(true);
+                    net.minecraft.client.gui.GuiTextField input=(net.minecraft.client.gui.GuiTextField)field.get(screen);
+                    if (input!=null && input.isFocused()) return false;
+                } catch (ReflectiveOperationException | RuntimeException ignored) { }
+            }
+        }
+        SCREEN_CAPTURE.begin(screen);
+        translatedScreen = screen;
+        screenSources = java.util.Collections.emptySet();
+        return true;
+    }
+
+    @SubscribeEvent public void beforeScreen(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre event) {
+        renderingScreen = event.getGui();
+    }
+
+    @SubscribeEvent public void afterScreen(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Post event) {
+        java.util.List<String> sources = SCREEN_CAPTURE.finish(event.getGui());
+        renderingScreen = null;
+        if (sources != null) {
+            screenSources = new java.util.HashSet<String>(sources);
+            TRANSLATOR.retranslateScreen(sources, currentTarget(), config);
+        }
+    }
+
+    /** Called by the loader-specific FontRenderer hook before wrapping/drawing. */
+    public static String translateScreenString(String source) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (instance == null || source == null || mc == null || renderingScreen == null
+                || renderingScreen != mc.currentScreen || !instance.config.enabled) return source;
+        if (SCREEN_CAPTURE.active(renderingScreen)) {
+            SCREEN_CAPTURE.record(renderingScreen, source);
+            return source;
+        }
+        if (translatedScreen != renderingScreen || !screenSources.contains(source)) return source;
+        String translated = TRANSLATOR.cached(source, currentTarget(), instance.config.aiEnabled, instance.config);
+        return translated == null ? source : translated;
+    }
+
+    static void translationFile(boolean importing) {
+        final Minecraft mc = Minecraft.getMinecraft();
+        final String target = currentTarget();
+        final LegacyConfig snapshot = instance.config.snapshotForRequest();
+        com.dragonmeow.mctranslator.translate.TranslationFileDialog.open(importing,
+                () -> TRANSLATOR.exportTranslations(target, snapshot),
+                file -> TRANSLATOR.importTranslations(file, target, snapshot),
+                message -> mc.addScheduledTask(() -> mc.ingameGUI.getChatGUI().printChatMessage(new TextComponentString(message))));
+    }
+
+    @SubscribeEvent public void screenKey(net.minecraftforge.client.event.GuiScreenEvent.KeyboardInputEvent.Pre event) {
+        if (Keyboard.getEventKeyState() && !Keyboard.isRepeatEvent()
+                && Keyboard.getEventKey() == screenScanKey.getKeyCode() && beginScreenScan(event.getGui())) event.setCanceled(true);
+    }
 
     private static final class PendingChat {
         final long id;
@@ -100,12 +168,20 @@ public final class MinecraftTranslatorForge {
         }, "mctranslator-codex-shutdown"));
         ClientRegistry.registerKeyBinding(settingsKey);
         ClientRegistry.registerKeyBinding(toggleKey);
+        ClientRegistry.registerKeyBinding(screenScanKey);
+        TRANSLATOR.loadSharedTranslations(configDir, currentTarget(), config);
         MinecraftForge.EVENT_BUS.register(this);
     }
 
     @SubscribeEvent public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         Minecraft minecraft = Minecraft.getMinecraft();
+        SCREEN_CAPTURE.cancelUnless(minecraft.currentScreen);
+        if (translatedScreen != minecraft.currentScreen) {
+            translatedScreen = null;
+            screenSources = java.util.Collections.emptySet();
+            scanKeyDown = false;
+        }
         syncChatSession(minecraft);
         boolean toggled = false;
         while (toggleKey.isPressed()) {
@@ -416,6 +492,10 @@ public final class MinecraftTranslatorForge {
         if (hasLetters(name)) names.add(name);
     }
     private void translateVisibleLines(List<String> lines, boolean highPriority) {
+        if (SCREEN_CAPTURE.active(renderingScreen)) {
+            for (String source : lines) SCREEN_CAPTURE.record(renderingScreen, source);
+            return;
+        }
         String target = currentTarget();
         for (int i = 0; i < lines.size(); i++) {
             String source = lines.get(i);

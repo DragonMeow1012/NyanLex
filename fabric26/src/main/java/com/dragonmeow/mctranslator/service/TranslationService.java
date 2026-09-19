@@ -40,6 +40,7 @@ public final class TranslationService {
     /** Loader-side visible-surface invalidation after an actual target-language change. */
     private volatile Runnable targetLangChangeListener = () -> { };
     private volatile boolean showOriginalOnly;
+    private volatile Set<String> manualScreenSources = Set.of();
     private volatile Supplier<? extends Collection<String>> protectedNames = List::of;
     private volatile Supplier<String> itemSourceLanguage = () -> null;
     private final Set<String> invalidatedNameFailures = ConcurrentHashMap.newKeySet();
@@ -251,8 +252,8 @@ public final class TranslationService {
      *
      * <p>This is deliberately separate from {@link #requestScreenTextAsync(String, Consumer)}:
      * that method belongs to the manual "scan this screen" action and therefore uses
-     * {@code aiScreenScan}.  FTB Library fields are live screen widgets and must use the
-     * {@code aiScreenText} engine selected for that surface.  The callback also lets an
+     * {@code aiScreenScan}. Live screen widgets normally use {@code aiScreenText};
+     * explicitly rescanned sources use the scan engine until the next scan. The callback lets an
      * optional UI integration reflow itself as soon as the cached translation arrives.</p>
      */
     public void requestLiveScreenTextAsync(String source, Consumer<String> onResult) {
@@ -262,7 +263,7 @@ public final class TranslationService {
                 onResult.accept(LayoutPreserver.matchOuterWhitespace(source, translated));
             }
         };
-        requestByEngine(config.aiScreenText, source, false, ready, false, true);
+        requestByEngine(screenEngine(source), source, false, ready, false, true);
     }
 
     /**
@@ -375,12 +376,25 @@ public final class TranslationService {
 
     public String targetLang() { return activeTargetLang; }
 
+    public synchronized com.dragonmeow.mctranslator.translate.TranslationFile exportTranslations() {
+        return new com.dragonmeow.mctranslator.translate.TranslationFile("modern-template-v1",
+                activeTargetLang, com.dragonmeow.mctranslator.config.MachineTranslationProvider.normalize(
+                        config.machineTranslationProvider), google.exportTranslations(), ai.exportTranslations());
+    }
+
+    public synchronized int importTranslations(com.dragonmeow.mctranslator.translate.TranslationFile file)
+            throws java.io.IOException {
+        file.requireCompatible("modern-template-v1", activeTargetLang,
+                com.dragonmeow.mctranslator.config.MachineTranslationProvider.normalize(config.machineTranslationProvider));
+        return google.importTranslations(file.machine) + ai.importTranslations(file.ai);
+    }
+
     public void setTargetLangChangeListener(Runnable listener) {
         targetLangChangeListener = listener == null ? () -> { } : listener;
     }
 
     /** Apply a live machine-provider selection while preserving every provider's disk rows. */
-    public void reloadMachineProvider() {
+    public synchronized void reloadMachineProvider() {
         google.reloadProviderPartition();
         contextualItemNameRetries.clear();
         invalidatedNameFailures.clear();
@@ -435,13 +449,28 @@ public final class TranslationService {
     public int translatedCount() { return google.size() + ai.size(); }
     public int pendingCount() { return google.pendingCount() + ai.pendingCount(); }
     public void retranslate(List<String> sources) {
+        invalidateSources(sources);
+        warmTooltipBatch(sources);
+    }
+
+    /** Explicit rescan: discard stale/failed rows, then queue the original screen inputs. */
+    public void retranslateScreen(List<String> sources) {
+        manualScreenSources = Set.copyOf(sources);
+        invalidateSources(sources);
+        warmMasked(sources, true, config.screenTextMode, config.aiScreenScan);
+    }
+
+    private boolean screenEngine(String source) {
+        return manualScreenSources.contains(source) ? config.aiScreenScan : config.aiScreenText;
+    }
+
+    private void invalidateSources(List<String> sources) {
         Collection<String> protectedNow = names();
         for (String source : sources) {
             invalidateBoth(source);
             String masked = NameMasker.mask(source, protectedNow).text();
             if (!masked.equals(source)) invalidateBoth(masked);
         }
-        warmTooltipBatch(sources);
     }
 
     private void invalidateBoth(String source) {
@@ -485,7 +514,7 @@ public final class TranslationService {
         return lookup(text, config.bookMode, config.aiBook, true);
     }
     public TranslationDecision translateScreenText(String text) {
-        return lookup(text, config.screenTextMode, config.aiScreenText, true);
+        return lookup(text, config.screenTextMode, screenEngine(text), true);
     }
     public TranslationDecision translateScreenScanText(String text) {
         return lookup(text, config.screenTextMode, config.aiScreenScan, true);
