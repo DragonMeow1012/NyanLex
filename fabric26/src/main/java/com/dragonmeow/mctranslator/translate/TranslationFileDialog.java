@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.Base64;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -23,15 +23,14 @@ public final class TranslationFileDialog {
         if (!BUSY.compareAndSet(false, true)) { result.accept("A translation file operation is already running."); return; }
         Thread worker = new Thread(() -> {
             try {
-                String selected = selectFile(importing);
-                if (selected == null) return;
-                Path path = Paths.get(selected);
+                List<Path> selected = selectFiles(importing);
+                if (selected.isEmpty()) return;
                 if (importing) {
-                    int count = importer.merge(TranslationFile.read(path));
-                    result.accept("Imported " + count + " translations (existing translations kept).");
+                    result.accept(importFiles(selected, importer));
                 } else {
-                    exporter.get().write(path);
-                    result.accept("Translations exported: " + path.getFileName());
+                    List<Path> parts = exporter.get().writeParts(selected.get(0));
+                    result.accept("Exported " + parts.size() + " translation file(s): " + parts.get(0).getFileName()
+                            + (parts.size() > 1 ? " ... " + parts.get(parts.size() - 1).getFileName() : ""));
                 }
             } catch (Exception error) {
                 result.accept("Translation file: " + (error.getMessage() == null ? "operation failed" : error.getMessage()));
@@ -43,18 +42,45 @@ public final class TranslationFileDialog {
         worker.start();
     }
 
-    private static String selectFile(boolean importing) throws Exception {
-        String title = importing ? "Import translations" : "Export translations";
+    static String importFiles(List<Path> selected, Importer importer) {
+        Set<Path> paths = new TreeSet<>();
+        for (Path path : selected) paths.add(path.toAbsolutePath().normalize());
+        long count = 0;
+        int imported = 0, failed = 0;
+        String firstFailure = "";
+        for (Path path : paths) {
+            try {
+                count += importer.merge(TranslationFile.read(path));
+                imported++;
+            } catch (Exception error) {
+                failed++;
+                if (firstFailure.isEmpty()) firstFailure = path.getFileName() + ": "
+                        + (error.getMessage() == null ? "operation failed" : error.getMessage());
+            }
+        }
+        return "Imported " + count + " translations from " + imported + "/" + paths.size()
+                + " files (existing translations kept)."
+                + (failed == 0 ? "" : " Failed files: " + failed + ". Successful files remain imported. " + firstFailure);
+    }
+
+    private static List<Path> selectFiles(boolean importing) throws Exception {
+        String title = importing ? "Import translations (select one or more JSON files)" : "Export translations (automatic parts)";
         String defaultPath = importing ? "" : "translations-" + System.currentTimeMillis() + ".json";
         try {
             Class<?> dialogs = Class.forName("org.lwjgl.util.tinyfd.TinyFileDialogs");
             Class<?> pointers = Class.forName("org.lwjgl.PointerBuffer");
-            if (importing) return (String) dialogs.getMethod("tinyfd_openFileDialog",
+            String selected;
+            if (importing) selected = (String) dialogs.getMethod("tinyfd_openFileDialog",
                     CharSequence.class, CharSequence.class, pointers, CharSequence.class, boolean.class)
-                    .invoke(null, title, defaultPath, null, "Translation JSON", false);
-            return (String) dialogs.getMethod("tinyfd_saveFileDialog",
+                    .invoke(null, title, defaultPath, null, "Translation JSON", true);
+            else selected = (String) dialogs.getMethod("tinyfd_saveFileDialog",
                     CharSequence.class, CharSequence.class, pointers, CharSequence.class)
                     .invoke(null, title, defaultPath, null, "Translation JSON");
+            List<Path> paths = new ArrayList<>();
+            if (selected != null && !selected.isEmpty()) {
+                for (String value : importing ? selected.split("\\|") : new String[]{selected}) paths.add(Paths.get(value));
+            }
+            return paths;
         } catch (ClassNotFoundException absentOnLwjgl2) {
             // Minecraft sets java.awt.headless=true. A separate small JVM isolates AWT
             // from the game's graphics settings on the older LWJGL 2 clients.
@@ -64,12 +90,16 @@ public final class TranslationFileDialog {
             Process picker = new ProcessBuilder(java, "-Djava.awt.headless=false", "-cp", classes,
                     Picker.class.getName(), importing ? "import" : "export", defaultPath)
                     .redirectError(ProcessBuilder.Redirect.INHERIT).start();
-            String output;
+            List<Path> paths = new ArrayList<>();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(
-                    picker.getInputStream(), StandardCharsets.UTF_8))) { output = reader.readLine(); }
+                    picker.getInputStream(), StandardCharsets.UTF_8))) {
+                String output;
+                while ((output = reader.readLine()) != null) {
+                    if (!output.isEmpty()) paths.add(Paths.get(new String(Base64.getDecoder().decode(output), StandardCharsets.UTF_8)));
+                }
+            }
             if (picker.waitFor() != 0) throw new java.io.IOException("Could not open file picker");
-            return output == null || output.isEmpty() ? null
-                    : new String(Base64.getDecoder().decode(output), StandardCharsets.UTF_8);
+            return paths;
         }
     }
 
@@ -83,9 +113,10 @@ public final class TranslationFileDialog {
                         importing ? FileDialog.LOAD : FileDialog.SAVE);
                 try {
                     dialog.setFile(importing ? "*.json" : args[1]);
+                    dialog.setMultipleMode(importing);
                     dialog.setVisible(true);
-                    if (dialog.getFile() != null) {
-                        String path = Paths.get(dialog.getDirectory(), dialog.getFile()).toString();
+                    for (java.io.File file : dialog.getFiles()) {
+                        String path = file.getAbsolutePath();
                         System.out.println(Base64.getEncoder().encodeToString(path.getBytes(StandardCharsets.UTF_8)));
                     }
                 } finally { dialog.dispose(); }

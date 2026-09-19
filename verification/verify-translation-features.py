@@ -26,6 +26,12 @@ def main():
                 assert bytecode[:4] == b"\xca\xfe\xba\xbe"
                 if legacy:
                     assert int.from_bytes(bytecode[6:8], "big") == 52, (target, name)
+                if name == "TranslationFile":
+                    assert b"writeParts" in bytecode, target
+                if name == "TranslationFileDialog":
+                    assert b"importFiles" in bytecode, target
+                if name == "TranslationFileDialog$Picker":
+                    assert b"setMultipleMode" in bytecode, target
             service = ("forgelegacy/LegacyTranslator" if target.startswith("forge") else
                        "legacy/LegacyTranslator" if legacy else "service/TranslationService")
             bytecode = jar.read(PREFIX + service + ".class")
