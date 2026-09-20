@@ -14,7 +14,7 @@ PREFIX = "com/dragonmeow/mctranslator/"
 def main():
     results = []
     for target in TARGETS:
-        jars = [p for p in (ROOT / target / "build/libs").glob("mctranslator-1.0.5-*.jar")
+        jars = [p for p in (ROOT / target / "build/libs").glob("mctranslator-1.0.6-*.jar")
                 if not p.name.endswith(("-sources.jar", "-dev.jar", "-javadoc.jar"))]
         assert len(jars) == 1, (target, jars)
         path = jars[0]

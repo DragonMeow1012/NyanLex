@@ -479,4 +479,47 @@ class TemplateTextTest {
         assertFalse(playerEvent.changed());
         assertEquals("You were killed by Steve", playerEvent.text());
     }
+
+    @Test
+    void restoreIsStableAcrossRepeatedCallsAndSharedSlotPatterns() {
+        // restore()/restoreLayout() run every render frame, so their per-slot and per-gap
+        // regexes are compiled once and shared. The expected strings below were captured
+        // from the pre-cache implementation: repeated restores, different translations and
+        // different snapshots reusing the same slot indices must stay byte-identical.
+        TranslationTemplate template = new TranslationTemplate();
+
+        TranslationTemplate.Snapshot scoreboard =
+                template.prepare("Coins: 1,250   Kills: 17   Time: 12:30");
+        assertEquals("Coins: ⟦MT0⟧ ⟦WS0⟧ Kills: ⟦MT1⟧ ⟦WS1⟧ Time: ⟦MT2⟧", scoreboard.key());
+        assertEquals(List.of("1,250", "17", "12:30"), scoreboard.base().values());
+        assertEquals(2, scoreboard.layoutGaps().size());
+        String tidy = "硬幣: ⟦MT0⟧ ⟦WS0⟧ 擊殺: ⟦MT1⟧ ⟦WS1⟧ 時間: ⟦MT2⟧";
+        String messy = "金幣：⟦ MT 0 ⟧⟦WS0⟧擊殺數：⟦MT1⟧ ⟦ WS1 ⟧時間：⟦MT2⟧";
+        for (int pass = 0; pass < 2; pass++) {
+            assertEquals("硬幣: 1,250   擊殺: 17   時間: 12:30",
+                    scoreboard.restore(tidy), "pass " + pass);
+            assertEquals("硬幣: 1,250 ⟦WS0⟧ 擊殺: 17 ⟦WS1⟧ 時間: 12:30",
+                    scoreboard.base().restore(tidy), "pass " + pass);
+            assertEquals("金幣：1,250   擊殺數：17   時間：12:30",
+                    scoreboard.restore(messy), "pass " + pass);
+            assertEquals("金幣：1,250⟦WS0⟧擊殺數：17 ⟦ WS1 ⟧時間：12:30",
+                    scoreboard.base().restore(messy), "pass " + pass);
+        }
+
+        TranslationTemplate.Snapshot hud = template.prepare("HP: 20/20\t\tLv 5   XP 75%");
+        assertEquals("HP: ⟦MT0⟧/⟦MT1⟧ ⟦WS0⟧ Lv ⟦MT2⟧ ⟦WS1⟧ XP ⟦MT3⟧", hud.key());
+        assertEquals(List.of("20", "20", "5", "75%"), hud.base().values());
+        assertEquals(2, hud.layoutGaps().size());
+        String hudTidy = "生命: ⟦MT0⟧/⟦MT1⟧ ⟦WS0⟧ 等級 ⟦MT2⟧ ⟦WS1⟧ 經驗 ⟦MT3⟧";
+        String hudMessy = "生命值：⟦MT0⟧ / ⟦MT1⟧⟦ WS 0 ⟧等級⟦ MT2 ⟧ ⟦WS1⟧經驗值 ⟦MT3⟧";
+        for (int pass = 0; pass < 2; pass++) {
+            assertEquals("生命: 20/20\t\t等級5   經驗75%", hud.restore(hudTidy), "pass " + pass);
+            assertEquals("生命: 20/20 ⟦WS0⟧ 等級5 ⟦WS1⟧ 經驗75%",
+                    hud.base().restore(hudTidy), "pass " + pass);
+            assertEquals("生命值：20 / 20\t\t等級5   經驗值75%",
+                    hud.restore(hudMessy), "pass " + pass);
+            assertEquals("生命值：20 / 20⟦ WS 0 ⟧等級5 ⟦WS1⟧經驗值75%",
+                    hud.base().restore(hudMessy), "pass " + pass);
+        }
+    }
 }

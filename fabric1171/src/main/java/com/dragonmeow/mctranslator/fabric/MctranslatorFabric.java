@@ -656,6 +656,9 @@ public final class MctranslatorFabric implements ClientModInitializer {
         return t != null ? t : c;
     }
 
+    private static final java.util.Map<String, Boolean> NAME_TAG_MEMO = new java.util.HashMap<>();
+    private static final java.util.List<String> NAME_TAG_MEMO_ROSTER = new java.util.ArrayList<>();
+
     /** Whole-token match (name chars = [A-Za-z0-9_], so "Steve" never matches inside
      *  "Steves") of any LISTED player name inside a name tag's plain text. */
     private static boolean nameTagMatchesListedPlayer(String plain) {
@@ -664,6 +667,37 @@ public final class MctranslatorFabric implements ClientModInitializer {
         net.minecraft.client.multiplayer.ClientPacketListener conn =
                 (mc == null) ? null : mc.getConnection();
         if (conn == null) return false;
+        // Memo is valid only while the live roster's names are unchanged (same size, same
+        // names in order); any drift rebuilds the snapshot and drops every memoised answer.
+        java.util.Collection<net.minecraft.client.multiplayer.PlayerInfo> roster = conn.getOnlinePlayers();
+        boolean rosterChanged = roster.size() != NAME_TAG_MEMO_ROSTER.size();
+        if (!rosterChanged) {
+            int i = 0;
+            for (net.minecraft.client.multiplayer.PlayerInfo info : roster) {
+                String name = (info == null || info.getProfile() == null) ? null : info.getProfile().getName();
+                if (!java.util.Objects.equals(name, NAME_TAG_MEMO_ROSTER.get(i++))) {
+                    rosterChanged = true;
+                    break;
+                }
+            }
+        }
+        if (rosterChanged) {
+            NAME_TAG_MEMO_ROSTER.clear();
+            for (net.minecraft.client.multiplayer.PlayerInfo info : roster) {
+                NAME_TAG_MEMO_ROSTER.add((info == null || info.getProfile() == null) ? null : info.getProfile().getName());
+            }
+            NAME_TAG_MEMO.clear();
+        }
+        Boolean hit = NAME_TAG_MEMO.get(plain);
+        if (hit != null) return hit;
+        boolean result = nameTagMatchesListedPlayerUncached(plain, conn);
+        if (NAME_TAG_MEMO.size() >= 2048) NAME_TAG_MEMO.clear();
+        NAME_TAG_MEMO.put(plain, result);
+        return result;
+    }
+
+    private static boolean nameTagMatchesListedPlayerUncached(
+            String plain, net.minecraft.client.multiplayer.ClientPacketListener conn) {
         for (net.minecraft.client.multiplayer.PlayerInfo info : conn.getOnlinePlayers()) {
             String name = (info == null || info.getProfile() == null) ? null : info.getProfile().getName();
             if (name == null || name.isEmpty()) continue;
@@ -1301,6 +1335,24 @@ public final class MctranslatorFabric implements ClientModInitializer {
         return pending.message;
     }
 
+    private static boolean chatRescaleQueued;
+
+    /** Coalesce every late-translation backfill of one task-loop pass into a single
+     *  vanilla chat rescale: {@code tell} always enqueues (unlike execute, which runs
+     *  inline on the render thread), and runAllTasks drains it before this frame renders. */
+    private static void requestChatRescale(Minecraft mc) {
+        if (chatRescaleQueued) return;
+        chatRescaleQueued = true;
+        mc.tell(() -> {
+            chatRescaleQueued = false;
+            try {
+                mc.gui.getChat().rescaleChat();
+            } catch (RuntimeException ignored) {
+                // Same tolerance as replaceChatMessage: foreign chat internals never crash the client.
+            }
+        });
+    }
+
     private static boolean replaceChatMessage(
             net.minecraft.client.gui.components.ChatComponent chat,
             Component previous, Component replacement) {
@@ -1313,7 +1365,7 @@ public final class MctranslatorFabric implements ClientModInitializer {
                 if (content != previous) continue;
                 messages.set(i, new net.minecraft.client.GuiMessage<>(
                         old.getAddedTime(), replacement, old.getId()));
-                chat.rescaleChat();
+                requestChatRescale(Minecraft.getInstance());
                 return true;
             }
         } catch (RuntimeException ignored) {

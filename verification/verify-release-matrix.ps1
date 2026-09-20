@@ -11,7 +11,7 @@ Set-StrictMode -Version 2.0
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$releaseVersion = '1.0.5'
+$releaseVersion = '1.0.6'
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $verificationRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $gradleExecutables = @{
@@ -257,7 +257,7 @@ $rows = @(
     New-TomlRow -Key 'neoforge120' -Project 'neoforge120' -Loader 'neoforge' `
         -Label 'NeoForge' -Minecraft '1.20.1' -MetadataEntry 'META-INF/mods.toml' `
         -MinecraftRange '[1.20.1,1.20.2)' -LoaderRange '[47,)' `
-        -TomlVersion '1.0.5' -LoaderDependency 'forge' `
+        -TomlVersion '1.0.6' -LoaderDependency 'forge' `
         -LoaderDependencyRange '[47,)' -SourceRelease 17 -ClassMajor 61 `
         -RuntimeJdk 21 -BuildJdk 21 -HarnessKind 'modern' `
         -MainClass 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' `
@@ -267,7 +267,7 @@ $rows = @(
         -Label 'NeoForge' -Minecraft '1.21.1' `
         -MetadataEntry 'META-INF/neoforge.mods.toml' `
         -MinecraftRange '[1.21.1,1.21.2)' -LoaderRange '[4,)' `
-        -TomlVersion '1.0.5' -LoaderDependency 'neoforge' `
+        -TomlVersion '1.0.6' -LoaderDependency 'neoforge' `
         -LoaderDependencyRange '[21.1.0,)' -SourceRelease 21 -ClassMajor 65 `
         -RuntimeJdk 21 -BuildJdk 21 -HarnessKind 'modern' `
         -MainClass 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' `
@@ -277,7 +277,7 @@ $rows = @(
         -Label 'NeoForge' -Minecraft '26.2' `
         -MetadataEntry 'META-INF/neoforge.mods.toml' `
         -MinecraftRange '[26.2,26.3)' -LoaderRange '[4,)' `
-        -TomlVersion '1.0.5' -LoaderDependency 'neoforge' `
+        -TomlVersion '1.0.6' -LoaderDependency 'neoforge' `
         -LoaderDependencyRange '[26.2,)' -SourceRelease 25 -ClassMajor 69 `
         -RuntimeJdk 25 -BuildJdk 21 -HarnessKind 'modern' `
         -MainClass 'com.dragonmeow.mctranslator.neoforge26.MctranslatorNeoForge26' `

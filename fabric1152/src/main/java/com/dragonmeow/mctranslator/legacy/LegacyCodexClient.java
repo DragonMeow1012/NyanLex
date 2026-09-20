@@ -54,7 +54,7 @@ final class LegacyCodexClient implements AutoCloseable {
     private static final int MAX_COMPLETED_LOGIN_RESULTS = 512;
     private static final int MAX_ACTIVE_TURNS = 512;
     private static final int MAX_ACTIVE_THREADS = 512;
-    private static final String CLIENT_VERSION = "1.0.5";
+    private static final String CLIENT_VERSION = "1.0.6";
     private static final List<String> DISABLED_TRANSLATION_FEATURES = Collections.unmodifiableList(Arrays.asList(
             "apps",
             "auth_elicitation",

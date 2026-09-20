@@ -1,4 +1,4 @@
-# Minecraft Translator 1.0.5 packaging
+# Minecraft Translator 1.0.6 packaging
 
 The release contains 18 JARs. Each JAR is tied to one Minecraft version and loader.
 
@@ -47,25 +47,25 @@ Push-Location forge1122; .\gradlew.bat clean build; Pop-Location
 
 ## Release folders
 
-Generated binaries are ignored by Git and stored under `mods-jar/1.0.5`:
+Generated binaries are ignored by Git and stored under `mods-jar/1.0.6`:
 
 ```text
-mods-jar/1.0.5/
+mods-jar/1.0.6/
   fabric/
-    1.14.4/mctranslator-1.0.5-Fabric-1.14.4.jar
+    1.14.4/mctranslator-1.0.6-Fabric-1.14.4.jar
     ...
-    26.2/mctranslator-1.0.5-Fabric-26.2.jar
+    26.2/mctranslator-1.0.6-Fabric-26.2.jar
   neoforge/
-    1.20.1/mctranslator-1.0.5-NeoForge-1.20.1.jar
-    1.21.1/mctranslator-1.0.5-NeoForge-1.21.1.jar
-    26.2/mctranslator-1.0.5-NeoForge-26.2.jar
+    1.20.1/mctranslator-1.0.6-NeoForge-1.20.1.jar
+    1.21.1/mctranslator-1.0.6-NeoForge-1.21.1.jar
+    26.2/mctranslator-1.0.6-NeoForge-26.2.jar
   forge/
-    1.12.2/mctranslator-1.0.5-Forge-1.12.2.jar
-    1.13.2/mctranslator-1.0.5-Forge-1.13.2.jar
-  MinecraftTranslator-1.0.5-Fabric.zip
-  MinecraftTranslator-1.0.5-NeoForge.zip
-  MinecraftTranslator-1.0.5-Forge.zip
-  MinecraftTranslator-1.0.5-all-versions.zip
+    1.12.2/mctranslator-1.0.6-Forge-1.12.2.jar
+    1.13.2/mctranslator-1.0.6-Forge-1.13.2.jar
+  MinecraftTranslator-1.0.6-Fabric.zip
+  MinecraftTranslator-1.0.6-NeoForge.zip
+  MinecraftTranslator-1.0.6-Forge.zip
+  MinecraftTranslator-1.0.6-all-versions.zip
   SHA256SUMS.txt
 ```
 
@@ -76,11 +76,11 @@ GitHub Release assets are flat, so all 18 JARs are also uploaded individually fo
 Before publishing:
 
 - Build all 18 targets successfully.
-- Confirm exactly 16 packaged JARs, 4 ZIPs, and `SHA256SUMS.txt`.
+- Confirm exactly 18 packaged JARs, 4 ZIPs, and `SHA256SUMS.txt`.
 - Compare each packaged JAR SHA-256 with its matching `build/libs` output.
-- Confirm loader metadata contains version 1.0.5 and the exact Minecraft range.
+- Confirm loader metadata contains version 1.0.6 and the exact Minecraft range.
 - Run `git diff --check` and core unit tests.
-- Upload individual JARs plus the four ZIP files to tag `v1.0.5`.
+- Upload individual JARs plus the four ZIP files to tag `v1.0.6`.
 
 ## Minecraft 26.3 builds
 

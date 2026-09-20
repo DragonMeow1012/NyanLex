@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -114,6 +115,20 @@ public final class TemplateText {
                 }
             });
 
+    // restore() runs per render frame on cache HITS (scoreboard rows, tooltips, name
+    // tags). Its per-slot regex is fully determined by (leadingSpace, trailingSpace,
+    // slotIndex), so the compiled Pattern is shared instead of recompiled every call.
+    // Pattern is immutable/thread-safe; the bound only guards against unbounded growth.
+    private static final int PATTERN_CACHE_MAX = 4096;
+    private static final ConcurrentHashMap<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
+
+    private static Pattern cachedPattern(String regex) {
+        Pattern cached = PATTERN_CACHE.get(regex);
+        if (cached != null) return cached;
+        if (PATTERN_CACHE.size() >= PATTERN_CACHE_MAX) PATTERN_CACHE.clear();
+        return PATTERN_CACHE.computeIfAbsent(regex, Pattern::compile);
+    }
+
     private TemplateText() {
     }
 
@@ -165,7 +180,7 @@ public final class TemplateText {
                 boolean hadSpaceAfter = at >= 0 && at + tok.length() < text.length()
                         && isHorizontalSpace(text.charAt(at + tok.length()));
 
-                Matcher m = Pattern.compile(regex).matcher(out);
+                Matcher m = cachedPattern(regex).matcher(out);
                 StringBuilder sb = new StringBuilder(out.length() + 8);
                 int last = 0;
                 while (m.find()) {

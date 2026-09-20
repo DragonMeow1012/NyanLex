@@ -2,6 +2,7 @@ package com.dragonmeow.mctranslator.translate;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,6 +25,21 @@ public final class TranslationTemplate {
             "\\u27E6\\s*WS\\s*(\\d+)\\s*\\u27E7");
     private static final Pattern LAYOUT_PROTOCOL_TOKEN = Pattern.compile(
             "\\u27E6\\s*(/?)\\s*(CS|MT|WS)\\s*(\\d+)\\s*\\u27E7");
+    // restoreLayout() runs per render frame on cache hits; its per-gap regex depends
+    // only on the gap index, so the compiled Pattern is shared instead of recompiled.
+    // Pattern is immutable/thread-safe; the bound only guards against unbounded growth.
+    private static final int LAYOUT_PATTERN_CACHE_MAX = 4096;
+    private static final ConcurrentHashMap<Integer, Pattern> LAYOUT_PATTERN_CACHE =
+            new ConcurrentHashMap<>();
+
+    private static Pattern layoutTokenPattern(int index) {
+        Pattern cached = LAYOUT_PATTERN_CACHE.get(index);
+        if (cached != null) return cached;
+        if (LAYOUT_PATTERN_CACHE.size() >= LAYOUT_PATTERN_CACHE_MAX) LAYOUT_PATTERN_CACHE.clear();
+        return LAYOUT_PATTERN_CACHE.computeIfAbsent(index, i -> Pattern.compile(
+                "[ \\t\\u00A0]*\\u27E6\\s*WS\\s*" + i
+                        + "\\s*\\u27E7[ \\t\\u00A0]*"));
+    }
 
     public Snapshot prepare(String source) {
         String normalized = source == null ? "" : source.strip();
@@ -164,9 +180,7 @@ public final class TranslationTemplate {
         if (translated == null || gaps == null || gaps.isEmpty()) return translated;
         String out = translated;
         for (int i = 0; i < gaps.size(); i++) {
-            Pattern token = Pattern.compile(
-                    "[ \\t\\u00A0]*\\u27E6\\s*WS\\s*" + i
-                            + "\\s*\\u27E7[ \\t\\u00A0]*");
+            Pattern token = layoutTokenPattern(i);
             out = token.matcher(out).replaceAll(Matcher.quoteReplacement(gaps.get(i)));
         }
         return out;

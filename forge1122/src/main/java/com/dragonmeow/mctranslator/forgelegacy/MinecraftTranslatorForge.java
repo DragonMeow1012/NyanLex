@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-@Mod(modid = "mctranslator", name = "Minecraft Translator", version = "1.0.5", clientSideOnly = true)
+@Mod(modid = "mctranslator", name = "Minecraft Translator", version = "1.0.6", clientSideOnly = true)
 public final class MinecraftTranslatorForge {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static MinecraftTranslatorForge instance;
