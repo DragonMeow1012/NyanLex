@@ -61,9 +61,15 @@ public final class SettingsModel {
     public static final String KEY_ALL_MIXED = "nyanlex.ui.all.mixed";
     public static final String KEY_MANUAL_TITLE = "nyanlex.manual.title";
     public static final String KEY_MANUAL_BACK = "nyanlex.manual.back";
+    public static final String KEY_MANUAL_SETUP_BTN = "nyanlex.manual.setup_btn";
+    public static final String KEY_MANUAL_CHAPTERS = "nyanlex.manual.chapters";
+    public static final String KEY_NARRATE_CHAPTER = "nyanlex.narrate.chapter";
+    public static final String KEY_KEY_UNSET = "nyanlex.setup.key.unset";
     public static final String KEY_MANUAL_CARD = "nyanlex.settings.manual";
     /** Sections of the manual screen ({@code nyanlex.manual.s1.title} ... {@code .body}). */
     public static final int MANUAL_SECTIONS = 10;
+    /** The chapter on online translation and privacy (1-based): what the 隱私說明 button opens. */
+    public static final int MANUAL_PRIVACY_SECTION = 6;
     public static final String KEY_BTN_CLEAR = "nyanlex.ui.btn.clear";
     public static final String KEY_DONE_SHORT = "nyanlex.ui.done.short";
     public static final String KEY_ABOUT_TITLE = "nyanlex.ui.about.title";
@@ -198,6 +204,7 @@ public final class SettingsModel {
                 KEY_BTN_SETTINGS, KEY_BTN_EDIT, KEY_BTN_DETECT, KEY_BTN_EXPORT, KEY_BTN_IMPORT,
                 KEY_ALL_TITLE, KEY_ALL_DESC, KEY_ALL_COL_MODE, KEY_ALL_COL_ENGINE, KEY_ALL_MIXED,
                 KEY_MANUAL_TITLE, KEY_MANUAL_BACK, KEY_MANUAL_CARD, KEY_MANUAL_CARD + ".tip",
+                KEY_MANUAL_SETUP_BTN, KEY_MANUAL_CHAPTERS, KEY_NARRATE_CHAPTER,
                 KEY_BTN_START, KEY_BTN_CHANGE, KEY_BTN_PRIVACY, KEY_BTN_USE_AI, KEY_CURRENT,
                 KEY_NARRATE_CATEGORY, KEY_NARRATE_SEARCH, KEY_NARRATE_BUTTON, KEY_NARRATE_SWITCH,
                 KEY_NARRATE_SLIDER, KEY_NARRATE_VALUE, KEY_NARRATE_GROUP, KEY_NARRATE_OPEN,

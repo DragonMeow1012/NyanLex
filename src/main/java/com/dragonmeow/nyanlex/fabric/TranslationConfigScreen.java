@@ -5,6 +5,7 @@ import com.dragonmeow.nyanlex.config.FileOpener;
 import com.dragonmeow.nyanlex.config.SettingAction;
 import com.dragonmeow.nyanlex.config.SettingEntry;
 import com.dragonmeow.nyanlex.config.SettingsCatalog;
+import com.dragonmeow.nyanlex.config.SettingsModel;
 import com.dragonmeow.nyanlex.config.SettingsPanel;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.config.UiCanvas;
@@ -206,7 +207,7 @@ public final class TranslationConfigScreen extends Screen {
             case OPEN_KEYBINDS -> open(new TranslationKeybindScreen(this));
             case OPEN_QUICK_SETUP -> open(new QuickSetupScreen(this));
             case OPEN_MANUAL -> open(new TranslationManualScreen(this));
-            case OPEN_PRIVACY -> open(new TranslationManualScreen(this));
+            case OPEN_PRIVACY -> open(new TranslationManualScreen(this, SettingsModel.MANUAL_PRIVACY_SECTION - 1));
             case OPEN_AI -> open(new AiConfigScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new TranslationRequestsScreen(this));
             case OPEN_ITEM_WARMUP -> NyanLexFabric.openItemWarmupScreen(this);

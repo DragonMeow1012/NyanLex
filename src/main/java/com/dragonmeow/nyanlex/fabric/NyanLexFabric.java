@@ -901,6 +901,10 @@ public final class NyanLexFabric implements ClientModInitializer {
         if (debugLog != null) debugLog.clear();
     }
 
+    public static KeyMapping modeKeyMapping() {
+        return modeKey;
+    }
+
     public static KeyMapping retranslateKeyMapping() {
         return retranslateKey;
     }
