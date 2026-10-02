@@ -12,7 +12,6 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import com.dragonmeow.nyanlex.platform.BrowserLinks;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -38,6 +37,95 @@ public final class Neo26AiScreen extends Screen {
     private boolean missingPromptShown;
     private String status = "";
 
+    // Vertical layout, computed once per init() so the widgets and the text agree. The key notice wraps
+    // to as many lines as the full file path needs; everything below it moves down and, when the
+    // screen is short, the gaps shrink.
+    private List<String> noticeLines = List.of();
+    private int layProv;
+    private int layMode;
+    private int layBaseLabel;
+    private int layBase;
+    private int layModelLabel;
+    private int layModel;
+    private int layKeysLabel;
+    private int layKeys;
+    private int layTest;
+    private int layAccount;
+    private int layLogin;
+    private int layCodexModel;
+    private int layEffort;
+    private int layCodexTest;
+    private int layQuota;
+    private int layStatus;
+    private int layDone;
+    /** When even the tightest gaps do not fit, 測試連接 and 完成 share one row. */
+    private boolean tight;
+
+    private void computeLayout(TranslatorConfig cfg) {
+        java.nio.file.Path file = NyanLexNeoForge26.configFilePath();
+        String path = file == null ? "" : file.toAbsolutePath().toString();
+        String text = Component.translatable("screen.nyanlex.ai.key_notice", path).getString();
+        noticeLines = com.dragonmeow.nyanlex.config.UiText.wrap(text, Math.max(80, this.width - 12), this.font::width);
+        boolean openAi = isOpenAiProvider(cfg);
+        boolean codex = cfg.aiUseCodex;
+        int[] gaps = {10, 6, 4, 2};
+        tight = false;
+        boolean fitted = false;
+        for (int gi = 0; gi < gaps.length; gi++) {
+            int g = gaps[gi];
+            int small = Math.min(g, 6);
+            int end = 17 + noticeLines.size() * 10;
+            layAccount = end + 3;
+            layProv = end + (codex ? 17 : 7);
+            int y = layProv + 20;
+            if (openAi || codex) {
+                y += small;
+                layMode = y;
+                y += 20;
+            }
+            if (codex) {
+                y += small;
+                layLogin = y;
+                y += 20 + g;
+                layCodexModel = y;
+                y += 20 + g;
+                layEffort = y;
+                y += 20 + g;
+                layCodexTest = y;
+                y += 20 + 4;
+                layQuota = y;
+                y += 10;
+                layStatus = y;
+                y += 10;
+            } else {
+                y += Math.min(g, 4);
+                layBaseLabel = y;
+                layBase = y + 12;
+                y = layBase + 20 + g;
+                layModelLabel = y;
+                layModel = y + 12;
+                y = layModel + 20 + g;
+                layKeysLabel = y;
+                layKeys = y + 12;
+                y = layKeys + 20 + Math.min(g, 8);
+                layTest = y;
+                y += 20;
+                layStatus = y + 2;
+            }
+            layDone = Math.max(y + 4, 210);
+            if (layDone + 20 <= this.height - 4) {
+                fitted = true;
+                break;
+            }
+        }
+        if (!fitted) {
+            tight = true;
+            layDone = codex ? layCodexTest : layTest;
+            return;
+        }
+        layDone = Math.min(layDone, Math.max(4, this.height - 24));
+    }
+
     public Neo26AiScreen(Screen parent) {
         super(Component.translatable("screen.nyanlex.ai.title"));
         this.parent = parent;
@@ -46,17 +134,18 @@ public final class Neo26AiScreen extends Screen {
     @Override
     protected void init() {
         TranslatorConfig cfg = NyanLexNeoForge26.config();
+        computeLayout(cfg);
         int x = this.width / 2 - FIELD_W / 2;
         boolean openAiPanel = isOpenAiProvider(cfg);
-        addProviderButtons(x, 34);
-        if (openAiPanel) addOpenAiModeButtons(x, 60);
+        addProviderButtons(x, layProv);
+        if (openAiPanel || cfg.aiUseCodex) addOpenAiModeButtons(x, layMode);
         if (cfg.aiUseCodex) {
             initCodex(x);
         } else {
             initApi(x, openAiPanel);
         }
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
-                .bounds(this.width / 2 - 100, 210, 200, 20).build());
+                .bounds(tight ? this.width / 2 + 3 : this.width / 2 - 100, layDone, tight ? FIELD_W / 2 - 3 : 200, 20).build());
 
         if (cfg.aiUseCodex && !this.initialCodexRefreshStarted) {
             this.initialCodexRefreshStarted = true;
@@ -107,16 +196,16 @@ public final class Neo26AiScreen extends Screen {
 
     private void initApi(int x, boolean openAiPanel) {
         TranslatorConfig cfg = NyanLexNeoForge26.config();
-        int baseY = openAiPanel ? 94 : 70;
-        int modelY = openAiPanel ? 126 : 112;
-        int keysY = openAiPanel ? 158 : 154;
-        int testY = openAiPanel ? 180 : 182;
-        this.baseUrlBox = new EditBox(this.font, x, baseY, FIELD_W, 20, Component.literal("Base URL"));
+        int baseY = layBase;
+        int modelY = layModel;
+        int keysY = layKeys;
+        int testY = layTest;
+        this.baseUrlBox = new EditBox(this.font, x, baseY, FIELD_W, 20, Component.translatable("screen.nyanlex.ai.endpoint"));
         this.baseUrlBox.setMaxLength(256);
         this.baseUrlBox.setValue(cfg.aiBaseUrl == null ? "" : cfg.aiBaseUrl);
         this.addRenderableWidget(this.baseUrlBox);
 
-        this.modelBox = new EditBox(this.font, x, modelY, FIELD_W, 20, Component.literal("Model"));
+        this.modelBox = new EditBox(this.font, x, modelY, FIELD_W, 20, Component.translatable("screen.nyanlex.ai.model"));
         this.modelBox.setMaxLength(128);
         this.modelBox.setValue(cfg.aiModel == null ? "" : cfg.aiModel);
         this.addRenderableWidget(this.modelBox);
@@ -142,7 +231,7 @@ public final class Neo26AiScreen extends Screen {
                             button[0].setMessage(Component.literal(result));
                         }
                     });
-        }).bounds(x, testY, FIELD_W, 20).build();
+        }).bounds(x, testY, tight ? FIELD_W / 2 - 3 : FIELD_W, 20).build();
         this.testButton = button[0];
         this.addRenderableWidget(button[0]);
     }
@@ -159,30 +248,30 @@ public final class Neo26AiScreen extends Screen {
                 b -> {
                     if (signedIn) logoutCodex();
                     else loginCodex();
-                }).bounds(x, 86, FIELD_W, 20).build();
+                }).bounds(x, layLogin, FIELD_W, 20).build();
         this.loginButton.active = !this.busy;
         this.addRenderableWidget(this.loginButton);
 
         this.modelButton = Button.builder(modelLabel(), b -> openModelPicker())
-                .bounds(x, 116, 252, 20).build();
+                .bounds(x, layCodexModel, 252, 20).build();
         this.modelButton.active = signedIn && !this.busy && client != null && !client.cachedModels().isEmpty();
         this.addRenderableWidget(this.modelButton);
 
         this.refreshButton = Button.builder(
                 Component.translatable("screen.nyanlex.ai.codex.refresh"),
-                b -> refreshCodexSession(true)).bounds(x + 258, 116, 62, 20).build();
+                b -> refreshCodexSession(true)).bounds(x + 258, layCodexModel, 62, 20).build();
         this.refreshButton.active = signedIn && !this.busy && client != null;
         this.addRenderableWidget(this.refreshButton);
 
         this.effortButton = Button.builder(effortLabel(), b -> openEffortPicker())
-                .bounds(x, 146, FIELD_W, 20).build();
+                .bounds(x, layEffort, FIELD_W, 20).build();
         this.effortButton.active = signedIn && !this.busy
                 && selectedModel().map(option -> !option.reasoningEfforts().isEmpty()).orElse(false);
         this.addRenderableWidget(this.effortButton);
 
         this.testButton = Button.builder(
                 Component.translatable("screen.nyanlex.ai.test"),
-                b -> testCodex()).bounds(x, 174, FIELD_W, 20).build();
+                b -> testCodex()).bounds(x, layCodexTest, tight ? FIELD_W / 2 - 3 : FIELD_W, 20).build();
         this.testButton.active = signedIn && !this.busy
                 && NyanLexNeoForge26.config().codexModel != null
                 && !NyanLexNeoForge26.config().codexModel.isBlank();
@@ -304,7 +393,7 @@ public final class Neo26AiScreen extends Screen {
             }
             try {
                 LoginStart login = client.startLogin();
-                onMain(() -> BrowserLinks.open(login.authUrl()));
+                onMain(() -> com.dragonmeow.nyanlex.platform.BrowserLinks.open(login.authUrl()));
                 setStatus(Component.translatable(
                         "screen.nyanlex.ai.codex.waiting_login").getString(), false);
                 boolean success = client.awaitLogin(login.loginId(), Duration.ofMinutes(10));
@@ -443,7 +532,7 @@ public final class Neo26AiScreen extends Screen {
         this.missingPromptShown = true;
         ConfirmScreen confirm = new ConfirmScreen(confirmed -> {
             this.missingPromptShown = false;
-            if (confirmed) BrowserLinks.open(CODEX_DOWNLOAD_URL);
+            if (confirmed) com.dragonmeow.nyanlex.platform.BrowserLinks.open(CODEX_DOWNLOAD_URL);
             if (this.minecraft != null) this.minecraft.setScreenAndShow(this);
         }, Component.translatable("screen.nyanlex.ai.codex.missing_title"),
                 Component.translatable("screen.nyanlex.ai.codex.missing_message"),
@@ -471,29 +560,37 @@ public final class Neo26AiScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        graphics.centeredText(this.font, this.title, this.width / 2, 10, 0xFFFFFFFF);
+        graphics.centeredText(this.font, this.title, this.width / 2, 4, 0xFFFFFFFF);
 
         TranslatorConfig cfg = NyanLexNeoForge26.config();
+        drawKeyNotice(graphics);
         if (cfg.aiUseCodex) {
             drawCodexAccount(graphics);
-            if (this.status.isBlank()) graphics.centeredText(this.font, Component.translatable(
-                    "screen.nyanlex.ai.codex.independent_hint"), this.width / 2, 198, 0xFF909090);
+            // always visible, whatever the sign-in status line says below it
+            graphics.centeredText(this.font, Component.translatable(
+                    "screen.nyanlex.ai.codex.quota_notice"), this.width / 2, layQuota, 0xFFA4A9B8);
+            if (!this.status.isBlank()) {
+                graphics.centeredText(this.font, Component.literal(this.status),
+                        this.width / 2, layStatus, 0xFFFFD080);
+            }
         } else {
             int x = this.width / 2 - FIELD_W / 2;
-            boolean openAiPanel = isOpenAiProvider(cfg);
-            int endpointLabelY = openAiPanel ? 82 : 58;
-            int modelLabelY = openAiPanel ? 114 : 100;
-            int keysLabelY = openAiPanel ? 146 : 142;
-            graphics.text(this.font, Component.translatable("screen.nyanlex.ai.endpoint"),
-                    x, endpointLabelY, 0xFFA0A0A0, false);
-            graphics.text(this.font, Component.translatable("screen.nyanlex.ai.model"),
-                    x, modelLabelY, 0xFFA0A0A0, false);
-            graphics.text(this.font, Component.translatable("screen.nyanlex.ai.keys"),
-                    x, keysLabelY, 0xFFA0A0A0, false);
+            graphics.text(this.font, Component.translatable("screen.nyanlex.ai.endpoint"), x, layBaseLabel, 0xFFA0A0A0, false);
+            graphics.text(this.font, Component.translatable("screen.nyanlex.ai.model"), x, layModelLabel, 0xFFA0A0A0, false);
+            graphics.text(this.font, Component.translatable("screen.nyanlex.ai.keys"), x, layKeysLabel, 0xFFA0A0A0, false);
+            if (!this.status.isBlank()) {
+                graphics.centeredText(this.font, Component.literal(this.status),
+                        this.width / 2, layStatus, 0xFFFFD080);
+            }
         }
-        if (!this.status.isBlank()) {
-            graphics.centeredText(this.font, Component.literal(this.status),
-                    this.width / 2, 198, 0xFFFFD080);
+    }
+
+    /** The always-visible notice: where the API keys live (the full path, wrapped) and that they never leave this computer. */
+    private void drawKeyNotice(GuiGraphicsExtractor graphics) {
+        int y = 17;
+        for (String line : noticeLines) {
+            graphics.text(this.font, line, 6, y, 0xFFA4A9B8, false);
+            y += 10;
         }
     }
 
@@ -502,16 +599,19 @@ public final class Neo26AiScreen extends Screen {
         AccountSnapshot account = client == null ? AccountSnapshot.signedOut() : client.cachedAccount();
         if (!account.signedIn()) {
             Component line = Component.translatable("screen.nyanlex.ai.codex.signed_out");
-            graphics.text(this.font, line, this.width - this.font.width(line) - 6,
-                    7, 0xFF909090, false);
+            graphics.centeredText(this.font, line, this.width / 2, layAccount, 0xFF909090);
             return;
         }
         Component line1 = Component.translatable("screen.nyanlex.ai.codex.signed_in");
         Component line2 = Component.literal(maskEmail(account.email()));
         Component line3 = Component.literal(formatPlan(account.planType()));
-        drawRight(graphics, line1, 5, 0xFF80FF80);
-        drawRight(graphics, line2, 16, 0xFFFFFFFF);
-        drawRight(graphics, line3, 27, 0xFFA0A0A0);
+        int total = this.font.width(line1) + this.font.width(line2) + this.font.width(line3) + 16;
+        int x = this.width / 2 - total / 2;
+        graphics.text(this.font, line1, x, layAccount, 0xFF80FF80, false);
+        x += this.font.width(line1) + 8;
+        graphics.text(this.font, line2, x, layAccount, 0xFFFFFFFF, false);
+        x += this.font.width(line2) + 8;
+        graphics.text(this.font, line3, x, layAccount, 0xFFA0A0A0, false);
     }
 
     private void drawRight(GuiGraphicsExtractor graphics, Component text, int y, int color) {
