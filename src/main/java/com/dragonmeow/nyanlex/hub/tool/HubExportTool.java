@@ -748,7 +748,7 @@ public final class HubExportTool {
         }
     }
 
-    private static String sha256Hex(byte[] data) {
+    static String sha256Hex(byte[] data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(data);
@@ -760,7 +760,7 @@ public final class HubExportTool {
         }
     }
 
-    private static void mergeIndex(Path out, HubSource source, String language, int rows, long bytes,
+    static void mergeIndex(Path out, HubSource source, String language, int rows, long bytes,
             String sha256) throws IOException {
         Path indexFile = out.resolve(HubPaths.indexPath());
         HubIndex index = HubIndex.empty();

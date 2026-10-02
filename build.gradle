@@ -99,3 +99,25 @@ tasks.register('hubExport', JavaExec) {
         args = cliArgs
     }
 }
+
+// Author-only: convert (English, translation) language-file pairs into translation-hub/mods/<id>/ files.
+// See com.dragonmeow.nyanlex.hub.tool.LangPackBuilder. Example:
+//   gradle langPackBuild -Pin=C:\work\out -Pout=translation-hub -PmergeIndex [-Preport=report.txt]
+tasks.register('langPackBuild', JavaExec) {
+    group = 'translation hub'
+    description = 'Author-only: convert language-file pairs into translation-hub mod files.'
+    mainClass = 'com.dragonmeow.nyanlex.hub.tool.LangPackBuilder'
+    classpath = sourceSets.main.runtimeClasspath
+    jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
+    doFirst {
+        List<String> cliArgs = []
+        if (project.hasProperty('in')) project.property('in').toString().split(';').each { cliArgs += ['--in', it] }
+        if (project.hasProperty('out')) cliArgs += ['--out', project.property('out').toString()]
+        if (project.hasProperty('lang')) cliArgs += ['--lang', project.property('lang').toString()]
+        if (project.hasProperty('shaderTarget')) cliArgs += ['--shader-target', project.property('shaderTarget').toString()]
+        if (project.hasProperty('report')) cliArgs += ['--report', project.property('report').toString()]
+        if (project.hasProperty('skips')) cliArgs += ['--skips', project.property('skips').toString()]
+        if (project.hasProperty('mergeIndex')) cliArgs += ['--merge-index']
+        args = cliArgs
+    }
+}
