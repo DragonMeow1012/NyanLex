@@ -1,0 +1,8 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":7,"entries":{
+"3a54aee35e42df7c46cd620d50ccb567cbdfdac3148eb5c7e31c81e4342580ab":"壓平符文"
+,"7622b57609c3ab9b9ca40754216bb03bac3960299b2369895c31d9f4fc3d310d":"增加壓平所能加工的物品數量。"
+,"afe1c428e6c26ba40af6c6f6d9f11c72cd6570780a807560687d2ed9b9a1c57f":"壓平會嘗試加工附近的物品。"
+,"bd2208f03382fac18b1e95ad7dc9f03a240bbb5da295469d7c203a0477ffd2f9":"增加切割所能加工的物品數量。"
+,"d2dfbaff8e4bd05d5862a6504447ed45a2dae90d1cdaaaedf95a51d632377f91":"增加搜尋待加工物品的半徑。"
+,"daad5e010a158b7e2879e9ec59fc27c580dcabd5f646a6c38f4074a5d4e9565c":"切割會嘗試加工附近的物品。"
+,"e90e9ab6628c26eb8492e72f3045f7a77847e6d4633f2d4f3cabfa782c240c68":"切割符文"}}

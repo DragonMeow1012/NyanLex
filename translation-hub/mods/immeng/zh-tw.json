@@ -1,0 +1,5 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":4,"entries":{
+"0bf98755141768bf8f3962d038e1134eb8b22b53b4b945583ceab21edc7d8397":"ME 線圈"
+,"17350ef958b05bd591b9b615039c71d13808b514ab01649584d79d87b8cfb534":"ME 中繼站"
+,"5e7fc103aa88eb330f668dc1d2794eb3b372b9d96ea746ba81ce6d4194ed961b":"高密度 ME 線圈"
+,"6fe2cc5d88758d26babc1c679a543700c926c449ff9e7ae0b66c1c0f3876d5d2":"ME 連接器"}}

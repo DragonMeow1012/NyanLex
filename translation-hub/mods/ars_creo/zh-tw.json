@@ -1,0 +1,15 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":14,"entries":{
+"002af0923f17f4ea319c07a18ab6e091e94730014c304ed1062d4dcc03ee91f8":"為 Create 產生旋轉動力。在轉輪前放置金磚可提高 RPM。"
+,"0d4a391771e28ff831fed75d7b33edf55bb090bf193b6ec0bdd92944796bac27":"顯示連結器可附加在魔源罐上以顯示罐中的魔源量，或附加在法術砲塔上，將目前的法術顯示在顯示板上。"
+,"2386e26b412e63cedd52dad2366ebfa633f31109f4683b47f8fc7b5870b993ba":"法術砲塔"
+,"3e75818fd276e40c8ab38e9923ec6f115f0600591e82bdb1d6c0e6e4ff16e83d":"Starbuncle 轉輪"
+,"3faba91a11554c0e2fb961b8f03c08229e26cb5730d6c21f6ed9fb405aa04aba":"Ars Creo：顯示連結器"
+,"62a50757aa6f63fe4325df8bb2db0a0bc28c736e353bfaabf24853c58934a3d2":"藥水可以透過管道與儲罐，儲存到 Create 流體儲罐中並在儲罐之間傳輸。"
+,"63c5b77101f2fd7c7fd3a4acd8522e07fd14b623f50216ecbaf02a8e06de0d29":"法術"
+,"64426112d0f131a2578b8c9a45ff73765a17eefb6651d68856ee3b5f6274b55f":"空間不足 "
+,"76d6e77f7f3d52c2252ceb3b2d20050413840d5cb7f2b8c23376561189f37a18":"未設定法術。"
+,"9565b1481a2cf69684b58bcccd9abd69f4ef2f1ef85977f7493b2baf5d0435c2":"魔源量"
+,"96454e8e6957dd94d0548fe3feeaaaa94296a9f67438b26e6ddf75e7e1e98c2e":"以顯示砲塔狀態"
+,"ca85b250ebda450f7b4fd5d86dd007804c15d020346d1de494c32dc1f920c9a4":"以顯示魔源狀態"
+,"dbc1551b1a90fec4dadf2207b0615a5eb5998b34bc26cf3abfba42df5c1b3ba1":"Ars Creo 為 Ars Nouveau 的方塊啟用特殊的機關行為，包括法術砲塔與魔源罐。基本法術砲塔：在機關上被互動時發射法術。計時砲塔：依其間隔發射法術。附魔法術砲塔：每經過一個新方塊就發射法術。魔源罐：可被機關上的砲塔消耗。"
+,"e51caf337a2a158ab8d301bd7f93762b4b2bc93060863c22859ffd9b1bb3ec5f":"Ars Creo：流體儲罐"}}

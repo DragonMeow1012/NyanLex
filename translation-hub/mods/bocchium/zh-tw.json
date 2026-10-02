@@ -1,0 +1,7 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":6,"entries":{
+"2ef311bc2c655aa7949563d53e6572ebb74baf542f897f9063702b5c07e8f64c":"啟用 Bocchium"
+,"6a82f117ce070e1623b6b2d457a9c17519016c17b334cab0997fe1870104a9f5":"若被渲染的方塊位於維度的底部，則停用其底面渲染。"
+,"8bee7122df2f75ef1841d20a6d20dfc449c3aa1ce6ac8bde53fc9a905a59b745":"剔除底部"
+,"a3af0ba48af283908e5cb741a3565b02a828b5133ef12044a40bd7243f566441":"Bocchium 是一款效能模組，會剔除維度中頂部與底部的基岩，以獲得額外的 Fps"
+,"a7b04424dbbb42ca893ee4cec8160150d792eda00322e3759f784e64e22b9a4c":"若被渲染的方塊位於類地獄維度的頂部，則停用其頂面渲染。"
+,"b7463366e2df3d0052deb23bfb90eb6b7812cd7f5b43cda5b968bafa718d80e0":"剔除頂部"}}

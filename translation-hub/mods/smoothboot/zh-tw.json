@@ -1,0 +1,14 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":13,"entries":{
+"1f96a3c5067c8e0a553ed522f8e95d107683a3aeef41e0c03758e20632d7b107":"主要工作優先順序"
+,"2eed8fb8395a95f2a337c931e49fe1b329ffe8d5c8f4e9cffd7a8dfb30bb4b56":"執行緒數量"
+,"33207933ae4c4d42467b6f32bd81cd70f8b95ea933c17ecf65ccddabd1d1b799":"主要工作執行緒數量"
+,"39abc3877a6b7b2ca8aeb05feecdfa7c9493891dcabb3c4f317e5f7a6fa197f7":"執行緒優先順序"
+,"57b0a4babecab661d0215b460dd59a25136c79a8adfb3119861d06bfc13c52bc":"啟動工作優先順序"
+,"69218d1b808cddccfb15041ab5d303cea3d3918b189211b0359bfc597de82f5e":"內建伺服器執行緒優先順序"
+,"7dfbc57db8eb34c30d917df080b78377ad75ec8ff0da9037737a452d620bee64":"遊戲執行緒優先順序"
+,"8843f1b285b436946d16fd00b8f5f6fea2964c8c4747ad1f9b0ab8afbc529198":"此值會大幅影響載入時間。"
+,"97aeae344604cf5f3e90d76ce3373bff95bf450551b4a6a92f14c2f92f00707f":"啟動工作執行緒數量"
+,"9c9646945605118c686cce72fd31a143b7325df69a4959fa06f41cff21c641c5":"最好維持為 1。"
+,"a792a69323e4a844b159b9fb66ec3db799bcf5cad092b8a29c0c8c4ca5179a66":"注意：已知增加此值會降低效能。"
+,"d54e965d94ec42a63a862c50fee9663700430c5f49763ab9140932ce1933779a":"也可能影響遊戲內效能。"
+,"f47b5d094edc89e4013d90bd75d1a385452910ba2ae28df6fb0ebef8824fce47":"IO 工作優先順序"}}

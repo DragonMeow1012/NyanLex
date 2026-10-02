@@ -1,0 +1,13 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":12,"entries":{
+"12a72070626f71648e671b4b79eec32c19ec51fe50fbeb02d9062f4b7fc88aa1":"吸引器"
+,"25ed77282d99c5d3caabc3e52976f7929cc04459b476aeda32c71284cdadf1cb":"限制"
+,"7a79cc5b97b94206fe40f2c0715b70099c3da632e782b09173925d8a31b020b4":"穿著這雙靴子時，吸引器、推動器與單向方塊對你不會產生效果"
+,"7eb2b305a355c1e014fb9068edf99644a0541c7ed7af88dec7f44812d386f1b0":"此方塊會吸引距離等同於其所接收紅石訊號強度的實體、物品、生物、玩家等等"
+,"8a0f47d954201d59988ef4fb40e49aebc7ea0991279dcdfaa68314df84082535":"單向牆"
+,"95461389844da7747f2c93dc2422614d11554dca7f9ad4ed4f47d02b7f55b5ce":"推動器"
+,"ae5820b086cb5939b101c9b91351107a245767c9c491e815d10af601d9529822":"<按住 Shift>"
+,"b790c5b47e481ad7fb8e0ff46fdfada9638fb9e5bb3c469b33eac20bd238b643":"此方塊只允許實體、物品、生物、玩家等等朝特定方向移動"
+,"badc8592591b1fea5a148dd451432f854e562c1b50dc56f71db921bd5f3141ea":"玻璃靴子"
+,"c8d4ee64e8ebc156c0854fcf9a83ee59de3c556d0aecff769e81f5e8e602b5f4":"此方塊會推動距離等同於其所接收紅石訊號強度的實體、物品、生物、玩家等等"
+,"f13b5116fa6352e78fb4b196eeec0482bd99d26064e26ca442ae16672904f930":"單向"
+,"fc0d01af1bf86d38caf5368d123bdc27cc2daf0d0f5631d800cb68b47eb985e9":"這會迫使實體、物品、生物、玩家等等朝特定方向移動"}}

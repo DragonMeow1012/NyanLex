@@ -1,0 +1,5 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":4,"entries":{
+"167e6fc8c5692877d20069095f81e1d37f0958662fd2d3249526052752bc1681":"掉落物會在此半徑（以方塊為單位）內檢查是否有其他可合併的掉落物，「0.5」為原版行為。"
+,"5b0975b259346d9b2643ee15b25ddc0243bb32cf92192e5fd431ed8cca323814":"設為 true 時，掉落物也會檢查其上方與下方；設為 false 則不檢查（「false」為原版行為）。"
+,"6fe0661c82d10d34d342a2db6cf48e6903215f3e296d0dc8038ab44fcb48a0ce":"半徑"
+,"7cfd3fc9bc2512d21ce91f44b4bf0d9b040df272845f28e9a1819d38d82f0087":"檢查 Y 軸"}}

@@ -1,0 +1,18 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":17,"entries":{
+"0ee755cb06a04ec0f6e0a8032b4e857f65a409ff29825dd6ccf50f812954b086":"邊界內顯示距離"
+,"120fa738ffd9d2fb14b18c9c63106eee98c70d549975c43713c854a1004ffde3":"超出地圖時顯示距離"
+,"29d4198e41d8221a8138262be9d40a7bee89ccee73f17623d92ca4b2c10806ae":"格式"
+,"43130b20f0179639533b9504e8794ef54a579bab910cb5f26701a01b041bc1b0":"玩家位於地圖邊界外時顯示距離"
+,"57ea584c302fb531f7b38dd3ad2c702f1a60aed49dcaf5c7bfcf3403ba762a46":"在玩家箭頭下方顯示與最近結構（林地府邸、海底神殿、村莊等）的距離，而不是與地圖中心的距離"
+,"5bc7a3a35c73c610cac18b6fd4ab793f4f1c348ec5b35e8ab69c8854e2e4324b":"距離格式"
+,"5d98cbdbd4c4ca18fc9598b26e28efe83b1312b8975945c199ce0faa77da9ebd":"對較長的距離使用縮寫單位（例如以「1.5k」取代「1500m」）"
+,"82cad7e863d64b81def8234da158eac705274152ba2d9edebb9aef276fca193f":"開始使用短單位的距離（單位為方塊）"
+,"8e94d8b15b2be917e0155b713ffe31ac57c58d646cc283fdc3b8b07c30eb3afc":"距離顯示的格式字串。請用 ％d 代表距離數值。 ⟦PB0⟧ 範例：「％dm」會顯示為「100m」"
+,"94f6602fa55be14a8d0eea67fccc0a3c0465dc184910edc5e3b5990a35bb8af0":"使用短單位"
+,"c4491979c8c4ae2545cecf036e69d21a1d658aa748a1dbca0770d1783aa884d5":"顯示與最近結構的距離"
+,"c59491a40185d62e37711c15f6b1cace99c2e1090d8dd0c9d91401cb0db805c4":"玩家位於地圖邊界內時也顯示距離"
+,"c910d474dcd724bff83ddedeb06bf1eceaf9fb3af7c76bb282be057f36e6dffa":"一般"
+,"cece3bb471573ea1b6b76c3a2e01a34eb0edd6963aebc83b6cb0e327dd5146fb":"地圖距離修正設定"
+,"d5b74c81b5fbb8198a00ceddba321ae91e72fa32f01cd609b37a315467621bb9":"在玩家圖示上顯示與地圖中心的距離"
+,"dc9ed48984fd348b843296d99b87729ec1e235b5e4fe39f1a521af492907b535":"短單位門檻"
+,"f1f4aa1b5f2f4e3ca9f1c0be406485a4b77905a4bbfc3240913c76a18bc09449":"顯示距離"}}

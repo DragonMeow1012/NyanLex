@@ -1,0 +1,4 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":3,"entries":{
+"2eecff5c6ded224f411b3e1782e78986b92bcdca0f51eee690a05b0f4dde631f":"停用原版海底神殿"
+,"aedf67e77681937219fd67792e512ce096376006d61f8c5dd6bb5e1d46e3a335":"是否停用原版海底神殿。"
+,"f503c4403fc264a22502a7e7980da286c43213daed3ced3b9f793486f96e2fe7":"請改用 /locate structure betteroceanmonuments:ocean_monument！"}}

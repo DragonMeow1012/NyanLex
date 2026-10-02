@@ -1,0 +1,5 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":4,"entries":{
+"09274757f7d3342a70191f7ba28d00b7a1b7a5fd6131833e7287db81ad6644e3":"清除所有按鍵綁定"
+,"17079dddc462e40cd41f56d5f8d985d80edd91ba6ecee93bf883e8260f3b3c05":"清除所有非原版按鍵綁定"
+,"5dd15ea739262ab623fc730029d2cd650ddfd134de9b9a10f8eaf262b3b68a6a":"重設此分類中的所有按鍵綁定"
+,"d55e450c6d4a4b7ed107ab03c9e2a09934db47ac5c11ffe5c15fab49a121ab1c":"清除此分類中的所有按鍵綁定"}}

@@ -1,0 +1,11 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":10,"entries":{
+"23213234a471dc5591bdf4889d5ec3eeef58cab7cc6c7aab0b72652e41995d04":"Moog's Structure Lib 的設定畫面需要 Cloth Config API。請安裝後再於遊戲內進行設定。"
+,"324b134f57c70c729ae3dc4d298bb451656717d70523e942c1ce667b8024ea07":"預覽"
+,"75081b593d15cf6e631971bc6768723f593b88b172477e40ae7d363e4829816d":"已停用"
+,"817e5b707a98f320c6061292e0352974cf20a3e200f1412a959d142812ff4a01":"變更會在重新載入世界後生效（退出至標題畫面再重新進入，或執行 /reload），且只會影響新生成的區塊。"
+,"8dea3cf676082c8a90ee6769eb624540d9725ca2675e3d02a63e19098edcc03e":"將每個 Moog 結構的間距相乘。數值越高越稀有，越低越常見。"
+,"92c1cdfdf4cb9cf6fcca962f206de36fd5d60db1178bc9461052f8de703a0e06":"已啟用"
+,"9582edb2b2530c74a44663416045998a73fb66f49ca01b78a7525da6f080dabd":"取代原版結構"
+,"97a2e6f1880d7c0491cfdfef43427eb9358ce668a24b433ab42c19f72a090814":"通用稀有度"
+,"b912533f7f9a318d96607b263a3fdaf282ed09bcf134c7f60834b32f7f9729f9":"結構"
+,"c6aec5adf6908798b04031755370ad5f3df9c48c769c46bc80d0212ed2a931db":"無預覽：此模組尚未設定預覽連結（mod_slug）。"}}
