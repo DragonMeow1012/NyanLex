@@ -40,7 +40,7 @@ public final class ConfirmDialogScreen extends Screen {
 
     @Override
     protected void init() {
-        panel.setNarration(DialogContent.narration((key, args) -> new net.minecraft.network.chat.TranslatableComponent(key, args).getString()));
+        panel.setNarration(DialogContent.narration((key, args) -> LangText.get(key, args)));
         panel.set(new DialogPanel.Content(this.title.getString(),
                 List.of(new DialogPanel.Text(message, 0)),
                 DialogPanel.Footer.of(new DialogPanel.Btn(CANCEL, new net.minecraft.network.chat.TranslatableComponent("gui.cancel").getString()),

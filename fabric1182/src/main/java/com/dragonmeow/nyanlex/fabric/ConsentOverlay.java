@@ -21,7 +21,7 @@ import net.minecraft.network.chat.Component;
 final class ConsentOverlay {
     private static final ConsentGate GATE =
             new ConsentGate(NyanLexFabric::config, NyanLexFabric::saveConfig);
-    private static final DialogContent.Lang LANG = (key, args) -> new net.minecraft.network.chat.TranslatableComponent(key, args).getString();
+    private static final DialogContent.Lang LANG = (key, args) -> LangText.get(key, args);
 
     private static DialogPanel panel;
     private static Screen anchor;

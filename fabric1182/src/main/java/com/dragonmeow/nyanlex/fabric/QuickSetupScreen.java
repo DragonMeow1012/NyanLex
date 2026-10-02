@@ -70,7 +70,7 @@ public final class QuickSetupScreen extends Screen {
         @Override public void saveConfig() { NyanLexFabric.saveConfig(); }
 
         @Override
-        public String text(String key, Object... args) { return new net.minecraft.network.chat.TranslatableComponent(key, args).getString(); }
+        public String text(String key, Object... args) { return LangText.get(key, args); }
 
         @Override public int textWidth(String text) { return font == null ? text.length() * 6 : font.width(text); }
 

@@ -41,7 +41,7 @@ public final class TranslationManualScreen extends Screen {
     }
 
     private static String text(String key) {
-        return com.dragonmeow.nyanlex.config.ProjectLinks.fill(new net.minecraft.network.chat.TranslatableComponent(key).getString());
+        return com.dragonmeow.nyanlex.config.ProjectLinks.fill(LangText.get(key));
     }
 
     private static String keyName(KeyMapping key) {

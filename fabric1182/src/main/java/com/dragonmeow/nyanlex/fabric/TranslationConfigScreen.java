@@ -93,7 +93,7 @@ public final class TranslationConfigScreen extends Screen {
 
         @Override
         public String text(String key, Object... args) {
-            return new net.minecraft.network.chat.TranslatableComponent(key, args).getString();
+            return LangText.get(key, args);
         }
 
         @Override public int textWidth(String text) { return font.width(text); }

@@ -37,7 +37,7 @@ final class WarmupHudOverlay {
         if (cfg == null || mc == null || mc.options.hideGui) return;
         WarmupStatus status = WarmupStatus.of(true, NyanLexFabric.itemWarmupDriver().progress());
         WarmupHud.View view = WarmupHud.view(status, cfg.itemWarmupHud, NyanLexFabric.warmupMsSinceDone(),
-                (key, args) -> new net.minecraft.network.chat.TranslatableComponent(key, args).getString());
+                (key, args) -> LangText.get(key, args));
         if (view == null) return;
         Font font = mc.font;
         int textW = font.width(view.text());
