@@ -1047,6 +1047,9 @@ public final class NyanslateFabric implements ClientModInitializer {
                 codexRoot.resolve(MOD_ID + "-codex-home"),
                 codexRoot.resolve(MOD_ID + "-codex-workspace"));
         codexClient.setTokenUsage(tokenUsage);
+        // Spawn + initialize app-server in the background when Codex mode is the active
+        // engine, so the first translation does not wait for process start.
+        if (config.aiUseCodex) codexClient.warmUpAsync();
         codexTransport = new CodexAppServerTransport(codexClient,
                 () -> config.codexReasoningEffort);
         OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,

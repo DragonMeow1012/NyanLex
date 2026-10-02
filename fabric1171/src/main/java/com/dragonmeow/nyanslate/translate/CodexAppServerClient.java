@@ -82,7 +82,30 @@ public final class CodexAppServerClient implements AutoCloseable {
             "skill_search",
             "tool_call_mcp_elicitation",
             "tool_suggest",
-            "workspace_dependencies");
+            "workspace_dependencies",
+            // Tool-less translation never needs these default tool definitions; they only
+            // inflate the (cached) prompt prefix.
+            "unified_exec",
+            "view_image",
+            "sleep_tool",
+            "worktrees");
+
+    /**
+     * Prompt-bloat switches (measured 2026-10-02 against codex-cli 0.159.2: the default
+     * per-turn prefix was ~5.4k input tokens, ~1.75k of which was skills catalog,
+     * permissions text, environment context and apps/collaboration blurbs that a
+     * translation engine never uses). These do not touch the user's model, effort or
+     * service tier. Keep them constant: they are part of the cached prefix.
+     */
+    private static final List<String> TRIMMED_PROMPT_CONFIG = List.of(
+            "include_permissions_instructions=false",
+            "include_apps_instructions=false",
+            "include_collaboration_mode_instructions=false",
+            "include_environment_context=false",
+            "project_doc_max_bytes=0",
+            "skills.include_instructions=false",
+            "skills.bundled.enabled=false",
+            "features.multi_agent_v2.usage_hint_enabled=false");
 
 
     private final Path codexHome;
@@ -218,6 +241,28 @@ public final class CodexAppServerClient implements AutoCloseable {
         } finally {
             if (probe != null && probe.isAlive()) probe.destroyForcibly();
         }
+    }
+
+    /**
+     * Start (spawn + initialize) app-server in the background so the first translation
+     * does not pay the ~0.6 s process start. Best effort: failures are left to the next
+     * real request, which retries {@link #ensureStarted()} itself.
+     */
+    public void warmUpAsync() {
+        Thread thread = new Thread(() -> {
+            try {
+                ensureStarted();
+                // Also fills the signed-in cache (otherwise only the settings screen does),
+                // so the retry gate does not read "signed out" in a fresh session. The model
+                // list is deliberately NOT fetched here: it drives the service-tier choice,
+                // which is the user's call, not warm-up's.
+                readAccount(false);
+            } catch (IOException ignored) {
+                // The first real request reports the actual error.
+            }
+        }, "nyanslate-codex-warmup");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     public AccountSnapshot readAccount(boolean refreshToken) throws IOException {
@@ -1328,6 +1373,10 @@ public final class CodexAppServerClient implements AutoCloseable {
         for (String feature : DISABLED_TRANSLATION_FEATURES) {
             command.add("-c");
             command.add("features." + feature + "=false");
+        }
+        for (String setting : TRIMMED_PROMPT_CONFIG) {
+            command.add("-c");
+            command.add(setting);
         }
         command.add("app-server");
         return List.copyOf(command);
