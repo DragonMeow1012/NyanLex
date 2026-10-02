@@ -147,7 +147,7 @@ public abstract class HudMixin {
                 List<com.dragonmeow.nyanlex.translate.TranslationDebugLog.Entry> entries = log.snapshot(5);
                 Font font = minecraft.font;
                 int availableWidth = Math.max(160, graphics.guiWidth() - 16);
-                int maxWidth = Math.min(520,
+                int maxWidth = Math.min(440,
                         Math.min(availableWidth, Math.max(220, graphics.guiWidth() / 3)));
                 int lineHeight = 9;
                 int x = 6;
@@ -171,6 +171,7 @@ public abstract class HudMixin {
                         + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
                         + " | req " + tokens.requests() + " | " + com.dragonmeow.nyanlex.translate.HookHealth.shortSummary();
                 graphics.text(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);
+
 
                 int row = y + 22;
                 for (var entry : entries) {
@@ -305,6 +306,10 @@ public abstract class HudMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanlex$actionBar(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int width, int color) {
+        if (NyanLexFabric26.isOwnFeedback(text)) {
+            com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
+            return;
+        }
         if (!HookGuard.enter("Hud.actionBar")) {
             com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
             return;
