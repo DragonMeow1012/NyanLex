@@ -12,9 +12,9 @@ apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
-version = '1.0.6'
-group = 'com.dragonmeow.mctranslator'
-archivesBaseName = 'mctranslator'
+version = '1.0.0'
+group = 'com.dragonmeow.nyanslate'
+archivesBaseName = 'nyanslate'
 
 sourceCompatibility = targetCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8' // Need this here so eclipse task generates correctly.
 
@@ -100,7 +100,7 @@ dependencies {
 jar {
     classifier = 'Forge-1.13.2'
     from('../LICENSE') {
-        rename { 'LICENSE_MinecraftTranslator' }
+        rename { 'LICENSE_Nyanslate' }
     }
     manifest {
         attributes([

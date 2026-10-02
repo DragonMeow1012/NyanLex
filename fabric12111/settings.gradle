@@ -5,4 +5,4 @@ pluginManagement {
         mavenCentral()
     }
 }
-rootProject.name = 'mctranslator-fabric12111'
+rootProject.name = 'nyanslate-fabric12111'

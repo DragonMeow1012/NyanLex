@@ -1,8 +1,8 @@
-# Minecraft Translator 1.0.6
+# Nyanslate 1.0.0
 
 [繁體中文](README.md)
 
-Minecraft Translator is a client-side real-time translation mod. It translates text that needs translation on screen without changing server data or sending chat messages for the player.
+Nyanslate (formerly Minecraft Translator) is a client-side real-time translation mod. It translates text that needs translation on screen without changing server data or sending chat messages for the player.
 
 ## Features
 
@@ -12,6 +12,11 @@ Minecraft Translator is a client-side real-time translation mod. It translates t
 - Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-5.6-terra` / `medium`.
 - Async batching, priority queues, disk caches, and failure backoff reduce stalls and duplicate requests.
 - Player names are masked only from the TAB list; ordinary item text such as `with Chest` is no longer guessed as a player name.
+- **Items and mod screens now translate on demand**: press `R` on the item under your cursor, or `P` to rescan the current screen. Anything already translated is served straight from the cache; text you haven't triggered is never requested automatically. Chat, scoreboards, name tags, boss bars, titles, action bars, and books are unaffected and keep translating automatically.
+- **Segmented tooltip cache**: long tooltips (title plus multi-line body) cache and restore per segment, so only the segment that actually changed needs a fresh request.
+- **GitHub AI translation hub**: at startup (can be turned off in settings), the mod quietly checks whether ready-made translations exist for your current server, modpack, or installed mods, then asks before downloading and merging them into the local cache. It only reads the hub's `index.json` and the files it needs - nothing local is ever uploaded.
+- **Reorganized settings**: a new "do-not-translate filter" screen holds the pause-new-requests switch (still shows cached translations) and a case-insensitive, whole-word do-not-translate term list.
+- Export/import translation JSON to merge a friend's translations locally while keeping your own.
 
 ## In-game screenshots
 
@@ -46,7 +51,7 @@ Before and after translation in Better Minecraft, including the quest title, lon
 
 Each JAR supports only the exact Minecraft version and loader in its filename.
 
-[Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/MinecraftTranslator-1.0.6-all-versions.zip)
+[Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/Nyanslate-1.0.0-all-versions.zip)
 
 
 ### Fabric
@@ -55,34 +60,34 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.14.4 | 8 | [mctranslator-1.0.6-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.14.4.jar) |
-| 1.15.2 | 8 | [mctranslator-1.0.6-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.15.2.jar) |
-| 1.16.5 | 8 | [mctranslator-1.0.6-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.16.5.jar) |
-| 1.17.1 | 16 | [mctranslator-1.0.6-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.17.1.jar) |
-| 1.18.2 | 17 | [mctranslator-1.0.6-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.18.2.jar) |
-| 1.19.4 | 17 | [mctranslator-1.0.6-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.19.4.jar) |
-| 1.20.1 | 17 | [mctranslator-1.0.6-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.20.1.jar) |
-| 1.21.1 | 21 | [mctranslator-1.0.6-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.21.1.jar) |
-| 1.21.11 | 21 | [mctranslator-1.0.6-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.21.11.jar) |
-| 26.1.2 | 25 | [mctranslator-1.0.6-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-26.1.2.jar) |
-| 26.2 | 25 | [mctranslator-1.0.6-Fabric-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-26.2.jar) |
-| 26.3 | 25 | [mctranslator-1.0.6-Fabric-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-26.3.jar) |
+| 1.14.4 | 8 | [nyanslate-1.0.0-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.14.4.jar) |
+| 1.15.2 | 8 | [nyanslate-1.0.0-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.15.2.jar) |
+| 1.16.5 | 8 | [nyanslate-1.0.0-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.16.5.jar) |
+| 1.17.1 | 16 | [nyanslate-1.0.0-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.17.1.jar) |
+| 1.18.2 | 17 | [nyanslate-1.0.0-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.18.2.jar) |
+| 1.19.4 | 17 | [nyanslate-1.0.0-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.19.4.jar) |
+| 1.20.1 | 17 | [nyanslate-1.0.0-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.20.1.jar) |
+| 1.21.1 | 21 | [nyanslate-1.0.0-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.21.1.jar) |
+| 1.21.11 | 21 | [nyanslate-1.0.0-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.21.11.jar) |
+| 26.1.2 | 25 | [nyanslate-1.0.0-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.1.2.jar) |
+| 26.2 | 25 | [nyanslate-1.0.0-Fabric-26.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.2.jar) |
+| 26.3 | 25 | [nyanslate-1.0.0-Fabric-26.3.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.3.jar) |
 
 ### NeoForge
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.20.1 | 17 | [mctranslator-1.0.6-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-NeoForge-1.20.1.jar) |
-| 1.21.1 | 21 | [mctranslator-1.0.6-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-NeoForge-1.21.1.jar) |
-| 26.2 | 25 | [mctranslator-1.0.6-NeoForge-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-NeoForge-26.2.jar) |
-| 26.3 | 25 | [mctranslator-1.0.6-NeoForge-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-NeoForge-26.3.jar) |
+| 1.20.1 | 17 | [nyanslate-1.0.0-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-1.20.1.jar) |
+| 1.21.1 | 21 | [nyanslate-1.0.0-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-1.21.1.jar) |
+| 26.2 | 25 | [nyanslate-1.0.0-NeoForge-26.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-26.2.jar) |
+| 26.3 | 25 | [nyanslate-1.0.0-NeoForge-26.3.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-26.3.jar) |
 
 ### Forge
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.12.2 | 8 | [mctranslator-1.0.6-Forge-1.12.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Forge-1.12.2.jar) |
-| 1.13.2 | 8 | [mctranslator-1.0.6-Forge-1.13.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Forge-1.13.2.jar) |
+| 1.12.2 | 8 | [nyanslate-1.0.0-Forge-1.12.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Forge-1.12.2.jar) |
+| 1.13.2 | 8 | [nyanslate-1.0.0-Forge-1.13.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Forge-1.13.2.jar) |
 
 ## Installation
 
@@ -118,8 +123,8 @@ Fabric 1.17.1+ and NeoForge:
 | Key | Action |
 | --- | --- |
 | `G` | Toggle original/translated display |
-| `R` | Retranslate the item under the pointer |
-| `P` | Retranslate visible text and tooltips on the current screen |
+| `R` | Translate / retranslate the item under the pointer |
+| `P` | Translate / retranslate visible text and tooltips on the current screen |
 | Unbound | Open Translation Settings |
 
 Legacy UI:
@@ -129,7 +134,17 @@ Legacy UI:
 | Fabric 1.14.4-1.16.5 | `G` opens Translation Settings; `P` retranslates the current screen |
 | Forge 1.12.2-1.13.2 | `G` opens Translation Settings; `H` enables/disables translation; `P` retranslates the current screen |
 
-`P` captures currently visible text, including a hovered tooltip; it does not scan off-screen content or activate while typing. Completion time depends on the translation service.
+`P` captures currently visible text, including a hovered tooltip; it does not scan off-screen content or activate while typing. Items and mod-screen text now translate on demand (see Features above), so `R`/`P` are how you get those translations in the first place, not just a "re-" translate. Completion time depends on the translation service.
+
+If your keybinds look reset after upgrading: this release changes the mod id from `mctranslator` to `nyanslate`. The first launch automatically copies your old config file, translation caches, and any custom `options.txt` keybinds over to the new name (the old files are kept, not deleted), once.
+
+## 1.0.0 highlights
+
+- **Renamed to Nyanslate**: the package, mod id, config/cache filename prefix, and GitHub translation hub all moved to the new name. The first launch automatically copies your old `mctranslator-*` config, caches, and keybinds to the new name (originals are kept; existing new-named files are never overwritten).
+- Item and mod-screen translation now triggers on demand (`R`/`P`); chat and other live text keep translating automatically, so nothing you haven't looked at gets translated ahead of time.
+- Tooltips now cache per segment, cutting down on re-requesting an entire long tooltip for one changed line.
+- Adds a startup check and download-confirmation flow for the GitHub AI translation hub, letting you pull in translations others have already shared and the community has reviewed; it can be turned off in settings.
+- Adds a "do-not-translate filter" settings screen that consolidates the previously scattered request toggle and term list.
 
 ## 1.0.6 highlights
 
@@ -167,8 +182,9 @@ Legacy UI:
 - Only text requiring translation is sent to the selected source.
 - API keys are stored in the local Minecraft configuration directory.
 - Player names in TAB are masked locally. Other server text may still include user-provided content.
+- The GitHub translation hub check only downloads (`index.json` plus the files it needs) and never uploads anything local; the startup check can be turned off in settings.
 - Redact API keys, Authorization headers, and private server information before reporting an issue.
 
 ## Source and issues
 
-See [PACKAGING.md](PACKAGING.md) for build commands and the release folder layout. Report problems through [GitHub Issues](https://github.com/DragonMeow1012/MinecraftTranslator/issues).
+See [PACKAGING.md](PACKAGING.md) for build commands and the release folder layout. Report problems through [GitHub Issues](https://github.com/DragonMeow1012/Nyanslate/issues).

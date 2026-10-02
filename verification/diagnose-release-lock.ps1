@@ -128,9 +128,9 @@ $before = @((Get-ChildItem -LiteralPath $modsJarRoot -Force -Directory |
     Where-Object { $_.Name -match $stagePattern }).FullName)
 $id = [guid]::NewGuid().ToString('N')
 $stdout = Join-Path ([System.IO.Path]::GetTempPath()) `
-    "mctranslator-package-$id.out"
+    "nyanslate-package-$id.out"
 $stderr = Join-Path ([System.IO.Path]::GetTempPath()) `
-    "mctranslator-package-$id.err"
+    "nyanslate-package-$id.err"
 $process = Start-Process `
     -FilePath 'powershell.exe' `
     -ArgumentList @(

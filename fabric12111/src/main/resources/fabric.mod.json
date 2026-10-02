@@ -1,9 +1,10 @@
 {
   "schemaVersion": 1,
-  "id": "mctranslator",
+  "id": "nyanslate",
   "version": "${version}",
-  "name": "Minecraft Translator",
+  "name": "Nyanslate",
   "description": "Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation.",
+  "icon": "assets/nyanslate/icon.png",
   "authors": [
     "DragonMeow"
   ],
@@ -12,12 +13,12 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "com.dragonmeow.mctranslator.fabric.MctranslatorFabric"
+      "com.dragonmeow.nyanslate.fabric.NyanslateFabric"
     ]
   },
   "mixins": [
     {
-      "config": "mctranslator.mixins.json",
+      "config": "nyanslate.mixins.json",
       "environment": "client"
     }
   ],

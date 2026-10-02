@@ -6,25 +6,27 @@ Set-StrictMode -Version 2.0
 
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $canonicalRoot = Join-Path $repoRoot `
-    'fabric1144\src\main\java\com\dragonmeow\mctranslator\legacy'
+    'fabric1144\src\main\java\com\dragonmeow\nyanslate\legacy'
 $targets = @(
     (Join-Path $repoRoot `
-        'forge1122\src\main\java\com\dragonmeow\mctranslator\forgelegacy'),
+        'forge1122\src\main\java\com\dragonmeow\nyanslate\forgelegacy'),
     (Join-Path $repoRoot `
-        'forge1132\src\main\java\com\dragonmeow\mctranslator\forgelegacy')
+        'forge1132\src\main\java\com\dragonmeow\nyanslate\forgelegacy')
 )
 $files = @(
     'LegacyConfig.java',
     'LegacyChatDeliveryQueue.java',
     'LegacyChatRequestProfile.java',
     'LegacyCodexClient.java',
+    'LegacyDataMigration.java',
+    'KeybindMigration.java',
     'LegacyMachineProvider.java',
     'LegacySessionTokenUsage.java',
     'LegacyTemplateText.java',
     'LegacyTranslator.java'
 )
-$canonicalPackage = 'com.dragonmeow.mctranslator.legacy'
-$forgePackage = 'com.dragonmeow.mctranslator.forgelegacy'
+$canonicalPackage = 'com.dragonmeow.nyanslate.legacy'
+$forgePackage = 'com.dragonmeow.nyanslate.forgelegacy'
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 $changed = 0
 
@@ -35,9 +37,9 @@ function Require {
 
 Require (Test-Path -LiteralPath $canonicalRoot -PathType Container) `
     "Canonical legacy root is missing: $canonicalRoot"
-Require ($files.Count -eq 8 -and
-        @($files | Select-Object -Unique).Count -eq 8) `
-    'Forge canonical transform must contain exactly eight unique files'
+Require ($files.Count -eq 10 -and
+        @($files | Select-Object -Unique).Count -eq 10) `
+    'Forge canonical transform must contain exactly ten unique files'
 
 foreach ($targetRoot in $targets) {
     Require (Test-Path -LiteralPath $targetRoot -PathType Container) `
@@ -83,5 +85,5 @@ foreach ($targetRoot in $targets) {
 if ($Check) {
     Require ($changed -eq 0) 'Check mode unexpectedly changed a file'
 }
-Write-Output ("SYNC_FORGE_CORE_OK files=16 changed={0} check={1}" -f
+Write-Output ("SYNC_FORGE_CORE_OK files=20 changed={0} check={1}" -f
     $changed, $Check.IsPresent)

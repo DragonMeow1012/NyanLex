@@ -2,20 +2,21 @@ modLoader="javafml"
 loaderVersion="[25,)"
 
 [[mods]]
-modId="mctranslator"
+logoFile="icon.png"
+modId="nyanslate"
 version="${file.jarVersion}"
-displayName="Minecraft Translator"
+displayName="Nyanslate"
 authors="DragonMeow"
 description='''Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation.'''
 
-[[dependencies.mctranslator]]
+[[dependencies.nyanslate]]
 modId="forge"
 mandatory=true
 versionRange="[25,)"
 ordering="NONE"
 side="CLIENT"
 
-[[dependencies.mctranslator]]
+[[dependencies.nyanslate]]
 modId="minecraft"
 mandatory=true
 versionRange="[1.13.2]"

@@ -6,4 +6,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "mctranslator-fabric120"
+rootProject.name = "nyanslate-fabric120"

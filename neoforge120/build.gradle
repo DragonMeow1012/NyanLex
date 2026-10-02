@@ -4,10 +4,10 @@ plugins {
 }
 version = project.mod_version
 group = project.maven_group
-base { archivesName = 'mctranslator' }
+base { archivesName = 'nyanslate' }
 tasks.named('jar') {
     archiveClassifier = 'NeoForge-1.20.1'
-    from('../LICENSE') { rename { 'LICENSE_MinecraftTranslator' } }
+    from('../LICENSE') { rename { 'LICENSE_Nyanslate' } }
 }
 repositories { mavenCentral() }
 dependencies {

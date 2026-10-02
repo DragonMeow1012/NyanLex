@@ -3,25 +3,26 @@ loaderVersion = "[4,)"
 license = "MIT"
 
 [[mixins]]
-config = "mctranslator.neoforge26.mixins.json"
+config = "nyanslate.neoforge26.mixins.json"
 
 [[mods]]
-modId = "mctranslator"
+logoFile="icon.png"
+modId = "nyanslate"
 version = "${version}"
-displayName = "Minecraft Translator"
+displayName = "Nyanslate"
 description = "Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation."
 authors = "DragonMeow"
 # Client-only QoL mod: do not block joining servers that don't have it.
 displayTest = "IGNORE_ALL_VERSION"
 
-[[dependencies.mctranslator]]
+[[dependencies.nyanslate]]
 modId = "neoforge"
 type = "required"
 versionRange = "${neoforge_range}"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.mctranslator]]
+[[dependencies.nyanslate]]
 modId = "minecraft"
 type = "required"
 versionRange = "${minecraft_range}"

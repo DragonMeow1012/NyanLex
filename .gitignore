@@ -45,3 +45,6 @@ Thumbs.db
 /verification/legacy-error-*/
 /verification/matrix-run-*/
 /verification/target-forge-srg-*/
+
+# Agent build homes
+.gradle-agent-home/

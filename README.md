@@ -1,8 +1,8 @@
-# Minecraft Translator 1.0.6
+# Nyanslate 1.0.0
 
 [English](README_EN.md)
 
-Minecraft Translator 是純客戶端即時翻譯模組。它只翻譯畫面上需要翻譯的文字，不修改伺服器資料，也不會代替玩家送出聊天訊息。
+Nyanslate（前身 Minecraft Translator）是純客戶端即時翻譯模組。它只翻譯畫面上需要翻譯的文字，不修改伺服器資料，也不會代替玩家送出聊天訊息。
 
 ## 主要功能
 
@@ -12,7 +12,10 @@ Minecraft Translator 是純客戶端即時翻譯模組。它只翻譯畫面上�
 - 所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設使用 `gpt-5.6-terra`／`medium`。
 - 非同步批次、優先佇列、磁碟快取與失敗退避，避免畫面卡頓及重複請求。
 - 玩家名只依 TAB 名單遮罩；物品名稱不再因 `with Chest` 等普通文字被誤判。
-- 按 `P` 重新擷取目前介面的可見原文並重新翻譯，包含模組任務文字與正在顯示的提示框。
+- **物品與模組介面改為手動翻譯**：游標指向物品按 `R`、重新掃描目前介面按 `P`；已有翻譯會直接從快取顯示，未看過的文字不會自動送出請求。聊天、記分板、名牌、Boss Bar、標題、Action Bar、書本不受影響，仍自動翻譯。
+- **提示框分段快取**：長提示框（標題＋多行內文）依段落快取與還原，只有真正變動的段落才需要重新請求。
+- **GitHub AI 翻譯倉庫**：啟動時（可在設定關閉）安靜檢查目前伺服器／模組包／已安裝模組是否有現成翻譯可下載，確認後再下載合併到本機快取；只會讀取倉庫的 `index.json` 與所需檔案，不會上傳任何個人資料或翻譯內容。
+- **設定畫面整理**：新增「不翻譯清單」畫面，可暫停送出新翻譯請求（仍顯示已有的快取翻譯）並維護逐字比對、不分大小寫的不翻譯詞彙表。
 - 匯出／匯入翻譯 JSON，將朋友的翻譯合併到本機，保留自己已有的翻譯。
 
 
@@ -60,7 +63,7 @@ Better Minecraft 任務介面的實際翻譯前後，包含任務標題、長段
 
 每個 JAR 只支援檔名標示的 Minecraft 版本與 Loader，不可混用。
 
-[下載包含全部版本與分類資料夾的 ZIP](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/MinecraftTranslator-1.0.6-all-versions.zip)
+[下載包含全部版本與分類資料夾的 ZIP](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/Nyanslate-1.0.0-all-versions.zip)
 
 
 ### Fabric
@@ -69,34 +72,34 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 
 | Minecraft | Java | 下載 |
 | --- | ---: | --- |
-| 1.14.4 | 8 | [mctranslator-1.0.6-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.14.4.jar) |
-| 1.15.2 | 8 | [mctranslator-1.0.6-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.15.2.jar) |
-| 1.16.5 | 8 | [mctranslator-1.0.6-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.16.5.jar) |
-| 1.17.1 | 16 | [mctranslator-1.0.6-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.17.1.jar) |
-| 1.18.2 | 17 | [mctranslator-1.0.6-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.18.2.jar) |
-| 1.19.4 | 17 | [mctranslator-1.0.6-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.19.4.jar) |
-| 1.20.1 | 17 | [mctranslator-1.0.6-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.20.1.jar) |
-| 1.21.1 | 21 | [mctranslator-1.0.6-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.21.1.jar) |
-| 1.21.11 | 21 | [mctranslator-1.0.6-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-1.21.11.jar) |
-| 26.1.2 | 25 | [mctranslator-1.0.6-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-26.1.2.jar) |
-| 26.2 | 25 | [mctranslator-1.0.6-Fabric-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-26.2.jar) |
-| 26.3 | 25 | [mctranslator-1.0.6-Fabric-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Fabric-26.3.jar) |
+| 1.14.4 | 8 | [nyanslate-1.0.0-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.14.4.jar) |
+| 1.15.2 | 8 | [nyanslate-1.0.0-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.15.2.jar) |
+| 1.16.5 | 8 | [nyanslate-1.0.0-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.16.5.jar) |
+| 1.17.1 | 16 | [nyanslate-1.0.0-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.17.1.jar) |
+| 1.18.2 | 17 | [nyanslate-1.0.0-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.18.2.jar) |
+| 1.19.4 | 17 | [nyanslate-1.0.0-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.19.4.jar) |
+| 1.20.1 | 17 | [nyanslate-1.0.0-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.20.1.jar) |
+| 1.21.1 | 21 | [nyanslate-1.0.0-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.21.1.jar) |
+| 1.21.11 | 21 | [nyanslate-1.0.0-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.21.11.jar) |
+| 26.1.2 | 25 | [nyanslate-1.0.0-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.1.2.jar) |
+| 26.2 | 25 | [nyanslate-1.0.0-Fabric-26.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.2.jar) |
+| 26.3 | 25 | [nyanslate-1.0.0-Fabric-26.3.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.3.jar) |
 
 ### NeoForge
 
 | Minecraft | Java | 下載 |
 | --- | ---: | --- |
-| 1.20.1 | 17 | [mctranslator-1.0.6-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-NeoForge-1.20.1.jar) |
-| 1.21.1 | 21 | [mctranslator-1.0.6-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-NeoForge-1.21.1.jar) |
-| 26.2 | 25 | [mctranslator-1.0.6-NeoForge-26.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-NeoForge-26.2.jar) |
-| 26.3 | 25 | [mctranslator-1.0.6-NeoForge-26.3.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-NeoForge-26.3.jar) |
+| 1.20.1 | 17 | [nyanslate-1.0.0-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-1.20.1.jar) |
+| 1.21.1 | 21 | [nyanslate-1.0.0-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-1.21.1.jar) |
+| 26.2 | 25 | [nyanslate-1.0.0-NeoForge-26.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-26.2.jar) |
+| 26.3 | 25 | [nyanslate-1.0.0-NeoForge-26.3.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-26.3.jar) |
 
 ### Forge
 
 | Minecraft | Java | 下載 |
 | --- | ---: | --- |
-| 1.12.2 | 8 | [mctranslator-1.0.6-Forge-1.12.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Forge-1.12.2.jar) |
-| 1.13.2 | 8 | [mctranslator-1.0.6-Forge-1.13.2.jar](https://github.com/DragonMeow1012/MinecraftTranslator/releases/download/v1.0.6/mctranslator-1.0.6-Forge-1.13.2.jar) |
+| 1.12.2 | 8 | [nyanslate-1.0.0-Forge-1.12.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Forge-1.12.2.jar) |
+| 1.13.2 | 8 | [nyanslate-1.0.0-Forge-1.13.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Forge-1.13.2.jar) |
 
 ## 安裝
 
@@ -121,8 +124,8 @@ Fabric 1.17.1 以上與 NeoForge：
 | 按鍵 | 功能 |
 | --- | --- |
 | `G` | 切換原文／譯文顯示 |
-| `R` | 重新翻譯游標指向的物品 |
-| `P` | 重新翻譯目前介面的可見文字與提示框 |
+| `R` | 翻譯／重新翻譯游標指向的物品 |
+| `P` | 翻譯／重新翻譯目前介面的可見文字與提示框 |
 | 未綁定 | 開啟翻譯設定 |
 
 舊版介面：
@@ -132,7 +135,17 @@ Fabric 1.17.1 以上與 NeoForge：
 | Fabric 1.14.4～1.16.5 | `G` 開啟翻譯設定；`P` 重新翻譯目前介面 |
 | Forge 1.12.2～1.13.2 | `G` 開啟翻譯設定；`H` 啟用／停用翻譯；`P` 重新翻譯目前介面 |
 
-`P` 擷取當下可見的文字，不包含尚未捲動到的內容；輸入文字時不會觸發。重新翻譯完成時間取決於所選翻譯服務。
+`P` 擷取當下可見的文字，不包含尚未捲動到的內容；輸入文字時不會觸發。物品與介面文字改為手動觸發（見上方「主要功能」），`R`／`P` 是取得這些翻譯的方式，而不只是「重新」翻譯。重新翻譯完成時間取決於所選翻譯服務。
+
+升級後若快捷鍵改回預設值：這個版本把模組 id 從 `mctranslator` 改成 `nyanslate`，首次啟動會自動把你原本設定檔、翻譯快取與 `options.txt` 裡的舊快捷鍵複製到新名稱（不刪除舊檔），只做一次。
+
+## 1.0.0 重點
+
+- **模組更名為 Nyanslate**：套件、mod id、設定與快取檔名前綴、GitHub 翻譯倉庫全部換成新名稱；首次啟動自動從舊的 `mctranslator-*` 設定檔／快取／快捷鍵複製一份到新名稱（原檔不刪除、不覆蓋既有新檔）。
+- 物品與模組介面翻譯改為手動觸發（`R`／`P`），聊天等即時文字維持自動翻譯，避免翻譯還沒看到的格子。
+- 提示框改用分段快取，減少長提示框重複請求整段文字的次數。
+- 新增 GitHub AI 翻譯倉庫的啟動偵測與下載確認流程，可下載他人已分享、通過社群校對的翻譯，並可在設定關閉。
+- 新增「不翻譯清單」設定畫面，整理原本散落的翻譯請求開關與詞彙表。
 
 ## 1.0.6 重點
 
@@ -170,8 +183,9 @@ Fabric 1.17.1 以上與 NeoForge：
 - 只將需要翻譯的文字送到所選來源。
 - API Key 儲存在本機 Minecraft 設定資料夾。
 - TAB 名單中的玩家名會先在本機遮罩；其他伺服器文字仍可能包含使用者提供的內容。
+- GitHub 翻譯倉庫檢查只下載（`index.json` 與所需翻譯檔），不會上傳任何本機資料；可在設定關閉啟動時的檢查。
 - 回報問題前請遮住 API Key、Authorization header 與私人伺服器資訊。
 
 ## 原始碼與回報
 
-各版本建置方式與 Release 資料夾結構請見 [PACKAGING.md](PACKAGING.md)。問題請提交到 [GitHub Issues](https://github.com/DragonMeow1012/MinecraftTranslator/issues)。
+各版本建置方式與 Release 資料夾結構請見 [PACKAGING.md](PACKAGING.md)。問題請提交到 [GitHub Issues](https://github.com/DragonMeow1012/Nyanslate/issues)。

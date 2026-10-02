@@ -7,7 +7,7 @@ group = project.maven_group
 base { archivesName = project.archives_base_name }
 tasks.named('remapJar') { archiveClassifier = "Fabric-${project.minecraft_version}" }
 tasks.named('jar') {
-    from('../LICENSE') { rename { 'LICENSE_MinecraftTranslator' } }
+    from('../LICENSE') { rename { 'LICENSE_Nyanslate' } }
 }
 repositories {
     mavenCentral()

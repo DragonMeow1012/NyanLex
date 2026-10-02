@@ -8,7 +8,7 @@ Set-StrictMode -Version 2.0
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$releaseVersion = '1.0.6'
+$releaseVersion = '1.0.0'
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $modsJarRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'mods-jar'))
 $releaseRoot = [System.IO.Path]::GetFullPath(
@@ -380,7 +380,7 @@ function Assert-FabricMetadata {
     )
 
     $metadata = (Read-ZipEntryText $Archive 'fabric.mod.json') | ConvertFrom-Json
-    Require ([string]$metadata.id -ceq 'mctranslator') `
+    Require ([string]$metadata.id -ceq 'nyanslate') `
         "$($Artifact.Source) has wrong Fabric mod id"
     Require ([string]$metadata.version -ceq $releaseVersion) `
         "$($Artifact.Source) has wrong Fabric version: $($metadata.version)"
@@ -409,9 +409,9 @@ function Assert-Forge1122Metadata {
     )
 
     $entries = @((Read-ZipEntryText $Archive 'mcmod.info') | ConvertFrom-Json)
-    $matches = @($entries | Where-Object { [string]$_.modid -ceq 'mctranslator' })
+    $matches = @($entries | Where-Object { [string]$_.modid -ceq 'nyanslate' })
     Require ($matches.Count -eq 1) `
-        "$($Artifact.Source) must contain one mctranslator mcmod.info record"
+        "$($Artifact.Source) must contain one nyanslate mcmod.info record"
     $metadata = $matches[0]
     Require ([string]$metadata.version -ceq $releaseVersion) `
         "$($Artifact.Source) has wrong Forge mod version: $($metadata.version)"
@@ -440,15 +440,15 @@ function Assert-TomlMetadata {
 
     $modBlocks = @(Get-TomlBlocks $toml 'mods')
     $mainMods = @($modBlocks | Where-Object {
-        (Get-TomlValue $_ 'modId') -ceq 'mctranslator'
+        (Get-TomlValue $_ 'modId') -ceq 'nyanslate'
     })
     Require ($mainMods.Count -eq 1) `
-        "$($Artifact.Source) must contain one mctranslator TOML mod block"
+        "$($Artifact.Source) must contain one nyanslate TOML mod block"
     $tomlVersion = Get-TomlValue $mainMods[0] 'version'
     Require ($tomlVersion -ceq $Artifact.TomlVersion) `
         "$($Artifact.Source) has wrong TOML version: $tomlVersion"
 
-    $dependencies = @(Get-TomlBlocks $toml 'dependencies.mctranslator')
+    $dependencies = @(Get-TomlBlocks $toml 'dependencies.nyanslate')
     $minecraftDependencies = @($dependencies | Where-Object {
         (Get-TomlValue $_ 'modId') -ceq 'minecraft'
     })
@@ -487,7 +487,7 @@ function Assert-SourceJar {
     Assert-NoReparseAncestors $jarPath "JAR artifact $($Artifact.Source)"
     Require (Test-Path -LiteralPath $jarPath -PathType Leaf) `
         "Missing JAR artifact for $($Artifact.Source): $jarPath"
-    $expectedName = "mctranslator-$releaseVersion-$($Artifact.Label)-$($Artifact.Minecraft).jar"
+    $expectedName = "nyanslate-$releaseVersion-$($Artifact.Label)-$($Artifact.Minecraft).jar"
     Require ((Split-Path -Leaf $jarPath) -ceq $expectedName) `
         "Unexpected JAR filename for $($Artifact.Source); expected $expectedName"
     Require ([System.IO.Path]::GetFileName($Artifact.Relative) -ceq $expectedName) `
@@ -521,33 +521,33 @@ function Assert-SourceJar {
 # The source and destination of every publishable JAR are intentionally explicit.
 # Adding a release target requires a reviewed row here and a matching ZIP count below.
 $artifacts = @(
-    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.12.2'; Source = 'forge1122\build\libs\mctranslator-1.0.6-Forge-1.12.2.jar'; Relative = 'forge/1.12.2/mctranslator-1.0.6-Forge-1.12.2.jar'; MetadataKind = 'forge1122'; MinecraftRange = '1.12.2'; MainClass = 'com.dragonmeow.mctranslator.forgelegacy.MinecraftTranslatorForge' },
-    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.13.2'; Source = 'forge1132\build\libs\mctranslator-1.0.6-Forge-1.13.2.jar'; Relative = 'forge/1.13.2/mctranslator-1.0.6-Forge-1.13.2.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = ('$' + '{file.jarVersion}'); MinecraftRange = '[1.13.2]'; LoaderRange = '[25,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[25,)'; MainClass = 'com.dragonmeow.mctranslator.forgelegacy.MinecraftTranslatorForge' },
+    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.12.2'; Source = "forge1122\build\libs\nyanslate-$releaseVersion-Forge-1.12.2.jar"; Relative = "forge/1.12.2/nyanslate-$releaseVersion-Forge-1.12.2.jar"; MetadataKind = 'forge1122'; MinecraftRange = '1.12.2'; MainClass = 'com.dragonmeow.nyanslate.forgelegacy.NyanslateForge' },
+    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.13.2'; Source = "forge1132\build\libs\nyanslate-$releaseVersion-Forge-1.13.2.jar"; Relative = "forge/1.13.2/nyanslate-$releaseVersion-Forge-1.13.2.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = ('$' + '{file.jarVersion}'); MinecraftRange = '[1.13.2]'; LoaderRange = '[25,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[25,)'; MainClass = 'com.dragonmeow.nyanslate.forgelegacy.NyanslateForge' },
 
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.14.4'; Source = 'fabric1144\build\libs\mctranslator-1.0.6-Fabric-1.14.4.jar'; Relative = 'fabric/1.14.4/mctranslator-1.0.6-Fabric-1.14.4.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.14.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.15.2'; Source = 'fabric1152\build\libs\mctranslator-1.0.6-Fabric-1.15.2.jar'; Relative = 'fabric/1.15.2/mctranslator-1.0.6-Fabric-1.15.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.15.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.16.5'; Source = 'fabric1165\build\libs\mctranslator-1.0.6-Fabric-1.16.5.jar'; Relative = 'fabric/1.16.5/mctranslator-1.0.6-Fabric-1.16.5.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.16.5'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.17.1'; Source = 'fabric1171\build\libs\mctranslator-1.0.6-Fabric-1.17.1.jar'; Relative = 'fabric/1.17.1/mctranslator-1.0.6-Fabric-1.17.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.17.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=16'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.18.2'; Source = 'fabric1182\build\libs\mctranslator-1.0.6-Fabric-1.18.2.jar'; Relative = 'fabric/1.18.2/mctranslator-1.0.6-Fabric-1.18.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.18.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.19.4'; Source = 'fabric1194\build\libs\mctranslator-1.0.6-Fabric-1.19.4.jar'; Relative = 'fabric/1.19.4/mctranslator-1.0.6-Fabric-1.19.4.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.19.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.20.1'; Source = 'fabric120\build\libs\mctranslator-1.0.6-Fabric-1.20.1.jar'; Relative = 'fabric/1.20.1/mctranslator-1.0.6-Fabric-1.20.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.20.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.1'; Source = 'build\libs\mctranslator-1.0.6-Fabric-1.21.1.jar'; Relative = 'fabric/1.21.1/mctranslator-1.0.6-Fabric-1.21.1.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.21.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.11'; Source = 'fabric12111\build\libs\mctranslator-1.0.6-Fabric-1.21.11.jar'; Relative = 'fabric/1.21.11/mctranslator-1.0.6-Fabric-1.21.11.jar'; MetadataKind = 'fabric'; MinecraftRange = '1.21.11'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.1.2'; Source = 'fabric2612\build\libs\mctranslator-1.0.6-Fabric-26.1.2.jar'; Relative = 'fabric/26.1.2/mctranslator-1.0.6-Fabric-26.1.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '26.1.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.2'; Source = 'fabric26\build\libs\mctranslator-1.0.6-Fabric-26.2.jar'; Relative = 'fabric/26.2/mctranslator-1.0.6-Fabric-26.2.jar'; MetadataKind = 'fabric'; MinecraftRange = '26.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.3'; Source = 'fabric263\build\libs\mctranslator-1.0.6-Fabric-26.3.jar'; Relative = 'fabric/26.3/mctranslator-1.0.6-Fabric-26.3.jar'; MetadataKind = 'fabric'; MinecraftRange = '26.3'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.14.4'; Source = "fabric1144\build\libs\nyanslate-$releaseVersion-Fabric-1.14.4.jar"; Relative = "fabric/1.14.4/nyanslate-$releaseVersion-Fabric-1.14.4.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.14.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.15.2'; Source = "fabric1152\build\libs\nyanslate-$releaseVersion-Fabric-1.15.2.jar"; Relative = "fabric/1.15.2/nyanslate-$releaseVersion-Fabric-1.15.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.15.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.16.5'; Source = "fabric1165\build\libs\nyanslate-$releaseVersion-Fabric-1.16.5.jar"; Relative = "fabric/1.16.5/nyanslate-$releaseVersion-Fabric-1.16.5.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.16.5'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.17.1'; Source = "fabric1171\build\libs\nyanslate-$releaseVersion-Fabric-1.17.1.jar"; Relative = "fabric/1.17.1/nyanslate-$releaseVersion-Fabric-1.17.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.17.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=16'; MainClass = 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.18.2'; Source = "fabric1182\build\libs\nyanslate-$releaseVersion-Fabric-1.18.2.jar"; Relative = "fabric/1.18.2/nyanslate-$releaseVersion-Fabric-1.18.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.18.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.19.4'; Source = "fabric1194\build\libs\nyanslate-$releaseVersion-Fabric-1.19.4.jar"; Relative = "fabric/1.19.4/nyanslate-$releaseVersion-Fabric-1.19.4.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.19.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.20.1'; Source = "fabric120\build\libs\nyanslate-$releaseVersion-Fabric-1.20.1.jar"; Relative = "fabric/1.20.1/nyanslate-$releaseVersion-Fabric-1.20.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.20.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.1'; Source = "build\libs\nyanslate-$releaseVersion-Fabric-1.21.1.jar"; Relative = "fabric/1.21.1/nyanslate-$releaseVersion-Fabric-1.21.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.21.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.11'; Source = "fabric12111\build\libs\nyanslate-$releaseVersion-Fabric-1.21.11.jar"; Relative = "fabric/1.21.11/nyanslate-$releaseVersion-Fabric-1.21.11.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.21.11'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.1.2'; Source = "fabric2612\build\libs\nyanslate-$releaseVersion-Fabric-26.1.2.jar"; Relative = "fabric/26.1.2/nyanslate-$releaseVersion-Fabric-26.1.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.1.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.2'; Source = "fabric26\build\libs\nyanslate-$releaseVersion-Fabric-26.2.jar"; Relative = "fabric/26.2/nyanslate-$releaseVersion-Fabric-26.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.3'; Source = "fabric263\build\libs\nyanslate-$releaseVersion-Fabric-26.3.jar"; Relative = "fabric/26.3/nyanslate-$releaseVersion-Fabric-26.3.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.3'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' },
 
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.20.1'; Source = 'neoforge120\build\libs\mctranslator-1.0.6-NeoForge-1.20.1.jar'; Relative = 'neoforge/1.20.1/mctranslator-1.0.6-NeoForge-1.20.1.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = '1.0.6'; MinecraftRange = '[1.20.1,1.20.2)'; LoaderRange = '[47,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[47,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' },
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.21.1'; Source = 'neoforge\build\libs\mctranslator-1.0.6-NeoForge-1.21.1.jar'; Relative = 'neoforge/1.21.1/mctranslator-1.0.6-NeoForge-1.21.1.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = '1.0.6'; MinecraftRange = '[1.21.1,1.21.2)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[21.1.0,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' },
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.2'; Source = 'neoforge26\build\libs\mctranslator-1.0.6-NeoForge-26.2.jar'; Relative = 'neoforge/26.2/mctranslator-1.0.6-NeoForge-26.2.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = '1.0.6'; MinecraftRange = '[26.2,26.3)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.2,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge26.MctranslatorNeoForge26' },
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.3'; Source = 'neoforge263\build\libs\mctranslator-1.0.6-NeoForge-26.3.jar'; Relative = 'neoforge/26.3/mctranslator-1.0.6-NeoForge-26.3.jar'; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = '1.0.6'; MinecraftRange = '[26.3,26.4)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.3,)'; MainClass = 'com.dragonmeow.mctranslator.neoforge26.MctranslatorNeoForge26' }
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.20.1'; Source = "neoforge120\build\libs\nyanslate-$releaseVersion-NeoForge-1.20.1.jar"; Relative = "neoforge/1.20.1/nyanslate-$releaseVersion-NeoForge-1.20.1.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[1.20.1,1.20.2)'; LoaderRange = '[47,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[47,)'; MainClass = 'com.dragonmeow.nyanslate.neoforge.NyanslateNeoForge' },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.21.1'; Source = "neoforge\build\libs\nyanslate-$releaseVersion-NeoForge-1.21.1.jar"; Relative = "neoforge/1.21.1/nyanslate-$releaseVersion-NeoForge-1.21.1.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[1.21.1,1.21.2)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[21.1.0,)'; MainClass = 'com.dragonmeow.nyanslate.neoforge.NyanslateNeoForge' },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.2'; Source = "neoforge26\build\libs\nyanslate-$releaseVersion-NeoForge-26.2.jar"; Relative = "neoforge/26.2/nyanslate-$releaseVersion-NeoForge-26.2.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[26.2,26.3)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.2,)'; MainClass = 'com.dragonmeow.nyanslate.neoforge26.NyanslateNeoForge26' },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.3'; Source = "neoforge263\build\libs\nyanslate-$releaseVersion-NeoForge-26.3.jar"; Relative = "neoforge/26.3/nyanslate-$releaseVersion-NeoForge-26.3.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[26.3,26.4)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.3,)'; MainClass = 'com.dragonmeow.nyanslate.neoforge26.NyanslateNeoForge26' }
 )
 
 $zipSpecs = @(
-    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.6-Fabric.zip'; Loaders = @('fabric'); ExpectedCount = 12 },
-    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.6-NeoForge.zip'; Loaders = @('neoforge'); ExpectedCount = 4 },
-    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.6-Forge.zip'; Loaders = @('forge'); ExpectedCount = 2 },
-    [pscustomobject]@{ Relative = 'MinecraftTranslator-1.0.6-all-versions.zip'; Loaders = @('fabric', 'neoforge', 'forge'); ExpectedCount = 18 }
+    [pscustomobject]@{ Relative = "Nyanslate-$releaseVersion-Fabric.zip"; Loaders = @('fabric'); ExpectedCount = 12 },
+    [pscustomobject]@{ Relative = "Nyanslate-$releaseVersion-NeoForge.zip"; Loaders = @('neoforge'); ExpectedCount = 4 },
+    [pscustomobject]@{ Relative = "Nyanslate-$releaseVersion-Forge.zip"; Loaders = @('forge'); ExpectedCount = 2 },
+    [pscustomobject]@{ Relative = "Nyanslate-$releaseVersion-all-versions.zip"; Loaders = @('fabric', 'neoforge', 'forge'); ExpectedCount = 18 }
 )
 
 Require ($artifacts.Count -eq 18) "Artifact map must contain exactly 18 JARs"
@@ -600,7 +600,7 @@ if ($releaseExistedAtPreflight) {
 
 foreach ($artifact in $artifacts) {
     $expectedName =
-        "mctranslator-$releaseVersion-$($artifact.Label)-$($artifact.Minecraft).jar"
+        "nyanslate-$releaseVersion-$($artifact.Label)-$($artifact.Minecraft).jar"
     $expectedRelative =
         "$($artifact.Loader)/$($artifact.Minecraft)/$expectedName"
     Require ($artifact.Relative -ceq $expectedRelative) `

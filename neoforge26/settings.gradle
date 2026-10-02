@@ -5,4 +5,4 @@ pluginManagement {
         mavenCentral()
     }
 }
-rootProject.name = "mctranslator-neoforge26"
+rootProject.name = "nyanslate-neoforge26"

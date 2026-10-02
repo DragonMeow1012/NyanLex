@@ -1,9 +1,13 @@
-# Minecraft Translator 1.0.6 packaging
+# Nyanslate 1.0.0 packaging
+
+This is the first release under the new name **Nyanslate** (formerly Minecraft Translator).
+The package root, mod id, archive base name, and GitHub translation-hub URL all moved from
+`mctranslator` to `nyanslate`; jar names moved from `mctranslator-<version>-...` to
+`nyanslate-<version>-...`. See the project README for the full list of user-facing changes.
 
 The release contains 18 JARs. Each JAR is tied to one Minecraft version and loader.
 
-Minecraft 26.3 is included in the main release (18 total). After rebuilding the current
-screen retranslation and translation-sharing changes, run
+Minecraft 26.3 is included in the main release (18 total). After rebuilding, run
 `python verification/verify-translation-features.py` before packaging. This checks
 the feature entry points, native file picker, language labels, legacy Java 8 class
 versions, and Forge font hooks in each built JAR.
@@ -47,25 +51,25 @@ Push-Location forge1122; .\gradlew.bat clean build; Pop-Location
 
 ## Release folders
 
-Generated binaries are ignored by Git and stored under `mods-jar/1.0.6`:
+Generated binaries are ignored by Git and stored under `mods-jar/1.0.0`:
 
 ```text
-mods-jar/1.0.6/
+mods-jar/1.0.0/
   fabric/
-    1.14.4/mctranslator-1.0.6-Fabric-1.14.4.jar
+    1.14.4/nyanslate-1.0.0-Fabric-1.14.4.jar
     ...
-    26.2/mctranslator-1.0.6-Fabric-26.2.jar
+    26.2/nyanslate-1.0.0-Fabric-26.2.jar
   neoforge/
-    1.20.1/mctranslator-1.0.6-NeoForge-1.20.1.jar
-    1.21.1/mctranslator-1.0.6-NeoForge-1.21.1.jar
-    26.2/mctranslator-1.0.6-NeoForge-26.2.jar
+    1.20.1/nyanslate-1.0.0-NeoForge-1.20.1.jar
+    1.21.1/nyanslate-1.0.0-NeoForge-1.21.1.jar
+    26.2/nyanslate-1.0.0-NeoForge-26.2.jar
   forge/
-    1.12.2/mctranslator-1.0.6-Forge-1.12.2.jar
-    1.13.2/mctranslator-1.0.6-Forge-1.13.2.jar
-  MinecraftTranslator-1.0.6-Fabric.zip
-  MinecraftTranslator-1.0.6-NeoForge.zip
-  MinecraftTranslator-1.0.6-Forge.zip
-  MinecraftTranslator-1.0.6-all-versions.zip
+    1.12.2/nyanslate-1.0.0-Forge-1.12.2.jar
+    1.13.2/nyanslate-1.0.0-Forge-1.13.2.jar
+  Nyanslate-1.0.0-Fabric.zip
+  Nyanslate-1.0.0-NeoForge.zip
+  Nyanslate-1.0.0-Forge.zip
+  Nyanslate-1.0.0-all-versions.zip
   SHA256SUMS.txt
 ```
 
@@ -78,9 +82,10 @@ Before publishing:
 - Build all 18 targets successfully.
 - Confirm exactly 18 packaged JARs, 4 ZIPs, and `SHA256SUMS.txt`.
 - Compare each packaged JAR SHA-256 with its matching `build/libs` output.
-- Confirm loader metadata contains version 1.0.6 and the exact Minecraft range.
+- Confirm loader metadata contains version 1.0.0 and the exact Minecraft range.
+- Confirm loader metadata mod id/entrypoint classes are `nyanslate` / `com.dragonmeow.nyanslate.*` (not the old `mctranslator` / `com.dragonmeow.mctranslator.*`).
 - Run `git diff --check` and core unit tests.
-- Upload individual JARs plus the four ZIP files to tag `v1.0.6`.
+- Upload individual JARs plus the four ZIP files to tag `v1.0.0`.
 
 ## Minecraft 26.3 builds
 

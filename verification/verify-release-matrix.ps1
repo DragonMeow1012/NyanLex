@@ -11,7 +11,18 @@ Set-StrictMode -Version 2.0
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$releaseVersion = '1.0.6'
+$releaseVersion = '1.0.0'
+# 18 release targets: 16 projects with their own sources, plus fabric263/neoforge263,
+# which compile the fabric26/neoforge26 sources and resources with platform263.
+$expectedProjects = 18
+# One canonical core harness per project, plus the Forge glue harness on both Forge projects.
+$expectedCoreRuns = 20
+# Four Codex protocol scenarios per project (Invoke-ProjectInlineSuite).
+$expectedCodexRuns = 72
+# One CodeSource proof per core harness run and per Codex run.
+$expectedCodeSourceRuns = 92
+# 1.0.7 settings anchor: the request switch toggle of the new requests/terms screen.
+$requestSwitchUiKey = 'screen.nyanslate.requests.toggle'
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $verificationRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $gradleExecutables = @{
@@ -27,9 +38,9 @@ $fakeCodex = Join-Path $verificationRoot 'fake-codex.cmd'
 $fakeCodexPython = Join-Path $verificationRoot 'fake_codex.py'
 $protocolAssertion = Join-Path $verificationRoot 'assert-inline-protocol.ps1'
 $requiredDeliveryKeys = @(
-    'config.mctranslator.chat_delivery',
-    'config.mctranslator.chat_delivery.ordered',
-    'config.mctranslator.chat_delivery.ready_first'
+    'config.nyanslate.chat_delivery',
+    'config.nyanslate.chat_delivery.ordered',
+    'config.nyanslate.chat_delivery.ready_first'
 )
 
 function Require {
@@ -79,15 +90,27 @@ function New-FabricRow {
         [int]$RuntimeJdk,
         [string]$HarnessKind,
         [string]$MainClass,
-        [string]$SettingsClass
+        [string]$SettingsClass,
+        [string]$SourceProject = '',
+        [string]$PlatformProject = ''
     )
     return [pscustomobject]@{
         Key = $Key
         Project = $Project
+        SourceProject = $(if ([string]::IsNullOrWhiteSpace($SourceProject)) {
+            $Project
+        } else {
+            $SourceProject
+        })
+        PlatformProject = $(if ([string]::IsNullOrWhiteSpace($PlatformProject)) {
+            $null
+        } else {
+            $PlatformProject
+        })
         Loader = 'fabric'
         Label = 'Fabric'
         Minecraft = $Minecraft
-        ArtifactName = "mctranslator-$releaseVersion-Fabric-$Minecraft.jar"
+        ArtifactName = "nyanslate-$releaseVersion-Fabric-$Minecraft.jar"
         MetadataKind = 'fabric'
         MetadataEntry = 'fabric.mod.json'
         MinecraftRange = $Minecraft
@@ -129,15 +152,27 @@ function New-TomlRow {
         [string]$MainClass,
         [string]$SettingsClass,
         [int]$LangCount,
-        [string]$LangExtension
+        [string]$LangExtension,
+        [string]$SourceProject = '',
+        [string]$PlatformProject = ''
     )
     return [pscustomobject]@{
         Key = $Key
         Project = $Project
+        SourceProject = $(if ([string]::IsNullOrWhiteSpace($SourceProject)) {
+            $Project
+        } else {
+            $SourceProject
+        })
+        PlatformProject = $(if ([string]::IsNullOrWhiteSpace($PlatformProject)) {
+            $null
+        } else {
+            $PlatformProject
+        })
         Loader = $Loader
         Label = $Label
         Minecraft = $Minecraft
-        ArtifactName = "mctranslator-$releaseVersion-$Label-$Minecraft.jar"
+        ArtifactName = "nyanslate-$releaseVersion-$Label-$Minecraft.jar"
         MetadataKind = 'toml'
         MetadataEntry = $MetadataEntry
         MinecraftRange = $MinecraftRange
@@ -162,10 +197,12 @@ function New-Forge1122Row {
     return [pscustomobject]@{
         Key = 'forge1122'
         Project = 'forge1122'
+        SourceProject = 'forge1122'
+        PlatformProject = $null
         Loader = 'forge'
         Label = 'Forge'
         Minecraft = '1.12.2'
-        ArtifactName = "mctranslator-$releaseVersion-Forge-1.12.2.jar"
+        ArtifactName = "nyanslate-$releaseVersion-Forge-1.12.2.jar"
         MetadataKind = 'forge1122'
         MetadataEntry = 'mcmod.info'
         MinecraftRange = '1.12.2'
@@ -179,8 +216,8 @@ function New-Forge1122Row {
         RuntimeJdk = 8
         BuildJdk = 8
         HarnessKind = 'forgelegacy'
-        MainClass = 'com.dragonmeow.mctranslator.forgelegacy.MinecraftTranslatorForge'
-        SettingsClass = 'com.dragonmeow.mctranslator.forgelegacy.ForgeSettingsScreen'
+        MainClass = 'com.dragonmeow.nyanslate.forgelegacy.NyanslateForge'
+        SettingsClass = 'com.dragonmeow.nyanslate.forgelegacy.ForgeSettingsScreen'
         LangCount = 2
         LangExtension = 'lang'
     }
@@ -194,95 +231,116 @@ $rows = @(
         -TomlVersion ('${file.jarVersion}') -LoaderDependency 'forge' `
         -LoaderDependencyRange '[25,)' -SourceRelease 8 -ClassMajor 52 `
         -RuntimeJdk 8 -BuildJdk 8 -HarnessKind 'forgelegacy' `
-        -MainClass 'com.dragonmeow.mctranslator.forgelegacy.MinecraftTranslatorForge' `
-        -SettingsClass 'com.dragonmeow.mctranslator.forgelegacy.ForgeSettingsScreen' `
+        -MainClass 'com.dragonmeow.nyanslate.forgelegacy.NyanslateForge' `
+        -SettingsClass 'com.dragonmeow.nyanslate.forgelegacy.ForgeSettingsScreen' `
         -LangCount 2 -LangExtension 'json'
 
     New-FabricRow -Key 'fabric1144' -Project 'fabric1144' -Minecraft '1.14.4' `
         -LoaderRange '>=0.16.0' -JavaRange '>=8' -SourceRelease 8 `
         -ClassMajor 52 -RuntimeJdk 8 -HarnessKind 'legacy' `
-        -MainClass 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' `
-        -SettingsClass 'com.dragonmeow.mctranslator.legacy.LegacySettingsScreen'
+        -MainClass 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' `
+        -SettingsClass 'com.dragonmeow.nyanslate.legacy.LegacySettingsScreen'
     New-FabricRow -Key 'fabric1152' -Project 'fabric1152' -Minecraft '1.15.2' `
         -LoaderRange '>=0.16.0' -JavaRange '>=8' -SourceRelease 8 `
         -ClassMajor 52 -RuntimeJdk 8 -HarnessKind 'legacy' `
-        -MainClass 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' `
-        -SettingsClass 'com.dragonmeow.mctranslator.legacy.LegacySettingsScreen'
+        -MainClass 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' `
+        -SettingsClass 'com.dragonmeow.nyanslate.legacy.LegacySettingsScreen'
     New-FabricRow -Key 'fabric1165' -Project 'fabric1165' -Minecraft '1.16.5' `
         -LoaderRange '>=0.16.0' -JavaRange '>=8' -SourceRelease 8 `
         -ClassMajor 52 -RuntimeJdk 8 -HarnessKind 'legacy' `
-        -MainClass 'com.dragonmeow.mctranslator.legacy.LegacyTranslatorMod' `
-        -SettingsClass 'com.dragonmeow.mctranslator.legacy.LegacySettingsScreen'
+        -MainClass 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' `
+        -SettingsClass 'com.dragonmeow.nyanslate.legacy.LegacySettingsScreen'
     New-FabricRow -Key 'fabric1171' -Project 'fabric1171' -Minecraft '1.17.1' `
         -LoaderRange '>=0.16.0' -JavaRange '>=16' -SourceRelease 16 `
         -ClassMajor 60 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' `
-        -SettingsClass 'com.dragonmeow.mctranslator.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric1182' -Project 'fabric1182' -Minecraft '1.18.2' `
         -LoaderRange '>=0.16.0' -JavaRange '>=17' -SourceRelease 17 `
         -ClassMajor 61 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' `
-        -SettingsClass 'com.dragonmeow.mctranslator.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric1194' -Project 'fabric1194' -Minecraft '1.19.4' `
         -LoaderRange '>=0.16.0' -JavaRange '>=17' -SourceRelease 17 `
         -ClassMajor 61 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' `
-        -SettingsClass 'com.dragonmeow.mctranslator.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric120' -Project 'fabric120' -Minecraft '1.20.1' `
         -LoaderRange '>=0.16.0' -JavaRange '>=17' -SourceRelease 17 `
         -ClassMajor 61 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' `
-        -SettingsClass 'com.dragonmeow.mctranslator.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric1211' -Project '.' -Minecraft '1.21.1' `
         -LoaderRange '>=0.16.0' -JavaRange '>=21' -SourceRelease 21 `
         -ClassMajor 65 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' `
-        -SettingsClass 'com.dragonmeow.mctranslator.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric12111' -Project 'fabric12111' -Minecraft '1.21.11' `
         -LoaderRange '>=0.16.0' -JavaRange '>=21' -SourceRelease 21 `
         -ClassMajor 65 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.fabric.MctranslatorFabric' `
-        -SettingsClass 'com.dragonmeow.mctranslator.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric2612' -Project 'fabric2612' -Minecraft '26.1.2' `
         -LoaderRange '>=0.19.0' -JavaRange '>=25' -SourceRelease 25 `
         -ClassMajor 69 -RuntimeJdk 25 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' `
-        -SettingsClass 'com.dragonmeow.mctranslator.fabric26.Fabric26ConfigScreen'
+        -MainClass 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric26.Fabric26ConfigScreen'
     New-FabricRow -Key 'fabric26' -Project 'fabric26' -Minecraft '26.2' `
         -LoaderRange '>=0.19.0' -JavaRange '>=25' -SourceRelease 25 `
         -ClassMajor 69 -RuntimeJdk 25 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.fabric26.MctranslatorFabric26' `
-        -SettingsClass 'com.dragonmeow.mctranslator.fabric26.Fabric26ConfigScreen'
+        -MainClass 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric26.Fabric26ConfigScreen'
+    # No sources of its own: fabric263/build.gradle compiles ../fabric26 (java and
+    # resources) plus ../platform263, against Minecraft 26.3 / Fabric Loader 0.19.5.
+    New-FabricRow -Key 'fabric263' -Project 'fabric263' -Minecraft '26.3' `
+        -LoaderRange '>=0.19.0' -JavaRange '>=25' -SourceRelease 25 `
+        -ClassMajor 69 -RuntimeJdk 25 -HarnessKind 'modern' `
+        -MainClass 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' `
+        -SettingsClass 'com.dragonmeow.nyanslate.fabric26.Fabric26ConfigScreen' `
+        -SourceProject 'fabric26' -PlatformProject 'platform263'
 
     New-TomlRow -Key 'neoforge120' -Project 'neoforge120' -Loader 'neoforge' `
         -Label 'NeoForge' -Minecraft '1.20.1' -MetadataEntry 'META-INF/mods.toml' `
         -MinecraftRange '[1.20.1,1.20.2)' -LoaderRange '[47,)' `
-        -TomlVersion '1.0.6' -LoaderDependency 'forge' `
+        -TomlVersion $releaseVersion -LoaderDependency 'forge' `
         -LoaderDependencyRange '[47,)' -SourceRelease 17 -ClassMajor 61 `
         -RuntimeJdk 21 -BuildJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' `
-        -SettingsClass 'com.dragonmeow.mctranslator.neoforge.TranslationConfigScreen' `
+        -MainClass 'com.dragonmeow.nyanslate.neoforge.NyanslateNeoForge' `
+        -SettingsClass 'com.dragonmeow.nyanslate.neoforge.TranslationConfigScreen' `
         -LangCount 143 -LangExtension 'json'
     New-TomlRow -Key 'neoforge1211' -Project 'neoforge' -Loader 'neoforge' `
         -Label 'NeoForge' -Minecraft '1.21.1' `
         -MetadataEntry 'META-INF/neoforge.mods.toml' `
         -MinecraftRange '[1.21.1,1.21.2)' -LoaderRange '[4,)' `
-        -TomlVersion '1.0.6' -LoaderDependency 'neoforge' `
+        -TomlVersion $releaseVersion -LoaderDependency 'neoforge' `
         -LoaderDependencyRange '[21.1.0,)' -SourceRelease 21 -ClassMajor 65 `
         -RuntimeJdk 21 -BuildJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.neoforge.MctranslatorNeoForge' `
-        -SettingsClass 'com.dragonmeow.mctranslator.neoforge.TranslationConfigScreen' `
+        -MainClass 'com.dragonmeow.nyanslate.neoforge.NyanslateNeoForge' `
+        -SettingsClass 'com.dragonmeow.nyanslate.neoforge.TranslationConfigScreen' `
         -LangCount 143 -LangExtension 'json'
     New-TomlRow -Key 'neoforge26' -Project 'neoforge26' -Loader 'neoforge' `
         -Label 'NeoForge' -Minecraft '26.2' `
         -MetadataEntry 'META-INF/neoforge.mods.toml' `
         -MinecraftRange '[26.2,26.3)' -LoaderRange '[4,)' `
-        -TomlVersion '1.0.6' -LoaderDependency 'neoforge' `
+        -TomlVersion $releaseVersion -LoaderDependency 'neoforge' `
         -LoaderDependencyRange '[26.2,)' -SourceRelease 25 -ClassMajor 69 `
         -RuntimeJdk 25 -BuildJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.mctranslator.neoforge26.MctranslatorNeoForge26' `
-        -SettingsClass 'com.dragonmeow.mctranslator.neoforge26.Neo26ConfigScreen' `
+        -MainClass 'com.dragonmeow.nyanslate.neoforge26.NyanslateNeoForge26' `
+        -SettingsClass 'com.dragonmeow.nyanslate.neoforge26.Neo26ConfigScreen' `
         -LangCount 143 -LangExtension 'json'
+    # No sources of its own: neoforge263/build.gradle compiles ../neoforge26 (java and
+    # resources) plus ../platform263, against NeoForge 26.3.0.6-beta (ModDevGradle 2.0.147).
+    New-TomlRow -Key 'neoforge263' -Project 'neoforge263' -Loader 'neoforge' `
+        -Label 'NeoForge' -Minecraft '26.3' `
+        -MetadataEntry 'META-INF/neoforge.mods.toml' `
+        -MinecraftRange '[26.3,26.4)' -LoaderRange '[4,)' `
+        -TomlVersion $releaseVersion -LoaderDependency 'neoforge' `
+        -LoaderDependencyRange '[26.3,)' -SourceRelease 25 -ClassMajor 69 `
+        -RuntimeJdk 25 -BuildJdk 21 -HarnessKind 'modern' `
+        -MainClass 'com.dragonmeow.nyanslate.neoforge26.NyanslateNeoForge26' `
+        -SettingsClass 'com.dragonmeow.nyanslate.neoforge26.Neo26ConfigScreen' `
+        -LangCount 143 -LangExtension 'json' `
+        -SourceProject 'neoforge26' -PlatformProject 'platform263'
 )
 
 function Get-HarnessSpec {
@@ -295,16 +353,18 @@ function Get-HarnessSpec {
     if ($Kind -ceq 'modern') {
         if ($Purpose -ceq 'core') {
             return [pscustomobject]@{
-                Source = 'modern\com\dragonmeow\mctranslator\translate\InlineCoreRegression.java'
-                Main = 'com.dragonmeow.mctranslator.translate.InlineCoreRegression'
-                Marker = ('INLINE_CORE_OK hostile=24 codex=21 ' +
-                    'coverage=recovery-assembly,result-progress,batch-budget,codex-state')
+                Source = 'modern\com\dragonmeow\nyanslate\translate\InlineCoreRegression.java'
+                Main = 'com.dragonmeow.nyanslate.translate.InlineCoreRegression'
+                # v107 = 1.0.7 request-switch/do-not-translate cases (RequestSwitchAndTermsSuite).
+                Marker = ('INLINE_CORE_OK hostile=24 codex=21 v107=24 ' +
+                    'coverage=recovery-assembly,result-progress,batch-budget,codex-state,' +
+                    'request-switch,do-not-translate')
                 TransformPackage = $null
             }
         }
         return [pscustomobject]@{
-            Source = 'modern\com\dragonmeow\mctranslator\translate\InlineCodexSimulation.java'
-            Main = 'com.dragonmeow.mctranslator.translate.InlineCodexSimulation'
+            Source = 'modern\com\dragonmeow\nyanslate\translate\InlineCodexSimulation.java'
+            Main = 'com.dragonmeow.nyanslate.translate.InlineCodexSimulation'
             Marker = 'INLINE_CODEX_OK modern'
             TransformPackage = $null
         }
@@ -312,15 +372,15 @@ function Get-HarnessSpec {
     if ($Kind -ceq 'legacy') {
         if ($Purpose -ceq 'core') {
             return [pscustomobject]@{
-                Source = 'legacy-core\com\dragonmeow\mctranslator\legacy\InlineLegacyCoreSimulation.java'
-                Main = 'com.dragonmeow.mctranslator.legacy.InlineLegacyCoreSimulation'
+                Source = 'legacy-core\com\dragonmeow\nyanslate\legacy\InlineLegacyCoreSimulation.java'
+                Main = 'com.dragonmeow.nyanslate.legacy.InlineLegacyCoreSimulation'
                 Marker = 'INLINE_LEGACY_CORE_OK'
                 TransformPackage = $null
             }
         }
         return [pscustomobject]@{
-            Source = 'legacy\com\dragonmeow\mctranslator\legacy\InlineCodexSimulation.java'
-            Main = 'com.dragonmeow.mctranslator.legacy.InlineCodexSimulation'
+            Source = 'legacy\com\dragonmeow\nyanslate\legacy\InlineCodexSimulation.java'
+            Main = 'com.dragonmeow.nyanslate.legacy.InlineCodexSimulation'
             Marker = 'INLINE_CODEX_OK legacy'
             TransformPackage = $null
         }
@@ -333,22 +393,22 @@ function Get-HarnessSpec {
             # omitted from Forge by a stale copied verification file.
             return @(
                 [pscustomobject]@{
-                    Source = 'legacy-core\com\dragonmeow\mctranslator\legacy\InlineLegacyCoreSimulation.java'
-                    Main = 'com.dragonmeow.mctranslator.forgelegacy.InlineLegacyCoreSimulation'
+                    Source = 'legacy-core\com\dragonmeow\nyanslate\legacy\InlineLegacyCoreSimulation.java'
+                    Main = 'com.dragonmeow.nyanslate.forgelegacy.InlineLegacyCoreSimulation'
                     Marker = 'INLINE_LEGACY_CORE_OK'
-                    TransformPackage = 'com.dragonmeow.mctranslator.forgelegacy'
+                    TransformPackage = 'com.dragonmeow.nyanslate.forgelegacy'
                 },
                 [pscustomobject]@{
-                    Source = 'forgelegacy\com\dragonmeow\mctranslator\forgelegacy\InlineForgeGlueRegression.java'
-                    Main = 'com.dragonmeow.mctranslator.forgelegacy.InlineForgeGlueRegression'
+                    Source = 'forgelegacy\com\dragonmeow\nyanslate\forgelegacy\InlineForgeGlueRegression.java'
+                    Main = 'com.dragonmeow.nyanslate.forgelegacy.InlineForgeGlueRegression'
                     Marker = 'INLINE_FORGE_GLUE_OK scenarios=725760'
                     TransformPackage = $null
                 }
             )
         }
         return [pscustomobject]@{
-            Source = 'forgelegacy\com\dragonmeow\mctranslator\forgelegacy\InlineCodexSimulation.java'
-            Main = 'com.dragonmeow.mctranslator.forgelegacy.InlineCodexSimulation'
+            Source = 'forgelegacy\com\dragonmeow\nyanslate\forgelegacy\InlineCodexSimulation.java'
+            Main = 'com.dragonmeow.nyanslate.forgelegacy.InlineCodexSimulation'
             Marker = 'INLINE_CODEX_OK legacy'
             TransformPackage = $null
         }
@@ -361,38 +421,44 @@ function Get-CoreClasses {
 
     if ($Kind -ceq 'modern') {
         return @(
-            'com.dragonmeow.mctranslator.config.TranslatorConfig',
-            'com.dragonmeow.mctranslator.service.ChatDeliveryQueue',
-            'com.dragonmeow.mctranslator.service.ChatDeliverySession',
-            'com.dragonmeow.mctranslator.service.ChatRequestProfile',
-            'com.dragonmeow.mctranslator.service.RecoveryAssembly',
-            'com.dragonmeow.mctranslator.translate.TemplateText',
-            'com.dragonmeow.mctranslator.translate.CodexAppServerClient',
-            'com.dragonmeow.mctranslator.translate.SessionTokenUsage',
-            'com.dragonmeow.mctranslator.cache.TranslationCache',
-            'com.dragonmeow.mctranslator.cache.FileStore'
+            'com.dragonmeow.nyanslate.config.TranslatorConfig',
+            'com.dragonmeow.nyanslate.service.ChatDeliveryQueue',
+            'com.dragonmeow.nyanslate.service.ChatDeliverySession',
+            'com.dragonmeow.nyanslate.service.ChatRequestProfile',
+            'com.dragonmeow.nyanslate.service.RecoveryAssembly',
+            'com.dragonmeow.nyanslate.service.TranslationService',
+            'com.dragonmeow.nyanslate.translate.TemplateText',
+            'com.dragonmeow.nyanslate.translate.CodexAppServerClient',
+            'com.dragonmeow.nyanslate.translate.SessionTokenUsage',
+            'com.dragonmeow.nyanslate.translate.DoNotTranslateMatcher',
+            'com.dragonmeow.nyanslate.translate.NameMasker',
+            'com.dragonmeow.nyanslate.translate.RequestGate',
+            'com.dragonmeow.nyanslate.translate.RequestPacer',
+            'com.dragonmeow.nyanslate.translate.RequestsPausedException',
+            'com.dragonmeow.nyanslate.cache.TranslationCache',
+            'com.dragonmeow.nyanslate.cache.FileStore'
         )
     }
     if ($Kind -ceq 'legacy') {
         return @(
-            'com.dragonmeow.mctranslator.legacy.LegacyConfig',
-            'com.dragonmeow.mctranslator.legacy.LegacyChatDeliveryQueue',
-            'com.dragonmeow.mctranslator.legacy.LegacyChatRequestProfile',
-            'com.dragonmeow.mctranslator.legacy.LegacyTemplateText',
-            'com.dragonmeow.mctranslator.legacy.LegacyTranslator',
-            'com.dragonmeow.mctranslator.legacy.LegacyCodexClient',
-            'com.dragonmeow.mctranslator.legacy.LegacySessionTokenUsage'
+            'com.dragonmeow.nyanslate.legacy.LegacyConfig',
+            'com.dragonmeow.nyanslate.legacy.LegacyChatDeliveryQueue',
+            'com.dragonmeow.nyanslate.legacy.LegacyChatRequestProfile',
+            'com.dragonmeow.nyanslate.legacy.LegacyTemplateText',
+            'com.dragonmeow.nyanslate.legacy.LegacyTranslator',
+            'com.dragonmeow.nyanslate.legacy.LegacyCodexClient',
+            'com.dragonmeow.nyanslate.legacy.LegacySessionTokenUsage'
         )
     }
     if ($Kind -ceq 'forgelegacy') {
         return @(
-            'com.dragonmeow.mctranslator.forgelegacy.LegacyConfig',
-            'com.dragonmeow.mctranslator.forgelegacy.LegacyChatDeliveryQueue',
-            'com.dragonmeow.mctranslator.forgelegacy.LegacyChatRequestProfile',
-            'com.dragonmeow.mctranslator.forgelegacy.LegacyTemplateText',
-            'com.dragonmeow.mctranslator.forgelegacy.LegacyTranslator',
-            'com.dragonmeow.mctranslator.forgelegacy.LegacyCodexClient',
-            'com.dragonmeow.mctranslator.forgelegacy.LegacySessionTokenUsage'
+            'com.dragonmeow.nyanslate.forgelegacy.LegacyConfig',
+            'com.dragonmeow.nyanslate.forgelegacy.LegacyChatDeliveryQueue',
+            'com.dragonmeow.nyanslate.forgelegacy.LegacyChatRequestProfile',
+            'com.dragonmeow.nyanslate.forgelegacy.LegacyTemplateText',
+            'com.dragonmeow.nyanslate.forgelegacy.LegacyTranslator',
+            'com.dragonmeow.nyanslate.forgelegacy.LegacyCodexClient',
+            'com.dragonmeow.nyanslate.forgelegacy.LegacySessionTokenUsage'
         )
     }
     throw "Unknown class matrix kind: $Kind"
@@ -400,6 +466,13 @@ function Get-CoreClasses {
 
 foreach ($row in $rows) {
     $projectRoot = Get-RepoPath $row.Project
+    # Java/resource sources: the project itself, or the shared tree fabric263/neoforge263 compile.
+    $sourceRoot = Get-RepoPath $row.SourceProject
+    $platformRoot = if ($null -eq $row.PlatformProject) {
+        $null
+    } else {
+        Get-RepoPath $row.PlatformProject
+    }
     $artifactPath = Join-Path $projectRoot (Join-Path 'build\libs' $row.ArtifactName)
     $coreHarnesses = @(Get-HarnessSpec $row.HarnessKind 'core')
     $codexHarness = Get-HarnessSpec $row.HarnessKind 'codex'
@@ -407,7 +480,8 @@ foreach ($row in $rows) {
     $requiredClasses = @($row.MainClass, $row.SettingsClass) + $coreClasses
     $gradleVersion = if ($row.Loader -ceq 'forge') {
         'wrapper'
-    } elseif ($row.Key -in @('fabric12111', 'fabric2612', 'fabric26', 'neoforge26')) {
+    } elseif ($row.Key -in @('fabric12111', 'fabric2612', 'fabric26', 'fabric263',
+            'neoforge26', 'neoforge263')) {
         '9.5.0'
     } elseif ($row.Key -in @('neoforge120', 'neoforge1211')) {
         '8.13'
@@ -416,7 +490,7 @@ foreach ($row in $rows) {
     }
     $finalDependencyNamespace = if ($row.Loader -ceq 'forge') {
         'forge-srg'
-    } elseif ($row.Key -in @('fabric2612', 'fabric26')) {
+    } elseif ($row.Key -in @('fabric2612', 'fabric26', 'fabric263')) {
         'fabric-official'
     } elseif ($row.Loader -ceq 'fabric') {
         'fabric-intermediary'
@@ -424,6 +498,8 @@ foreach ($row in $rows) {
         'project-runtime'
     }
     $row | Add-Member -NotePropertyName ProjectRoot -NotePropertyValue $projectRoot
+    $row | Add-Member -NotePropertyName SourceRoot -NotePropertyValue $sourceRoot
+    $row | Add-Member -NotePropertyName PlatformRoot -NotePropertyValue $platformRoot
     $row | Add-Member -NotePropertyName ArtifactPath -NotePropertyValue $artifactPath
     $row | Add-Member -NotePropertyName CoreHarnesses -NotePropertyValue $coreHarnesses
     $row | Add-Member -NotePropertyName CodexHarness -NotePropertyValue $codexHarness
@@ -444,7 +520,7 @@ function Get-JdkCandidates {
 
     $candidates = @()
     $override = [Environment]::GetEnvironmentVariable(
-        "MCTRANSLATOR_JDK$Major", 'Process')
+        "NYANSLATE_JDK$Major", 'Process')
     if (-not [string]::IsNullOrWhiteSpace($override)) {
         $candidates += $override
     }
@@ -520,7 +596,7 @@ function Resolve-Jdk {
         }
     }
 
-    $message = "JDK $Major was not found. Set MCTRANSLATOR_JDK$Major to its home."
+    $message = "JDK $Major was not found. Set NYANSLATE_JDK$Major to its home."
     if ($AllowMissing) {
         Write-Warning $message
         return $null
@@ -535,7 +611,34 @@ function Get-ClassSourcePath {
     )
     $relative = $ClassName.Replace('.', [System.IO.Path]::DirectorySeparatorChar) +
         '.java'
-    return Join-Path $Row.ProjectRoot (Join-Path 'src\main\java' $relative)
+    return Join-Path $Row.SourceRoot (Join-Path 'src\main\java' $relative)
+}
+
+function Get-RequestSwitchUiReferences {
+    param([Parameter(Mandatory = $true)]$Row)
+
+    # UI/glue sources only: the five mirrored core packages never reference UI keys. The
+    # new requests/terms screen may live in any glue package, so search them all. Block
+    # comments and whole-line // comments are ignored: only code may satisfy the anchor.
+    # Known limit: the comment stripping is not string-aware, so a string literal holding
+    # "/*" or "*/" can hide real code. That only fails closed (reported as missing).
+    $javaRoot = Join-Path $Row.SourceRoot 'src\main\java'
+    if (-not (Test-Path -LiteralPath $javaRoot -PathType Container)) { return @() }
+    $corePackages = @('cache', 'config', 'service', 'style', 'translate')
+    $literal = '"' + $requestSwitchUiKey + '"'
+    return @(Get-ChildItem -LiteralPath $javaRoot -Recurse -File -Filter '*.java' -Force |
+        Where-Object {
+            $relative = $_.FullName.Substring($javaRoot.Length).TrimStart('\', '/')
+            $segments = $relative -split '[\\/]'
+            -not ($segments.Count -gt 4 -and $segments[0] -ceq 'com' -and
+                $segments[1] -ceq 'dragonmeow' -and $segments[2] -ceq 'nyanslate' -and
+                $corePackages -contains $segments[3])
+        } | Where-Object {
+            $code = [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8)
+            $code = [regex]::Replace($code, '(?s)/\*.*?\*/', '')
+            $code = [regex]::Replace($code, '(?m)^[ \t]*//.*$', '')
+            $code.Contains($literal)
+        } | ForEach-Object { $_.Name })
 }
 
 foreach ($row in $rows) {
@@ -547,14 +650,14 @@ foreach ($row in $rows) {
             $settingsSource, [System.Text.Encoding]::UTF8)
         $keyMatches = [regex]::Matches(
             $settingsText,
-            '"(?<key>config\.mctranslator\.chat_delivery(?:\.[a-z_]+)?)"')
+            '"(?<key>config\.nyanslate\.chat_delivery(?:\.[a-z_]+)?)"')
         $uiDeliveryKeys = @($keyMatches | ForEach-Object {
             $_.Groups['key'].Value
         } | Select-Object -Unique)
         $deliveryKeys += $uiDeliveryKeys
     }
     if ($row.HarnessKind -ceq 'legacy') {
-        $deliveryKeys += 'config.mctranslator.chat_delivery.short'
+        $deliveryKeys += 'config.nyanslate.chat_delivery.short'
     }
     $row | Add-Member -NotePropertyName UiDeliveryKeys `
         -NotePropertyValue $uiDeliveryKeys
@@ -606,14 +709,115 @@ function Assert-DeliveryLanguageText {
     }
 }
 
+function Get-SharedSourceIssues {
+    param([Parameter(Mandatory = $true)]$Row)
+
+    # fabric263/neoforge263 have no sources of their own. Prove that build.gradle compiles
+    # exactly the shared tree this matrix inspects plus the platform directory, and packages
+    # exactly that tree's resources, before trusting classes/resources found there.
+    $issues = @()
+    $buildFile = Join-Path $Row.ProjectRoot 'build.gradle'
+    if (-not (Test-Path -LiteralPath $buildFile -PathType Leaf)) {
+        return @("missing $buildFile")
+    }
+    if ($null -eq $Row.PlatformRoot) {
+        return @("shared-source project $($Row.Key) declares no platform directory")
+    }
+    $gradleText = [System.IO.File]::ReadAllText($buildFile, [System.Text.Encoding]::UTF8)
+    # Judge Gradle code only: block comments and whole-line // comments are removed. Known
+    # limit: the stripping is not string-aware, so a string literal holding "/*" would hide
+    # code up to a later "*/" (the fabric263/neoforge263 build files contain no such string).
+    $gradleCode = [regex]::Replace($gradleText, '(?s)/\*.*?\*/', '')
+    $gradleCode = [regex]::Replace($gradleCode, '(?m)^[ \t]*//.*$', '')
+    $shared = [regex]::Escape('../' + $Row.SourceProject)
+    $platform = [regex]::Escape('../' + $Row.PlatformProject)
+    $javaPattern = "java\.setSrcDirs\(\s*\[\s*['""]$shared/src/main/java['""]\s*,\s*" +
+        "['""]$platform/src/main/java['""]\s*\]\s*\)"
+    $resourcePattern = "resources\.setSrcDirs\(\s*\[\s*['""]$shared/src/main/resources['""]\s*\]\s*\)"
+    if ([regex]::Matches($gradleCode, $javaPattern).Count -ne 1) {
+        $issues += ("build.gradle does not compile exactly ../{0} + ../{1} java sources" -f
+            $Row.SourceProject, $Row.PlatformProject)
+    }
+    if ([regex]::Matches($gradleCode, $resourcePattern).Count -ne 1) {
+        $issues += "build.gradle does not package exactly ../$($Row.SourceProject) resources"
+    }
+    # "Exactly": those two setSrcDirs calls are the only source/resource directory wiring.
+    if ([regex]::Matches($gradleCode, '\bsetSrcDirs\b').Count -ne 2 -or
+            [regex]::Matches($gradleCode, '\bsrcDirs?\b').Count -ne 0) {
+        $issues += 'build.gradle adds source/resource directories beyond the two setSrcDirs calls'
+    }
+    $browserLinks = Join-Path $Row.PlatformRoot `
+        'src\main\java\com\dragonmeow\nyanslate\platform\BrowserLinks.java'
+    if (-not (Test-Path -LiteralPath $browserLinks -PathType Leaf)) {
+        $issues += "missing platform source $browserLinks"
+    }
+    return $issues
+}
+
+function Get-DeclaredVersionIssues {
+    param([Parameter(Mandatory = $true)]$Row)
+
+    # Build names the artifact from these declarations and FinalJar checks the metadata they
+    # produce, so an unbumped release version is reported by the preflight (and DryRun).
+    $declarations = @()
+    if ($Row.Loader -ceq 'forge') {
+        $declarations += [pscustomobject]@{
+            Path = (Join-Path $Row.ProjectRoot 'build.gradle')
+            Pattern = "(?m)^[ \t]*version[ \t]*=[ \t]*['""](?<v>[^'""]+)['""]"
+        }
+        if ($Row.MetadataKind -ceq 'forge1122') {
+            $declarations += [pscustomobject]@{
+                Path = (Join-Path $Row.SourceRoot 'src\main\resources\mcmod.info')
+                Pattern = '"version"\s*:\s*"(?<v>[^"]*)"'
+            }
+        }
+    } else {
+        $declarations += [pscustomobject]@{
+            Path = (Join-Path $Row.ProjectRoot 'gradle.properties')
+            Pattern = '(?m)^[ \t]*mod_version[ \t]*=[ \t]*(?<v>[^\s#]+)'
+        }
+    }
+    $issues = @()
+    foreach ($declaration in $declarations) {
+        if (-not (Test-Path -LiteralPath $declaration.Path -PathType Leaf)) {
+            $issues += "missing version declaration $($declaration.Path)"
+            continue
+        }
+        $text = [System.IO.File]::ReadAllText($declaration.Path, [System.Text.Encoding]::UTF8)
+        $values = @([regex]::Matches($text, $declaration.Pattern) | ForEach-Object {
+            $_.Groups['v'].Value
+        })
+        if ($values.Count -ne 1 -or $values[0] -cne $releaseVersion) {
+            $issues += ("{0} declares version '{1}', expected {2}" -f
+                (Split-Path -Leaf $declaration.Path), ($values -join ','), $releaseVersion)
+        }
+    }
+    return $issues
+}
+
 function Get-SourceReadiness {
     param([Parameter(Mandatory = $true)]$Row)
 
     $issues = @()
     if (-not (Test-Path -LiteralPath $Row.ProjectRoot -PathType Container)) {
         $issues += "missing project $($Row.ProjectRoot)"
-        return [pscustomobject]@{ Ready = $false; Issues = $issues; LangCount = 0 }
+        return [pscustomobject]@{
+            Ready = $false; Issues = $issues; VersionIssues = @(); LangCount = 0
+            RequestUiFiles = 0
+        }
     }
+    if (-not (Test-SamePath $Row.SourceRoot $Row.ProjectRoot)) {
+        if (-not (Test-Path -LiteralPath $Row.SourceRoot -PathType Container)) {
+            $issues += "missing shared source project $($Row.SourceRoot)"
+            return [pscustomobject]@{
+                Ready = $false; Issues = $issues; VersionIssues = @(); LangCount = 0
+                RequestUiFiles = 0
+            }
+        }
+        $issues += @(Get-SharedSourceIssues $Row)
+    }
+    $versionIssues = @(Get-DeclaredVersionIssues $Row)
+    $issues += $versionIssues
     foreach ($className in $Row.RequiredClasses) {
         $source = Get-ClassSourcePath $Row $className
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
@@ -625,17 +829,20 @@ function Get-SourceReadiness {
         if (Test-Path -LiteralPath $mainSource -PathType Leaf) {
             $mainText = [System.IO.File]::ReadAllText(
                 $mainSource, [System.Text.Encoding]::UTF8)
+            # 1.0.7 UI round 3 (429 fix): tooltips no longer auto-warm/auto-request on
+            # hover. They only read the cache; the player presses the manual retranslate
+            # key to prefetch what is missing (or force a full retranslate when nothing
+            # is missing). See LegacyRetranslateKeySimulation for the behavior this mirrors.
             foreach ($anchor in @(
-                    'ITEM_WARM_SCAN_INTERVAL_NANOS',
-                    'nextItemWarmScanAtNanos',
-                    'warmedItemNames',
-                    'TRANSLATOR.prefetch(')) {
+                    'itemRetranslateKey',
+                    'retranslatePointedTooltip(',
+                    'handleRetranslateItemKey(',
+                    'TRANSLATOR.cached(',
+                    'TRANSLATOR.prefetch(',
+                    'TRANSLATOR.retranslateScreen(')) {
                 if (-not $mainText.Contains($anchor)) {
-                    $issues += "legacy item-warm path is missing $anchor"
+                    $issues += "legacy retranslate-key path is missing $anchor"
                 }
-            }
-            if (-not $mainText.Contains('350L')) {
-                $issues += 'legacy item-warm scan is not gated at 350 ms'
             }
             if ([regex]::IsMatch(
                     $mainText, 'ignored\s*->\s*\{\s*\}')) {
@@ -644,12 +851,12 @@ function Get-SourceReadiness {
         }
     }
     $requiredUiKeys = @(
-        'config.mctranslator.chat_delivery.ordered',
-        'config.mctranslator.chat_delivery.ready_first',
+        'config.nyanslate.chat_delivery.ordered',
+        'config.nyanslate.chat_delivery.ready_first',
         $(if ($Row.HarnessKind -ceq 'legacy') {
-            'config.mctranslator.chat_delivery.short'
+            'config.nyanslate.chat_delivery.short'
         } else {
-            'config.mctranslator.chat_delivery'
+            'config.nyanslate.chat_delivery'
         })
     )
     foreach ($key in $requiredUiKeys) {
@@ -657,9 +864,14 @@ function Get-SourceReadiness {
             $issues += "settings UI does not reference $key"
         }
     }
+    # 1.0.7: the requests/terms settings screen must expose the request switch.
+    $requestUiFiles = @(Get-RequestSwitchUiReferences $Row)
+    if ($requestUiFiles.Count -eq 0) {
+        $issues += "settings UI does not reference $requestSwitchUiKey"
+    }
 
-    $resourceRoot = Join-Path $Row.ProjectRoot 'src\main\resources'
-    $langRoot = Join-Path $resourceRoot 'assets\mctranslator\lang'
+    $resourceRoot = Join-Path $Row.SourceRoot 'src\main\resources'
+    $langRoot = Join-Path $resourceRoot 'assets\nyanslate\lang'
     $langFiles = if (Test-Path -LiteralPath $langRoot -PathType Container) {
         @(Get-ChildItem -LiteralPath $langRoot -File -Force)
     } else {
@@ -692,24 +904,61 @@ function Get-SourceReadiness {
     return [pscustomobject]@{
         Ready = $issues.Count -eq 0
         Issues = $issues
+        VersionIssues = $versionIssues
         LangCount = $langFiles.Count
+        RequestUiFiles = $requestUiFiles.Count
     }
 }
 
+function Get-PhaseBlockingIssues {
+    param(
+        [Parameter(Mandatory = $true)]$Readiness,
+        [Parameter(Mandatory = $true)][string]$SelectedPhase
+    )
+
+    # Build names the artifacts and FinalJar checks their metadata, so both need the release
+    # version declared. The Source phase only runs the harnesses against compiled outputs,
+    # so an unbumped version does not block it (the caller reports it as a warning).
+    if ($SelectedPhase -cne 'Source') { return @($Readiness.Issues) }
+    $versionIssues = @($Readiness.VersionIssues)
+    return @($Readiness.Issues | Where-Object { $versionIssues -notcontains $_ })
+}
+
 function Assert-MatrixDefinition {
-    Require ($rows.Count -eq 16) "Release matrix must contain exactly 16 projects"
+    Require ($rows.Count -eq $expectedProjects) `
+        "Release matrix must contain exactly $expectedProjects projects"
     Require (@($rows | Group-Object Key | Where-Object Count -ne 1).Count -eq 0) `
         'Release matrix contains duplicate keys'
     Require (@($rows | Group-Object ArtifactName | Where-Object Count -ne 1).Count -eq 0) `
         'Release matrix contains duplicate artifact names'
     Require (@($rows | Group-Object Project | Where-Object Count -ne 1).Count -eq 0) `
         'Release matrix contains duplicate project roots'
-    Require (@($rows | Where-Object Loader -eq 'fabric').Count -eq 11) `
-        'Release matrix must contain 11 Fabric projects'
+    $sharedSourceRows = @($rows | Where-Object { $_.SourceProject -cne $_.Project })
+    Require ($sharedSourceRows.Count -eq 2 -and
+            @($sharedSourceRows | Where-Object {
+                ($_.Key -ceq 'fabric263' -and $_.SourceProject -ceq 'fabric26') -or
+                ($_.Key -ceq 'neoforge263' -and $_.SourceProject -ceq 'neoforge26')
+            }).Count -eq 2) `
+        'Only fabric263/neoforge263 may compile shared fabric26/neoforge26 sources'
+    foreach ($shared in $sharedSourceRows) {
+        $owners = @($rows | Where-Object {
+            $_.Project -ceq $shared.SourceProject -and $_.SourceProject -ceq $_.Project
+        })
+        Require ($owners.Count -eq 1 -and $owners[0].Loader -ceq $shared.Loader -and
+                $owners[0].ClassMajor -eq $shared.ClassMajor -and
+                $owners[0].MainClass -ceq $shared.MainClass -and
+                $owners[0].SettingsClass -ceq $shared.SettingsClass -and
+                $owners[0].LangCount -eq $shared.LangCount) `
+            "$($shared.Key) must share the sources of exactly one matching matrix project"
+        Require ($shared.PlatformProject -ceq 'platform263') `
+            "$($shared.Key) must compile the platform263 sources"
+    }
+    Require (@($rows | Where-Object Loader -eq 'fabric').Count -eq 12) `
+        'Release matrix must contain 12 Fabric projects'
     Require (@($rows | Where-Object Loader -eq 'forge').Count -eq 2) `
         'Release matrix must contain two Forge projects'
-    Require (@($rows | Where-Object Loader -eq 'neoforge').Count -eq 3) `
-        'Release matrix must contain three NeoForge projects'
+    Require (@($rows | Where-Object Loader -eq 'neoforge').Count -eq 4) `
+        'Release matrix must contain four NeoForge projects'
     Require (@($rows | Where-Object ClassMajor -eq 52).Count -eq 5) `
         'Exactly five Java 8 artifacts are required'
     Require (@($rows | Where-Object ClassMajor -eq 60).Count -eq 1) `
@@ -718,8 +967,8 @@ function Assert-MatrixDefinition {
         'Exactly four Java 17 artifacts are required'
     Require (@($rows | Where-Object ClassMajor -eq 65).Count -eq 3) `
         'Exactly three Java 21 artifacts are required'
-    Require (@($rows | Where-Object ClassMajor -eq 69).Count -eq 3) `
-        'Exactly three Java 25 artifacts are required'
+    Require (@($rows | Where-Object ClassMajor -eq 69).Count -eq 5) `
+        'Exactly five Java 25 artifacts are required'
     Require (@($rows | Where-Object {
         $_.ClassMajor -eq 52 -and $_.RuntimeJdk -ne 8
     }).Count -eq 0) 'Every Java 8 artifact must run on repository Temurin 8'
@@ -738,11 +987,11 @@ function Assert-MatrixDefinition {
         'Exactly eight stable Loom projects must use Gradle 8.10'
     Require (@($rows | Where-Object GradleVersion -eq '8.13').Count -eq 2) `
         'Exactly two NeoForge projects must use Gradle 8.13'
-    Require (@($rows | Where-Object GradleVersion -eq '9.5.0').Count -eq 4) `
-        'Exactly four 1.21.11/26.x projects must use Gradle 9.5.0'
+    Require (@($rows | Where-Object GradleVersion -eq '9.5.0').Count -eq 6) `
+        'Exactly six 1.21.11/26.x projects must use Gradle 9.5.0'
     $definedCoreRuns = 0
     foreach ($row in $rows) { $definedCoreRuns += $row.CoreHarnesses.Count }
-    Require ($definedCoreRuns -eq 18) `
+    Require ($definedCoreRuns -eq $expectedCoreRuns) `
         'Each project needs canonical core and each Forge project also needs glue core'
     Require (@($rows | Where-Object {
         $_.Loader -ceq 'forge' -and $_.CoreHarnesses.Count -ne 2
@@ -755,13 +1004,13 @@ function Assert-MatrixDefinition {
     }).Count -eq 9) 'Exactly nine mapped Fabric projects must use intermediary runtime'
     Require (@($rows | Where-Object {
         $_.FinalDependencyNamespace -ceq 'fabric-official'
-    }).Count -eq 2) 'Exactly two unobfuscated Fabric projects must use official runtime'
+    }).Count -eq 3) 'Exactly three unobfuscated Fabric projects must use official runtime'
     Require (@($rows | Where-Object {
         $_.FinalDependencyNamespace -ceq 'forge-srg'
     }).Count -eq 2) 'Exactly two reobfuscated Forge projects must use SRG runtime'
     Require (@($rows | Where-Object {
         $_.FinalDependencyNamespace -ceq 'project-runtime'
-    }).Count -eq 3) 'Exactly three NeoForge projects must use project runtime'
+    }).Count -eq 4) 'Exactly four NeoForge projects must use project runtime'
 
     foreach ($file in @(
             $initScript, $launcherSource, $sourceInitScript, $sourceLauncher, $fakeCodex,
@@ -899,7 +1148,7 @@ function Assert-FabricMetadata {
     )
 
     $metadata = (Read-ZipEntryText $Archive 'fabric.mod.json') | ConvertFrom-Json
-    Require ([string]$metadata.id -ceq 'mctranslator') `
+    Require ([string]$metadata.id -ceq 'nyanslate') `
         "$($Row.Key) has wrong Fabric id"
     Require ([string]$metadata.version -ceq $releaseVersion) `
         "$($Row.Key) has wrong Fabric version: $($metadata.version)"
@@ -929,10 +1178,10 @@ function Assert-Forge1122Metadata {
 
     $records = @((Read-ZipEntryText $Archive 'mcmod.info') | ConvertFrom-Json)
     $matches = @($records | Where-Object {
-        [string]$_.modid -ceq 'mctranslator'
+        [string]$_.modid -ceq 'nyanslate'
     })
     Require ($matches.Count -eq 1) `
-        "$($Row.Key) must contain one mctranslator mcmod.info record"
+        "$($Row.Key) must contain one nyanslate mcmod.info record"
     Require ([string]$matches[0].version -ceq $releaseVersion) `
         "$($Row.Key) has wrong mcmod.info version: $($matches[0].version)"
     Require ([string]$matches[0].mcversion -ceq $Row.MinecraftRange) `
@@ -960,15 +1209,15 @@ function Assert-TomlMetadata {
 
     $modBlocks = @(Get-TomlBlocks $toml 'mods')
     $mainMods = @($modBlocks | Where-Object {
-        (Get-TomlValue $_ 'modId') -ceq 'mctranslator'
+        (Get-TomlValue $_ 'modId') -ceq 'nyanslate'
     })
     Require ($mainMods.Count -eq 1) `
-        "$($Row.Key) must contain one mctranslator TOML mod block"
+        "$($Row.Key) must contain one nyanslate TOML mod block"
     $tomlVersion = Get-TomlValue $mainMods[0] 'version'
     Require ($tomlVersion -ceq $Row.TomlVersion) `
         "$($Row.Key) has wrong TOML version: $tomlVersion"
 
-    $dependencies = @(Get-TomlBlocks $toml 'dependencies.mctranslator')
+    $dependencies = @(Get-TomlBlocks $toml 'dependencies.nyanslate')
     $minecraftDependencies = @($dependencies | Where-Object {
         (Get-TomlValue $_ 'modId') -ceq 'minecraft'
     })
@@ -1047,7 +1296,8 @@ function Assert-JarResources {
         [Parameter(Mandatory = $true)]$Row
     )
 
-    $resourceRoot = Join-Path $Row.ProjectRoot 'src\main\resources'
+    # fabric263/neoforge263 package the fabric26/neoforge26 resources (SourceRoot).
+    $resourceRoot = Join-Path $Row.SourceRoot 'src\main\resources'
     Require (Test-Path -LiteralPath $resourceRoot -PathType Container) `
         "$($Row.Key) source resource root is missing"
     $sourceFiles = @(Get-ChildItem -LiteralPath $resourceRoot -Recurse -File -Force)
@@ -1058,7 +1308,7 @@ function Assert-JarResources {
         $entry = $Archive.GetEntry($relative)
         Require ($null -ne $entry) `
             "$($Row.Key) JAR is missing source resource $relative"
-        if ($relative.StartsWith('assets/mctranslator/lang/',
+        if ($relative.StartsWith('assets/nyanslate/lang/',
                 [System.StringComparison]::Ordinal)) {
             $sourceHash = (Get-FileHash -LiteralPath $source.FullName `
                 -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -1070,13 +1320,13 @@ function Assert-JarResources {
 
     $sourceLangEntries = @($sourceFiles | Where-Object {
         $_.DirectoryName.Equals(
-            (Join-Path $resourceRoot 'assets\mctranslator\lang'),
+            (Join-Path $resourceRoot 'assets\nyanslate\lang'),
             [System.StringComparison]::OrdinalIgnoreCase)
     } | ForEach-Object {
-        'assets/mctranslator/lang/' + $_.Name
+        'assets/nyanslate/lang/' + $_.Name
     })
     $jarLangEntries = @($Archive.Entries | Where-Object {
-        $_.FullName.StartsWith('assets/mctranslator/lang/',
+        $_.FullName.StartsWith('assets/nyanslate/lang/',
             [System.StringComparison]::Ordinal) -and
         -not $_.FullName.EndsWith('/', [System.StringComparison]::Ordinal)
     } | ForEach-Object { $_.FullName })
@@ -1086,7 +1336,7 @@ function Assert-JarResources {
         "$($Row.Key) JAR language entry set"
 
     foreach ($locale in @('en_us', 'zh_tw')) {
-        $entryName = "assets/mctranslator/lang/$locale.$($Row.LangExtension)"
+        $entryName = "assets/nyanslate/lang/$locale.$($Row.LangExtension)"
         $text = Read-ZipEntryText $Archive $entryName
         Assert-DeliveryLanguageText $text $Row.LangExtension `
             "$($Row.Key) JAR $entryName" $Row.DeliveryKeys
@@ -1122,7 +1372,7 @@ function Assert-FinalJar {
             Assert-ArchiveClass $archive $className "$($Row.Key) required matrix"
         }
         $ownClasses = @($archive.Entries | Where-Object {
-            $_.FullName -match '^com/dragonmeow/mctranslator/.+\.class$'
+            $_.FullName -match '^com/dragonmeow/nyanslate/.+\.class$'
         })
         Require ($ownClasses.Count -gt 0) "$($Row.Key) JAR has no implementation classes"
         foreach ($entry in $ownClasses) {
@@ -1276,7 +1526,7 @@ function Get-MaterializedHarnessSource {
 
     $canonicalText = [System.IO.File]::ReadAllText(
         $source, [System.Text.Encoding]::UTF8)
-    $canonicalPackage = 'com.dragonmeow.mctranslator.legacy'
+    $canonicalPackage = 'com.dragonmeow.nyanslate.legacy'
     $expectedDeclaration = "package $canonicalPackage;"
     $replacementDeclaration = "package $($Harness.TransformPackage);"
     $occurrences = [regex]::Matches(
@@ -1326,38 +1576,38 @@ function Invoke-InlineHarness {
     $anchors = [string]::Join(';', [string[]]$Row.RequiredClasses)
 
     $environment = @{
-        MCTRANSLATOR_CODEX_PATH = $fakeCodex
-        MCTRANSLATOR_FAKE_LOG = $fakeLog
-        MCTRANSLATOR_FAKE_EARLY_TURN = $EarlyTurn
-        MCTRANSLATOR_FAKE_COMPLETED_FIRST = $CompletedFirst
+        NYANSLATE_CODEX_PATH = $fakeCodex
+        NYANSLATE_FAKE_LOG = $fakeLog
+        NYANSLATE_FAKE_EARLY_TURN = $EarlyTurn
+        NYANSLATE_FAKE_COMPLETED_FIRST = $CompletedFirst
     }
     if ($Mode -ceq 'final') {
-        $environment.MCTRANSLATOR_FINAL_JAR = $Row.ArtifactPath
-        $environment.MCTRANSLATOR_FINAL_HARNESS = $harnessSource
-        $environment.MCTRANSLATOR_FINAL_LAUNCHER = $launcherSource
-        $environment.MCTRANSLATOR_FINAL_MAIN = $Harness.Main
-        $environment.MCTRANSLATOR_FINAL_ANCHORS = $anchors
-        $environment.MCTRANSLATOR_FINAL_OUTPUT = $output
-        $environment.MCTRANSLATOR_FINAL_RUNTIME = $runtime
-        $environment.MCTRANSLATOR_FINAL_JAVA = Join-Path $RuntimeJdk 'bin\java.exe'
-        $environment.MCTRANSLATOR_FINAL_JAVAC = Join-Path $RuntimeJdk 'bin\javac.exe'
-        $environment.MCTRANSLATOR_FINAL_JAVA_RELEASE = [string]$Row.SourceRelease
-        $environment.MCTRANSLATOR_FINAL_DEPENDENCY_NAMESPACE = `
+        $environment.NYANSLATE_FINAL_JAR = $Row.ArtifactPath
+        $environment.NYANSLATE_FINAL_HARNESS = $harnessSource
+        $environment.NYANSLATE_FINAL_LAUNCHER = $launcherSource
+        $environment.NYANSLATE_FINAL_MAIN = $Harness.Main
+        $environment.NYANSLATE_FINAL_ANCHORS = $anchors
+        $environment.NYANSLATE_FINAL_OUTPUT = $output
+        $environment.NYANSLATE_FINAL_RUNTIME = $runtime
+        $environment.NYANSLATE_FINAL_JAVA = Join-Path $RuntimeJdk 'bin\java.exe'
+        $environment.NYANSLATE_FINAL_JAVAC = Join-Path $RuntimeJdk 'bin\javac.exe'
+        $environment.NYANSLATE_FINAL_JAVA_RELEASE = [string]$Row.SourceRelease
+        $environment.NYANSLATE_FINAL_DEPENDENCY_NAMESPACE = `
             $Row.FinalDependencyNamespace
         $selectedInit = $initScript
         $selectedTask = 'finalJarInline'
         $classpathMarker = 'FINAL_JAR_CLASSPATH_OK'
         $codeSourceMarker = 'FINAL_JAR_CODE_SOURCE_OK'
     } else {
-        $environment.MCTRANSLATOR_SOURCE_HARNESS = $harnessSource
-        $environment.MCTRANSLATOR_SOURCE_LAUNCHER = $sourceLauncher
-        $environment.MCTRANSLATOR_SOURCE_MAIN = $Harness.Main
-        $environment.MCTRANSLATOR_SOURCE_ANCHORS = $anchors
-        $environment.MCTRANSLATOR_SOURCE_OUTPUT = $output
-        $environment.MCTRANSLATOR_SOURCE_RUNTIME = $runtime
-        $environment.MCTRANSLATOR_SOURCE_JAVA = Join-Path $RuntimeJdk 'bin\java.exe'
-        $environment.MCTRANSLATOR_SOURCE_JAVAC = Join-Path $RuntimeJdk 'bin\javac.exe'
-        $environment.MCTRANSLATOR_SOURCE_JAVA_RELEASE = [string]$Row.SourceRelease
+        $environment.NYANSLATE_SOURCE_HARNESS = $harnessSource
+        $environment.NYANSLATE_SOURCE_LAUNCHER = $sourceLauncher
+        $environment.NYANSLATE_SOURCE_MAIN = $Harness.Main
+        $environment.NYANSLATE_SOURCE_ANCHORS = $anchors
+        $environment.NYANSLATE_SOURCE_OUTPUT = $output
+        $environment.NYANSLATE_SOURCE_RUNTIME = $runtime
+        $environment.NYANSLATE_SOURCE_JAVA = Join-Path $RuntimeJdk 'bin\java.exe'
+        $environment.NYANSLATE_SOURCE_JAVAC = Join-Path $RuntimeJdk 'bin\javac.exe'
+        $environment.NYANSLATE_SOURCE_JAVA_RELEASE = [string]$Row.SourceRelease
         $selectedInit = $sourceInitScript
         $selectedTask = 'sourceOutputInline'
         $classpathMarker = 'SOURCE_OUTPUT_CLASSPATH_OK'
@@ -1514,8 +1764,15 @@ foreach ($row in $rows) {
     $readiness = Get-SourceReadiness $row
     $sourceReadiness[$row.Key] = $readiness
     if (-not $DryRun) {
-        Require ($readiness.Ready) `
-            "$($Row.Key) source preflight failed: $($readiness.Issues -join '; ')"
+        $blocking = @(Get-PhaseBlockingIssues $readiness $Phase)
+        Require ($blocking.Count -eq 0) `
+            "$($Row.Key) source preflight failed: $($blocking -join '; ')"
+        if ($Phase -ceq 'Source') {
+            foreach ($issue in @($readiness.VersionIssues)) {
+                Write-Warning ("{0}: {1} (Source phase continues; Build/FinalJar require it)" -f
+                    $row.Key, $issue)
+            }
+        }
     }
 }
 
@@ -1525,7 +1782,7 @@ Require ($initText.Contains('project.configurations.runtimeClasspath')) `
     'Final-JAR init script does not use dependency-only runtimeClasspath'
 Require ($initText.Contains("tasks.named('generateRemapClasspath')")) `
     'Mapped Fabric final-JAR verification does not use Loom production classpath'
-Require ($initText.Contains('MCTRANSLATOR_FINAL_DEPENDENCY_NAMESPACE')) `
+Require ($initText.Contains('NYANSLATE_FINAL_DEPENDENCY_NAMESPACE')) `
     'Final-JAR init script does not require an explicit production namespace'
 Require (-not $initText.Contains('project.sourceSets.main.runtimeClasspath')) `
     'Final-JAR init script must not put source-set runtime output on a classpath'
@@ -1573,26 +1830,49 @@ if ($DryRun) {
         } else {
             [string]::Join(' | ', [string[]]$readiness.Issues)
         }
+        # preflightReady = ready for every phase; sourcePhaseReady = ready for -Phase Source.
+        $sourcePhaseReady = @(Get-PhaseBlockingIssues $readiness 'Source').Count -eq 0
         Write-Output (("MATRIX_DRY_PROJECT project={0} loader={1} minecraft={2} " +
             "artifact={3} gradle={4} buildJdk={5} runtimeJdk={6} sourceRelease={7} " +
             "classMajor={8} coreHarnesses={9} langs={10} deliveryKeys={11} " +
-            "finalNamespace={12} sourceReady={13} issues={14}") -f
+            "finalNamespace={12} sourceProject={13} requestUi={14} preflightReady={15} " +
+            "sourcePhaseReady={16} issues={17}") -f
             $row.Key, $row.Loader, $row.Minecraft, $row.ArtifactName,
             $row.GradleVersion, $row.BuildJdk, $row.RuntimeJdk,
             $row.SourceRelease, $row.ClassMajor,
             $row.CoreHarnesses.Count, $readiness.LangCount,
             $row.DeliveryKeys.Count, $row.FinalDependencyNamespace,
-            $readiness.Ready, $issues)
+            $row.SourceProject, $readiness.RequestUiFiles,
+            $readiness.Ready, $sourcePhaseReady, $issues)
     }
+    # Every count below is derived from the matrix definition, then pinned to the release plan.
+    $projectCount = $rows.Count
     $coreHarnessCount = 0
     foreach ($row in $rows) { $coreHarnessCount += $row.CoreHarnesses.Count }
-    Require ($coreHarnessCount -eq 18) `
-        "Dry matrix expected 18 core runs (16 canonical + two Forge glue), got $coreHarnessCount"
-    Write-Output (("MATRIX_DRY_OK projects=16 builds=16 finalJars=16 " +
-        "sourceCore={0} finalCore={0} coreTotal={1} sourceCodex=64 finalCodex=64 " +
-        "codexTotal=128 protocolTotal=128 sourceCodeSource=82 finalCodeSource=82 " +
-        "package=false runDirCreated=false") -f
-        $coreHarnessCount, ($coreHarnessCount * 2))
+    $codexCount = $projectCount * 4
+    $codeSourceCount = $coreHarnessCount + $codexCount
+    # MATRIX_DRY_OK validates the matrix definition. Readiness is reported separately:
+    # preflightReady = ready for every phase; sourcePhaseReady = ready for -Phase Source,
+    # which does not depend on the declared release version.
+    $readyCount = @($rows | Where-Object { $sourceReadiness[$_.Key].Ready }).Count
+    $sourcePhaseReadyCount = @($rows | Where-Object {
+        @(Get-PhaseBlockingIssues $sourceReadiness[$_.Key] 'Source').Count -eq 0
+    }).Count
+    Require ($projectCount -eq $expectedProjects) `
+        "Dry matrix expected $expectedProjects projects, got $projectCount"
+    Require ($coreHarnessCount -eq $expectedCoreRuns) `
+        ("Dry matrix expected $expectedCoreRuns core runs ($expectedProjects canonical + " +
+            "two Forge glue), got $coreHarnessCount")
+    Require ($codexCount -eq $expectedCodexRuns) `
+        "Dry matrix expected $expectedCodexRuns Codex runs per phase, got $codexCount"
+    Require ($codeSourceCount -eq $expectedCodeSourceRuns) `
+        "Dry matrix expected $expectedCodeSourceRuns CodeSource proofs per phase, got $codeSourceCount"
+    Write-Output (("MATRIX_DRY_OK projects={0} builds={0} finalJars={0} " +
+        "sourceCore={1} finalCore={1} coreTotal={2} sourceCodex={3} finalCodex={3} " +
+        "codexTotal={4} protocolTotal={4} sourceCodeSource={5} finalCodeSource={5} " +
+        "preflightReady={6}/{0} sourcePhaseReady={7}/{0} package=false runDirCreated=false") -f
+        $projectCount, $coreHarnessCount, ($coreHarnessCount * 2), $codexCount,
+        ($codexCount * 2), $codeSourceCount, $readyCount, $sourcePhaseReadyCount)
     return
 }
 
@@ -1693,15 +1973,23 @@ try {
     throw
 }
 
-$expectedBuilds = if ($Phase -ceq 'All' -or $Phase -ceq 'Build') { 16 } else { 0 }
-$expectedFinal = if ($Phase -ceq 'All' -or $Phase -ceq 'FinalJar') { 16 } else { 0 }
-$expectedSource = if ($Phase -ceq 'All' -or $Phase -ceq 'Source') { 16 } else { 0 }
-$expectedSourceCore = if ($expectedSource -eq 16) { 18 } else { 0 }
-$expectedFinalCore = if ($expectedFinal -eq 16) { 18 } else { 0 }
-$expectedSourceCodex = if ($expectedSource -eq 16) { 64 } else { 0 }
-$expectedFinalCodex = if ($expectedFinal -eq 16) { 64 } else { 0 }
-$expectedSourceCodeSource = if ($expectedSource -eq 16) { 82 } else { 0 }
-$expectedFinalCodeSource = if ($expectedFinal -eq 16) { 82 } else { 0 }
+$expectedBuilds = if ($Phase -ceq 'All' -or $Phase -ceq 'Build') { $expectedProjects } else { 0 }
+$expectedFinal = if ($Phase -ceq 'All' -or $Phase -ceq 'FinalJar') { $expectedProjects } else { 0 }
+$expectedSource = if ($Phase -ceq 'All' -or $Phase -ceq 'Source') { $expectedProjects } else { 0 }
+$expectedSourceCore = if ($expectedSource -eq $expectedProjects) { $expectedCoreRuns } else { 0 }
+$expectedFinalCore = if ($expectedFinal -eq $expectedProjects) { $expectedCoreRuns } else { 0 }
+$expectedSourceCodex = if ($expectedSource -eq $expectedProjects) { $expectedCodexRuns } else { 0 }
+$expectedFinalCodex = if ($expectedFinal -eq $expectedProjects) { $expectedCodexRuns } else { 0 }
+$expectedSourceCodeSource = if ($expectedSource -eq $expectedProjects) {
+    $expectedCodeSourceRuns
+} else {
+    0
+}
+$expectedFinalCodeSource = if ($expectedFinal -eq $expectedProjects) {
+    $expectedCodeSourceRuns
+} else {
+    0
+}
 Require ($counts.Builds -eq $expectedBuilds) `
     "Matrix build count is $($counts.Builds), expected $expectedBuilds"
 Require ($counts.Jars -eq $expectedFinal -and
@@ -1712,8 +2000,8 @@ Require ($counts.Jars -eq $expectedFinal -and
 Require ($counts.SourceCore -eq $expectedSourceCore -and
         $counts.FinalCore -eq $expectedFinalCore) `
     'Matrix source/final core counts are incomplete'
-Require ($counts.SourceForgeGlue -eq $(if ($expectedSource -eq 16) { 2 } else { 0 }) -and
-        $counts.FinalForgeGlue -eq $(if ($expectedFinal -eq 16) { 2 } else { 0 })) `
+Require ($counts.SourceForgeGlue -eq $(if ($expectedSource -eq $expectedProjects) { 2 } else { 0 }) -and
+        $counts.FinalForgeGlue -eq $(if ($expectedFinal -eq $expectedProjects) { 2 } else { 0 })) `
     'Matrix source/final Forge glue counts are incomplete'
 Require ($counts.SourceCodex -eq $expectedSourceCodex -and
         $counts.SourceProtocol -eq $expectedSourceCodex -and
@@ -1724,7 +2012,7 @@ Require ($counts.SourceCodeSource -eq $expectedSourceCodeSource -and
         $counts.FinalCodeSource -eq $expectedFinalCodeSource) `
     'Matrix source/final CodeSource counts are incomplete'
 
-Write-Output (("MATRIX_OK phase={0} projects=16 builds={1} jars={2} metadata={3} " +
+Write-Output (("MATRIX_OK phase={0} projects={17} builds={1} jars={2} metadata={3} " +
     "classMajor={4} resources={5} sourceCore={6} finalCore={7} " +
     "sourceForgeGlue={8} finalForgeGlue={9} sourceCodex={10} finalCodex={11} " +
     "sourceProtocol={12} finalProtocol={13} sourceCodeSource={14} " +
@@ -1734,4 +2022,4 @@ Write-Output (("MATRIX_OK phase={0} projects=16 builds={1} jars={2} metadata={3}
     $counts.SourceForgeGlue, $counts.FinalForgeGlue,
     $counts.SourceCodex, $counts.FinalCodex,
     $counts.SourceProtocol, $counts.FinalProtocol,
-    $counts.SourceCodeSource, $counts.FinalCodeSource, $runRoot)
+    $counts.SourceCodeSource, $counts.FinalCodeSource, $runRoot, $rows.Count)

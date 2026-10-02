@@ -1,7 +1,7 @@
 # Mirror the MC-agnostic core packages from the root tree (src\) — the canonical,
 # unit-tested copy — into the modern source-compatible loader trees. Run after
 # ANY edit under
-# src\main\java\com\dragonmeow\mctranslator\{cache,config,service,style,translate}.
+# src\main\java\com\dragonmeow\nyanslate\{cache,config,service,style,translate}.
 #
 #   powershell -ExecutionPolicy Bypass -File .\sync-core.ps1
 #
@@ -11,15 +11,15 @@
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$corePackages = 'cache', 'config', 'service', 'style', 'translate'
+$corePackages = 'cache', 'config', 'hub', 'service', 'style', 'translate'
 $trees = 'fabric1182', 'fabric1194', 'fabric120', 'fabric12111',
     'fabric2612', 'fabric26', 'neoforge', 'neoforge120', 'neoforge26'
 
 $copied = 0
 foreach ($tree in $trees) {
     foreach ($pkg in $corePackages) {
-        $srcDir = Join-Path $root "src\main\java\com\dragonmeow\mctranslator\$pkg"
-        $dstDir = Join-Path $root "$tree\src\main\java\com\dragonmeow\mctranslator\$pkg"
+        $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanslate\$pkg"
+        $dstDir = Join-Path $root "$tree\src\main\java\com\dragonmeow\nyanslate\$pkg"
         if (-not (Test-Path $srcDir)) { continue }
         New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
 
@@ -94,10 +94,10 @@ function Convert-Fabric1171Core {
     }
 }
 
-$fabric1171Base = Join-Path $root 'fabric1171\src\main\java\com\dragonmeow\mctranslator'
+$fabric1171Base = Join-Path $root 'fabric1171\src\main\java\com\dragonmeow\nyanslate'
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 foreach ($pkg in $corePackages) {
-    $srcDir = Join-Path $root "src\main\java\com\dragonmeow\mctranslator\$pkg"
+    $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanslate\$pkg"
     $dstDir = Join-Path $fabric1171Base $pkg
     if (-not (Test-Path $srcDir)) { continue }
     New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
@@ -136,11 +136,16 @@ foreach ($pkg in $corePackages) {
 # cache/schema contract. FabricTextStyleIntegrationTest is deliberately target-
 # specific and is excluded by fabric12111/build.gradle, so it remains a manual
 # API-version port.
-$testSrcDir = Join-Path $root 'src\test\java\com\dragonmeow\mctranslator'
-$testDstDir = Join-Path $root 'fabric12111\src\test\java\com\dragonmeow\mctranslator'
+$testSrcDir = Join-Path $root 'src\test\java\com\dragonmeow\nyanslate'
+$testDstDir = Join-Path $root 'fabric12111\src\test\java\com\dragonmeow\nyanslate'
 foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     if ($f.Name -eq 'FabricTextStyleIntegrationTest.java') { continue }
     $relative = $f.FullName.Substring($testSrcDir.Length + 1)
+    # hub.tool is an author-only sub-package (HubExportTool/ChatLineClassifier/
+    # UnmaskedNameConverter) this script deliberately never mirrors into any tree's
+    # MAIN sources (see $corePackages above); its tests must not be mirrored here
+    # either, or fabric12111's test compile fails on the missing main-source classes.
+    if ($relative -like 'hub\tool\*') { continue }
     $dst = Join-Path $testDstDir $relative
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
     if (-not (Test-Path $dst) -or
@@ -152,10 +157,10 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
 }
 # Java 8 compatible boundaries shared unchanged by every loader.
 foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122', 'forge1132')) {
-    $sharedDestination = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\mctranslator\translate"
+    $sharedDestination = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\nyanslate\translate"
     New-Item -ItemType Directory -Force -Path $sharedDestination | Out-Null
     foreach ($sharedName in @('ScreenTranslationCapture.java', 'TranslationFile.java', 'TranslationFileDialog.java')) {
-        $sharedSource = Join-Path $root "src\main\java\com\dragonmeow\mctranslator\translate\$sharedName"
+        $sharedSource = Join-Path $root "src\main\java\com\dragonmeow\nyanslate\translate\$sharedName"
         $sharedFile = Join-Path $sharedDestination $sharedName
         if (-not (Test-Path $sharedFile) -or (Get-FileHash $sharedSource).Hash -ne (Get-FileHash $sharedFile).Hash) {
             Copy-Item -Force $sharedSource $sharedFile
