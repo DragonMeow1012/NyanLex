@@ -30,24 +30,42 @@ import java.util.logging.Logger;
  * {"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":N,
  *  "entries":{"&lt;64 hex&gt;":"translation", ...}}
  * </pre>
+ *
+ * <p>A file whose rows derive from a project under a copyleft license also carries an optional
+ * {@code "license"} (an SPDX expression, written between {@code language} and {@code rows}). It is
+ * information for people only: this client reads it leniently (a missing, empty, over-long or
+ * non-string value is simply no license) and never decides anything from it.</p>
  */
 public final class HubFile {
     public static final int SCHEMA = 2;
     public static final String FORMAT = "hub-hash-v1";
     static final int MAX_ROWS = HubPaths.MAX_FILE_ROWS;
     static final int MAX_VALUE_LENGTH = 16384;
+    static final int MAX_LICENSE_LENGTH = 256;
     private static final Logger LOG = Logger.getLogger("nyanlex");
 
     private final String language;
     private final Map<String, String> entries;
+    private final String license;
 
     public HubFile(String language, Map<String, String> entries) {
+        this(language, entries, null);
+    }
+
+    /** @param license SPDX expression of the source license the rows must keep, or null for the repository default */
+    public HubFile(String language, Map<String, String> entries, String license) {
         this.language = language.toLowerCase(Locale.ROOT).replace('_', '-');
         this.entries = Collections.unmodifiableMap(new LinkedHashMap<>(entries));
+        this.license = license == null || license.isBlank() ? null : license;
     }
 
     public String language() {
         return language;
+    }
+
+    /** The license the file declares for itself, or null when it declares none (repository default). */
+    public String license() {
+        return license;
     }
 
     /** hash -> translation. */
@@ -82,7 +100,7 @@ public final class HubFile {
                 }
                 entries.put(row.getKey(), value.getAsString());
             }
-            return new HubFile(language, entries);
+            return new HubFile(language, entries, optionalString(root, "license"));
         } catch (RuntimeException e) {
             throw new IOException("Invalid hub file", e);
         }
@@ -96,6 +114,14 @@ public final class HubFile {
         String text = value.getAsString();
         if (text.isEmpty() || text.length() > 256) throw new IOException("Invalid hub field: " + key);
         return text;
+    }
+
+    /** A purely informational field: anything that is not a short non-empty string counts as absent. */
+    private static String optionalString(JsonObject object, String key) {
+        JsonElement value = object.get(key);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) return null;
+        String text = value.getAsString();
+        return text.isBlank() || text.length() > MAX_LICENSE_LENGTH ? null : text;
     }
 
     /** Row-level checks that need no source text (the file has none): the value itself
@@ -124,6 +150,7 @@ public final class HubFile {
         json.name("format").value(FORMAT);
         json.name("hash").value("sha256");
         json.name("language").value(language);
+        if (license != null) json.name("license").value(license);
         json.name("rows").value(hashes.size());
         json.name("entries").beginObject();
         for (String hash : hashes) {

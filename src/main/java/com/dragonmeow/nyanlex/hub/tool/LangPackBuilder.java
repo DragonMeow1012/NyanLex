@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -378,6 +379,8 @@ public final class LangPackBuilder {
         public final String modId;
         public final Map<String, String> rows = new LinkedHashMap<>();
         public final List<String> sources = new ArrayList<>();
+        /** Canonical license expressions of the accepted sources that need an LGPL licence (see {@link #licenseField}). */
+        public final Set<String> copyleftLicenses = new TreeSet<>();
         public int entries;
         public int entriesWithRows;
         public final EnumMap<Skip, Integer> skipped = new EnumMap<>(Skip.class);
@@ -394,6 +397,22 @@ public final class LangPackBuilder {
             int total = 0;
             for (int count : skipped.values()) total += count;
             return total;
+        }
+
+        /**
+         * The {@code license} to write into the repository file and its index entry: the distinct LGPL
+         * license expressions of every accepted source merged into this file, sorted and joined with
+         * {@code AND} (an expression that itself contains {@code OR} is parenthesised). Null when no
+         * source needs an LGPL licence, i.e. the file stays under the repository default.
+         */
+        public String licenseField() {
+            if (copyleftLicenses.isEmpty()) return null;
+            if (copyleftLicenses.size() == 1) return copyleftLicenses.iterator().next();
+            List<String> parts = new ArrayList<>();
+            for (String expression : copyleftLicenses) {
+                parts.add(expression.toLowerCase(Locale.ROOT).contains(" or ") ? "(" + expression + ")" : expression);
+            }
+            return String.join(" AND ", parts);
         }
     }
 
@@ -416,50 +435,104 @@ public final class LangPackBuilder {
     private static final Set<String> SIMPLE_LICENSES = Set.of("mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause",
             "isc", "zlib", "cc0-1.0", "unlicense", "cc-by-3.0", "cc-by-4.0");
 
+    /** The LGPL licenses the repository accepts (lower case). A file built from one of them keeps that license. */
+    private static final Set<String> LGPL_LICENSES = Set.of("lgpl-2.1-only", "lgpl-2.1-or-later",
+            "lgpl-3.0-only", "lgpl-3.0-or-later");
+
+    /** The deprecated SPDX spellings of the same four licenses: {@code LGPL-3.0} means {@code LGPL-3.0-only}. */
+    private static final Map<String, String> LGPL_DEPRECATED = Map.of("lgpl-2.1", "lgpl-2.1-only",
+            "lgpl-2.1+", "lgpl-2.1-or-later", "lgpl-3.0", "lgpl-3.0-only", "lgpl-3.0+", "lgpl-3.0-or-later");
+
+    /** Canonical SPDX spelling of the accepted LGPL ids, by lower-case id. */
+    private static final Map<String, String> LGPL_CANONICAL = Map.of("lgpl-2.1-only", "LGPL-2.1-only",
+            "lgpl-2.1-or-later", "LGPL-2.1-or-later", "lgpl-3.0-only", "LGPL-3.0-only",
+            "lgpl-3.0-or-later", "LGPL-3.0-or-later");
+
     /** The one approved exception to the simple-license rule: Polyform Shield, with or without a version. */
     private static final Pattern POLYFORM_SHIELD = Pattern.compile("polyform-shield(?:-\\d+\\.\\d+\\.\\d+)?");
 
+    private static final Pattern LICENSE_TOKEN = Pattern.compile("[()]|[^\\s()]+");
+
     /**
-     * The license gate: the repository only takes translations of projects under a simple license. The
-     * {@code license} field of an input file is an SPDX expression, parsed with {@code AND}, {@code OR}
-     * (any letter case; {@code AND} binds tighter than {@code OR}), parentheses and
+     * The license gate: the repository only takes translations of projects under a simple license or an
+     * LGPL license. The {@code license} field of an input file is an SPDX expression, parsed with
+     * {@code AND}, {@code OR} (any letter case; {@code AND} binds tighter than {@code OR}), parentheses and
      * {@code WITH <exception>}, and every license id in it is compared exactly (never as a substring) with
      * the whitelist: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, CC0-1.0, Unlicense, CC-BY-3.0
-     * and CC-BY-4.0, plus Polyform Shield as the one approved exception. {@code A AND B} needs both sides
-     * accepted, {@code A OR B} either.
+     * and CC-BY-4.0, plus Polyform Shield as an approved exception, plus LGPL-2.1-only, LGPL-2.1-or-later,
+     * LGPL-3.0-only and LGPL-3.0-or-later (and the deprecated SPDX spellings of those four: LGPL-2.1,
+     * LGPL-3.0 and their {@code +} forms). {@code A AND B} needs both sides accepted, {@code A OR B} either.
      *
-     * <p>Everything else is refused: GPL, LGPL, AGPL and MPL in every version, every CC license with an SA,
-     * NC or ND term, All Rights Reserved and every other {@code LicenseRef-*}. The one {@code LicenseRef}
-     * that passes is Modrinth's spelling of Polyform Shield, {@code LicenseRef-Polyform-Shield-<version>},
-     * which is the same license under another name. Anything that is not a well-formed expression (a
-     * free-text license name, unbalanced parentheses, a dangling operator) is refused.</p>
+     * <p>Everything else is refused: GPL, AGPL and MPL in every version, other LGPL versions, every CC
+     * license with an SA, NC or ND term, All Rights Reserved and every other {@code LicenseRef-*}. The one
+     * {@code LicenseRef} that passes is Modrinth's spelling of Polyform Shield,
+     * {@code LicenseRef-Polyform-Shield-<version>}, which is the same license under another name. Anything
+     * that is not a well-formed expression (a free-text license name, unbalanced parentheses, a dangling
+     * operator) is refused.</p>
      */
     public static boolean licenseAccepted(String license) {
+        return evaluate(license, true);
+    }
+
+    /** Like {@link #licenseAccepted} but with the LGPL ids refused: true when the simple list alone carries the license. */
+    static boolean simpleLicenseAccepted(String license) {
+        return evaluate(license, false);
+    }
+
+    private static boolean evaluate(String license, boolean lgplAllowed) {
         if (license == null || license.isBlank()) return false;
         List<String> tokens = new ArrayList<>();
-        Matcher token = Pattern.compile("[()]|[^\\s()]+").matcher(license);
+        Matcher token = LICENSE_TOKEN.matcher(license);
         while (token.find()) tokens.add(token.group());
-        return new SpdxExpression(tokens).accepted();
+        return new SpdxExpression(tokens, lgplAllowed).accepted();
+    }
+
+    /**
+     * The license an accepted input passes on to the repository file: its SPDX expression in canonical spelling
+     * (deprecated LGPL ids rewritten, operators upper case) when the license is accepted only thanks to the LGPL
+     * ids, so the translation must keep that license; null when the simple list alone carries it (the file then
+     * stays under the repository default) and for a refused license.
+     */
+    static String copyleftLicense(String license) {
+        if (!licenseAccepted(license) || simpleLicenseAccepted(license)) return null;
+        StringBuilder out = new StringBuilder();
+        Matcher token = LICENSE_TOKEN.matcher(license);
+        String previous = null;
+        while (token.find()) {
+            String word = token.group();
+            String lower = word.toLowerCase(Locale.ROOT);
+            if (LGPL_DEPRECATED.containsKey(lower)) lower = LGPL_DEPRECATED.get(lower);
+            if (LGPL_CANONICAL.containsKey(lower)) word = LGPL_CANONICAL.get(lower);
+            else if (SpdxExpression.isOperator(word)) word = word.toUpperCase(Locale.ROOT);
+            boolean glue = word.equals(")") || "(".equals(previous);
+            if (out.length() > 0 && !glue) out.append(' ');
+            out.append(word);
+            previous = word;
+        }
+        return out.toString();
     }
 
     /** One license id against the whitelist (exact id, no prefix or substring matching). */
-    static boolean licenseIdAccepted(String id) {
+    static boolean licenseIdAccepted(String id, boolean lgplAllowed) {
         String s = id.toLowerCase(Locale.ROOT);
         if (s.startsWith("licenseref-")) {
             s = s.substring("licenseref-".length());
             return POLYFORM_SHIELD.matcher(s).matches(); // every other custom reference is refused
         }
-        return SIMPLE_LICENSES.contains(s) || POLYFORM_SHIELD.matcher(s).matches();
+        if (SIMPLE_LICENSES.contains(s) || POLYFORM_SHIELD.matcher(s).matches()) return true;
+        return lgplAllowed && (LGPL_LICENSES.contains(s) || LGPL_DEPRECATED.containsKey(s));
     }
 
     /** Recursive-descent evaluation of an SPDX expression: {@code or := and (OR and)*}, {@code and := term (AND term)*}. */
     private static final class SpdxExpression {
         private final List<String> tokens;
+        private final boolean lgplAllowed;
         private int pos;
         private boolean malformed;
 
-        SpdxExpression(List<String> tokens) {
+        SpdxExpression(List<String> tokens, boolean lgplAllowed) {
             this.tokens = tokens;
+            this.lgplAllowed = lgplAllowed;
         }
 
         boolean accepted() {
@@ -505,7 +578,7 @@ public final class LangPackBuilder {
                 return false;
             }
             pos++;
-            boolean ok = licenseIdAccepted(token);
+            boolean ok = licenseIdAccepted(token, lgplAllowed);
             if (isWord("with")) { // "GPL-2.0-only WITH <exception>": the exception only adds permissions
                 pos++;
                 if (pos >= tokens.size() || tokens.get(pos).equals("(") || tokens.get(pos).equals(")")
@@ -522,7 +595,7 @@ public final class LangPackBuilder {
             return pos < tokens.size() && tokens.get(pos).equalsIgnoreCase(word);
         }
 
-        private static boolean isOperator(String token) {
+        static boolean isOperator(String token) {
             return token.equalsIgnoreCase("and") || token.equalsIgnoreCase("or") || token.equalsIgnoreCase("with");
         }
     }
@@ -583,6 +656,8 @@ public final class LangPackBuilder {
             if (!accepted) continue;
             Target target = targets.computeIfAbsent(id, Target::new);
             target.sources.add(file.getFileName().toString());
+            String copyleft = copyleftLicense(input.license);
+            if (copyleft != null) target.copyleftLicenses.add(copyleft);
             for (String[] pair : input.entries) {
                 target.entries++;
                 Outcome outcome = converter.convert(pair[0], pair[1]);
@@ -621,12 +696,12 @@ public final class LangPackBuilder {
             if (target.rows.isEmpty()) continue;
             Path file = outDir.resolve(HubPaths.modPath(target.modId, language));
             Files.createDirectories(file.getParent());
-            new HubFile(language, target.rows).write(file);
+            new HubFile(language, target.rows, target.licenseField()).write(file);
             written.put(target.modId, file);
             if (mergeIndex) {
                 byte[] bytes = Files.readAllBytes(file);
                 HubExportTool.mergeIndex(outDir, HubSource.mod(target.modId), language, target.rows.size(),
-                        bytes.length, HubExportTool.sha256Hex(bytes));
+                        bytes.length, HubExportTool.sha256Hex(bytes), target.licenseField());
             }
         }
         return new Result(targets, written, licensing);
@@ -646,7 +721,9 @@ public final class LangPackBuilder {
                     .append(" rows=").append(target.rows.size())
                     .append(" skipped=").append(target.skippedTotal())
                     .append(" ").append(target.skipped)
-                    .append(" sources=").append(target.sources).append('\n');
+                    .append(" sources=").append(target.sources)
+                    .append(target.licenseField() == null ? "" : " license=" + target.licenseField())
+                    .append('\n');
         }
         for (Licensing decision : result.licensing) {
             out.append("LICENSE ").append(decision.accepted() ? "ACCEPT " : "REFUSE ")

@@ -21,12 +21,19 @@ import java.util.TreeMap;
  * row count / byte size / content hash. The download flow fetches only this one small
  * file before showing the confirmation screen; every other repository file is fetched
  * only for an item the player actually confirmed.
+ *
+ * <p>An entry may carry an optional {@code license} (the license of the file, written only for
+ * files that are not under the repository default). Entries are read leniently: a missing or
+ * malformed license is no license, and unknown fields are ignored.</p>
  */
 public final class HubIndex {
     private static final int SCHEMA = 1;
     private static final Gson GSON = new Gson();
 
-    public record LanguageStats(int rows, long bytes, String sha256, String updatedAt) {
+    public record LanguageStats(int rows, long bytes, String sha256, String updatedAt, String license) {
+        public LanguageStats(int rows, long bytes, String sha256, String updatedAt) {
+            this(rows, bytes, sha256, updatedAt, null);
+        }
     }
 
     private final String generatedAt;
@@ -121,7 +128,7 @@ public final class HubIndex {
                 JsonObject stats = langEntry.getValue().getAsJsonObject();
                 byLanguage.put(langEntry.getKey(), new LanguageStats(
                         intField(stats, "rows"), longField(stats, "bytes"),
-                        stringField(stats, "sha256"), stringField(stats, "updatedAt")));
+                        stringField(stats, "sha256"), stringField(stats, "updatedAt"), licenseField(stats)));
             }
             table.put(entry.getKey(), byLanguage);
         }
@@ -138,6 +145,14 @@ public final class HubIndex {
 
     private static String stringField(JsonObject o, String k) {
         return o.has(k) && !o.get(k).isJsonNull() ? o.get(k).getAsString() : null;
+    }
+
+    /** Informational field: anything that is not a short non-empty string counts as absent. */
+    private static String licenseField(JsonObject o) {
+        if (!o.has("license") || !o.get("license").isJsonPrimitive()
+                || !o.get("license").getAsJsonPrimitive().isString()) return null;
+        String text = o.get("license").getAsString();
+        return text.isBlank() || text.length() > 256 ? null : text;
     }
 
     public void write(Writer writer) throws IOException {
@@ -161,6 +176,7 @@ public final class HubIndex {
                 statsJson.addProperty("bytes", stats.bytes());
                 if (stats.sha256() != null) statsJson.addProperty("sha256", stats.sha256());
                 if (stats.updatedAt() != null) statsJson.addProperty("updatedAt", stats.updatedAt());
+                if (stats.license() != null) statsJson.addProperty("license", stats.license());
                 byLanguage.add(langEntry.getKey(), statsJson);
             }
             object.add(entry.getKey(), byLanguage);
