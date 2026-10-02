@@ -21,7 +21,7 @@ import java.util.Locale;
 /** Searchable picker for the key-free machine-translation backend. */
 public final class TranslationMachineProviderScreen extends OptionsSubScreen {
     private static final Component WARNING = Component.translatable(
-            "screen.nyanlex.provider.experimental_warning").withStyle(ChatFormatting.GOLD);
+            "screen.nyanlex.provider.unofficial_warning").withStyle(ChatFormatting.GOLD);
     private ProviderSelectionList providerList;
     private EditBox search;
 
@@ -59,7 +59,8 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
         }
         NeoTextStyle.clearRenderMemo();
         NyanLexNeoForge.saveConfig();
-        this.minecraft.setScreen(this.lastScreen);
+        this.minecraft.setScreen(provider != null && provider.requiresKey()
+                ? new MachineKeyScreen(this.lastScreen, provider) : this.lastScreen);
     }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
@@ -78,9 +79,7 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
     }
 
     private static Component providerName(MachineTranslationProvider provider) {
-        Component name = Component.translatable("screen.nyanlex.provider." + provider.id());
-        return provider.experimental()
-                ? Component.translatable("screen.nyanlex.provider.experimental", name) : name;
+        return Component.translatable("screen.nyanlex.provider." + provider.id());
     }
 
     private final class ProviderSelectionList extends ObjectSelectionList<ProviderSelectionList.Entry> {
@@ -135,7 +134,7 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
                                          int height, int mouseX, int mouseY, boolean hovered, float delta) {
                 graphics.drawCenteredString(TranslationMachineProviderScreen.this.font, this.label,
                         ProviderSelectionList.this.width / 2, y + 3,
-                        provider.experimental() ? 0xFFD080 : 0xFFFFFF);
+                        provider.unofficial() ? 0xFFD080 : 0xFFFFFF);
             }
 
             @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {

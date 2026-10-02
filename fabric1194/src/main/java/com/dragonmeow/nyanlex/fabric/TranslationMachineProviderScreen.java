@@ -59,7 +59,8 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
         }
         FabricTextStyle.clearRenderMemo();
         NyanLexFabric.saveConfig();
-        this.minecraft.setScreen(this.lastScreen);
+        this.minecraft.setScreen(provider != null && provider.requiresKey()
+                ? new MachineKeyScreen(this.lastScreen, provider) : this.lastScreen);
     }
 
     @Override
@@ -83,12 +84,7 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
     }
 
     static Component providerLabel(MachineTranslationProvider provider) {
-        Component name = Component.translatable(
-                "screen.nyanlex.machine_provider." + provider.id());
-        return provider.experimental()
-                ? Component.translatable(
-                        "screen.nyanlex.machine_provider.experimental", name)
-                : name;
+        return Component.translatable("screen.nyanlex.provider." + provider.id());
     }
 
     private final class ProviderSelectionList

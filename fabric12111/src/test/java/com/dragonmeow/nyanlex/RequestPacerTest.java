@@ -169,7 +169,7 @@ class RequestPacerTest {
 
     @Test
     void machineRouterAndWebEnginesLetThePauseThrough() {
-        for (String provider : List.of("youdao", "deepl", "microsoft", "google")) {
+        for (String provider : List.of("deepl_api", "microsoft_api", "google")) {
             AtomicLong now = new AtomicLong(1_000);
             boolean[] open = {true};
             RequestPacer pacer = new RequestPacer(() -> 400L, now::get, ms -> open[0] = false);
@@ -189,7 +189,13 @@ class RequestPacerTest {
             };
             com.dragonmeow.nyanlex.translate.SwitchingMachineTranslator router =
                     new com.dragonmeow.nyanlex.translate.SwitchingMachineTranslator(
-                            transport, () -> "auto", () -> provider, pacer);
+                            transport, () -> "auto", () -> provider, pacer, () -> {
+                                com.dragonmeow.nyanlex.config.TranslatorConfig c =
+                                        new com.dragonmeow.nyanlex.config.TranslatorConfig();
+                                c.deeplApiKey = "test-deepl-key:fx";
+                                c.microsoftApiKey = "test-ms-key";
+                                return c;
+                            });
             pacer.acquire(); // an earlier request owns the current slot
 
             BooleanSupplier previous = RequestGate.bind(() -> open[0]);

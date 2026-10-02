@@ -22,6 +22,10 @@ import java.util.Map;
  */
 public final class GoogleFreeTranslator implements Translator {
 
+    /**
+     * UNOFFICIAL endpoint: this is the key-free web endpoint, not a supported public API.
+     * It may stop working or be rate-limited at any time.
+     */
     static final String ENDPOINT = "https://translate.googleapis.com/translate_a/single";
 
     private static final java.util.regex.Pattern ANY_TOKEN =

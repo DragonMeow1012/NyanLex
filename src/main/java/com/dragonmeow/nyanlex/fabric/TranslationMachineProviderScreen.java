@@ -19,7 +19,7 @@ import net.minecraft.network.chat.Component;
 import java.util.List;
 import java.util.Locale;
 
-/** Searchable picker for the key-free machine-translation backend. */
+/** Searchable picker for the machine-translation backend. */
 public final class TranslationMachineProviderScreen extends OptionsSubScreen {
     private ProviderSelectionList providerList;
     private EditBox search;
@@ -52,7 +52,7 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
         LinearLayout footer = this.layout.addToFooter(LinearLayout.vertical().spacing(5));
         footer.defaultCellSetting().alignHorizontallyCenter();
         footer.addChild(new StringWidget(
-                Component.translatable("screen.nyanlex.provider.experimental_warning")
+                Component.translatable("screen.nyanlex.provider.unofficial_warning")
                         .withColor(0xFFD080), this.font));
         footer.addChild(Button.builder(CommonComponents.GUI_DONE, b -> onDone()).width(200).build());
     }
@@ -79,15 +79,13 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
         }
         FabricTextStyle.clearRenderMemo();
         NyanLexFabric.saveConfig();
-        this.minecraft.setScreen(this.lastScreen);
+        // Official APIs need the player's own key: ask for it right after the pick.
+        this.minecraft.setScreen(provider != null && provider.requiresKey()
+                ? new MachineKeyScreen(this.lastScreen, provider) : this.lastScreen);
     }
 
     private static Component providerName(MachineTranslationProvider provider) {
-        Component name = Component.translatable(
-                "screen.nyanlex.provider." + provider.id());
-        return provider.experimental()
-                ? Component.translatable("screen.nyanlex.provider.experimental", name)
-                : name;
+        return Component.translatable("screen.nyanlex.provider." + provider.id());
     }
 
     private final class ProviderSelectionList
@@ -147,7 +145,7 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
             @Override public void render(GuiGraphics graphics, int index, int y, int x, int width,
                                          int height, int mouseX, int mouseY, boolean hovered,
                                          float delta) {
-                int color = provider.experimental() ? 0xFFD080 : 0xFFFFFF;
+                int color = provider.unofficial() ? 0xFFD080 : 0xFFFFFF;
                 graphics.drawCenteredString(TranslationMachineProviderScreen.this.font, this.label,
                         ProviderSelectionList.this.width / 2, y + height / 2 - 9 / 2, color);
             }

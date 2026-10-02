@@ -37,18 +37,17 @@ public final class DialogContent {
                 "nyanlex.ui.first.hub", "nyanlex.ui.first.hub_btn", "nyanlex.ui.first.privacy",
                 "nyanlex.ui.privacy.status.on", "nyanlex.ui.privacy.status.off",
                 "message.nyanlex.tooltip_hint_start", "screen.nyanlex.provider.google",
-                "screen.nyanlex.provider.youdao", "screen.nyanlex.provider.deepl",
-                "screen.nyanlex.provider.microsoft", "config.nyanlex.language.follow",
+                "screen.nyanlex.provider.deepl_api",
+                "screen.nyanlex.provider.microsoft_api", "config.nyanlex.language.follow",
                 "nyanlex.settings.language");
     }
 
-    /** "Google（非官方端點）" / "AI（model）": the service one surface sends to. */
+    /** "Google 翻譯（非官方端點）" / "DeepL（官方 API，自備金鑰）" / "AI（model）": the service one surface sends to. */
     public static String engineName(TranslatorConfig cfg, boolean ai, Lang lang) {
         if (ai) return lang.get("nyanlex.ui.engine.ai", cfg.aiModel == null ? "" : cfg.aiModel);
         MachineTranslationProvider provider = MachineTranslationProvider.fromId(cfg.machineTranslationProvider);
-        String name = lang.get("screen.nyanlex.provider." + provider.id());
-        return provider == MachineTranslationProvider.GOOGLE
-                ? name + lang.get("nyanlex.ui.consent.unofficial") : name;
+        // The Google label itself says "unofficial endpoint"; official APIs say "official API".
+        return lang.get("screen.nyanlex.provider." + provider.id());
     }
 
     /** Engine summary of all surfaces for the status row: one name, or AI and machine together. */

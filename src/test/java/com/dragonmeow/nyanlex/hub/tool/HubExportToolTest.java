@@ -178,6 +178,31 @@ class HubExportToolTest {
     }
 
     @Test
+    void runExcludesChatRowsByDefaultAndIncludesThemOnlyOnRequest(@TempDir Path cacheDir,
+            @TempDir Path outDefault, @TempDir Path outInclude) throws Exception {
+        Map<String, String> rows = new LinkedHashMap<>();
+        rows.put("Strength: +10", "力量：+10");
+        rows.put("[VIP] hello everyone", "[VIP] 大家好");
+        seedCache(cacheDir, "zh-tw", rows, null);
+
+        HubExportTool.Result byDefault = HubExportTool.run(new String[] {
+                "--cache-dir", cacheDir.toString(), "--lang", "zh-TW", "--server", "mc.hypixel.net",
+                "--out", outDefault.toString()
+        }, nullOut());
+        HubFile defaultFile = HubFile.read(Files.readString(byDefault.writtenFile()));
+        assertEquals(1, defaultFile.entries().size());
+        assertTrue(defaultFile.entries().containsKey(HubKeyHash.of("Strength: +10")));
+        assertFalse(defaultFile.entries().containsKey(HubKeyHash.of("[VIP] hello everyone")));
+
+        HubExportTool.Result withChat = HubExportTool.run(new String[] {
+                "--cache-dir", cacheDir.toString(), "--lang", "zh-TW", "--server", "mc.hypixel.net",
+                "--out", outInclude.toString(), "--include-chat"
+        }, nullOut());
+        HubFile chatFile = HubFile.read(Files.readString(withChat.writtenFile()));
+        assertEquals(2, chatFile.entries().size());
+    }
+
+    @Test
     void classifyReturnsEmptyWhenCacheFileMissing(@TempDir Path cacheDir) throws IOException {
         List<HubExportTool.ClassifiedRow> result = HubExportTool.classify(cacheDir, "zh-TW", false);
         assertTrue(result.isEmpty());

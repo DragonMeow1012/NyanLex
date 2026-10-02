@@ -123,6 +123,12 @@ class DialogPanelTest {
         }
     }
 
+    private static int countOf(String text, String needle) {
+        int n = 0;
+        for (int i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + needle.length())) n++;
+        return n;
+    }
+
     @Test
     void consentNamesTheEngineAndMarksGoogleAsUnofficial() {
         TranslatorConfig cfg = new TranslatorConfig();
@@ -131,7 +137,12 @@ class DialogPanelTest {
         assertTrue(DialogContent.engineName(cfg, false, tw).contains("Google"));
         assertTrue(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
         assertEquals("AI（gemini-test）", DialogContent.engineName(cfg, true, tw));
-        cfg.machineTranslationProvider = "deepl";
+        assertEquals(1, countOf(DialogContent.engineName(cfg, false, tw), "非官方端點"), "marked once, not twice");
+        cfg.machineTranslationProvider = "deepl_api";
+        assertTrue(DialogContent.engineName(cfg, false, tw).contains("DeepL（官方 API"));
+        assertFalse(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
+        cfg.machineTranslationProvider = "microsoft_api";
+        assertTrue(DialogContent.engineName(cfg, false, tw).contains("Microsoft Translator（官方 API"));
         assertFalse(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
         cfg.machineTranslationProvider = "google";
 

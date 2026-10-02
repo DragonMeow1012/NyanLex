@@ -18,8 +18,14 @@ final class LegacyConfig {
     java.util.List<String> doNotTranslateTerms = new java.util.ArrayList<String>();
     String targetLang = "zh-TW";
     String sourceLang = "auto";
-    /** Key-free machine source: google, youdao, deepl, or microsoft. */
+    /** Machine source: google (unofficial key-free endpoint), deepl_api, or microsoft_api. */
     String machineTranslationProvider = "google";
+    /** Player-supplied DeepL API key (official API). Local config only; never logged. */
+    String deeplApiKey = "";
+    /** Player-supplied Microsoft Translator key (official API). Local config only. */
+    String microsoftApiKey = "";
+    /** Azure region of the Microsoft Translator resource; may be empty. */
+    String microsoftApiRegion = "";
     boolean aiEnabled = false;
     /** 1.0.7 UI round 3: machine-translation fallback defaults to off ("補譯關"). */
     boolean disableGoogleFallbackForAi = true;
@@ -40,8 +46,7 @@ final class LegacyConfig {
 
     static String normalizeMachineProvider(String value) {
         String provider = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-        if ("youdao".equals(provider) || "deepl".equals(provider)
-                || "microsoft".equals(provider)) return provider;
+        if ("deepl_api".equals(provider) || "microsoft_api".equals(provider)) return provider;
         return "google";
     }
 
@@ -78,7 +83,16 @@ final class LegacyConfig {
             loaded.codexModel = DEFAULT_CODEX_MODEL;
         if (loaded.codexReasoningEffort == null || loaded.codexReasoningEffort.trim().isEmpty())
             loaded.codexReasoningEffort = DEFAULT_CODEX_REASONING_EFFORT;
+        String stored = loaded.machineTranslationProvider == null
+                ? "" : loaded.machineTranslationProvider.trim().toLowerCase(Locale.ROOT);
+        if ("youdao".equals(stored) || "deepl".equals(stored) || "microsoft".equals(stored)) {
+            java.util.logging.Logger.getLogger("nyanlex").warning("Machine translation source '"
+                    + stored + "' is no longer supported; switched back to Google.");
+        }
         loaded.machineTranslationProvider = normalizeMachineProvider(loaded.machineTranslationProvider);
+        if (loaded.deeplApiKey == null) loaded.deeplApiKey = "";
+        if (loaded.microsoftApiKey == null) loaded.microsoftApiKey = "";
+        if (loaded.microsoftApiRegion == null) loaded.microsoftApiRegion = "";
         if (loaded.pacingDefaultsVersion < 1) {
             if (loaded.requestCooldownMs == 6000) loaded.requestCooldownMs = 10000;
             loaded.pacingDefaultsVersion = 1;
@@ -103,6 +117,9 @@ final class LegacyConfig {
         copy.targetLang = targetLang;
         copy.sourceLang = sourceLang;
         copy.machineTranslationProvider = normalizeMachineProvider(machineTranslationProvider);
+        copy.deeplApiKey = deeplApiKey;
+        copy.microsoftApiKey = microsoftApiKey;
+        copy.microsoftApiRegion = microsoftApiRegion;
         copy.aiEnabled = aiEnabled;
         copy.disableGoogleFallbackForAi = disableGoogleFallbackForAi;
         copy.aiBaseUrl = aiBaseUrl;

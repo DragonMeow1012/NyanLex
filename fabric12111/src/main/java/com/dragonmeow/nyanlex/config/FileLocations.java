@@ -16,7 +16,7 @@ public final class FileLocations {
     /** Ids in display order. Each id has lang keys {@code nyanlex.files.<id>} (title) and
      *  {@code nyanlex.files.<id>.desc} (what the file is for). */
     public static final List<String> IDS = List.of(
-            "config", "ai_cache", "gt_google", "gt_youdao", "gt_deepl", "gt_microsoft",
+            "config", "ai_cache", "gt_google", "gt_deepl_api", "gt_microsoft_api",
             "failures", "hub_cache", "hub_state", "debug_dir", "lang_probe");
 
     private static final String PREFIX = HubPaths.FILE_PREFIX;

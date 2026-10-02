@@ -212,8 +212,8 @@ class SettingsCatalogTest {
         assertTrue(fixed.isLiteral());
         assertEquals("zh-TW", fixed.literalText());
 
-        cfg.machineTranslationProvider = "deepl";
-        assertEquals("screen.nyanlex.provider.deepl", SettingsCatalog.byId("provider").state(cfg).key());
+        cfg.machineTranslationProvider = "deepl_api";
+        assertEquals("screen.nyanlex.provider.deepl_api", SettingsCatalog.byId("provider").state(cfg).key());
     }
 
     @Test

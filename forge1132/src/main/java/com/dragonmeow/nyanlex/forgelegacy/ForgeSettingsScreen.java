@@ -66,7 +66,13 @@ final class ForgeSettingsScreen extends GuiScreen implements ForgeButton.Handler
         }
         if(b.id==9){
             String p=LegacyConfig.normalizeMachineProvider(c.machineTranslationProvider);
-            c.machineTranslationProvider="google".equals(p)?"youdao":"youdao".equals(p)?"deepl":"deepl".equals(p)?"microsoft":"google";
+            c.machineTranslationProvider="google".equals(p)?"deepl_api":"deepl_api".equals(p)?"microsoft_api":"google";
+            // Official APIs need the player's own key: ask for it right after the pick.
+            if(!"google".equals(c.machineTranslationProvider)){
+                NyanLexForge.save();
+                mc.displayGuiScreen(new ForgeMachineKeyScreen(this,c.machineTranslationProvider));
+                return;
+            }
         }
         if(b.id==10){
             c.debugTranslationOverlay=!c.debugTranslationOverlay;

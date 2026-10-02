@@ -3,7 +3,7 @@
   "id": "nyanlex",
   "version": "${version}",
   "name": "NyanLex Translator",
-  "description": "Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation.",
+  "description": "Client-side translation into multiple target languages with OpenAI-compatible AI or machine translation (an unofficial Google endpoint, or your own DeepL / Microsoft Translator API key). Unofficial: not affiliated with or endorsed by Mojang, Microsoft, Hypixel or any mod author.",
   "icon": "assets/nyanlex/icon.png",
   "authors": ["DragonMeow"],
   "license": "MIT",

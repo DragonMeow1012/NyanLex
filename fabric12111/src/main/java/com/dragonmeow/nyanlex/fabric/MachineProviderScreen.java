@@ -52,7 +52,7 @@ public final class MachineProviderScreen extends OptionsSubScreen {
         LinearLayout footer = this.layout.addToFooter(LinearLayout.vertical()).spacing(8);
         footer.defaultCellSetting().alignHorizontallyCenter();
         footer.addChild(new StringWidget(
-                Component.translatable("screen.nyanlex.provider.warning"), this.font));
+                Component.translatable("screen.nyanlex.provider.unofficial_warning"), this.font));
         footer.addChild(Button.builder(CommonComponents.GUI_DONE, b -> onDone()).build());
     }
 
@@ -77,14 +77,12 @@ public final class MachineProviderScreen extends OptionsSubScreen {
         }
         FabricTextStyle.clearRenderMemo();
         NyanLexFabric.saveConfig();
-        this.minecraft.setScreen(this.lastScreen);
+        this.minecraft.setScreen(provider != null && provider.requiresKey()
+                ? new MachineKeyScreen(this.lastScreen, provider) : this.lastScreen);
     }
 
     static Component providerName(MachineTranslationProvider provider) {
-        Component base = Component.translatable("screen.nyanlex.provider." + provider.id());
-        return provider.experimental()
-                ? Component.translatable("screen.nyanlex.provider.experimental_name", base)
-                : base;
+        return Component.translatable("screen.nyanlex.provider." + provider.id());
     }
 
     private final class ProviderSelectionList extends ObjectSelectionList<ProviderSelectionList.Entry> {

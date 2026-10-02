@@ -52,7 +52,7 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
         LinearLayout footer = this.layout.addToFooter(LinearLayout.vertical().spacing(5));
         footer.defaultCellSetting().alignHorizontallyCenter();
         footer.addChild(new StringWidget(
-                Component.translatable("screen.nyanlex.provider.experimental_warning")
+                Component.translatable("screen.nyanlex.provider.unofficial_warning")
                         .withColor(0xFFD080), this.font));
         footer.addChild(Button.builder(CommonComponents.GUI_DONE, b -> onDone()).width(200).build());
     }
@@ -78,13 +78,12 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
         }
         NeoTextStyle.clearRenderMemo();
         NyanLexNeoForge.saveConfig();
-        this.minecraft.setScreen(this.lastScreen);
+        this.minecraft.setScreen(provider != null && provider.requiresKey()
+                ? new MachineKeyScreen(this.lastScreen, provider) : this.lastScreen);
     }
 
     private static Component providerName(MachineTranslationProvider provider) {
-        Component name = Component.translatable("screen.nyanlex.provider." + provider.id());
-        return provider.experimental()
-                ? Component.translatable("screen.nyanlex.provider.experimental", name) : name;
+        return Component.translatable("screen.nyanlex.provider." + provider.id());
     }
 
     private final class ProviderSelectionList extends ObjectSelectionList<ProviderSelectionList.Entry> {
@@ -142,7 +141,7 @@ public final class TranslationMachineProviderScreen extends OptionsSubScreen {
                                          int height, int mouseX, int mouseY, boolean hovered, float delta) {
                 graphics.drawCenteredString(TranslationMachineProviderScreen.this.font, this.label,
                         ProviderSelectionList.this.width / 2, y + height / 2 - 9 / 2,
-                        provider.experimental() ? 0xFFD080 : 0xFFFFFF);
+                        provider.unofficial() ? 0xFFD080 : 0xFFFFFF);
             }
 
             @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {

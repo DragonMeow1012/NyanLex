@@ -2,6 +2,8 @@
 
 This is the first release of **NyanLex Translator**; jar names use `nyanlex-<version>-...`.
 
+NyanLex Translator is an unofficial project and is not affiliated with or endorsed by Mojang, Microsoft, Hypixel, or any mod author.
+
 The release contains 18 JARs. Each JAR is tied to one Minecraft version and loader.
 
 Minecraft 26.3 is included in the main release (18 total). After rebuilding, run
