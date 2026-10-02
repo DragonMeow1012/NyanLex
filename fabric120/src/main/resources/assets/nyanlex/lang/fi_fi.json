@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Ei alustettu",
   "message.nyanlex.success": "Onnistui: %s",
   "message.nyanlex.failed": "Epäonnistui: %s",
-  "message.nyanlex.prefix": "[Kääntäjä] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Viimeisimmät %s  odottaa %s  epäonnistui %s",
   "debug.nyanlex.waiting": "odottaa",
   "debug.nyanlex.failed": "epäonnistui",

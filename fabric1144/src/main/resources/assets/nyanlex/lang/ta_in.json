@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "தொடங்கப்படவில்லை",
   "message.nyanlex.success": "வெற்றி: %s",
   "message.nyanlex.failed": "தோல்வி: %s",
-  "message.nyanlex.prefix": "[மொழிபெயர்ப்பான்] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  சமீபத்தியவை %s  காத்திருப்பு %s  தோல்வி %s",
   "debug.nyanlex.waiting": "காத்திருக்கிறது",
   "debug.nyanlex.failed": "தோல்வி",

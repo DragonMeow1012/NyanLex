@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "N'eo ket deraouekaet",
   "message.nyanlex.success": "Berzh : %s",
   "message.nyanlex.failed": "C'hwitet : %s",
-  "message.nyanlex.prefix": "[Troer] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Nevez %s  o c'hortoz %s  c'hwitet %s",
   "debug.nyanlex.waiting": "o c'hortoz",
   "debug.nyanlex.failed": "c'hwitet",

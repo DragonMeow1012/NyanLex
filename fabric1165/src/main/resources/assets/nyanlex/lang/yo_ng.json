@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Kò tíì bẹ̀rẹ̀",
   "message.nyanlex.success": "Àṣeyọrí: %s",
   "message.nyanlex.failed": "Kùnà: %s",
-  "message.nyanlex.prefix": "[Olùtúmọ̀] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Àìpẹ́ %s  ń dúró %s  kùnà %s",
   "debug.nyanlex.waiting": "ń dúró",
   "debug.nyanlex.failed": "kùnà",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Hasieratu gabe",
   "message.nyanlex.success": "Ongi: %s",
   "message.nyanlex.failed": "Huts egin du: %s",
-  "message.nyanlex.prefix": "[Itzultzailea] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Azkenak %s  zain %s  huts %s",
   "debug.nyanlex.waiting": "zain",
   "debug.nyanlex.failed": "huts eginda",

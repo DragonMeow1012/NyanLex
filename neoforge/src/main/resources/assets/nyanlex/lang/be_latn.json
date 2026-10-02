@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Nie inicyjalizavana",
   "message.nyanlex.success": "Paspiachova: %s",
   "message.nyanlex.failed": "Pamyłka: %s",
-  "message.nyanlex.prefix": "[Pierakładčyk] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Apošnija %s  čakajuć %s  pamyłak %s",
   "debug.nyanlex.waiting": "čakannie",
   "debug.nyanlex.failed": "pamyłka",

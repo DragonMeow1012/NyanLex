@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "ยังไม่ได้เริ่มต้น",
   "message.nyanlex.success": "สำเร็จ: %s",
   "message.nyanlex.failed": "ล้มเหลว: %s",
-  "message.nyanlex.prefix": "[ตัวแปล] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  ล่าสุด %s  รอ %s  ล้มเหลว %s",
   "debug.nyanlex.waiting": "กำลังรอ",
   "debug.nyanlex.failed": "ล้มเหลว",

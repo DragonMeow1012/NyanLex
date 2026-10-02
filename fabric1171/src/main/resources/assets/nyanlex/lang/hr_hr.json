@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Nije inicijalizirano",
   "message.nyanlex.success": "Uspjeh: %s",
   "message.nyanlex.failed": "Neuspjeh: %s",
-  "message.nyanlex.prefix": "[Prevoditelj] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Nedavno %s  čeka %s  neuspjelo %s",
   "debug.nyanlex.waiting": "čeka",
   "debug.nyanlex.failed": "neuspjelo",

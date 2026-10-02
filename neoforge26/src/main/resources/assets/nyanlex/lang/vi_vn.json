@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Chưa khởi tạo",
   "message.nyanlex.success": "Thành công: %s",
   "message.nyanlex.failed": "Thất bại: %s",
-  "message.nyanlex.prefix": "[Trình dịch] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Gần đây %s  đang chờ %s  thất bại %s",
   "debug.nyanlex.waiting": "đang chờ",
   "debug.nyanlex.failed": "thất bại",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Ekki frumstillt",
   "message.nyanlex.success": "Tókst: %s",
   "message.nyanlex.failed": "Mistókst: %s",
-  "message.nyanlex.prefix": "[Þýðandi] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Nýlegt %s  bíður %s  mistókst %s",
   "debug.nyanlex.waiting": "bíður",
   "debug.nyanlex.failed": "mistókst",

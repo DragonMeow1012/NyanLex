@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Nie zainicjowano",
   "message.nyanlex.success": "Sukces: %s",
   "message.nyanlex.failed": "Niepowodzenie: %s",
-  "message.nyanlex.prefix": "[Tłumacz] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Ostatnie %s  oczekuje %s  nieudane %s",
   "debug.nyanlex.waiting": "oczekuje",
   "debug.nyanlex.failed": "nieudane",

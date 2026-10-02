@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "E painicializuar",
   "message.nyanlex.success": "Sukses: %s",
   "message.nyanlex.failed": "Dështoi: %s",
-  "message.nyanlex.prefix": "[Përkthyesi] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Të fundit %s  në pritje %s  dështuan %s",
   "debug.nyanlex.waiting": "në pritje",
   "debug.nyanlex.failed": "dështoi",

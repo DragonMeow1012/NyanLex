@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Mhux inizjalizzat",
   "message.nyanlex.success": "Irnexxa: %s",
   "message.nyanlex.failed": "Falla: %s",
-  "message.nyanlex.prefix": "[Traduttur] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Reċenti %s  jistennew %s  fallew %s",
   "debug.nyanlex.waiting": "jistenna",
   "debug.nyanlex.failed": "falla",

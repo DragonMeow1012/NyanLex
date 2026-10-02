@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "초기화되지 않음",
   "message.nyanlex.success": "성공: %s",
   "message.nyanlex.failed": "실패: %s",
-  "message.nyanlex.prefix": "[번역기] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  최근 %s  대기 %s  실패 %s",
   "debug.nyanlex.waiting": "대기 중",
   "debug.nyanlex.failed": "실패",

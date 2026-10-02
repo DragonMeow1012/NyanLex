@@ -79,7 +79,7 @@
   "message.nyanlex.not_initialized": "尚未初始化",
   "message.nyanlex.success": "成功：%s",
   "message.nyanlex.failed": "失败：%s",
-  "message.nyanlex.prefix": "[翻译] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "message.nyanlex.hub.download_done": "翻译下载完成：新增 %s 条",
   "message.nyanlex.hub.download_failed": "翻译下载失败：%s",
   "message.nyanlex.hub.cleared": "已清除仓库翻译（%s 条）",

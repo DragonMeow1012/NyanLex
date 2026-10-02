@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Nie geïnisialiseer nie",
   "message.nyanlex.success": "Sukses: %s",
   "message.nyanlex.failed": "Misluk: %s",
-  "message.nyanlex.prefix": "[Vertaler] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Onlangs %s  wag %s  misluk %s",
   "debug.nyanlex.waiting": "wag",
   "debug.nyanlex.failed": "misluk",

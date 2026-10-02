@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Amalitebeghị ya",
   "message.nyanlex.success": "Ọ gara nke ọma: %s",
   "message.nyanlex.failed": "Ọ dara: %s",
-  "message.nyanlex.prefix": "[Onye Nsụgharị] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Nke na-adịbeghị anya %s  na-eche %s  dara %s",
   "debug.nyanlex.waiting": "na-eche",
   "debug.nyanlex.failed": "dara ada",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Net inisjalisearre",
   "message.nyanlex.success": "Slagge: %s",
   "message.nyanlex.failed": "Mislearre: %s",
-  "message.nyanlex.prefix": "[Oersetter] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Resint %s  wachtsjend %s  mislearre %s",
   "debug.nyanlex.waiting": "wachtsjend",
   "debug.nyanlex.failed": "mislearre",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "未初期化",
   "message.nyanlex.success": "成功: %s",
   "message.nyanlex.failed": "失敗: %s",
-  "message.nyanlex.prefix": "[翻訳] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  直近 %s  待機 %s  失敗 %s",
   "debug.nyanlex.waiting": "待機中",
   "debug.nyanlex.failed": "失敗",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Не инициализировано",
   "message.nyanlex.success": "Успешно: %s",
   "message.nyanlex.failed": "Ошибка: %s",
-  "message.nyanlex.prefix": "[Переводчик] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Недавние %s  ожидают %s  ошибок %s",
   "debug.nyanlex.waiting": "ожидание",
   "debug.nyanlex.failed": "ошибка",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Cha deach a thòiseachadh",
   "message.nyanlex.success": "Shoirbhich leis: %s",
   "message.nyanlex.failed": "Dh'fhàillig e: %s",
-  "message.nyanlex.prefix": "[Eadar-theangadair] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  O chionn goirid %s  a' feitheamh %s  dh'fhàillig %s",
   "debug.nyanlex.waiting": "a' feitheamh",
   "debug.nyanlex.failed": "dh'fhàillig",

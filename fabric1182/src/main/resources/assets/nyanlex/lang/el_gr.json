@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Δεν έχει αρχικοποιηθεί",
   "message.nyanlex.success": "Επιτυχία: %s",
   "message.nyanlex.failed": "Αποτυχία: %s",
-  "message.nyanlex.prefix": "[Μεταφραστής] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Πρόσφατα %s  σε αναμονή %s  απέτυχαν %s",
   "debug.nyanlex.waiting": "σε αναμονή",
   "debug.nyanlex.failed": "απέτυχε",

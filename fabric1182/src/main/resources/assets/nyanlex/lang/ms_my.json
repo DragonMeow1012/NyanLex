@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Belum dimulakan",
   "message.nyanlex.success": "Berjaya: %s",
   "message.nyanlex.failed": "Gagal: %s",
-  "message.nyanlex.prefix": "[Penterjemah] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Terkini %s  menunggu %s  gagal %s",
   "debug.nyanlex.waiting": "menunggu",
   "debug.nyanlex.failed": "gagal",

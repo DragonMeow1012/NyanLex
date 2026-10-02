@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Ishga tushirilmagan",
   "message.nyanlex.success": "Muvaffaqiyatli: %s",
   "message.nyanlex.failed": "Xatolik: %s",
-  "message.nyanlex.prefix": "[Tarjimon] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Soʻnggi %s  kutilmoqda %s  xato %s",
   "debug.nyanlex.waiting": "kutilmoqda",
   "debug.nyanlex.failed": "xato",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Neinicializované",
   "message.nyanlex.success": "Úspech: %s",
   "message.nyanlex.failed": "Zlyhalo: %s",
-  "message.nyanlex.prefix": "[Prekladač] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Nedávne %s  čaká %s  zlyhalo %s",
   "debug.nyanlex.waiting": "čaká",
   "debug.nyanlex.failed": "zlyhalo",

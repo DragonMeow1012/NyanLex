@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Ii leat álggahuvvon",
   "message.nyanlex.success": "Lihkostuvai: %s",
   "message.nyanlex.failed": "Ii lihkostuvvan: %s",
-  "message.nyanlex.prefix": "[Jorgaleaddji] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Varas %s  vuordimin %s  eahpelihkostuvvan %s",
   "debug.nyanlex.waiting": "vuordimin",
   "debug.nyanlex.failed": "eahpelihkostuvvan",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Nincs inicializálva",
   "message.nyanlex.success": "Siker: %s",
   "message.nyanlex.failed": "Sikertelen: %s",
-  "message.nyanlex.prefix": "[Fordító] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Legutóbbi %s  várakozik %s  sikertelen %s",
   "debug.nyanlex.waiting": "várakozik",
   "debug.nyanlex.failed": "sikertelen",

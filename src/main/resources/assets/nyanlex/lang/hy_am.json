@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Նախապատրաստված չէ",
   "message.nyanlex.success": "Հաջողվեց՝ %s",
   "message.nyanlex.failed": "Ձախողվեց՝ %s",
-  "message.nyanlex.prefix": "[Թարգմանիչ] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Վերջին %s  սպասում %s  ձախողված %s",
   "debug.nyanlex.waiting": "սպասում",
   "debug.nyanlex.failed": "ձախողված",

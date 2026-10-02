@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Инициализацияләнмәгән",
   "message.nyanlex.success": "Уңышлы: %s",
   "message.nyanlex.failed": "Хата: %s",
-  "message.nyanlex.prefix": "[Тәрҗемәче] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Соңгы %s  көтә %s  хата %s",
   "debug.nyanlex.waiting": "көтә",
   "debug.nyanlex.failed": "хата",

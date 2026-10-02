@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "İşə salınmayıb",
   "message.nyanlex.success": "Uğurlu: %s",
   "message.nyanlex.failed": "Uğursuz: %s",
-  "message.nyanlex.prefix": "[Tərcüməçi] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Son %s  gözləyir %s  uğursuz %s",
   "debug.nyanlex.waiting": "gözləyir",
   "debug.nyanlex.failed": "uğursuz",

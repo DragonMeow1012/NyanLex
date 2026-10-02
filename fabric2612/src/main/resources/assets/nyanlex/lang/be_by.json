@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Не ініцыялізавана",
   "message.nyanlex.success": "Паспяхова: %s",
   "message.nyanlex.failed": "Памылка: %s",
-  "message.nyanlex.prefix": "[Перакладчык] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Апошнія %s  чакаюць %s  памылак %s",
   "debug.nyanlex.waiting": "чаканне",
   "debug.nyanlex.failed": "памылка",

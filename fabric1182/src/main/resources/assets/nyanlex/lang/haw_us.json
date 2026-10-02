@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "ʻAʻole i hoʻomaka ʻia",
   "message.nyanlex.success": "Ua kō: %s",
   "message.nyanlex.failed": "Ua hāʻule: %s",
-  "message.nyanlex.prefix": "[Mea Unuhi] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Hou %s  ke kali nei %s  ua hāʻule %s",
   "debug.nyanlex.waiting": "ke kali nei",
   "debug.nyanlex.failed": "ua hāʻule",

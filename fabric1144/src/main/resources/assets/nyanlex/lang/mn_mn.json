@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Эхлүүлээгүй байна",
   "message.nyanlex.success": "Амжилттай: %s",
   "message.nyanlex.failed": "Амжилтгүй: %s",
-  "message.nyanlex.prefix": "[Орчуулагч] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Сүүлийн %s  хүлээж буй %s  амжилтгүй %s",
   "debug.nyanlex.waiting": "хүлээж байна",
   "debug.nyanlex.failed": "амжилтгүй",

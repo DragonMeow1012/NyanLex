@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Başlatılmadı",
   "message.nyanlex.success": "Başarılı: %s",
   "message.nyanlex.failed": "Başarısız: %s",
-  "message.nyanlex.prefix": "[Çevirmen] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Son %s  bekleyen %s  başarısız %s",
   "debug.nyanlex.waiting": "bekliyor",
   "debug.nyanlex.failed": "başarısız",

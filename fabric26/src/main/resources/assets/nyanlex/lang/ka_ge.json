@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "არ არის ინიციალიზებული",
   "message.nyanlex.success": "წარმატება: %s",
   "message.nyanlex.failed": "ვერ მოხერხდა: %s",
-  "message.nyanlex.prefix": "[მთარგმნელი] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  ბოლო %s  ლოდინში %s  ვერ მოხერხდა %s",
   "debug.nyanlex.waiting": "ლოდინში",
   "debug.nyanlex.failed": "ვერ მოხერხდა",

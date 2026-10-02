@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Lama bilaabin",
   "message.nyanlex.success": "Guul: %s",
   "message.nyanlex.failed": "Fashilmay: %s",
-  "message.nyanlex.prefix": "[Turjume] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Kuwii dambe %s  sugaya %s  fashilmay %s",
   "debug.nyanlex.waiting": "sugaya",
   "debug.nyanlex.failed": "fashilmay",

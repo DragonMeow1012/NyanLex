@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Non initialisé",
   "message.nyanlex.success": "Succès : %s",
   "message.nyanlex.failed": "Échec : %s",
-  "message.nyanlex.prefix": "[Traducteur] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Récents %s  en attente %s  échecs %s",
   "debug.nyanlex.waiting": "en attente",
   "debug.nyanlex.failed": "échec",

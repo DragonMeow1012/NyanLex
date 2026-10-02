@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "प्रारंभ नहीं हुआ",
   "message.nyanlex.success": "सफल: %s",
   "message.nyanlex.failed": "विफल: %s",
-  "message.nyanlex.prefix": "[अनुवादक] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  हालिया %s  प्रतीक्षा में %s  विफल %s",
   "debug.nyanlex.waiting": "प्रतीक्षा में",
   "debug.nyanlex.failed": "विफल",

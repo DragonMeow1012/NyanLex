@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Ikke initialiseret",
   "message.nyanlex.success": "Gennemført: %s",
   "message.nyanlex.failed": "Mislykkedes: %s",
-  "message.nyanlex.prefix": "[Oversætter] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Seneste %s  venter %s  mislykkedes %s",
   "debug.nyanlex.waiting": "venter",
   "debug.nyanlex.failed": "mislykkedes",

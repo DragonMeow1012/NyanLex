@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Inte initialiserad",
   "message.nyanlex.success": "Lyckades: %s",
   "message.nyanlex.failed": "Misslyckades: %s",
-  "message.nyanlex.prefix": "[Översättare] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Senaste %s  väntar %s  misslyckades %s",
   "debug.nyanlex.waiting": "väntar",
   "debug.nyanlex.failed": "misslyckades",

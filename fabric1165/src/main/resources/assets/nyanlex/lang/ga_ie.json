@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Gan túsú",
   "message.nyanlex.success": "D'éirigh leis: %s",
   "message.nyanlex.failed": "Theip air: %s",
-  "message.nyanlex.prefix": "[Aistritheoir] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Le déanaí %s  ag fanacht %s  theip %s",
   "debug.nyanlex.waiting": "ag fanacht",
   "debug.nyanlex.failed": "theip",

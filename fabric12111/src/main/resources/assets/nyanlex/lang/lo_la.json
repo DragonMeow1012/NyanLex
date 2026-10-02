@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "ຍັງບໍ່ໄດ້ເລີ່ມຕົ້ນ",
   "message.nyanlex.success": "ສຳເລັດ: %s",
   "message.nyanlex.failed": "ລົ້ມເຫຼວ: %s",
-  "message.nyanlex.prefix": "[ຕົວແປພາສາ] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  ຫຼ້າສຸດ %s  ລໍຖ້າ %s  ລົ້ມເຫຼວ %s",
   "debug.nyanlex.waiting": "ລໍຖ້າ",
   "debug.nyanlex.failed": "ລົ້ມເຫຼວ",

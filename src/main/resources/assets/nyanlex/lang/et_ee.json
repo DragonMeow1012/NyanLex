@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Pole initsialiseeritud",
   "message.nyanlex.success": "Õnnestus: %s",
   "message.nyanlex.failed": "Ebaõnnestus: %s",
-  "message.nyanlex.prefix": "[Tõlkija] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Viimased %s  ootel %s  ebaõnnestus %s",
   "debug.nyanlex.waiting": "ootel",
   "debug.nyanlex.failed": "ebaõnnestus",

@@ -69,7 +69,7 @@
   "message.nyanlex.not_initialized": "Neinicijuota",
   "message.nyanlex.success": "Pavyko: %s",
   "message.nyanlex.failed": "Nepavyko: %s",
-  "message.nyanlex.prefix": "[Vertėjas] %s",
+  "message.nyanlex.prefix": "[NyanLex] %s",
   "debug.nyanlex.header": "DEBUG  Paskutiniai %s  laukiama %s  nepavyko %s",
   "debug.nyanlex.waiting": "laukiama",
   "debug.nyanlex.failed": "nepavyko",
