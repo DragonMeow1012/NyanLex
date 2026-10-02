@@ -41,6 +41,7 @@ public final class HubDownloadProgressScreen extends Screen {
 
     @Override
     public void render(PoseStack g, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(g);
         super.render(g, mouseX, mouseY, partialTick);
         HubDownloadJob job = NyanLexFabric.hubDownloadJob();
         int centerX = this.width / 2;

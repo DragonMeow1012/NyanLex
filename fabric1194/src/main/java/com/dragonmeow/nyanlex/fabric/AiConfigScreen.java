@@ -565,6 +565,7 @@ public final class AiConfigScreen extends Screen {
 
     @Override
     public void render(PoseStack graphics, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
         GuiComponent.drawCenteredString(graphics, this.font, this.title, this.width / 2, 4, 0xFFFFFFFF);
 

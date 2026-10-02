@@ -73,6 +73,7 @@ public final class TranslationKeybindScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
     @Override public void render(PoseStack graphics, int mouseX, int mouseY, float delta) {
+        this.renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, delta);
         GuiComponent.drawCenteredString(graphics, font, title, width / 2, 10, 0xFFFFFFFF);
         GuiComponent.drawCenteredString(graphics, font, Component.translatable("screen.nyanlex.keybind.hint"), width / 2, 22, 0xFFA4A9B8);

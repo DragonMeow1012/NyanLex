@@ -124,6 +124,7 @@ public final class HubDownloadConfirmScreen extends Screen {
 
     @Override
     public void render(PoseStack g, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(g);
         super.render(g, mouseX, mouseY, partialTick);
         int centerX = this.width / 2;
         GuiComponent.drawCenteredString(g, this.font, this.title, centerX, 12, 0xFFFFFFFF);
