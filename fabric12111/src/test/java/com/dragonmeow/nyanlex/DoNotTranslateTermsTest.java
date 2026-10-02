@@ -93,6 +93,7 @@ class DoNotTranslateTermsTest {
 
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScoreboard = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
         List<String> sent = new ArrayList<>();
@@ -202,6 +203,7 @@ class DoNotTranslateTermsTest {
 
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScoreboard = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
         List<String> sent = new ArrayList<>();
@@ -355,6 +357,7 @@ class DoNotTranslateTermsTest {
     void addingOrRemovingATermNeedsNoCacheClear() {
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScoreboard = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         List<String> sent = new ArrayList<>();
         TranslationService s = service(cfg, recording(sent, text -> text
@@ -447,6 +450,7 @@ class DoNotTranslateTermsTest {
     void questWidgetLiveScreenTextUsesTheSameMaskedKeyAsItsRenderLookup() {
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScreenText = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.screenTextMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("skyblock");
         List<String> sent = new ArrayList<>();

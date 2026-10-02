@@ -2146,6 +2146,14 @@ public final class NyanLexFabric implements ClientModInitializer {
                 if (mc != null && mc.player != null) retranslateItem(mc.player.getMainHandItem());
             }
         }
+        if (screenScanKey != null && service != null) {
+            // P in the world (no screen open): translate the HUD text. With a screen open the
+            // key goes to the screen handler (the scan of that screen).
+            while (screenScanKey.consumeClick()) {
+                if (mc == null || mc.level == null || mc.screen != null) continue;
+                scanHud();
+            }
+        }
         if (toggleKey != null && service != null) {
             while (toggleKey.consumeClick()) {
                 if (ScreenTextInput.isTyping(mc == null ? null : mc.screen)) continue;
@@ -2185,6 +2193,32 @@ public final class NyanLexFabric implements ClientModInitializer {
         if (screenScanKey != null && screenScanKey.matches(key, scancode)) {
             scanAndTranslateScreen(screen);
         }
+    }
+
+    /**
+     * P with no screen open: translate what the HUD is drawing right now -- every scoreboard row,
+     * boss bar name, title and subtitle, action bar line and name tag shown during the next few
+     * frames. It passes the same Google gate and consent box as R and the screen scan.
+     */
+    private void scanHud() {
+        if (service == null) return;
+        if (gateBlocksManual(service.usesMachineEngineForHud())) return;
+        // 線上翻譯 off: ask on the spot; the scan then starts once.
+        ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.HUD, this::startHudScan);
+    }
+
+    private void startHudScan() {
+        com.dragonmeow.nyanlex.service.TranslationService current = service;
+        if (current == null) return;
+        current.beginHudCapture(count -> onHudScanDone(count));
+    }
+
+    private static void onHudScanDone(int count) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        mc.execute(() -> feedback(count > 0
+                ? Component.translatable("message.nyanlex.hud_scan", count)
+                : Component.translatable("message.nyanlex.hud_scan_none")));
     }
 
     /** Rescan one render frame without replacing the widgets' original labels. */

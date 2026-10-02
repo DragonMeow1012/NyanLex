@@ -162,7 +162,11 @@ class SettingsModelTest {
         // a surface row is found by its name and, with "引擎", by its engine button too
         assertTrue(ids(SettingsModel.search("聊天", lang)).contains("chat"));
         assertTrue(ids(SettingsModel.search("聊天 引擎", lang)).contains("chat"));
-        assertFalse(ids(SettingsModel.search("聊天 引擎", lang)).contains("tooltip"));
+        // 2026-10-03: every row's engine tip now says "only chat translates on its own", so the
+        // word 聊天 no longer separates the chat row from the others -- a row name that the tip
+        // does not repeat still does.
+        assertTrue(ids(SettingsModel.search("記分板 引擎", lang)).contains("scoreboard"));
+        assertFalse(ids(SettingsModel.search("記分板 引擎", lang)).contains("tooltip"));
         // the guide on 關於 is read, never listed as a search hit
         assertTrue(ids(SettingsModel.search("冷卻", lang)).stream().noneMatch(id -> id.startsWith("about_")));
         // the words of older builds still find the new cards (synonyms)

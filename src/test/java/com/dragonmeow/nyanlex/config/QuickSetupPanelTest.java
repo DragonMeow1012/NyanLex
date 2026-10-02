@@ -231,7 +231,8 @@ class QuickSetupPanelTest {
         p.render(c, -1, -1);
         String all = String.join("", c.texts);
         assertTrue(all.contains("機翻") && all.contains("AI") && all.contains("先不要"));
-        assertTrue(all.contains("物品和介面需要按快捷鍵翻譯（R 翻譯物品、P 翻譯整個畫面）"), all);
+        assertTrue(all.contains("只有聊天會自動翻譯；物品、介面、記分板、Boss 血條、標題等其他文字需要按快捷鍵翻譯"
+                + "（R 翻譯物品；P 翻譯目前的介面，在遊戲中則翻譯畫面上的記分板、血條和標題）"), all);
         assertTrue(all.contains("Google 翻譯（非官方端點）"));
         assertTrue(all.contains("Codex 額度"));
         assertTrue(all.contains("不會送出任何文字"));
@@ -481,7 +482,7 @@ class QuickSetupPanelTest {
         press(p, QuickSetupPanel.ID_NEXT);
         String page = String.join("", texts(p));
         assertTrue(page.contains("翻譯游標指向的物品；沒開任何畫面時，翻譯手上拿的物品"), page);
-        assertTrue(page.contains("翻譯目前開啟的整個畫面"));
+        assertTrue(page.contains("翻譯目前的介面；在遊戲中則翻譯畫面上的記分板、血條和標題"));
         assertTrue(page.contains("切換顯示原文或譯文"));
         assertTrue(page.contains("按鍵不順手？可以到「翻譯設定 → 一般 → 快捷鍵」改成你習慣的按鍵。"));
         assertTrue(page.contains("之後要調整其他設定：按 Esc → 選項 → 翻譯設定…"));

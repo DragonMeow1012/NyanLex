@@ -39,6 +39,9 @@ class PlayerNameSlotTest {
     private static TranslatorConfig allSurfaces() {
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScoreboard = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
+        cfg.aiActionBar = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
+        cfg.aiScreenText = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.targetLang = "zh-TW";
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.chatMode = DisplayMode.TRANSLATION;

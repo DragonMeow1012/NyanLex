@@ -557,7 +557,8 @@ public final class TranslationService {
      * optional UI integration reflow itself as soon as the cached translation arrives.</p>
      */
     public void requestLiveScreenTextAsync(String source, Consumer<String> onResult) {
-        if (!wantsScreenTextTranslation(source)) return;
+        // Automatic live-GUI request: manual (P) under the machine engine, see isManualScreenTranslation().
+        if (!config.aiScreenText || !wantsScreenTextTranslation(source)) return;
         // Same masked key as the render-time lookup of this widget.
         NameMasker.Masked masked = asyncMask(source, onResult);
         if (masked == null || !translatableMasked(masked, false)) return;
@@ -577,7 +578,9 @@ public final class TranslationService {
      * between render calls, so a render-only request can be lost entirely.
      */
     public void requestActionBarAsync(String source, Consumer<String> onResult) {
-        if (!wantsActionBarTranslation(source)) return;
+        // Manual under the machine engine: a cached line was already shown by translateActionBar;
+        // a miss stays original until the player presses P in the world (beginHudCapture).
+        if (!config.aiActionBar || !wantsActionBarTranslation(source)) return;
         NameMasker.Masked masked = asyncMask(source, onResult);
         if (masked == null || !translatableMasked(masked, false)) return;
         requestByEngine(config.aiActionBar, masked.text(), false, translated -> {
@@ -2042,8 +2045,148 @@ public final class TranslationService {
     }
 
     public void flushBatches() {
+        tickHudCapture();
         google.flushBatch();
         ai.flushBatch();
+    }
+
+    // -------------------------------------------------------------------------
+    // P while no screen is open: translate what the HUD is drawing right now
+    // -------------------------------------------------------------------------
+
+    /** The HUD text surfaces the in-world P scan collects. */
+    public enum HudSurface { SCOREBOARD, BOSS_BAR, TITLE, ACTION_BAR, NAME_TAG }
+
+    /** Client ticks the collection window stays open: at least one full render frame passes. */
+    private static final int HUD_CAPTURE_TICKS = 3;
+    private static final int HUD_CAPTURE_MAX_TEXTS = 256;
+
+    private static final class HudCapture {
+        final java.util.EnumMap<HudSurface, LinkedHashSet<String>> texts =
+                new java.util.EnumMap<>(HudSurface.class);
+        final java.util.function.IntConsumer onSent;
+        int ticksLeft = HUD_CAPTURE_TICKS;
+        int total;
+
+        HudCapture(java.util.function.IntConsumer onSent) {
+            this.onSent = onSent;
+        }
+    }
+
+    private final Object hudLock = new Object();
+    private volatile HudCapture hudCapture;
+
+    /** Whether some HUD surface is set to the machine-translation engine (so P in the world
+     *  is a manual machine action and must pass the Google gate). */
+    public boolean usesMachineEngineForHud() {
+        return !config.aiScoreboard || !config.aiBossBar || !config.aiTitle
+                || !config.aiActionBar || !config.aiName;
+    }
+
+    public boolean isHudCaptureActive() {
+        return hudCapture != null;
+    }
+
+    /**
+     * Opens a short collection window (a few client ticks) in which every HUD text the render
+     * hooks actually look up -- each scoreboard row, boss bar name, title/subtitle, action bar
+     * line and name tag drawn in those frames -- is remembered. When the window closes (on the
+     * {@link #flushBatches} ticks) every collected text is retranslated in ONE batch per engine:
+     * like the screen scan, a stale row is discarded first, and the cache ordering of the
+     * lookup path still applies. {@code onSent} receives the number of texts sent ({@code 0}
+     * when nothing translatable was on screen). The caller owns the consent and Google-gate
+     * checks. Returns {@code false} when a window is already open or there is no
+     * HUD surface to scan.
+     */
+    public boolean beginHudCapture(java.util.function.IntConsumer onSent) {
+        synchronized (hudLock) {
+            if (hudCapture != null || showOriginalOnly) return false;
+            hudCapture = new HudCapture(onSent);
+            return true;
+        }
+    }
+
+    private DisplayMode hudMode(HudSurface surface) {
+        return switch (surface) {
+            case SCOREBOARD -> config.scoreboardMode;
+            case BOSS_BAR -> config.bossBarMode;
+            case TITLE -> config.titleMode;
+            case ACTION_BAR -> config.actionBarMode;
+            case NAME_TAG -> config.nameMode;
+        };
+    }
+
+    private boolean hudEngine(HudSurface surface) {
+        return switch (surface) {
+            case SCOREBOARD -> config.aiScoreboard;
+            case BOSS_BAR -> config.aiBossBar;
+            case TITLE -> config.aiTitle;
+            case ACTION_BAR -> config.aiActionBar;
+            case NAME_TAG -> config.aiName;
+        };
+    }
+
+    /** Called by the HUD lookups: records the exact text the render hook asked about. */
+    private void noteHud(HudSurface surface, String text) {
+        HudCapture capture = hudCapture;
+        if (capture == null || text == null || text.isBlank()) return;
+        if (hudMode(surface) == DisplayMode.ORIGINAL_ONLY
+                || !TextFilter.shouldTranslate(text, activeTargetLang)) return;
+        synchronized (hudLock) {
+            if (hudCapture != capture || capture.total >= HUD_CAPTURE_MAX_TEXTS) return;
+            if (capture.texts.computeIfAbsent(surface, k -> new LinkedHashSet<>()).add(text)) {
+                capture.total++;
+            }
+        }
+    }
+
+    private void tickHudCapture() {
+        HudCapture capture = hudCapture;
+        if (capture == null) return;
+        synchronized (hudLock) {
+            if (hudCapture != capture) return;
+            if (--capture.ticksLeft > 0) return;
+            hudCapture = null;
+        }
+        int sent = 0;
+        try {
+            sent = sendHudCapture(capture);
+        } finally {
+            if (capture.onSent != null) {
+                try {
+                    capture.onSent.accept(sent);
+                } catch (RuntimeException ignored) {
+                    // a loader feedback failure must never break the client tick
+                }
+            }
+        }
+    }
+
+    private int sendHudCapture(HudCapture capture) {
+        // Cache-only mode (master switch off): nothing may be discarded that cannot be bought again.
+        if (!requestsEnabled()) return 0;
+        List<String> viaMachine = new ArrayList<>();
+        List<String> viaAi = new ArrayList<>();
+        for (Map.Entry<HudSurface, LinkedHashSet<String>> entry : capture.texts.entrySet()) {
+            List<String> target = hudEngine(entry.getKey()) ? viaAi : viaMachine;
+            for (String text : entry.getValue()) {
+                NameMasker.Masked masked = mask(text);
+                if (translatableMasked(masked, false) && !target.contains(text)) target.add(text);
+            }
+        }
+        int sent = 0;
+        for (boolean useAi : new boolean[] {false, true}) {
+            List<String> sources = useAi ? viaAi : viaMachine;
+            if (sources.isEmpty()) continue;
+            invalidateSources(sources);
+            // One batch per engine: the whole HUD is each other's surface context.
+            warmMasked(sources, true, DisplayMode.TRANSLATION, useAi, true, false, false);
+            sent += sources.size();
+        }
+        enchantComposeMemo.clear();
+        structuredComposeMemo.clear();
+        legacyConvertAttempted.clear();
+        return sent;
     }
 
     public int translatedCount() { return google.size() + ai.size(); }
@@ -2213,23 +2356,37 @@ public final class TranslationService {
         return lookup(text, config.tooltipMode, config.aiTooltip, false, true, true,
                 config.aiTooltip);
     }
+    // 2026-10-03: under the machine-translation engine (Google) only CHAT translates on its
+    // own; every other surface is manual -- a cache hit (AI cache, repository, machine cache,
+    // in that order) still displays, a miss shows the original and sends nothing until the
+    // player triggers a translation (R: item, P: the open screen, or the HUD while no screen is
+    // open -- see beginHudCapture). Each surface follows its OWN engine switch, so a surface the
+    // player set to the AI engine keeps translating automatically.
     public TranslationDecision translateScoreboardLine(String text) {
-        return lookup(text, config.scoreboardMode, config.aiScoreboard, true);
+        noteHud(HudSurface.SCOREBOARD, text);
+        return lookup(text, config.scoreboardMode, config.aiScoreboard, true, false, false,
+                config.aiScoreboard);
     }
     public TranslationDecision translateUi(String text) {
-        return lookup(text, config.nameMode, config.aiName);
+        noteHud(HudSurface.NAME_TAG, text);
+        return lookup(text, config.nameMode, config.aiName, false, false, false, config.aiName);
     }
     public TranslationDecision translateBossBar(String text) {
-        return lookup(text, config.bossBarMode, config.aiBossBar);
+        noteHud(HudSurface.BOSS_BAR, text);
+        return lookup(text, config.bossBarMode, config.aiBossBar, false, false, false,
+                config.aiBossBar);
     }
     public TranslationDecision translateTitle(String text) {
-        return lookup(text, config.titleMode, config.aiTitle);
+        noteHud(HudSurface.TITLE, text);
+        return lookup(text, config.titleMode, config.aiTitle, false, false, false, config.aiTitle);
     }
     public TranslationDecision translateActionBar(String text) {
-        return lookup(text, config.actionBarMode, config.aiActionBar);
+        noteHud(HudSurface.ACTION_BAR, text);
+        return lookup(text, config.actionBarMode, config.aiActionBar, false, false, false,
+                config.aiActionBar);
     }
     public TranslationDecision translateBook(String text) {
-        return lookup(text, config.bookMode, config.aiBook, true);
+        return lookup(text, config.bookMode, config.aiBook, true, false, false, config.aiBook);
     }
     public TranslationDecision translateScreenText(String text) {
         // Not itemText (screen widgets keep TextFilter.shouldTranslate()/requestBatched()
@@ -2267,7 +2424,8 @@ public final class TranslationService {
     }
 
     public TranslationDecision translateScreenScanText(String text) {
-        return lookup(text, config.screenTextMode, config.aiScreenText, true);
+        return lookup(text, config.screenTextMode, config.aiScreenText, true, false, false,
+                config.aiScreenText);
     }
 
     private TranslationDecision lookup(String original, DisplayMode mode, boolean useAi) {
@@ -2455,6 +2613,8 @@ public final class TranslationService {
     /** Warm every blank-line/indent-delimited paragraph on the current book page in one
      * context-aware request while keeping each paragraph as one translation unit. */
     public void warmBookBatch(List<String> sources) {
+        // Manual under the machine engine (see translateBook): reading a book sends nothing.
+        if (!config.aiBook) return;
         warmMasked(sources, true, config.bookMode, config.aiBook);
     }
 
@@ -2462,6 +2622,9 @@ public final class TranslationService {
      * context, while optional/animated neighbouring rows cannot change a label's cache
      * identity or make its wording flicker. */
     public void warmScoreboardBatch(List<String> sources) {
+        // Manual under the machine engine (see translateScoreboardLine): a visible sidebar
+        // sends nothing; the HUD scan (beginHudCapture) is what buys it.
+        if (!config.aiScoreboard) return;
         warmMasked(sources, true, config.scoreboardMode, config.aiScoreboard);
     }
 

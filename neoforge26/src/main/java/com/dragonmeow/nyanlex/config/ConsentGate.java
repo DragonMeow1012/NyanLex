@@ -3,14 +3,14 @@ package com.dragonmeow.nyanlex.config;
 import java.util.function.Supplier;
 
 /**
- * The only way a manual translation action (R, P, start warm-up) gets past a switched-off
+ * The only way a manual translation action (R, P with a screen open, P in the world, start warm-up) gets past a switched-off
  * 線上翻譯: it is parked until the player presses "開始翻譯" in the on-the-spot box, then
  * runs exactly once; "取消" drops it and nothing is sent. Pure logic, the box is drawn by the glue.
  */
 public final class ConsentGate {
 
     /** What the player asked for (decides the wording of the box). */
-    public enum Kind { ITEM, SCREEN, WARMUP }
+    public enum Kind { ITEM, SCREEN, HUD, WARMUP }
 
     private final Supplier<TranslatorConfig> config;
     private final Runnable save;

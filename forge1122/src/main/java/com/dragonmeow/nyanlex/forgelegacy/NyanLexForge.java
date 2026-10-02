@@ -802,7 +802,9 @@ public final class NyanLexForge {
                 if (slot != null && slot.getHasStack()) addWarmName(names, slot.getStack());
         }
         for (String name : names) {
-            if (!warmedItemNames.contains(name)
+            // Machine engine: only chat translates on its own; a hotbar/container name is shown from
+            // the cache and bought by the item key (R) or the screen key (P), never by merely being seen.
+            if (config.aiEnabled && !warmedItemNames.contains(name)
                     && TRANSLATOR.cached(name, target, config.aiEnabled, config) == null) {
                 TRANSLATOR.prefetch(name, target, config.aiEnabled, false, config);
             }

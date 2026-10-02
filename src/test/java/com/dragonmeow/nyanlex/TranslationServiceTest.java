@@ -215,7 +215,7 @@ class TranslationServiceTest {
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.actionBarMode = DisplayMode.TRANSLATION;
-        cfg.aiActionBar = false;
+        cfg.aiActionBar = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         AtomicInteger calls = new AtomicInteger();
         Translator translator = (text, target) -> {
             calls.incrementAndGet();
@@ -419,6 +419,7 @@ class TranslationServiceTest {
     void nameTagsTranslateEverythingButRestorePlayerNames() {
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiName = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         List<String> sent = new ArrayList<>();
         Translator t = (text, target) -> {
             sent.add(text);
@@ -445,6 +446,7 @@ class TranslationServiceTest {
     void cacheHitWithoutAProtectedNameDoesNotRescanProtectedNames() {
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiName = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         AtomicInteger nameSnapshots = new AtomicInteger();
         TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
         s.setProtectedNames(() -> {
@@ -464,6 +466,7 @@ class TranslationServiceTest {
     void protectedNameVerificationReusesTheSuppliedSet() {
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiName = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         Set<String> containsOnly = new AbstractSet<>() {
             @Override
             public Iterator<String> iterator() {
@@ -645,6 +648,7 @@ class TranslationServiceTest {
         };
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScoreboard = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         TranslationService service = service(cfg, fake, DIRECT);
 
@@ -705,6 +709,7 @@ class TranslationServiceTest {
         // variants share ONE key — punctuation runs are what is left for the guard.)
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScoreboard = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.churnGuard = true;
         cfg.churnVariantThreshold = 2; // trip on the 2nd distinct variant
@@ -727,6 +732,7 @@ class TranslationServiceTest {
         // real server, turning it off must restore translate-everything behaviour.
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScoreboard = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.churnGuard = false;
         cfg.churnVariantThreshold = 2;
@@ -800,6 +806,7 @@ class TranslationServiceTest {
         // first to exist and complete.
         TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
+        cfg.aiScoreboard = true; // AI engine: this surface only translates on its own under the AI engine (see TranslationService#translateScoreboardLine)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();

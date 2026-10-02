@@ -20,7 +20,7 @@ public final class DialogContent {
     /** Every lang key the dialogs use (for the lang-file test). */
     public static List<String> allLangKeys() {
         return List.of("nyanlex.ui.consent.title", "nyanlex.ui.consent.item", "nyanlex.ui.consent.screen",
-                "nyanlex.ui.consent.warmup", "nyanlex.ui.consent.stop",
+                "nyanlex.ui.consent.hud", "nyanlex.ui.consent.warmup", "nyanlex.ui.consent.stop",
                 "nyanlex.ui.consent.start", "nyanlex.ui.consent.cancel",
                 "nyanlex.ui.engine.ai", "nyanlex.ui.engine.codex", "nyanlex.ui.engine.custom",
                 "nyanlex.ui.privacy.status.on", "nyanlex.ui.privacy.status.off",
@@ -84,6 +84,8 @@ public final class DialogContent {
         switch (kind) {
             case ITEM -> body = lang.get("nyanlex.ui.consent.item", engineName(cfg, cfg.aiTooltip, lang));
             case SCREEN -> body = lang.get("nyanlex.ui.consent.screen", engineName(cfg, cfg.aiScreenText, lang));
+            case HUD -> body = lang.get("nyanlex.ui.consent.hud", engineName(cfg,
+                    cfg.aiScoreboard && cfg.aiBossBar && cfg.aiTitle && cfg.aiActionBar && cfg.aiName, lang));
             default -> body = lang.get("nyanlex.ui.consent.warmup", engineName(cfg, true, lang));
         }
         List<DialogPanel.Block> blocks = new ArrayList<>();

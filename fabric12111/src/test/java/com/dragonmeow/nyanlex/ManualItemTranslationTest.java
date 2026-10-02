@@ -30,9 +30,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * ENGINE. Item-class surfaces (tooltip/held/container+HUD name pre-warm/custom-GUI
  * text pre-warm) are manual exactly when {@code config.aiTooltip == false} (the
  * machine-translation engine, also {@link TranslatorConfig}'s own default) -- a miss
- * shows the original and sends nothing -- while chat/boss bar/scoreboard/title/action
- * bar/book/name tags keep sending automatically exactly as before (every pre-existing
- * test in this module exercises that unaffected default). {@link
+ * shows the original and sends nothing. Since 2026-10-03 the other surfaces (scoreboard,
+ * boss bar, title, action bar, book, name tags, GUI text) are manual under the machine
+ * engine too -- only chat still sends on its own (see {@link MachineModeManualSurfacesTest})
+ * -- and a surface set to the AI engine keeps sending automatically. {@link
  * TranslationService#requestItemLines} and {@link TranslationService#retranslate} are
  * the explicit, key-triggered entry points that still send regardless of the mode. The
  * AI engine ({@code config.aiTooltip == true}) auto-translates instead, exactly like
@@ -293,7 +294,7 @@ class ManualItemTranslationTest {
         assertTrue(s.isTooltipTranslationReady("Diamond Sword"));
     }
 
-    // ---- chat / boss bar remain fully automatic in manual mode ----
+    // ---- chat remains fully automatic; every other surface follows its own engine ----
 
     @Test
     void chatStillSendsAutomaticallyInManualMode() {
@@ -309,16 +310,32 @@ class ManualItemTranslationTest {
     }
 
     @Test
-    void bossBarStillSendsAutomaticallyInManualMode() {
+    void bossBarSendsNothingOnItsOwnUnderTheMachineEngine() {
+        // 2026-10-03: "only chat translates on its own under Google" -- this used to assert the
+        // opposite (a boss bar bought automatically). The surface is manual now: P in the world.
         AtomicInteger calls = new AtomicInteger();
         TranslationService s = manualService(TestConfigs.translating(), counting(calls));
+
+        assertFalse(s.translateBossBar("Kuudra, the Mad").changed());
+        pump(s);
+
+        assertFalse(s.translateBossBar("Kuudra, the Mad").changed());
+        assertEquals(0, calls.get(), "boss bar is manual under the machine engine");
+    }
+
+    @Test
+    void bossBarStillSendsAutomaticallyUnderTheAiEngine() {
+        AtomicInteger calls = new AtomicInteger();
+        TranslatorConfig cfg = TestConfigs.translating();
+        cfg.aiBossBar = true;
+        TranslationService s = manualService(cfg, counting(calls));
 
         assertFalse(s.translateBossBar("Kuudra, the Mad").changed());
         pump(s);
         TranslationDecision d = s.translateBossBar("Kuudra, the Mad");
 
         assertTrue(d.changed());
-        assertEquals(1, calls.get(), "boss bar is unaffected by manual item/screen mode");
+        assertEquals(1, calls.get(), "a surface set to the AI engine keeps translating on its own");
     }
 
     // ---- manual mode writes no failure/backoff/churn state ----
