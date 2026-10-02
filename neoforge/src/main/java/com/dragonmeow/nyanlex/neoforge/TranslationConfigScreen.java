@@ -228,6 +228,7 @@ public final class TranslationConfigScreen extends Screen {
             case OPEN_DO_NOT_TRANSLATE -> open(new TranslationRequestsScreen(this));
             case OPEN_ITEM_WARMUP -> NyanLexNeoForge.openItemWarmupScreen(this);
             case HUB_DOWNLOAD -> NyanLexNeoForge.startHubIdentifyAndPlan(this);
+            case HUB_CLEAR -> confirmClearPacks();
             case EXPORT_TRANSLATIONS -> NyanLexNeoForge.translationFile(false);
             case IMPORT_TRANSLATIONS -> NyanLexNeoForge.translationFile(true);
             case CLEAR_CACHE -> confirmClearCache();
@@ -256,6 +257,22 @@ public final class TranslationConfigScreen extends Screen {
                     if (NyanLexNeoForge.service() != null) NyanLexNeoForge.service().clearTranslations();
                     NeoTextStyle.clearRenderMemo();
                     setStatus(Component.translatable("config.nyanlex.cache.cleared"));
+                });
+    }
+
+    private void confirmClearPacks() {
+        if (com.dragonmeow.nyanlex.hub.HubPackCleaner.downloadedCount(NyanLexNeoForge.hubLocalCache()) == 0) {
+            NyanLexNeoForge.toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                    Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_NONE));
+            return;
+        }
+        confirm(Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_TITLE),
+                Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_MESSAGE), () -> {
+                    int removed = com.dragonmeow.nyanlex.hub.HubPackCleaner.clear(
+                            NyanLexNeoForge.hubLocalCache(), NyanLexNeoForge.hubDownloadState());
+                    NeoTextStyle.clearRenderMemo();
+                    NyanLexNeoForge.toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                            Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_DONE, removed));
                 });
     }
 

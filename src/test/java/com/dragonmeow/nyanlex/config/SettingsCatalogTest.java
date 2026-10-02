@@ -50,7 +50,7 @@ class SettingsCatalogTest {
         assertEquals(18 + 1, SettingsCatalog.entries(SettingsPage.DISPLAY).size(), "nine surfaces with their service, plus 不翻譯詞彙");
         assertEquals(9, SettingsCatalog.rows(SettingsPage.DISPLAY).size());
         assertEquals(2, SettingsCatalog.entries(SettingsPage.SERVICE).size());
-        assertEquals(1, SettingsCatalog.entries(SettingsPage.PACK).size(), "only 偵測並下載");
+        assertEquals(2, SettingsCatalog.entries(SettingsPage.PACK).size(), "偵測並下載, 清除下載的翻譯包");
         assertEquals(5, SettingsCatalog.entries(SettingsPage.MINE).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
     }
@@ -214,7 +214,10 @@ class SettingsCatalogTest {
     @Test
     void actionsAndDestructiveMarking() {
         assertTrue(SettingsCatalog.byId("clear_cache").destructive());
-        assertNull(SettingsCatalog.byId("clear_hub"), "the downloaded packs are cleared with the saved translations");
+        assertTrue(SettingsCatalog.byId("clear_packs").destructive());
+        assertEquals(SettingAction.HUB_CLEAR, SettingsCatalog.byId("clear_packs").action());
+        assertEquals(SettingsPage.PACK, SettingsCatalog.byId("clear_packs").page());
+        assertEquals(SettingsPage.PACK, SettingsCatalog.byId("download").page());
         assertNull(SettingsCatalog.byId("open_repo"));
         assertFalse(SettingsCatalog.byId("export").destructive());
         assertEquals(SettingAction.OPEN_ITEM_WARMUP, SettingsCatalog.byId("warmup").action());

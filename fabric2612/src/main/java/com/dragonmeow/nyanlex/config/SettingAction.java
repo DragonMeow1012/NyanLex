@@ -20,6 +20,7 @@ public enum SettingAction {
     /** Opens the "warm every item" screen; the glue reports it unavailable until wired. */
     OPEN_ITEM_WARMUP,
     HUB_DOWNLOAD,
+    HUB_CLEAR,
     EXPORT_TRANSLATIONS,
     IMPORT_TRANSLATIONS,
     /** Destructive: glue must confirm first (with the entry count). */

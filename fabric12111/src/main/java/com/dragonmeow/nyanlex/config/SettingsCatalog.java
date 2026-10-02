@@ -36,6 +36,11 @@ public final class SettingsCatalog {
     public static final String KEY_CONFIRM_YES = "nyanlex.settings.confirm.yes";
     public static final String KEY_CLEAR_CACHE_CONFIRM_TITLE = "nyanlex.settings.clear_cache.confirm.title";
     public static final String KEY_CLEAR_CACHE_CONFIRM_MESSAGE = "nyanlex.settings.clear_cache.confirm.message";
+    public static final String KEY_CLEAR_PACKS_CONFIRM_TITLE = "nyanlex.settings.clear_packs.confirm.title";
+    public static final String KEY_CLEAR_PACKS_CONFIRM_MESSAGE = "nyanlex.settings.clear_packs.confirm.message";
+    /** Toast after the downloaded packs were removed ({0} = rows removed) and when there were none. */
+    public static final String KEY_CLEAR_PACKS_DONE = "message.nyanlex.hub.cleared";
+    public static final String KEY_CLEAR_PACKS_NONE = "message.nyanlex.hub.nothing_to_clear";
 
     /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value). */
     public static final int[] COOLDOWN_STEPS = {0, 1000, 2000, 4000, 6000, 8000, 10000};
@@ -110,6 +115,8 @@ public final class SettingsCatalog {
         List<String> keys = new ArrayList<>(List.of(
                 KEY_TITLE, KEY_HELP_BUTTON, KEY_NEEDS_AI, KEY_CONFIRM_YES,
                 KEY_CLEAR_CACHE_CONFIRM_TITLE, KEY_CLEAR_CACHE_CONFIRM_MESSAGE,
+                KEY_CLEAR_PACKS_CONFIRM_TITLE, KEY_CLEAR_PACKS_CONFIRM_MESSAGE,
+                KEY_CLEAR_PACKS_DONE, KEY_CLEAR_PACKS_NONE,
                 STATE_ON, STATE_OFF, STATE_ORIGINAL, STATE_BOTH, STATE_TRANSLATION, STATE_MACHINE,
                 STATE_AI, STATE_ORDERED, STATE_READY_FIRST, UNIT_SECONDS));
         for (SettingEntry entry : allEntries()) {
@@ -171,7 +178,10 @@ public final class SettingsCatalog {
         map.put(SettingsPage.PACK, pairs(List.of(
                 action(SettingsPage.PACK, "download", SettingAction.HUB_DOWNLOAD)
                         .withKeywords("hub", "repository", "repo", "download", "倉庫", "仓库", "翻譯檔", "翻译文件",
-                                "社群", "community"))));
+                                "社群", "community"),
+                action(SettingsPage.PACK, "clear_packs", SettingAction.HUB_CLEAR)
+                        .withKeywords("hub", "repository", "clear", "delete", "remove", "倉庫", "仓库", "清除", "刪除", "删除",
+                                "翻譯包", "翻译包"))));
 
         map.put(SettingsPage.MINE, pairs(List.of(
                 action(SettingsPage.MINE, "warmup", SettingAction.OPEN_ITEM_WARMUP)

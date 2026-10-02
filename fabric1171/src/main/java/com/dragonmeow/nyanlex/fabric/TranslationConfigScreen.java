@@ -229,6 +229,7 @@ public final class TranslationConfigScreen extends Screen {
             case OPEN_DO_NOT_TRANSLATE -> open(new TranslationRequestsScreen(this));
             case OPEN_ITEM_WARMUP -> NyanLexFabric.openItemWarmupScreen(this);
             case HUB_DOWNLOAD -> NyanLexFabric.startHubIdentifyAndPlan(this);
+            case HUB_CLEAR -> confirmClearPacks();
             case EXPORT_TRANSLATIONS -> NyanLexFabric.translationFile(false);
             case IMPORT_TRANSLATIONS -> NyanLexFabric.translationFile(true);
             case CLEAR_CACHE -> confirmClearCache();
@@ -257,6 +258,22 @@ public final class TranslationConfigScreen extends Screen {
                     if (NyanLexFabric.service() != null) NyanLexFabric.service().clearTranslations();
                     FabricTextStyle.clearRenderMemo();
                     setStatus(new net.minecraft.network.chat.TranslatableComponent("config.nyanlex.cache.cleared"));
+                });
+    }
+
+    private void confirmClearPacks() {
+        if (com.dragonmeow.nyanlex.hub.HubPackCleaner.downloadedCount(NyanLexFabric.hubLocalCache()) == 0) {
+            NyanLexFabric.toast(new net.minecraft.network.chat.TranslatableComponent("message.nyanlex.hub.toast_title"),
+                    new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_PACKS_NONE));
+            return;
+        }
+        confirm(new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_TITLE),
+                new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_MESSAGE), () -> {
+                    int removed = com.dragonmeow.nyanlex.hub.HubPackCleaner.clear(
+                            NyanLexFabric.hubLocalCache(), NyanLexFabric.hubDownloadState());
+                    FabricTextStyle.clearRenderMemo();
+                    NyanLexFabric.toast(new net.minecraft.network.chat.TranslatableComponent("message.nyanlex.hub.toast_title"),
+                            new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_PACKS_DONE, removed));
                 });
     }
 

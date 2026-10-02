@@ -126,7 +126,7 @@ public final class SettingEntry {
 
     /** True for entries whose press must be confirmed by the glue with an entry count. */
     public boolean destructive() {
-        return action == SettingAction.CLEAR_CACHE;
+        return action == SettingAction.CLEAR_CACHE || action == SettingAction.HUB_CLEAR;
     }
 
     /** Applies a TOGGLE / CYCLE press to {@code cfg}. No-op for other types. */

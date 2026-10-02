@@ -229,6 +229,7 @@ public final class Neo26ConfigScreen extends Screen {
             case OPEN_DO_NOT_TRANSLATE -> open(new Neo26RequestsScreen(this));
             case OPEN_ITEM_WARMUP -> NyanLexNeoForge26.openItemWarmupScreen(this);
             case HUB_DOWNLOAD -> NyanLexNeoForge26.startHubIdentifyAndPlan(this);
+            case HUB_CLEAR -> confirmClearPacks();
             case EXPORT_TRANSLATIONS -> NyanLexNeoForge26.translationFile(false);
             case IMPORT_TRANSLATIONS -> NyanLexNeoForge26.translationFile(true);
             case CLEAR_CACHE -> confirmClearCache();
@@ -258,6 +259,22 @@ public final class Neo26ConfigScreen extends Screen {
                     if (NyanLexNeoForge26.service() != null) NyanLexNeoForge26.service().clearTranslations();
                     Neo26TextStyle.clearRenderMemo();
                     setStatus(Component.translatable("config.nyanlex.cache.cleared"));
+                });
+    }
+
+    private void confirmClearPacks() {
+        if (com.dragonmeow.nyanlex.hub.HubPackCleaner.downloadedCount(NyanLexNeoForge26.hubLocalCache()) == 0) {
+            NyanLexNeoForge26.toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                    Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_NONE));
+            return;
+        }
+        confirm(Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_TITLE),
+                Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_MESSAGE), () -> {
+                    int removed = com.dragonmeow.nyanlex.hub.HubPackCleaner.clear(
+                            NyanLexNeoForge26.hubLocalCache(), NyanLexNeoForge26.hubDownloadState());
+                    Neo26TextStyle.clearRenderMemo();
+                    NyanLexNeoForge26.toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                            Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_DONE, removed));
                 });
     }
 
