@@ -37,13 +37,16 @@ final class LegacyHelpScreen extends Screen {
         lines = font.split(new TranslatableComponent("screen.nyanlex.help.body").getString(), contentW);
         navY = height - 52;
         int doneY = height - 26;
-        topY = 30;
+        topY = 50;
         int available = Math.max(LINE_H, navY - 8 - topY);
         linesPerPage = Math.max(1, available / LINE_H);
         totalPages = Math.max(1, (int) Math.ceil(lines.size() / (double) linesPerPage));
         if (page >= totalPages) page = totalPages - 1;
         if (page < 0) page = 0;
 
+        addButton(new Button(contentX, 26, contentW, 18,
+                new TranslatableComponent("screen.nyanlex.help.quick").getString(),
+                button -> minecraft.setScreen(new LegacySetupScreen(this, true))));
         addButton(new Button(contentX, navY, 40, 20, "<",
                 button -> { if (page > 0) page--; init(minecraft, width, height); }));
         addButton(new Button(contentX + contentW - 40, navY, 40, 20, ">",

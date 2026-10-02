@@ -1,79 +1,81 @@
 package com.dragonmeow.nyanlex.legacy;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.gui.GuiComponent;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.client.gui.screens.Screen;
 
-final class LegacySettingsScreen extends Screen {
+import java.util.List;
+
+/**
+ * Translation settings: an index of six categories, each opening a short page of settings. The
+ * rows come from {@link LegacyUiModel}; this class only reacts to what is clicked.
+ */
+final class LegacySettingsScreen extends LegacyFormScreen {
     private final Screen parent;
+    private int category = -1;
 
     LegacySettingsScreen(Screen parent) {
         super(new TranslatableComponent("screen.nyanlex.config.title"));
         this.parent = parent;
     }
 
-    @Override protected void init() {
+    @Override protected List<LegacyUiModel.Row> rows() {
         LegacyConfig cfg = LegacyTranslatorMod.config();
-        // Prominent (but non-blocking) entry point to the help screen, top-left corner.
-        addButton(new Button(6, 4, 70, 14,
-                new TextComponent("§e").append(new TranslatableComponent("config.nyanlex.help.open")),
-                button -> minecraft.setScreen(new LegacyHelpScreen(this))));
-        addButton(new Button(width / 2 - 155, 30, 310, 20,
-                new TranslatableComponent("config.nyanlex.language",
-                        cfg.followGameLanguage ? new TranslatableComponent("config.nyanlex.language.follow",
-                                LegacyTranslatorMod.currentTarget(minecraft)) : new TextComponent(cfg.targetLang)),
-                button -> minecraft.setScreen(new LegacyLanguageScreen(this))));
-        addButton(new Button(width / 2 - 155, 50, 152, 20,
-                new TranslatableComponent(cfg.enabled ? "config.nyanlex.enabled" : "config.nyanlex.disabled"),
-                button -> { cfg.enabled = !cfg.enabled; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 + 3, 50, 152, 20,
-                new TranslatableComponent("config.nyanlex.requests.open"),
-                button -> minecraft.setScreen(new LegacyRequestsScreen(this))));
-        addButton(new Button(width / 2 - 155, 70, 310, 20,
-                new TextComponent(cfg.showOriginal ? "Original + Translation" : "Translation Only"),
-                button -> { cfg.showOriginal = !cfg.showOriginal; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 155, 90, 152, 20,
-                new TextComponent("Engine: " + (cfg.aiEnabled ? "AI" : "GT")),
-                button -> { cfg.aiEnabled = !cfg.aiEnabled; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 + 3, 90, 152, 20,
-                machineFallbackLabel(cfg),
-                button -> { cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 155, 110, 310, 20,
-                new TranslatableComponent("screen.nyanlex.ai.title"),
-                button -> minecraft.setScreen(new LegacyAiConfigScreen(this))));
-        // Request cooldown + batch window merged into one submenu (was two half-width cyclers).
-        addButton(new Button(width / 2 - 155, 130, 310, 20,
-                new TranslatableComponent("config.nyanlex.request_cooldown.open"),
-                button -> minecraft.setScreen(new LegacyCooldownScreen(this))));
-        Button providerButton = new Button(width / 2 - 155, 150, 310, 20, providerLabel(cfg),
-                button -> { });
-        providerButton.active = false; // Google is the only machine source
-        addButton(providerButton);
-        addButton(new Button(width / 2 - 155, 170, 152, 20,
-                new TranslatableComponent("config.nyanlex.debug.short",
-                        cfg.debugTranslationOverlay ? "ON" : "OFF"),
-                button -> { cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
-                    if (!cfg.debugTranslationOverlay) LegacyTranslatorMod.TRANSLATOR.clearDebug();
-                    init(minecraft, width, height); }));
-        addButton(new Button(width / 2 + 3, 170, 152, 20,
-                chatDeliveryLabel(cfg),
-                button -> { cfg.deliverChatTranslationsInOrder =
-                        !cfg.deliverChatTranslationsInOrder;
-                    init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 155, height - 46, 310, 20,
-                requestsToggleLabel(cfg),
-                button -> { cfg.translationRequestsEnabled = !cfg.translationRequestsEnabled; init(minecraft, width, height); }));
-        addButton(new Button(width / 2 - 155, height - 22, 100, 20, new TranslatableComponent("config.nyanlex.translations.export"),
-                button -> LegacyTranslatorMod.translationFile(false)));
-        addButton(new Button(width / 2 - 50, height - 22, 100, 20, new TranslatableComponent("config.nyanlex.translations.import"),
-                button -> LegacyTranslatorMod.translationFile(true)));
-        addButton(new Button(width / 2 + 55, height - 22, 100, 20,
-                new TranslatableComponent("gui.done"), button -> onClose()));
+        if (category < 0) return LegacyUiModel.indexRows(TEXT);
+        return LegacyUiModel.categoryRows(category, cfg, TEXT, languageLabel(cfg),
+                LegacyTranslatorMod.version());
     }
+
+    @Override protected String heading() {
+        return category < 0 ? title.getString() : TEXT.get(LegacyUiModel.CATEGORY_KEYS[category]);
+    }
+
+    @Override protected void init() {
+        super.init();
+        addButton(new Button(6, 4, 70, 14, new TextComponent("§e" + TEXT.get("config.nyanlex.help.open")),
+                button -> minecraft.setScreen(new LegacyHelpScreen(this))));
+    }
+
+    private String languageLabel(LegacyConfig cfg) {
+        return TEXT.get("config.nyanlex.language", cfg.followGameLanguage
+                ? TEXT.get("config.nyanlex.language.follow", LegacyTranslatorMod.currentTarget(minecraft))
+                : cfg.targetLang);
+    }
+
+    @Override protected void onAction(int action) {
+        LegacyConfig cfg = LegacyTranslatorMod.config();
+        if (action >= LegacyUiModel.A_CATEGORY && action < LegacyUiModel.A_CATEGORY + LegacyUiModel.CATEGORY_COUNT) {
+            category = action - LegacyUiModel.A_CATEGORY;
+            refresh();
+            return;
+        }
+        if (LegacyUiModel.perform(action, cfg)) {
+            if (action == LegacyUiModel.A_DEBUG && !cfg.debugTranslationOverlay)
+                LegacyTranslatorMod.TRANSLATOR.clearDebug();
+            LegacyTranslatorMod.saveConfig();
+            refresh();
+            return;
+        }
+        switch (action) {
+            case LegacyUiModel.A_DONE: onClose(); break;
+            case LegacyUiModel.A_QUICK_SETUP: minecraft.setScreen(new LegacySetupScreen(this, true)); break;
+            case LegacyUiModel.A_HELP: minecraft.setScreen(new LegacyHelpScreen(this)); break;
+            case LegacyUiModel.A_LANGUAGE: minecraft.setScreen(new LegacyLanguageScreen(this)); break;
+            case LegacyUiModel.A_KEYS:
+                minecraft.setScreen(new net.minecraft.client.gui.screens.controls.ControlsScreen(this, minecraft.options));
+                break;
+            case LegacyUiModel.A_TERMS: minecraft.setScreen(new LegacyRequestsScreen(this)); break;
+            case LegacyUiModel.A_AI: minecraft.setScreen(new LegacyAiConfigScreen(this)); break;
+            case LegacyUiModel.A_COOLDOWN: minecraft.setScreen(new LegacyCooldownScreen(this)); break;
+            case LegacyUiModel.A_EXPORT: LegacyTranslatorMod.translationFile(false); break;
+            case LegacyUiModel.A_IMPORT: LegacyTranslatorMod.translationFile(true); break;
+            case LegacyUiModel.A_GITHUB: LegacyTranslatorMod.openLink(this, LegacyUiModel.GITHUB_URL); break;
+            default: break;
+        }
+    }
+
     static int nextCooldown(int current) {
         int[] values = {0, 1000, 2000, 4000, 6000, 8000, 10000};
         for (int value : values) if (value > current) return value;
@@ -100,37 +102,13 @@ final class LegacySettingsScreen extends Screen {
         return new TranslatableComponent("config.nyanlex.batch_window", state);
     }
 
-    /** Same field as before; label text now explains the effect instead of naming "GT". */
-    private static Component machineFallbackLabel(LegacyConfig cfg) {
-        return new TranslatableComponent("config.nyanlex.ai.machine_fallback",
-                cfg.disableGoogleFallbackForAi ? "OFF" : "ON");
-    }
-
-    private static Component providerLabel(LegacyConfig cfg) {
-        return new TranslatableComponent("config.nyanlex.provider",
-                new TranslatableComponent("screen.nyanlex.provider.google"));
-    }
-
-    private static Component chatDeliveryLabel(LegacyConfig cfg) {
-        Component mode = new TranslatableComponent(cfg.deliverChatTranslationsInOrder
-                ? "config.nyanlex.chat_delivery.ordered"
-                : "config.nyanlex.chat_delivery.ready_first");
-        return new TranslatableComponent("config.nyanlex.chat_delivery.short", mode);
-    }
-
-    private static Component requestsToggleLabel(LegacyConfig cfg) {
-        return new TranslatableComponent("screen.nyanlex.requests.toggle",
-                cfg.translationRequestsEnabled ? "OFF" : "ON");
-    }
-
-    @Override public void render(PoseStack pose, int mouseX, int mouseY, float delta) {
-        renderBackground(pose);
-        GuiComponent.drawCenteredString(pose, font, title, width / 2, 20, 0xFFFFFF);
-        super.render(pose, mouseX, mouseY, delta);
-    }
-
     @Override public void onClose() {
         LegacyTranslatorMod.saveConfig();
-        minecraft.setScreen(parent);
+        if (category >= 0) {
+            category = -1;
+            refresh();
+        } else {
+            minecraft.setScreen(parent);
+        }
     }
 }

@@ -12,7 +12,7 @@
   "mixins": [{ "config": "nyanlex.mixins.json", "environment": "client" }],
   "depends": {
     "fabricloader": ">=0.16.0",
-    "fabric-api": "*",
+    "fabric": "*",
     "minecraft": "1.15.2",
     "java": ">=8"
   }
