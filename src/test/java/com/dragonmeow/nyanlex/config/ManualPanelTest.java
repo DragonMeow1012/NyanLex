@@ -50,7 +50,7 @@ class ManualPanelTest {
         List<ManualPanel.Section> sections = new ArrayList<>();
         for (int i = 1; i <= SettingsModel.MANUAL_SECTIONS; i++) {
             sections.add(new ManualPanel.Section(l.get(SettingsModel.manualTitleKey(i)).getAsString(),
-                    l.get(SettingsModel.manualBodyKey(i)).getAsString()));
+                    ProjectLinks.fill(l.get(SettingsModel.manualBodyKey(i)).getAsString())));
         }
         ManualPanel p = new ManualPanel(ManualPanelTest::width, l.get(SettingsModel.KEY_MANUAL_TITLE).getAsString(),
                 l.get(SettingsModel.KEY_MANUAL_BACK).getAsString(), sections)
@@ -201,7 +201,7 @@ class ManualPanelTest {
         List<ManualPanel.Section> sections = new ArrayList<>();
         for (int i = 1; i <= SettingsModel.MANUAL_SECTIONS; i++) {
             sections.add(new ManualPanel.Section(l.get(SettingsModel.manualTitleKey(i)).getAsString(),
-                    l.get(SettingsModel.manualBodyKey(i)).getAsString()));
+                    ProjectLinks.fill(l.get(SettingsModel.manualBodyKey(i)).getAsString())));
         }
         ManualPanel p = new ManualPanel(ManualPanelTest::width, "說明書", "返回", sections)
                 .withTopButton("開始設定").withNarration("%s，按鈕", "%s，章節")

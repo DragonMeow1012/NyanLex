@@ -25,8 +25,8 @@ class FileLocationsTest {
         assertEquals("nyanlex-failures-zh-tw.json", name(e, "failures"));
         assertEquals("nyanlex-hub-cache-zh-tw.json", name(e, "hub_cache"));
         assertEquals("nyanlex-hub-state.json", name(e, "hub_state"));
-        assertEquals("nyanlex-debug", name(e, "debug_dir"));
-        assertEquals("lang-probe.json", name(e, "lang_probe"));
+        assertEquals("nyanlex-debug-log.jsonl", name(e, "debug_log"));
+        assertTrue(e.stream().noneMatch(x -> x.id().equals("debug_dir") || x.id().equals("lang_probe")));
     }
 
     @Test

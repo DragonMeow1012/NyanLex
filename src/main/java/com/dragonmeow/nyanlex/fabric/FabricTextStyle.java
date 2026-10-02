@@ -110,7 +110,6 @@ public final class FabricTextStyle {
     public static Component renderTranslated(String surfaceId, Component source,
                                              Function<String, TranslationDecision> translateFn) {
         if (source == null) return null;
-        LangProbeGlue.observe(surfaceId, source);
         source = resolveLegacyCodes(source);
         Rendered rendered = translateParagraphBlock(source, translateFn);
         if (rendered == null) return null;

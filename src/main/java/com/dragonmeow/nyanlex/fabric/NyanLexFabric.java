@@ -30,7 +30,6 @@ import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.translate.AiSettings;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerTransport;
-import com.dragonmeow.nyanlex.translate.ExchangeDumpWriter;
 import com.dragonmeow.nyanlex.translate.OpenAiTranslator;
 import com.dragonmeow.nyanlex.translate.ParagraphModel;
 import com.dragonmeow.nyanlex.translate.RequestPacer;
@@ -708,8 +707,13 @@ public final class NyanLexFabric implements ClientModInitializer {
             mc.execute(() -> {
                 HUB_PLANNING.set(false);
                 if (finalPlan == null) {
-                    toast(Component.translatable("message.nyanlex.hub.detect_failed",
-                            finalError == null ? "" : finalError));
+                    toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                            Component.translatable("message.nyanlex.hub.unreachable"));
+                    return;
+                }
+                if (!finalPlan.hasAnyContent()) {
+                    toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                            Component.translatable("message.nyanlex.hub.no_packs"));
                     return;
                 }
                 mc.setScreen(new HubDownloadConfirmScreen(hubScreen, finalPlan, finalHost,
@@ -1332,18 +1336,16 @@ public final class NyanLexFabric implements ClientModInitializer {
                 () -> new AiSettings("codex://app-server", config.codexModel,
                         java.util.Collections.emptyList(), config.aiGlossary),
                 RequestPacer.disabled());
-        // 2026-10-02: a bounded, rotating on-disk trace of real AI request/response
-        // bodies (never headers/keys) plus each exchange's per-unit verdicts, active only
-        // while the player has the debug overlay on -- lets a player who hits a
-        // translation failure send the files under nyanlex-debug/ for offline
-        // diagnosis, the same kind of evidence scratchpad/live-ai's manual probe had to
-        // reconstruct by hand. See ExchangeDumpWriter's class doc.
-        ExchangeDumpWriter exchangeDump = new ExchangeDumpWriter(
-                configPath.getParent().resolve("nyanlex-debug"),
-                () -> config != null && config.debugTranslationOverlay, 20,
+        // 偵錯模式: the one local error log (newest 1000 entries, API keys masked). It is written only
+        // when something goes wrong while the mode is on; nothing else is ever dumped.
+        com.dragonmeow.nyanlex.translate.DebugErrorLog errorLog = new com.dragonmeow.nyanlex.translate.DebugErrorLog(
+                configPath.getParent().resolve(com.dragonmeow.nyanlex.config.FileLocations.DEBUG_LOG_FILE),
+                () -> config != null && config.debugTranslationOverlay,
+                com.dragonmeow.nyanlex.translate.DebugErrorLog.DEFAULT_MAX_ENTRIES,
                 () -> config == null ? java.util.List.of() : config.secretValues());
-        apiAi.setExchangeDumpSink(exchangeDump);
-        codexAi.setExchangeDumpSink(exchangeDump);
+        com.dragonmeow.nyanlex.translate.DebugErrorLog.install(errorLog);
+        apiAi.setExchangeDumpSink(errorLog.exchangeSink());
+        codexAi.setExchangeDumpSink(errorLog.exchangeSink());
         SwitchingAiTranslator ai = new SwitchingAiTranslator(
                 apiAi, codexAi, () -> config.aiUseCodex);
         aiRateLimitedProbe = ai::isRateLimited;
@@ -1396,19 +1398,6 @@ public final class NyanLexFabric implements ClientModInitializer {
         // the machine-translation engine is cache-only. See
         // TranslationService#isManualItemTranslation()/#isManualScreenTranslation().
         service.setInfoLog(LOGGER::info);
-        // 2026-10-02: per-segment tooltip trace, same gate/rotation discipline and dumpDir
-        // as exchangeDump above -- captures the ONE layer an HTTP exchange dump cannot see
-        // (which TooltipSegmentPlanner segment a row became, its LOCAL cache key, hit/
-        // pending/missing) so a future "why did this ONE row never translate" investigation
-        // reads it straight off disk. See TooltipTraceWriter's class doc.
-        service.setTooltipTraceWriter(new com.dragonmeow.nyanlex.translate.TooltipTraceWriter(
-                configPath.getParent().resolve("nyanlex-debug"),
-                () -> config != null && config.debugTranslationOverlay, 20));
-        // 2026-10-02: measurement-only lang-template probe (zero cost while the debug
-        // overlay is off); writes config/nyanlex-debug/lang-probe.json. Never alters text.
-        LangProbeGlue.install(new com.dragonmeow.nyanlex.translate.LangProbe(
-                configPath.getParent().resolve("nyanlex-debug").resolve("lang-probe.json"),
-                () -> config != null && config.debugTranslationOverlay, 60_000L));
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
         service.setItemSourceLanguage(() -> {
@@ -1585,7 +1574,6 @@ public final class NyanLexFabric implements ClientModInitializer {
     private boolean translateAndInject(Component message, net.minecraft.network.chat.ChatType.Bound params) {
         if (service == null || message == null) return false;
         observeChatDeliveryContext(Minecraft.getInstance());
-        LangProbeGlue.observe("chat", message);
         final boolean systemMessage = params == null;
         final Component renderedMessage = FabricTextStyle.resolveLegacyCodes(
                 params == null ? message : decorate(params, message));
@@ -2690,10 +2678,15 @@ public final class NyanLexFabric implements ClientModInitializer {
 
     /** A system notification at the top right: what happened in a menu, or in the background. */
     public static void toast(Component message) {
+        toast(Component.translatable("nyanlex.ui.about.title"), message);
+    }
+
+    /** A system notification with its own title. */
+    public static void toast(Component title, Component message) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
         mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToasts(),
                 net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-                Component.translatable("nyanlex.ui.about.title"), message));
+                title, message));
     }
 }

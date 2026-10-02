@@ -30,6 +30,8 @@ public final class HubDownloadConfirmScreen extends Screen {
     private final String serverHost;
     private final String modpackLabel;
     private final int installedModCount;
+    private final List<HubPlanItem> shown = new java.util.ArrayList<>();
+    private final int othersWithoutPack;
     private int page;
     private int pageSize = 6;
     private List<FormattedCharSequence> pathLines = List.of();
@@ -44,10 +46,17 @@ public final class HubDownloadConfirmScreen extends Screen {
         this.serverHost = serverHost;
         this.modpackLabel = modpackLabel;
         this.installedModCount = installedModCount;
+        // only what has a pack is listed; the mods without one are summed up in one grey line
+        int others = 0;
+        for (HubPlanItem item : plan.items()) {
+            if (item.hasContent()) shown.add(item);
+            else if (item.source().kind() == HubSource.Kind.MOD) others++;
+        }
+        this.othersWithoutPack = others;
     }
 
     private int totalPages() {
-        return Math.max(1, (plan.items().size() + pageSize - 1) / pageSize);
+        return Math.max(1, (shown.size() + pageSize - 1) / pageSize);
     }
 
     @Override
@@ -60,12 +69,12 @@ public final class HubDownloadConfirmScreen extends Screen {
         pathLines = this.font.split(Component.translatable("screen.nyanlex.hub.confirm.path", storagePath()),
                 contentW);
         int listTop = INFO_TOP + 3 * 12 + 8;
-        int footerH = 4 + ROW_H + pathLines.size() * (this.font.lineHeight + 1) + 6;
+        int footerH = 4 + ROW_H + (othersWithoutPack > 0 ? ROW_H : 0) + pathLines.size() * (this.font.lineHeight + 1) + 6;
         int navY = bottomY - 24;
         int availableForRows = navY - 4 - listTop - footerH;
         pageSize = Math.max(1, availableForRows / ROW_H);
 
-        if (plan.isEmpty()) {
+        if (shown.isEmpty()) {
             int w = Math.min(200, this.width - 40);
             this.addRenderableWidget(Button.builder(
                     Component.translatable("screen.nyanlex.hub.confirm.cancel"),
@@ -139,13 +148,13 @@ public final class HubDownloadConfirmScreen extends Screen {
                 installedModCount, (int) modItemCount), centerX, y, 0xFFE0E0E0);
         y += 20;
 
-        if (plan.isEmpty()) {
+        if (shown.isEmpty()) {
             g.centeredText(this.font, Component.translatable("screen.nyanlex.hub.confirm.empty"),
                     centerX, y + 10, 0xFFFFD700);
             return;
         }
 
-        List<HubPlanItem> items = plan.items();
+        List<HubPlanItem> items = shown;
         int start = page * pageSize;
         int end = Math.min(items.size(), start + pageSize);
         int listLeft = Math.max(10, centerX - 170);
@@ -161,6 +170,11 @@ public final class HubDownloadConfirmScreen extends Screen {
             }
             g.text(this.font, label, listLeft, y, 0xFFFFFFFF, false);
             g.text(this.font, status, listRight - statusWidth, y, statusColor(item), false);
+            y += ROW_H;
+        }
+
+        if (othersWithoutPack > 0) {
+            g.text(this.font, Component.translatable("screen.nyanlex.hub.confirm.others", othersWithoutPack), listLeft, y, 0xFF808080, false);
             y += ROW_H;
         }
 

@@ -13,6 +13,8 @@ public enum SettingAction {
     OPEN_MANUAL,
     /** Opens the manual on its privacy chapter. */
     OPEN_PRIVACY,
+    /** Opens the project page on GitHub (after the game's own link confirmation). */
+    OPEN_GITHUB,
     OPEN_AI,
     OPEN_DO_NOT_TRANSLATE,
     /** Opens the "warm every item" screen; the glue reports it unavailable until wired. */

@@ -108,6 +108,19 @@ class QuickSetupPanelTest {
                 || id == QuickSetupPanel.ID_PACK_SKIP || id == QuickSetupPanel.ID_PACK_DOWNLOAD;
     }
 
+    /** Button id of the display mode of grid row r (0 is 全部項目, then 聊天, 物品提示, ...). */
+    private static int mode(int row) { return QuickSetupPanel.ID_GRID_BASE + 2 * row; }
+
+    /** Button id of the translation service of grid row r. */
+    private static int engine(int row) { return QuickSetupPanel.ID_GRID_BASE + 2 * row + 1; }
+
+    private static void toDisplayPage(QuickSetupPanel p, int methodId) {
+        toMethodPage(p);
+        press(p, methodId);
+        press(p, QuickSetupPanel.ID_NEXT);
+        assertEquals(QuickSetupPanel.Page.DISPLAY, p.page());
+    }
+
     /** Walks to the page with the way-to-translate question. */
     private static void toMethodPage(QuickSetupPanel p) {
         press(p, QuickSetupPanel.ID_START);
@@ -135,8 +148,9 @@ class QuickSetupPanelTest {
         press(p, QuickSetupPanel.ID_METHOD_MACHINE);
         press(p, QuickSetupPanel.ID_NEXT);
         assertEquals(QuickSetupPanel.Page.DISPLAY, p.page());
-        press(p, QuickSetupPanel.ID_CHAT_OFF);
-        press(p, QuickSetupPanel.ID_OTHER_BOTH);
+        press(p, mode(1)); // 聊天 display mode
+        press(p, mode(0)); // 全部項目 display mode
+        press(p, engine(3)); // 記分板 translation service
         press(p, QuickSetupPanel.ID_NEXT);
         assertEquals(QuickSetupPanel.Page.DONE, p.page(), "no packs: straight to the end");
         assertEquals(before, json(host.cfg), "the configuration is untouched until 完成");
@@ -159,8 +173,10 @@ class QuickSetupPanelTest {
         toMethodPage(p);
         press(p, QuickSetupPanel.ID_METHOD_MACHINE);
         press(p, QuickSetupPanel.ID_NEXT);
-        press(p, QuickSetupPanel.ID_CHAT_TRANSLATION);
-        press(p, QuickSetupPanel.ID_OTHER_OFF);
+        press(p, mode(0)); // mixed (聊天 is 雙語) -> everything 譯文
+        press(p, mode(0)); // -> everything 不翻譯
+        press(p, mode(1)); // 聊天: 不翻譯 -> 雙語
+        press(p, mode(1)); // -> 譯文
         press(p, QuickSetupPanel.ID_NEXT);
         press(p, QuickSetupPanel.ID_DONE);
         TranslatorConfig c = host.cfg;
@@ -250,8 +266,9 @@ class QuickSetupPanelTest {
         QuickSetupPanel q = panel(lang);
         assertFalse(q.followGame());
         assertEquals("ja-JP", q.tag());
-        assertEquals(DisplayMode.TRANSLATION, q.chatMode());
-        assertEquals(DisplayMode.BOTH, q.otherMode(), "the other questions are prefilled with the current values");
+        assertEquals(DisplayMode.TRANSLATION, q.draft().chatMode);
+        assertEquals(DisplayMode.BOTH, q.draft().tooltipMode, "the display rows are prefilled with the current values");
+        assertEquals(DisplayMode.BOTH, q.draft().screenTextMode);
     }
 
     @Test
@@ -573,6 +590,123 @@ class QuickSetupPanelTest {
                 assertFalse(b.equals(key), code + " is missing " + key);
                 assertEquals(a.split("%s", -1).length, b.split("%s", -1).length, code + " placeholders of " + key);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ the display grid
+
+    @Test
+    void theDisplayPageHasTheSettingsRowsAndTheirTwoButtons() {
+        FakeHost host = new FakeHost("zh_tw");
+        QuickSetupPanel p = panel(host);
+        toDisplayPage(p, QuickSetupPanel.ID_METHOD_MACHINE);
+        List<String> shown = texts(p);
+        for (String name : List.of("全部項目", "聊天", "物品提示", "記分板", "名牌", "Boss 血條", "標題", "動作列", "書籍", "介面")) {
+            assertTrue(shown.contains(name), name + " in " + shown);
+        }
+        assertTrue(shown.contains("顯示方式") && shown.contains("翻譯服務"), "column headers: " + shown);
+        assertFalse(shown.stream().anyMatch(t -> t.contains("不翻譯詞彙")), "the do-not-translate words are not part of it");
+        for (int row = 0; row <= 9; row++) {
+            assertNotNull(p.dialog().buttonRect(mode(row)), "mode button of row " + row);
+            assertNotNull(p.dialog().buttonRect(engine(row)), "service button of row " + row);
+        }
+        assertNull(p.dialog().buttonRect(mode(10)));
+        assertTrue(shown.contains("翻譯聊天時，聊天內容（包含私訊）會送去翻譯。"), "the chat note stays: " + shown);
+    }
+
+    @Test
+    void theDefaultsAreChatBothAndEverythingElseTranslationWithTheServiceOfThePageBefore() {
+        FakeHost machine = new FakeHost("zh_tw");
+        machine.cfg.aiTooltip = true;
+        QuickSetupPanel p = panel(machine);
+        toDisplayPage(p, QuickSetupPanel.ID_METHOD_MACHINE);
+        TranslatorConfig d = p.draft();
+        assertEquals(DisplayMode.BOTH, d.chatMode);
+        assertEquals(DisplayMode.TRANSLATION, d.tooltipMode);
+        assertEquals(Boolean.FALSE, SettingsCatalog.commonEngine(d), "machine translation everywhere");
+
+        FakeHost ai = new FakeHost("zh_tw");
+        ai.ai = true;
+        QuickSetupPanel q = panel(ai);
+        toMethodPage(q);
+        press(q, QuickSetupPanel.ID_METHOD_AI);
+        assertEquals(1, ai.openAi);
+        q.aiSettingsClosed();
+        assertEquals(QuickSetupPanel.Page.DISPLAY, q.page());
+        assertEquals(Boolean.TRUE, SettingsCatalog.commonEngine(q.draft()), "AI everywhere");
+
+        FakeHost none = new FakeHost("zh_tw");
+        none.cfg.aiChat = true;
+        QuickSetupPanel r = panel(none);
+        toDisplayPage(r, QuickSetupPanel.ID_METHOD_NONE);
+        assertEquals(Boolean.FALSE, SettingsCatalog.commonEngine(r.draft()), "先不要 shows machine translation");
+        press(r, QuickSetupPanel.ID_NEXT);
+        press(r, QuickSetupPanel.ID_DONE);
+        assertTrue(none.cfg.aiChat, "but 先不要 does not change the services that are set");
+        assertFalse(none.cfg.translationRequestsEnabled);
+    }
+
+    @Test
+    void theButtonsChangeOnlyTheDraftAndDoneAppliesEveryRow() {
+        FakeHost host = new FakeHost("zh_tw");
+        QuickSetupPanel p = panel(host);
+        toDisplayPage(p, QuickSetupPanel.ID_METHOD_MACHINE);
+        String before = json(host.cfg);
+        press(p, engine(2)); // 物品提示 -> AI
+        press(p, mode(4)); // 名牌: 譯文 -> 不翻譯
+        assertEquals(before, json(host.cfg), "the configuration is untouched while the rows change");
+        assertEquals(0, host.saves);
+        assertTrue(p.draft().aiTooltip);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, p.draft().nameMode);
+        press(p, QuickSetupPanel.ID_NEXT);
+        press(p, QuickSetupPanel.ID_DONE);
+        assertTrue(host.cfg.aiTooltip);
+        assertFalse(host.cfg.aiChat);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.nameMode);
+        assertEquals(DisplayMode.BOTH, host.cfg.chatMode);
+    }
+
+    @Test
+    void fromTheSettingsMixedServicesStayUntilTheWayOfTranslatingChanges() {
+        FakeHost host = new FakeHost("zh_tw");
+        host.cfg.translationRequestsEnabled = true;
+        host.cfg.firstRunDone = true;
+        host.cfg.aiChat = true;
+        QuickSetupPanel p = panel(host);
+        toMethodPage(p);
+        assertEquals(QuickSetupPanel.Method.MACHINE, p.method(), "prefilled from the settings");
+        press(p, QuickSetupPanel.ID_NEXT);
+        assertTrue(p.draft().aiChat, "unchanged answer: the rows keep what they have");
+        assertNull(SettingsCatalog.commonEngine(p.draft()));
+        press(p, QuickSetupPanel.ID_BACK);
+        press(p, QuickSetupPanel.ID_METHOD_NONE);
+        press(p, QuickSetupPanel.ID_NEXT);
+        assertEquals(Boolean.FALSE, SettingsCatalog.commonEngine(p.draft()), "a new answer sets every row");
+    }
+
+    @Test
+    void theGridIsReachableOnAThreeTwentyByTwoFortyScreen() {
+        FakeHost host = new FakeHost("zh_tw");
+        QuickSetupPanel p = new QuickSetupPanel(host);
+        p.resize(320, 240);
+        toDisplayPage(p, QuickSetupPanel.ID_METHOD_MACHINE);
+        int[] box = p.dialog().boxRect();
+        assertTrue(box[1] >= 0 && box[1] + box[3] <= 240, "the card fits the screen");
+        assertTrue(p.dialog().contentHeight() > p.dialog().viewRect()[3], "the grid is taller than the view and scrolls");
+        press(p, engine(9)); // the last row, scrolled into view
+        assertTrue(p.draft().aiScreenText);
+    }
+
+    @Test
+    void theThreeWaysFitTheViewWithoutScrollingOnA240HighScreen() {
+        for (int[] size : new int[][] {{427, 240}, {320, 240}}) {
+            FakeHost host = new FakeHost("zh_tw");
+            QuickSetupPanel p = new QuickSetupPanel(host);
+            p.resize(size[0], size[1]);
+            toMethodPage(p);
+            assertTrue(p.dialog().contentHeight() <= p.dialog().viewRect()[3],
+                    size[0] + "x" + size[1] + ": content " + p.dialog().contentHeight() + " view "
+                            + p.dialog().viewRect()[3]);
         }
     }
 }

@@ -301,10 +301,13 @@ public final class SettingsPanel {
         int textW = r.stacked || !hasCtrl ? inner : textColW;
         String desc = card.kind() == SettingCard.Kind.INFO && card.id().equals("about_info")
                 ? aboutText(card) : SettingsModel.description(card, lang);
+        if (card.id().equals("about_github")) desc = desc + "\n" + ProjectLinks.GITHUB_DISPLAY; // the address under the sentence
         SettingEntry entry = card.entry();
         if (entry != null && entry.type() == SettingEntry.Type.SUBSCREEN && entry.hasState()) {
             // a screen-opening card shows what is set right now ("目前：跟隨遊戲（繁體中文）")
-            desc = desc + "\n" + host.text(SettingsModel.KEY_CURRENT, resolve(entry.state(host.config())));
+            String current = entry.action() == SettingAction.OPEN_LANGUAGE
+                    ? languageStateText(host.config()) : resolve(entry.state(host.config()));
+            desc = desc + "\n" + host.text(SettingsModel.KEY_CURRENT, current);
         }
         r.desc = UiText.wrap(desc, textW, host::textWidth);
         if (card.kind() == SettingCard.Kind.FILE) {
@@ -331,6 +334,13 @@ public final class SettingsPanel {
         String id = card.id().startsWith("file.") ? card.id().substring(5) : card.id();
         for (FileLocations.Entry e : host.fileLocations()) if (e.id().equals(id)) return e;
         return null;
+    }
+
+    /** The translation language by its name ("繁體中文（台灣）"), never by its code. */
+    private String languageStateText(TranslatorConfig cfg) {
+        String name = host.languageName(cfg.targetLang);
+        if (name == null || name.isBlank()) name = cfg.targetLang;
+        return cfg.followGameLanguage ? host.text("config.nyanlex.language.follow", name) : name;
     }
 
     private String aboutText(SettingCard card) {
@@ -407,14 +417,41 @@ public final class SettingsPanel {
      * row so that the two columns line up all the way down; wide enough for the column headers.
      */
     private int[] multiWidths() {
-        int mode = host.textWidth(host.text(SettingsModel.KEY_ALL_MIXED));
-        for (DisplayMode m : DisplayMode.values()) mode = Math.max(mode, host.textWidth(resolve(SettingsCatalog.modeState(m))));
-        int engine = Math.max(host.textWidth(host.text(SettingsModel.KEY_ALL_MIXED)),
-                Math.max(host.textWidth(resolve(SettingsCatalog.engineState(true))),
-                        host.textWidth(resolve(SettingsCatalog.engineState(false)))));
-        int headMode = host.textWidth(host.text(SettingsModel.KEY_ALL_COL_MODE)) + 4;
-        int headEngine = host.textWidth(host.text(SettingsModel.KEY_ALL_COL_ENGINE)) + 4;
-        return new int[] {Math.max(34, Math.max(mode + 12, headMode)), Math.max(32, Math.max(engine + 12, headEngine))};
+        List<String> modes = new ArrayList<>();
+        for (DisplayMode m : DisplayMode.values()) modes.add(resolve(SettingsCatalog.modeState(m)));
+        List<String> engines = List.of(resolve(SettingsCatalog.engineState(true)),
+                resolve(SettingsCatalog.engineState(false)));
+        return columnWidths(host::textWidth, modes, engines, host.text(SettingsModel.KEY_ALL_MIXED),
+                host.text(SettingsModel.KEY_ALL_COL_MODE), host.text(SettingsModel.KEY_ALL_COL_ENGINE));
+    }
+
+    /**
+     * Widths of the (mode, engine) button columns, from every label a button can show and the two
+     * column headers. The settings screen and the 快速設定 display page both size their buttons with this.
+     */
+    static int[] columnWidths(java.util.function.ToIntFunction<String> width, List<String> modeLabels,
+                              List<String> engineLabels, String mixedLabel, String headMode, String headEngine) {
+        int mode = width.applyAsInt(mixedLabel);
+        for (String label : modeLabels) mode = Math.max(mode, width.applyAsInt(label));
+        int engine = width.applyAsInt(mixedLabel);
+        for (String label : engineLabels) engine = Math.max(engine, width.applyAsInt(label));
+        int headModeW = width.applyAsInt(headMode) + 4;
+        int headEngineW = width.applyAsInt(headEngine) + 4;
+        return new int[] {Math.max(34, Math.max(mode + 12, headModeW)), Math.max(32, Math.max(engine + 12, headEngineW))};
+    }
+
+    /** One mode or engine button, drawn the same way on the settings screen and in the questionnaire. */
+    static void drawChoiceCell(UiCanvas c, int x, int y, int w, int h, String label, int labelColor,
+                               boolean blue, boolean hover, java.util.function.ToIntFunction<String> width) {
+        int bg = blue ? (hover ? C_AI_HOVER : C_AI) : (hover ? C_BUTTON_HOVER : C_BUTTON);
+        rrect(c, x, y, w, h, bg);
+        String text = UiText.fit(label, w - 6, width);
+        c.text(text, x + (w - width.applyAsInt(text)) / 2, y + 3, labelColor);
+    }
+
+    /** Colour of a mode label: translation green, both blue, off grey (settings order of the options). */
+    static int modeColor(int optionIndex) {
+        return optionIndex == 0 ? C_GOOD : optionIndex == 1 ? C_CRUMB : C_DESC;
     }
 
     /** Button rectangles of a SURFACE / ALL card, left to right, inside its control area (below the column headers on ALL). */
@@ -432,10 +469,9 @@ public final class SettingsPanel {
     }
 
     private String toggleStateText(SettingEntry entry, TranslatorConfig cfg) {
+        // every switch states its position (開／關), or its own word where it has one (依序／先到先顯示)
         StateText st = entry.state(cfg);
-        if (st == null || SettingsCatalog.STATE_ON.equals(st.key()) || SettingsCatalog.STATE_OFF.equals(st.key())) {
-            return null;
-        }
+        if (st == null) st = SettingsCatalog.onOff(entry.isOn(cfg));
         return resolve(st);
     }
 
@@ -454,6 +490,7 @@ public final class SettingsPanel {
                 case OPEN_DO_NOT_TRANSLATE:
                     return host.text(SettingsModel.KEY_BTN_EDIT);
                 case OPEN_MANUAL:
+                case OPEN_GITHUB:
                     return host.text(SettingsModel.KEY_BTN_OPEN);
                 case HUB_DOWNLOAD:
                     return host.text(SettingsModel.KEY_BTN_DETECT);
@@ -881,8 +918,8 @@ public final class SettingsPanel {
         c.text(label, btn[0] + (btn[2] - host.textWidth(label)) / 2, btn[1] + 3, C_TITLE);
     }
 
-    private static final int C_AI = 0xFF2E5E9E;
-    private static final int C_AI_HOVER = 0xFF3E72B8;
+    static final int C_AI = 0xFF2E5E9E;
+    static final int C_AI_HOVER = 0xFF3E72B8;
 
     private void drawSurface(UiCanvas c, Row r, int mx, int my) {
         SettingEntry mode = r.card.entry();
@@ -890,16 +927,12 @@ public final class SettingsPanel {
         TranslatorConfig cfg = host.config();
         int[][] rects = multiRects(r);
         int[] m = rects[0];
-        boolean hoverMode = in(mx, my, m[0], m[1], m[2], m[3]);
-        rrect(c, m[0], m[1], m[2], m[3], hoverMode ? C_BUTTON_HOVER : C_BUTTON);
         int idx = Math.max(0, Math.min(mode.options().labels().size() - 1, mode.options().index().applyAsInt(cfg)));
-        int modeColor = idx == 0 ? C_GOOD : idx == 1 ? C_CRUMB : C_DESC;
-        centered(c, resolve(mode.options().labels().get(idx)), m, modeColor);
+        drawChoiceCell(c, m[0], m[1], m[2], m[3], resolve(mode.options().labels().get(idx)), modeColor(idx),
+                false, in(mx, my, m[0], m[1], m[2], m[3]), host::textWidth);
         int[] e = rects[1];
-        boolean ai = engine.isOn(cfg);
-        boolean hoverEngine = in(mx, my, e[0], e[1], e[2], e[3]);
-        rrect(c, e[0], e[1], e[2], e[3], ai ? (hoverEngine ? C_AI_HOVER : C_AI) : (hoverEngine ? C_BUTTON_HOVER : C_BUTTON));
-        centered(c, resolve(engine.state(cfg)), e, C_TITLE);
+        drawChoiceCell(c, e[0], e[1], e[2], e[3], resolve(engine.state(cfg)), C_TITLE, engine.isOn(cfg),
+                in(mx, my, e[0], e[1], e[2], e[3]), host::textWidth);
     }
 
     /** The 全部項目 row: grey column headers over two buttons that show the shared value or "混合". */
@@ -913,19 +946,16 @@ public final class SettingsPanel {
         }
         int[] m = rects[0];
         DisplayMode common = SettingsCatalog.commonMode(cfg);
-        boolean hoverMode = in(mx, my, m[0], m[1], m[2], m[3]);
-        rrect(c, m[0], m[1], m[2], m[3], hoverMode ? C_BUTTON_HOVER : C_BUTTON);
         String modeLabel = common == null ? host.text(SettingsModel.KEY_ALL_MIXED) : resolve(SettingsCatalog.modeState(common));
         int modeColor = common == null ? C_WARN : common == DisplayMode.TRANSLATION ? C_GOOD
                 : common == DisplayMode.BOTH ? C_CRUMB : C_DESC;
-        centered(c, modeLabel, m, modeColor);
+        drawChoiceCell(c, m[0], m[1], m[2], m[3], modeLabel, modeColor, false,
+                in(mx, my, m[0], m[1], m[2], m[3]), host::textWidth);
         int[] e = rects[1];
         Boolean ai = SettingsCatalog.commonEngine(cfg);
-        boolean hoverEngine = in(mx, my, e[0], e[1], e[2], e[3]);
-        boolean blue = ai != null && ai;
-        rrect(c, e[0], e[1], e[2], e[3], blue ? (hoverEngine ? C_AI_HOVER : C_AI) : (hoverEngine ? C_BUTTON_HOVER : C_BUTTON));
-        centered(c, ai == null ? host.text(SettingsModel.KEY_ALL_MIXED) : resolve(SettingsCatalog.engineState(ai)), e,
-                ai == null ? C_WARN : C_TITLE);
+        drawChoiceCell(c, e[0], e[1], e[2], e[3],
+                ai == null ? host.text(SettingsModel.KEY_ALL_MIXED) : resolve(SettingsCatalog.engineState(ai)),
+                ai == null ? C_WARN : C_TITLE, ai != null && ai, in(mx, my, e[0], e[1], e[2], e[3]), host::textWidth);
     }
 
     private void centered(UiCanvas c, String text, int[] rc, int color) {

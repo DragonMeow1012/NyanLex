@@ -90,12 +90,8 @@ public final class QuickSetupPanel {
     static final int ID_METHOD_MACHINE = 20;
     static final int ID_METHOD_AI = 21;
     static final int ID_METHOD_NONE = 22;
-    static final int ID_CHAT_BOTH = 30;
-    static final int ID_CHAT_TRANSLATION = 31;
-    static final int ID_CHAT_OFF = 32;
-    static final int ID_OTHER_TRANSLATION = 40;
-    static final int ID_OTHER_BOTH = 41;
-    static final int ID_OTHER_OFF = 42;
+    /** The display grid: row r (0 is 全部項目) has its mode button at base + 2r and its engine button next to it. */
+    static final int ID_GRID_BASE = 100;
     static final int ID_PACK_SKIP = 50;
     static final int ID_PACK_DOWNLOAD = 51;
     static final int ID_REBIND = 60;
@@ -111,8 +107,10 @@ public final class QuickSetupPanel {
     private Method method;
     private boolean followGame;
     private String tag;
-    private DisplayMode chatMode;
-    private DisplayMode otherMode;
+    /** The way to translate the page was opened with (null on a first start), to tell whether the player changed it. */
+    private Method startMethod;
+    /** What 完成 will apply to the display grid: the current settings, edited here; the real configuration is not touched. */
+    private TranslatorConfig draft;
     private boolean packSkipped;
     private boolean packWaiting;
     private long packWaitStart;
@@ -145,16 +143,8 @@ public final class QuickSetupPanel {
             Boolean ai = SettingsCatalog.commonEngine(cfg);
             method = ai != null && ai ? Method.AI : Method.MACHINE;
         }
-        chatMode = cfg.chatMode;
-        DisplayMode[] others = {cfg.tooltipMode, cfg.scoreboardMode, cfg.nameMode, cfg.bossBarMode,
-                cfg.titleMode, cfg.actionBarMode, cfg.bookMode, cfg.screenTextMode};
-        otherMode = others[0];
-        for (DisplayMode m : others) {
-            if (m != otherMode) {
-                otherMode = DisplayMode.TRANSLATION;
-                break;
-            }
-        }
+        startMethod = method;
+        draft = cfg.copy();
     }
 
     public Page page() { return page; }
@@ -166,9 +156,8 @@ public final class QuickSetupPanel {
 
     public String tag() { return tag; }
 
-    public DisplayMode chatMode() { return chatMode; }
-
-    public DisplayMode otherMode() { return otherMode; }
+    /** The display choices made so far (a copy of the settings with the questionnaire's edits). */
+    public TranslatorConfig draft() { return draft; }
 
     public boolean isFinished() { return finished; }
 
@@ -195,12 +184,25 @@ public final class QuickSetupPanel {
         switch (page) {
             case LANGUAGE -> go(Page.METHOD);
             case METHOD -> {
-                if (method != null) go(Page.DISPLAY);
+                if (method != null) enterDisplay();
             }
             case DISPLAY -> afterDisplay();
             case PACKS -> go(Page.DONE);
             default -> { }
         }
+    }
+
+    /**
+     * On to the display page. The translation service of every row follows the way chosen on the
+     * page before (AI for AI, machine for machine or 先不要); when the player did not change that
+     * choice (re-entering from the settings), the rows keep what they have.
+     */
+    private void enterDisplay() {
+        if (method != startMethod) {
+            SettingsCatalog.setAllEngines(draft, method == Method.AI);
+            startMethod = method;
+        }
+        go(Page.DISPLAY);
     }
 
     private void afterDisplay() {
@@ -243,7 +245,7 @@ public final class QuickSetupPanel {
         if (page != Page.METHOD) return;
         if (host.aiConfigured()) {
             method = Method.AI;
-            go(Page.DISPLAY);
+            enterDisplay();
         } else {
             method = null;
             rebuild(false);
@@ -275,24 +277,15 @@ public final class QuickSetupPanel {
         TranslatorConfig cfg = host.config();
         boolean wasOnline = cfg.translationRequestsEnabled;
         host.applyLanguage(followGame, tag);
-        if (method == Method.MACHINE) {
-            SettingsCatalog.setAllEngines(cfg, false);
-            cfg.translationRequestsEnabled = true;
-        } else if (method == Method.AI) {
-            SettingsCatalog.setAllEngines(cfg, true);
-            cfg.translationRequestsEnabled = true;
-        } else if (method == Method.NONE) {
-            cfg.translationRequestsEnabled = false;
+        if (method == Method.MACHINE || method == Method.AI) cfg.translationRequestsEnabled = true;
+        else if (method == Method.NONE) cfg.translationRequestsEnabled = false;
+        for (SettingsRow row : SettingsCatalog.rows(SettingsPage.DISPLAY)) {
+            SettingEntry mode = row.primary();
+            SettingEntry engine = row.secondary();
+            mode.options().select().accept(cfg, mode.options().index().applyAsInt(draft));
+            // 先不要 sends nothing, so it leaves the services as they are
+            if (method != Method.NONE && engine.isOn(cfg) != engine.isOn(draft)) engine.press(cfg);
         }
-        cfg.chatMode = chatMode;
-        cfg.tooltipMode = otherMode;
-        cfg.scoreboardMode = otherMode;
-        cfg.nameMode = otherMode;
-        cfg.bossBarMode = otherMode;
-        cfg.titleMode = otherMode;
-        cfg.actionBarMode = otherMode;
-        cfg.bookMode = otherMode;
-        cfg.screenTextMode = otherMode;
         cfg.firstRunDone = true;
         host.saveConfig();
         if (wasOnline != cfg.translationRequestsEnabled) host.onlineChanged();
@@ -347,12 +340,6 @@ public final class QuickSetupPanel {
                 rebuild(false);
             }
             case ID_METHOD_AI -> host.openAiSettings();
-            case ID_CHAT_BOTH -> setChat(DisplayMode.BOTH);
-            case ID_CHAT_TRANSLATION -> setChat(DisplayMode.TRANSLATION);
-            case ID_CHAT_OFF -> setChat(DisplayMode.ORIGINAL_ONLY);
-            case ID_OTHER_TRANSLATION -> setOther(DisplayMode.TRANSLATION);
-            case ID_OTHER_BOTH -> setOther(DisplayMode.BOTH);
-            case ID_OTHER_OFF -> setOther(DisplayMode.ORIGINAL_ONLY);
             case ID_PACK_SKIP -> {
                 packSkipped = true;
                 rebuild(false);
@@ -363,17 +350,26 @@ public final class QuickSetupPanel {
                 go(Page.DONE);
             }
             case ID_REBIND -> host.openKeybinds();
-            default -> { }
+            default -> {
+                if (id >= ID_GRID_BASE) pressGrid(id - ID_GRID_BASE);
+            }
         }
     }
 
-    private void setChat(DisplayMode mode) {
-        chatMode = mode;
-        rebuild(false);
-    }
-
-    private void setOther(DisplayMode mode) {
-        otherMode = mode;
+    /** A button of the display grid was pressed: {@code cell / 2} is the row, an odd {@code cell} the engine button. */
+    private void pressGrid(int cell) {
+        int row = cell / 2;
+        boolean engine = cell % 2 == 1;
+        if (row == 0) {
+            if (engine) SettingsCatalog.toggleAllEngines(draft);
+            else SettingsCatalog.cycleAllModes(draft);
+        } else {
+            List<SettingsRow> rows = SettingsCatalog.rows(SettingsPage.DISPLAY);
+            if (row - 1 >= rows.size()) return;
+            SettingsRow r = rows.get(row - 1);
+            if (engine) r.secondary().press(draft);
+            else r.primary().press(draft);
+        }
         rebuild(false);
     }
 
@@ -435,23 +431,7 @@ public final class QuickSetupPanel {
                 steps = totalSteps();
                 step = 3;
                 blocks.add(new DialogPanel.Text(t("nyanlex.setup.display.title"), DialogPanel.C_TITLE));
-                blocks.add(new DialogPanel.Text(t("nyanlex.setup.display.chat"), 0));
-                blocks.add(new DialogPanel.Row(List.of(
-                        new DialogPanel.Btn(ID_CHAT_BOTH, t("nyanlex.setup.mode.both_recommended"), false,
-                                chatMode == DisplayMode.BOTH, true),
-                        new DialogPanel.Btn(ID_CHAT_TRANSLATION, t("nyanlex.setup.mode.translation"), false,
-                                chatMode == DisplayMode.TRANSLATION, true),
-                        new DialogPanel.Btn(ID_CHAT_OFF, t("nyanlex.setup.mode.off"), false,
-                                chatMode == DisplayMode.ORIGINAL_ONLY, true))));
-                blocks.add(new DialogPanel.Text(t("nyanlex.setup.display.chat.note"), C_MUTED));
-                blocks.add(new DialogPanel.Text(t("nyanlex.setup.display.other"), 0));
-                blocks.add(new DialogPanel.Row(List.of(
-                        new DialogPanel.Btn(ID_OTHER_TRANSLATION, t("nyanlex.setup.mode.translation"), false,
-                                otherMode == DisplayMode.TRANSLATION, true),
-                        new DialogPanel.Btn(ID_OTHER_BOTH, t("nyanlex.setup.mode.both"), false,
-                                otherMode == DisplayMode.BOTH, true),
-                        new DialogPanel.Btn(ID_OTHER_OFF, t("nyanlex.setup.mode.off"), false,
-                                otherMode == DisplayMode.ORIGINAL_ONLY, true))));
+                blocks.add(displayGrid());
                 footer = navFooter(true);
             }
             case PACKS -> {
@@ -499,6 +479,45 @@ public final class QuickSetupPanel {
         return new DialogPanel.Content(title, steps, step, blocks, footer, ID_LATER);
     }
 
+    /** The same rows as the settings screen's 顯示 category: 全部項目, then one row per surface. */
+    private DialogPanel.Grid displayGrid() {
+        List<String> modeLabels = new ArrayList<>();
+        for (DisplayMode m : DisplayMode.values()) modeLabels.add(t(SettingsCatalog.modeState(m).key()));
+        List<String> engineLabels = List.of(t(SettingsCatalog.engineState(true).key()),
+                t(SettingsCatalog.engineState(false).key()));
+        String mixed = t(SettingsModel.KEY_ALL_MIXED);
+        List<DialogPanel.GridRow> rows = new ArrayList<>();
+        DisplayMode commonMode = SettingsCatalog.commonMode(draft);
+        Boolean commonAi = SettingsCatalog.commonEngine(draft);
+        rows.add(new DialogPanel.GridRow(t(SettingsModel.KEY_ALL_TITLE),
+                new DialogPanel.Cell(ID_GRID_BASE, commonMode == null ? mixed : t(SettingsCatalog.modeState(commonMode).key()),
+                        commonMode == null ? SettingsPanel.C_WARN : SettingsPanel.modeColor(modeOrder(commonMode)), false),
+                new DialogPanel.Cell(ID_GRID_BASE + 1,
+                        commonAi == null ? mixed : t(SettingsCatalog.engineState(commonAi).key()),
+                        commonAi == null ? SettingsPanel.C_WARN : SettingsPanel.C_TITLE, commonAi != null && commonAi)));
+        List<SettingsRow> surfaces = SettingsCatalog.rows(SettingsPage.DISPLAY);
+        int chatRow = -1;
+        for (int i = 0; i < surfaces.size(); i++) {
+            SettingsRow r = surfaces.get(i);
+            SettingEntry mode = r.primary();
+            SettingEntry engine = r.secondary();
+            if (mode.id().equals("chat")) chatRow = i + 1;
+            int idx = Math.max(0, Math.min(mode.options().labels().size() - 1, mode.options().index().applyAsInt(draft)));
+            boolean ai = engine.isOn(draft);
+            int base = ID_GRID_BASE + 2 * (i + 1);
+            rows.add(new DialogPanel.GridRow(SettingCard.stripState(t(mode.labelKey())),
+                    new DialogPanel.Cell(base, t(mode.options().labels().get(idx).key()), SettingsPanel.modeColor(idx), false),
+                    new DialogPanel.Cell(base + 1, t(SettingsCatalog.engineState(ai).key()), SettingsPanel.C_TITLE, ai)));
+        }
+        return new DialogPanel.Grid(t(SettingsModel.KEY_ALL_COL_MODE), t(SettingsModel.KEY_ALL_COL_ENGINE), modeLabels,
+                engineLabels, mixed, rows, chatRow, t("nyanlex.setup.display.chat.note"));
+    }
+
+    /** Position of a mode in the settings buttons: 譯文, 雙語, 不翻譯. */
+    private static int modeOrder(DisplayMode mode) {
+        return mode == DisplayMode.TRANSLATION ? 0 : mode == DisplayMode.BOTH ? 1 : 2;
+    }
+
     private DialogPanel.Footer navFooter(boolean nextEnabled) {
         return DialogPanel.Footer.of(new DialogPanel.Btn(ID_BACK, t("nyanlex.setup.back")),
                 new DialogPanel.Btn(ID_NEXT, t("nyanlex.setup.next"), true).withEnabled(nextEnabled));
@@ -514,9 +533,7 @@ public final class QuickSetupPanel {
                 "nyanlex.setup.method.title", "nyanlex.setup.method.machine", "nyanlex.setup.method.machine.desc",
                 "nyanlex.setup.method.ai", "nyanlex.setup.method.ai.desc",
                 "nyanlex.setup.method.none", "nyanlex.setup.method.none.desc", "nyanlex.setup.method.note",
-                "nyanlex.setup.display.title", "nyanlex.setup.display.chat", "nyanlex.setup.display.chat.note",
-                "nyanlex.setup.display.other", "nyanlex.setup.mode.both_recommended", "nyanlex.setup.mode.translation",
-                "nyanlex.setup.mode.both", "nyanlex.setup.mode.off",
+                "nyanlex.setup.display.title", "nyanlex.setup.display.chat.note",
                 "nyanlex.setup.packs.checking", "nyanlex.setup.packs.title", "nyanlex.setup.packs.skip",
                 "nyanlex.setup.packs.download", "nyanlex.setup.packs.skipped", "nyanlex.setup.packs.note",
                 "nyanlex.setup.done.title", "nyanlex.setup.done.keys", "nyanlex.setup.done.key.item",

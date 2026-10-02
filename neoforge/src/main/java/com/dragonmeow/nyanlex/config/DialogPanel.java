@@ -48,6 +48,21 @@ public final class DialogPanel {
     /** Empty vertical space. */
     public record Gap(int height) implements Block {}
 
+    /** One mode or engine button of a {@link Grid} row; {@code color} 0 means white, {@code blue} the AI look. */
+    public record Cell(int id, String label, int color, boolean blue) {}
+
+    /** One row of a {@link Grid}: a name and its two buttons. */
+    public record GridRow(String name, Cell mode, Cell engine) {}
+
+    /**
+     * A table of rows with two buttons each, the same buttons and column widths as the settings
+     * screen's 顯示 category (the 快速設定 display page). {@code modeLabels} and {@code engineLabels}
+     * list every text a button may show, so the columns keep their width while a choice changes;
+     * {@code note} is a grey paragraph under row {@code noteAfterRow} (-1 for none).
+     */
+    public record Grid(String modeHead, String engineHead, List<String> modeLabels, List<String> engineLabels,
+                       String mixedLabel, List<GridRow> rows, int noteAfterRow, String note) implements Block {}
+
     /** Buttons pinned to the bottom: {@code left} at the left edge, {@code right} at the right edge. */
     public record Footer(List<Btn> left, List<Btn> right) {
         public static Footer of(Btn left, Btn right) {
@@ -98,6 +113,10 @@ public final class DialogPanel {
     private static final int MIN_BTN_W = 56;
     private static final int STEP = 20;
     private static final int BAR_W = 4;
+    private static final int CHOICE_PAD_TOP = 6;
+    private static final int CHOICE_PAD_TOP_COMPACT = 4;
+    private static final int CELL_H = 14;
+    private static final int HEAD_H = 10;
 
     private final ToIntFunction<String> width;
     private Narration narration = Narration.PLAIN;
@@ -127,9 +146,12 @@ public final class DialogPanel {
 
     /** One pressable thing: a button or a choice box. y is relative to the content area for content items. */
     private record Item(int id, String label, String desc, int x, int y, int w, int h, boolean choice,
-                        boolean selected, boolean primary, boolean enabled, boolean inFooter) {
-        Item at(int nx, int ny) {
-            return new Item(id, label, desc, nx, ny, w, h, choice, selected, primary, enabled, inFooter);
+                        boolean selected, boolean primary, boolean enabled, boolean inFooter,
+                        boolean cell, int color, boolean blue, String narrate, int pad) {
+        Item(int id, String label, String desc, int x, int y, int w, int h, boolean choice,
+             boolean selected, boolean primary, boolean enabled, boolean inFooter) {
+            this(id, label, desc, x, y, w, h, choice, selected, primary, enabled, inFooter, false, 0, false, null,
+                    CHOICE_PAD_TOP);
         }
     }
 
@@ -194,62 +216,22 @@ public final class DialogPanel {
         int inner = bw - 2 * PAD;
         titleShown = UiText.fit(content.title(), inner - (content.steps() > 0 ? content.steps() * 8 + 8 : 0), width);
 
-        // 1) content, laid out relative to the content area's top-left
-        int y = 0;
-        int choiceH = 0;
-        for (Block b : content.blocks()) {
-            if (b instanceof Choice c) choiceH = Math.max(choiceH, choiceHeight(c, inner));
-        }
-        Block previous = null;
-        for (Block b : content.blocks()) {
-            if (previous != null && !(b instanceof Gap) && !(previous instanceof Gap)) y += gapBetween(previous, b);
-            previous = b;
-            if (b instanceof Text t) {
-                for (String line : UiText.wrap(t.text(), inner, width)) {
-                    texts.add(new LaidText(line, 0, y, t.color() == 0 ? C_TEXT : t.color(), 0));
-                    y += LINE;
-                }
-            } else if (b instanceof Gap g) {
-                y += g.height();
-            } else if (b instanceof Choice c) {
-                items.add(new Item(c.id(), c.title(), c.desc(), 0, y, inner, choiceH, true, c.selected(), false, true, false));
-                y += choiceH;
-            } else if (b instanceof Row r) {
-                int n = Math.max(1, r.buttons().size());
-                int each = (inner - (n - 1) * GAP) / n;
-                if (n == 1) each = Math.min(inner, Math.max(MIN_BTN_W, width.applyAsInt(r.buttons().get(0).label()) + 24));
-                int x = 0;
-                for (Btn btn : r.buttons()) {
-                    items.add(new Item(btn.id(), btn.label(), null, x, y, each, BTN_H, false, btn.selected(),
-                            btn.primary(), btn.enabled(), false));
-                    x += each + GAP;
-                }
-                y += BTN_H;
-            } else if (b instanceof ListBox l) {
-                int visible = Math.max(1, Math.min(l.maxVisible(), l.lines().size()));
-                int h = visible * LINE + 8;
-                lists.add(new LaidList(l.lines(), 0, y, inner, h, visible));
-                y += h;
-            } else if (b instanceof KeyLine k) {
-                int capW = Math.max(18, width.applyAsInt(k.key()) + 10);
-                texts.add(new LaidText(k.key(), 0, y, C_TITLE, capW));
-                List<String> wrapped = UiText.wrap(k.desc(), inner - capW - 8, width);
-                int ly = y + 3;
-                for (String line : wrapped) {
-                    texts.add(new LaidText(line, capW + 8, ly, C_TEXT, 0));
-                    ly += LINE;
-                }
-                y += Math.max(BTN_H, wrapped.size() * LINE + 6);
-            }
-        }
-        contentH = y;
-
-        // 2) footer width and height
+        // 1) the frame around the content (it does not depend on the content)
         Footer footer = content.footer();
         int footerH = footer == null || (footer.left().isEmpty() && footer.right().isEmpty()) ? 0 : BTN_H;
         int headH = TITLE_H + 4;
         int chrome = PAD_Y + headH + (footerH > 0 ? 8 + footerH : 0) + PAD_Y;
         int maxViewH = Math.max(LINE * 3, screenH - 8 - chrome);
+
+        // 2) content, laid out relative to the content area's top-left; when the equally tall option
+        // boxes do not fit the screen, each box takes only the height its own text needs
+        contentH = layoutBlocks(inner, false);
+        if (contentH > maxViewH && content.blocks().stream().filter(b -> b instanceof Choice).count() >= 2) {
+            items.clear();
+            texts.clear();
+            lists.clear();
+            contentH = layoutBlocks(inner, true);
+        }
         viewH = Math.min(contentH, maxViewH);
         viewW = inner;
         bh = chrome + viewH;
@@ -281,17 +263,108 @@ public final class DialogPanel {
         }
     }
 
+    /** Lays the blocks out below each other and returns their total height. */
+    private int layoutBlocks(int inner, boolean compact) {
+        int y = 0;
+        int choiceH = 0;
+        for (Block b : content.blocks()) {
+            if (b instanceof Choice c) choiceH = Math.max(choiceH, choiceHeight(c, inner, compact));
+        }
+        int pad = compact ? CHOICE_PAD_TOP_COMPACT : CHOICE_PAD_TOP;
+        Block previous = null;
+        for (Block b : content.blocks()) {
+            if (previous != null && !(b instanceof Gap) && !(previous instanceof Gap)) y += gapBetween(previous, b);
+            previous = b;
+            if (b instanceof Text t) {
+                for (String line : UiText.wrap(t.text(), inner, width)) {
+                    texts.add(new LaidText(line, 0, y, t.color() == 0 ? C_TEXT : t.color(), 0));
+                    y += LINE;
+                }
+            } else if (b instanceof Gap g) {
+                y += g.height();
+            } else if (b instanceof Choice c) {
+                int h = compact ? choiceHeight(c, inner, true) : choiceH;
+                items.add(new Item(c.id(), c.title(), c.desc(), 0, y, inner, h, true, c.selected(), false, true, false,
+                        false, 0, false, null, pad));
+                y += h;
+            } else if (b instanceof Row r) {
+                int n = Math.max(1, r.buttons().size());
+                int each = (inner - (n - 1) * GAP) / n;
+                if (n == 1) each = Math.min(inner, Math.max(MIN_BTN_W, width.applyAsInt(r.buttons().get(0).label()) + 24));
+                int x = 0;
+                for (Btn btn : r.buttons()) {
+                    items.add(new Item(btn.id(), btn.label(), null, x, y, each, BTN_H, false, btn.selected(),
+                            btn.primary(), btn.enabled(), false));
+                    x += each + GAP;
+                }
+                y += BTN_H;
+            } else if (b instanceof ListBox l) {
+                int visible = Math.max(1, Math.min(l.maxVisible(), l.lines().size()));
+                int h = visible * LINE + 8;
+                lists.add(new LaidList(l.lines(), 0, y, inner, h, visible));
+                y += h;
+            } else if (b instanceof KeyLine k) {
+                int capW = Math.max(18, width.applyAsInt(k.key()) + 10);
+                texts.add(new LaidText(k.key(), 0, y, C_TITLE, capW));
+                List<String> wrapped = UiText.wrap(k.desc(), inner - capW - 8, width);
+                int ly = y + 3;
+                for (String line : wrapped) {
+                    texts.add(new LaidText(line, capW + 8, ly, C_TEXT, 0));
+                    ly += LINE;
+                }
+                y += Math.max(BTN_H, wrapped.size() * LINE + 6);
+            } else if (b instanceof Grid g) {
+                y = layoutGrid(g, inner, y);
+            }
+        }
+        return y;
+    }
+
+    /** Column headers, then one row per entry (name on the left, mode and engine buttons on the right). */
+    private int layoutGrid(Grid g, int inner, int top) {
+        int[] cw = SettingsPanel.columnWidths(width, g.modeLabels(), g.engineLabels(), g.mixedLabel(),
+                g.modeHead(), g.engineHead());
+        int engineX = inner - cw[1];
+        int modeX = engineX - GAP - cw[0];
+        int nameW = Math.max(40, modeX - 8);
+        int y = top;
+        texts.add(new LaidText(g.modeHead(), modeX + (cw[0] - width.applyAsInt(g.modeHead())) / 2, y + 1, C_MUTED, 0));
+        texts.add(new LaidText(g.engineHead(), engineX + (cw[1] - width.applyAsInt(g.engineHead())) / 2, y + 1,
+                C_MUTED, 0));
+        y += HEAD_H;
+        for (int i = 0; i < g.rows().size(); i++) {
+            GridRow row = g.rows().get(i);
+            texts.add(new LaidText(UiText.fit(row.name(), nameW, width), 0, y + 3, C_TEXT, 0));
+            items.add(new Item(row.mode().id(), row.mode().label(), null, modeX, y, cw[0], CELL_H, false, false, false,
+                    true, false, true, row.mode().color(), row.mode().blue(),
+                    row.name() + " " + g.modeHead() + " " + row.mode().label(), CHOICE_PAD_TOP));
+            items.add(new Item(row.engine().id(), row.engine().label(), null, engineX, y, cw[1], CELL_H, false, false,
+                    false, true, false, true, row.engine().color(), row.engine().blue(),
+                    row.name() + " " + g.engineHead() + " " + row.engine().label(), CHOICE_PAD_TOP));
+            y += CELL_H + 4;
+            if (i == g.noteAfterRow() && g.note() != null && !g.note().isEmpty()) {
+                for (String line : UiText.wrap(g.note(), inner, width)) {
+                    texts.add(new LaidText(line, 0, y - 2, C_MUTED, 0));
+                    y += LINE;
+                }
+                y += 2;
+            }
+        }
+        return y - 4;
+    }
+
     /** Space between two blocks: tight inside a group of the same kind, looser between groups. */
     private static int gapBetween(Block a, Block b) {
         boolean sameKind = a.getClass() == b.getClass();
         // a question sits close to what answers it
-        boolean question = a instanceof Text && (b instanceof Choice || b instanceof Row);
+        boolean question = a instanceof Text && (b instanceof Choice || b instanceof Row || b instanceof Grid);
         return sameKind || question ? 4 : BLOCK_GAP;
     }
 
-    private int choiceHeight(Choice c, int inner) {
+    private int choiceHeight(Choice c, int inner, boolean compact) {
         int textW = inner - 24;
-        return 6 + LINE + 2 + UiText.wrap(c.desc(), textW, width).size() * LINE + 4;
+        return (compact ? CHOICE_PAD_TOP_COMPACT : CHOICE_PAD_TOP) + LINE + 2
+                + UiText.wrap(c.desc(), textW, width).size() * LINE + (compact ? 3 : 4);
     }
 
     private int maxScroll() { return Math.max(0, contentH - viewH); }
@@ -385,12 +458,17 @@ public final class DialogPanel {
         if (it.choice()) {
             SettingsPanel.rrect(c, x, y, it.w(), it.h(), it.selected() ? C_CARD_SELECTED : hover ? C_CARD_HOVER : C_CARD);
             SettingsPanel.border(c, x, y, it.w(), it.h(), it.selected() ? C_ACCENT : C_EDGE);
-            c.text(UiText.fit(it.label(), it.w() - 16, width), x + 12, y + 6, C_TITLE);
-            int ly = y + 6 + LINE + 2;
+            c.text(UiText.fit(it.label(), it.w() - 16, width), x + 12, y + it.pad(), C_TITLE);
+            int ly = y + it.pad() + LINE + 2;
             for (String line : UiText.wrap(it.desc(), it.w() - 24, width)) {
                 c.text(line, x + 12, ly, C_MUTED);
                 ly += LINE;
             }
+            return;
+        }
+        if (it.cell()) {
+            SettingsPanel.drawChoiceCell(c, x, y, it.w(), it.h(), it.label(), it.color() == 0 ? C_TITLE : it.color(),
+                    it.blue(), hover, width);
             return;
         }
         int bg = !it.enabled() ? C_OFF_BG
@@ -549,7 +627,7 @@ public final class DialogPanel {
             String base = String.format(narration.choice(), it.label() + (it.desc() == null ? "" : "。" + it.desc()));
             return it.selected() ? String.format(narration.chosen(), base) : base;
         }
-        String label = String.format(narration.button(), it.label());
+        String label = String.format(narration.button(), it.narrate() != null ? it.narrate() : it.label());
         return it.enabled() ? label : String.format(narration.disabled(), label);
     }
 

@@ -76,6 +76,7 @@ class SettingsPanelTest {
         }
         @Override public void openFileLocation(FileLocations.Entry entry) { opened.add(entry); }
         @Override public String modVersion() { return "1.0.0"; }
+        @Override public String languageName(String tag) { return "zh-TW".equals(tag) ? "繁體中文（台灣）" : null; }
         @Override public String clipboard() { return clipboard; }
         @Override public void close() { closed = true; }
         @Override public long nowMs() { return 0; }
@@ -272,6 +273,12 @@ class SettingsPanelTest {
         p.setCategory(SettingsCategory.ADVANCED);
         assertTrue(p.isExpanded(SettingsModel.FILES_GROUP_ID));
         for (String id : FileLocations.IDS) assertNotNull(SettingsModel.byId("file." + id), id);
+        for (int i = 0; i < 200; i++) {
+            int[] at = p.controlBounds("file.ai_cache");
+            int[] list = p.listRect();
+            if (at != null && at[1] >= list[1] && at[1] + at[3] <= list[1] + list[3]) break;
+            p.keyPressed(SettingsPanel.KEY_DOWN, false, false);
+        }
         int[] ctl = p.controlBounds("file.ai_cache");
         assertNotNull(ctl, "AI cache card must be laid out");
         click(p, ctl);
@@ -307,11 +314,11 @@ class SettingsPanelTest {
     }
 
     @Test
-    void aboutCategoryIsJustTheVersionAndTheManualButton() {
+    void aboutCategoryIsTheVersionTheManualAndGitHub() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 427, 240);
         p.setCategory(SettingsCategory.ABOUT);
-        assertEquals(2, p.rowCount());
+        assertEquals(3, p.rowCount());
         Rec c = new Rec();
         p.render(c, -1, -1);
         assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("NyanLex Translator")));
@@ -321,6 +328,11 @@ class SettingsPanelTest {
         assertEquals(List.of(), host.actions);
         click(p, p.controlBounds("about_manual"));
         assertEquals(List.of(SettingAction.OPEN_MANUAL), host.actions);
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("GitHub")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().startsWith("作者 DragonMeow")), "the author line");
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals(ProjectLinks.GITHUB_DISPLAY)), "the address, on its own line");
+        click(p, p.controlBounds("about_github"));
+        assertEquals(List.of(SettingAction.OPEN_MANUAL, SettingAction.OPEN_GITHUB), host.actions);
     }
 
     @Test
@@ -378,8 +390,9 @@ class SettingsPanelTest {
             }
             String privacy = lookup(code, SettingsModel.manualBodyKey(6));
             assertTrue(privacy.contains("Google") && privacy.contains("API"), code);
-            String last = lookup(code, SettingsModel.manualBodyKey(10));
-            assertTrue(last.contains("MIT") && last.contains("github.com/DragonMeow1012/NyanLex"), code);
+            String last = ProjectLinks.fill(lookup(code, SettingsModel.manualBodyKey(10)));
+            assertTrue(last.contains("MIT") && last.contains(ProjectLinks.GITHUB_URL), code);
+            assertFalse(last.contains("AI") && last.contains("圖示"), code + ": the game no longer carries the icon, so no icon line");
             // the old wording is gone for good
             for (int i = 1; i <= SettingsModel.MANUAL_SECTIONS; i++) {
                 String body = lookup(code, SettingsModel.manualBodyKey(i));
@@ -947,4 +960,41 @@ class SettingsPanelTest {
         assertTrue(top && left, "a one pixel accent-blue frame surrounds the switch");
     }
 
+
+    @Test
+    void theLanguageIsShownByItsNameNeverByItsCode() {
+        FakeHost host = new FakeHost();
+        host.cfg.followGameLanguage = true;
+        host.cfg.targetLang = "zh-TW";
+        SettingsPanel p = panel(host, 640, 360);
+        p.setCategory(SettingsCategory.GENERAL);
+        Rec c = new Rec();
+        p.render(c, -1, -1);
+        String all = c.texts.stream().map(Text::s).reduce("", String::concat);
+        assertTrue(all.contains("目前：跟隨遊戲（繁體中文（台灣））"), all);
+        assertFalse(all.contains("zh-TW"));
+        host.cfg.followGameLanguage = false;
+        Rec d = new Rec();
+        p.setCategory(SettingsCategory.DISPLAY);
+        p.setCategory(SettingsCategory.GENERAL);
+        p.render(d, -1, -1);
+        assertTrue(d.texts.stream().map(Text::s).reduce("", String::concat).contains("目前：繁體中文（台灣）"));
+    }
+
+    @Test
+    void everySwitchStatesItsPosition() {
+        FakeHost host = new FakeHost();
+        for (SettingsCategory cat : new SettingsCategory[] {SettingsCategory.SERVICE, SettingsCategory.ADVANCED,
+                SettingsCategory.MINE}) {
+            SettingsPanel p = panel(host, 640, 480);
+            p.setCategory(cat);
+            Rec c = new Rec();
+            p.render(c, -1, -1);
+            int switches = 0;
+            for (SettingCard card : SettingsModel.cards(cat)) if (card.kind() == SettingCard.Kind.TOGGLE) switches++;
+            long states = c.texts.stream().map(Text::s)
+                    .filter(t -> t.equals("開") || t.equals("關") || t.equals("依序") || t.equals("先到先顯示")).count();
+            assertTrue(switches > 0 && states >= switches, cat + ": " + switches + " switches, " + states + " states");
+        }
+    }
 }

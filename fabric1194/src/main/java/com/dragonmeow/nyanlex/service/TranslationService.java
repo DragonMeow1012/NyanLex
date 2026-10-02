@@ -134,16 +134,11 @@ public final class TranslationService {
     private final ItemEntityRegistry itemEntities = new ItemEntityRegistry();
     /** Loader-provided info log (debug overlay diagnostics only). */
     private volatile Consumer<String> infoLog = message -> { };
-    /** Loader-provided per-segment tooltip trace sink (debug overlay diagnostics only,
-     *  see {@link TooltipTraceWriter}'s class doc) — {@code null} until the glue wires one
-     *  up (mirrors {@link OpenAiTranslator}'s {@code ExchangeDumpSink}: both are strictly
-     *  optional, writes nothing of its own, and record calls are no-ops while unset). */
-    private volatile TooltipTraceWriter tooltipTrace;
-
-    /** Wires the debug-overlay-only per-segment tooltip trace sink (see {@link
-     *  #composeStructuredTooltip}). {@code null} restores the no-op default. */
+    /** Kept so loader glue that still wires the old per-segment tooltip trace compiles; the
+     *  trace itself is gone (偵錯模式 only logs errors now, see {@link DebugErrorLog}). */
+    @Deprecated
     public void setTooltipTraceWriter(TooltipTraceWriter sink) {
-        this.tooltipTrace = sink;
+        // intentionally nothing
     }
     private static final int MAX_LOGGED_ITEM_ENTITIES = 4096;
     private final Set<String> loggedItemEntities = ConcurrentHashMap.newKeySet();
@@ -1290,14 +1285,7 @@ public final class TranslationService {
         // groupedOrder/buildContextBlocks) emits it ONCE per HTTP request, not once per
         // segment. See #structuredTooltipContext for the per-unit dedup rationale.
         List<String> context = structuredTooltipContext(plan, original, null);
-        // Debug-overlay-only (see TooltipTraceWriter's class doc): checked ONCE up front so
-        // the common "overlay off" case costs only this one volatile read per render frame,
-        // never a per-segment branch/allocation.
-        TooltipTraceWriter trace = tooltipTrace;
-        boolean tracing = trace != null && trace.isEnabled();
-        List<TooltipTraceWriter.SegmentTrace> traces = tracing ? new ArrayList<>() : null;
         TooltipSegmentPlanner.SegmentResolver resolver = (segment, rawSegmentText) -> {
-            String localizedKey = null;
             String resolved;
             switch (segment.kind()) {
                 case INERT:
@@ -1328,10 +1316,6 @@ public final class TranslationService {
                     // internally (localize THEN maskPlain) — shown/looked-up here exactly
                     // as-is so the trace file and the actual cache agree on what "this
                     // segment's key" means.
-                    if (tracing) {
-                        localizedKey = maskPlain(
-                                LocalTokenRenumberer.localize(rawSegmentText).text()).text();
-                    }
                     resolved = resolveEnchantName(rawSegmentText, useAi);
                     if (resolved == null && allowRequest) {
                         requestEnchantName(rawSegmentText, useAi, context, false);
@@ -1341,19 +1325,12 @@ public final class TranslationService {
                 default:
                     resolved = null;
             }
-            if (tracing) {
-                String verdict = resolved != null ? "ok"
-                        : (localizedKey != null && cache(useAi).isPending(localizedKey) ? "pending" : "missing");
-                traces.add(new TooltipTraceWriter.SegmentTrace(
-                        segment.kind().name(), rawSegmentText, localizedKey, verdict));
-            }
             return resolved;
         };
 
         TooltipSegmentPlanner.Composition composition =
                 TooltipSegmentPlanner.composeDetailed(original, plan, resolver);
         String composed = composition.full();
-        if (tracing) trace.record(original, traces, composed);
         if (composed != null) {
             structuredComposeMemo.put(original, composed);
             return TranslationDecision.of(mode, original, composed);

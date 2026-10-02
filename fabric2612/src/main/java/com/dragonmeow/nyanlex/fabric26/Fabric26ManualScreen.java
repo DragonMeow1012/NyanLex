@@ -42,7 +42,7 @@ public final class Fabric26ManualScreen extends Screen {
     }
 
     private static String text(String key) {
-        return Component.translatable(key).getString();
+        return com.dragonmeow.nyanlex.config.ProjectLinks.fill(Component.translatable(key).getString());
     }
 
     private static String keyName(KeyMapping key) {

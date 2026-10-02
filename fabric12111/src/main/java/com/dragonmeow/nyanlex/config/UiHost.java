@@ -40,6 +40,9 @@ public interface UiHost {
     /** Short transient message (e.g. "cache cleared") drawn at the bottom of the list, or null. */
     default String statusText() { return null; }
 
+    /** The name of the language with this tag, e.g. 繁體中文（台灣）, or null when unknown. */
+    default String languageName(String tag) { return null; }
+
     default String modVersion() { return ""; }
 
     default int translatedCount() { return 0; }

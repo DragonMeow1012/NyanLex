@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.fabric;
 
 import com.dragonmeow.nyanlex.config.FileLocations;
 import com.dragonmeow.nyanlex.config.FileOpener;
+import com.dragonmeow.nyanlex.config.ProjectLinks;
 import com.dragonmeow.nyanlex.config.SettingAction;
 import com.dragonmeow.nyanlex.config.SettingEntry;
 import com.dragonmeow.nyanlex.config.SettingsCatalog;
@@ -164,6 +165,19 @@ public final class TranslationConfigScreen extends Screen {
             }
         }
 
+        @Override
+        public String languageName(String tag) {
+            if (tag == null || minecraft == null) return null;
+            for (java.util.Map.Entry<String, net.minecraft.client.resources.language.LanguageInfo> entry
+                    : minecraft.getLanguageManager().getLanguages().entrySet()) {
+                if (com.dragonmeow.nyanlex.config.TranslationLanguages.fromMinecraftCode(entry.getKey())
+                        .equalsIgnoreCase(tag)) {
+                    return entry.getValue().toComponent().getString();
+                }
+            }
+            return null;
+        }
+
         @Override public String modVersion() { return NyanLexFabric.modVersion(); }
 
         @Override
@@ -208,6 +222,7 @@ public final class TranslationConfigScreen extends Screen {
             case OPEN_KEYBINDS -> open(new TranslationKeybindScreen(this));
             case OPEN_QUICK_SETUP -> open(new QuickSetupScreen(this));
             case OPEN_MANUAL -> open(new TranslationManualScreen(this));
+            case OPEN_GITHUB -> openGithub();
             case OPEN_PRIVACY -> open(new TranslationManualScreen(this, SettingsModel.MANUAL_PRIVACY_SECTION - 1));
             case OPEN_AI -> open(new AiConfigScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new TranslationRequestsScreen(this));
@@ -217,6 +232,15 @@ public final class TranslationConfigScreen extends Screen {
             case IMPORT_TRANSLATIONS -> NyanLexFabric.translationFile(true);
             case CLEAR_CACHE -> confirmClearCache();
         }
+    }
+
+    /** The game's own "open this link?" question first, then the system browser. */
+    private void openGithub() {
+        if (this.minecraft == null) return;
+        this.minecraft.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(confirmed -> {
+            if (confirmed) Util.getPlatform().openUri(ProjectLinks.GITHUB_URL);
+            if (this.minecraft != null) this.minecraft.setScreen(this);
+        }, ProjectLinks.GITHUB_URL, true));
     }
 
     private void confirm(Component title, Component message, Runnable onYes) {

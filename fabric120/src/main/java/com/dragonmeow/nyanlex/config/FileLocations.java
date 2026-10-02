@@ -17,9 +17,12 @@ public final class FileLocations {
      *  {@code nyanlex.files.<id>.desc} (what the file is for). */
     public static final List<String> IDS = List.of(
             "config", "ai_cache", "gt_google",
-            "failures", "hub_cache", "hub_state", "debug_dir", "lang_probe");
+            "failures", "hub_cache", "hub_state", "debug_log");
 
     private static final String PREFIX = HubPaths.FILE_PREFIX;
+
+    /** 偵錯模式's error log: only written when an error happens while the mode is on. */
+    public static final String DEBUG_LOG_FILE = PREFIX + "-debug-log.jsonl";
 
     /** One file or folder: {@code id} (one of {@link #IDS}) and its absolute path. */
     public record Entry(String id, Path path) {
@@ -36,7 +39,6 @@ public final class FileLocations {
     public static List<Entry> entries(Path configDir, String language) {
         Path dir = configDir.toAbsolutePath().normalize();
         String tag = LanguageFileStore.languageTag(language);
-        Path debug = dir.resolve(PREFIX + "-debug");
         List<Entry> out = new ArrayList<>();
         out.add(new Entry("config", dir.resolve(PREFIX + ".json")));
         out.add(new Entry("ai_cache", dir.resolve(PREFIX + "-ai-cache-" + tag + ".json")));
@@ -50,8 +52,7 @@ public final class FileLocations {
         out.add(new Entry("failures", dir.resolve(PREFIX + "-failures-" + tag + ".json")));
         out.add(new Entry("hub_cache", dir.resolve(HubPaths.hubCacheFileName(language))));
         out.add(new Entry("hub_state", dir.resolve(HubPaths.stateFileName())));
-        out.add(new Entry("debug_dir", debug));
-        out.add(new Entry("lang_probe", debug.resolve("lang-probe.json")));
+        out.add(new Entry("debug_log", dir.resolve(DEBUG_LOG_FILE)));
         return List.copyOf(out);
     }
 }

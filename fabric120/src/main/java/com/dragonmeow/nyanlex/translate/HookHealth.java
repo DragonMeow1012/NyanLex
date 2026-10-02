@@ -206,7 +206,10 @@ public final class HookHealth {
         if (warn != null) warnSink = warn;
     }
 
-    static void logWarn(String s) { warnSink.accept(s); }
+    static void logWarn(String s) {
+        warnSink.accept(s);
+        DebugErrorLog.report(DebugErrorLog.HOOK, s);
+    }
 
     static long now() { return clock.getAsLong(); }
 

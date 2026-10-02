@@ -66,9 +66,9 @@ class SettingsModelTest {
         List<String> cardIds = ids(SettingsModel.allCards());
         assertEquals(cardIds.size(), new HashSet<>(cardIds).size(), "card ids are unique");
         // every entry once (a display surface's engine entry rides on its surface card), plus the one
-        // 全部項目 row, the fixed machine-service line, the two 關於 cards (version, manual) and one FILE card per mod file
+        // 全部項目 row, the fixed machine-service line, the three 關於 cards (version, manual, GitHub) and one FILE card per mod file
         int surfaces = SettingsCatalog.rows(SettingsPage.DISPLAY).size();
-        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 1 + 1 + 2
+        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 1 + 1 + 3
                 + FileLocations.IDS.size(), cardIds.size());
         for (SettingCard card : SettingsModel.allCards()) {
             if (card.entry() != null && card.category().page() != null) {
@@ -100,7 +100,8 @@ class SettingsModelTest {
         assertNull(SettingsModel.byId("help"), "no help card on 一般");
         assertNull(SettingsModel.byId("screen_scan"));
         // 關於 is just the version and the manual button
-        assertEquals(List.of("about_info", "about_manual"), ids(SettingsModel.cards(SettingsCategory.ABOUT)));
+        assertEquals(List.of("about_info", "about_manual", "about_github"), ids(SettingsModel.cards(SettingsCategory.ABOUT)));
+        assertEquals(SettingAction.OPEN_GITHUB, SettingsModel.byId("about_github").entry().action());
         assertEquals(SettingCard.Kind.BUTTON, SettingsModel.byId("about_manual").kind());
         assertEquals(SettingAction.OPEN_MANUAL, SettingsModel.byId("about_manual").entry().action());
     }

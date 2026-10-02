@@ -241,6 +241,12 @@ public final class TranslatorConfig {
             .disableHtmlEscaping()
             .create();
 
+    /** An independent copy (the questionnaire edits one until 完成); {@code null} fields are normalised. */
+    public TranslatorConfig copy() {
+        TranslatorConfig out = GSON.fromJson(GSON.toJson(this), TranslatorConfig.class);
+        return (out == null ? new TranslatorConfig() : out).normalized();
+    }
+
     /** Parse a config from a reader; never returns {@code null}. */
     public static TranslatorConfig fromReader(Reader reader) {
         JsonElement json = new JsonParser().parse(reader);

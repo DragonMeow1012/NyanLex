@@ -72,6 +72,7 @@ public final class SettingsModel {
     public static final String KEY_DONE_SHORT = "nyanlex.ui.done.short";
     public static final String KEY_ABOUT_TITLE = "nyanlex.ui.about.title";
     public static final String KEY_ABOUT_VERSION = "nyanlex.ui.about.version";
+    public static final String KEY_ABOUT_GITHUB = "nyanlex.ui.about.github";
     public static final String KEY_WARMUP_START = "nyanlex.ui.warmup.start";
     public static final String KEY_WARMUP_DETAILS = "nyanlex.ui.warmup.details";
     public static final String KEY_WARMUP_IDLE = "nyanlex.ui.warmup.idle";
@@ -88,6 +89,11 @@ public final class SettingsModel {
     private static final SettingEntry MANUAL_ENTRY = new SettingEntry("manual", SettingsPage.GENERAL,
             SettingEntry.Type.SUBSCREEN, KEY_MANUAL_CARD, KEY_MANUAL_CARD + ".tip", null, null,
             SettingAction.OPEN_MANUAL, SettingEntry.SideEffect.NONE, false);
+
+    /** The 關於 > GitHub button (not a catalog entry: it only exists on this card). */
+    private static final SettingEntry GITHUB_ENTRY = new SettingEntry("github", SettingsPage.GENERAL,
+            SettingEntry.Type.SUBSCREEN, KEY_ABOUT_GITHUB, KEY_ABOUT_GITHUB + ".tip", null, null,
+            SettingAction.OPEN_GITHUB, SettingEntry.SideEffect.NONE, false);
 
     private static final Map<SettingsCategory, List<Node>> NODES = build();
 
@@ -206,7 +212,7 @@ public final class SettingsModel {
                 KEY_NARRATE_CATEGORY, KEY_NARRATE_SEARCH, KEY_NARRATE_BUTTON, KEY_NARRATE_SWITCH,
                 KEY_NARRATE_SLIDER, KEY_NARRATE_VALUE, KEY_NARRATE_GROUP, KEY_NARRATE_OPEN,
                 KEY_NARRATE_CLOSED,
-                KEY_ABOUT_TITLE, KEY_ABOUT_VERSION, KEY_WARMUP_START,
+                KEY_ABOUT_TITLE, KEY_ABOUT_VERSION, KEY_ABOUT_GITHUB, KEY_ABOUT_GITHUB + ".tip", KEY_WARMUP_START,
                 KEY_WARMUP_DETAILS, KEY_WARMUP_IDLE, KEY_WARMUP_HUD_RUNNING, KEY_WARMUP_HUD_PAUSED,
                 KEY_WARMUP_HUD_DONE, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING,
                 KEY_FILES_GROUP, KEY_FILES_GROUP_DESC,
@@ -251,6 +257,8 @@ public final class SettingsModel {
                         KEY_ABOUT_TITLE, KEY_ABOUT_VERSION, null, null), null));
                 nodes.add(new Node(new SettingCard("about_manual", SettingCard.Kind.BUTTON, category,
                         MANUAL_ENTRY, KEY_MANUAL_CARD, KEY_MANUAL_CARD + ".tip", null, null), null));
+                nodes.add(new Node(new SettingCard("about_github", SettingCard.Kind.BUTTON, category,
+                        GITHUB_ENTRY, KEY_ABOUT_GITHUB, KEY_ABOUT_GITHUB + ".tip", null, null), null));
             } else {
                 for (SettingEntry entry : SettingsCatalog.entries(category.page())) {
                     nodes.add(new Node(card(entry, category), null));

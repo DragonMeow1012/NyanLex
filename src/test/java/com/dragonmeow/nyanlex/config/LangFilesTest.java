@@ -142,4 +142,69 @@ class LangFilesTest {
         for (String key : tw.keySet()) if (key.startsWith(literal)) return true;
         return false;
     }
+
+    // ------------------------------------------------------------------ wording rules of this round
+
+    private static List<Path> allLangFiles() throws IOException {
+        try (Stream<Path> files = Files.list(Path.of("src/main/resources/assets/nyanlex/lang"))) {
+            return files.filter(f -> f.toString().endsWith(".json")).sorted().toList();
+        }
+    }
+
+    @Test
+    void noLangValueNamesAServerOrTheGameModeOfOne() throws IOException {
+        for (Path file : allLangFiles()) {
+            JsonObject json = new Gson().fromJson(Files.readString(file, StandardCharsets.UTF_8), JsonObject.class);
+            for (String key : json.keySet()) {
+                String value = json.get(key).getAsString().toLowerCase(java.util.Locale.ROOT);
+                assertFalse(value.contains("hypixel") || value.contains("skyblock"), file.getFileName() + " " + key);
+            }
+        }
+    }
+
+    @Test
+    void theRemovedKeysAreGoneFromEveryLangFile() throws IOException {
+        List<String> gone = List.of("nyanlex.setup.display.chat", "nyanlex.setup.display.other",
+                "nyanlex.setup.mode.both_recommended", "nyanlex.setup.mode.translation", "nyanlex.setup.mode.both",
+                "nyanlex.setup.mode.off", "message.nyanlex.hub.detect_failed", "nyanlex.files.debug_dir",
+                "nyanlex.files.debug_dir.desc", "nyanlex.files.lang_probe", "nyanlex.files.lang_probe.desc");
+        for (Path file : allLangFiles()) {
+            JsonObject json = new Gson().fromJson(Files.readString(file, StandardCharsets.UTF_8), JsonObject.class);
+            for (String key : gone) assertFalse(json.has(key), file.getFileName() + " still has " + key);
+        }
+    }
+
+    @Test
+    void theDisplayModesHaveOneNameEverywhere() {
+        JsonObject tw = lang("zh_tw");
+        assertEquals("不翻譯", tw.get("nyanlex.settings.state.original").getAsString());
+        assertEquals("雙語", tw.get("nyanlex.settings.state.both").getAsString());
+        assertEquals("譯文", tw.get("nyanlex.settings.state.translation").getAsString());
+        for (String code : List.of("zh_tw", "zh_hk")) {
+            JsonObject json = lang(code);
+            for (String key : json.keySet()) {
+                String v = json.get(key).getAsString();
+                assertFalse(v.contains("只有翻譯") || v.contains("原文＋譯文（推薦）") || v.contains("只顯示譯文"), code + " " + key);
+            }
+            // the first mention explains the short names
+            String intro = json.get("nyanlex.manual.s2.body").getAsString();
+            assertTrue(intro.contains("雙語（原文＋譯文）") && intro.contains("譯文（只看譯文）"), code + ": " + intro);
+        }
+    }
+
+    @Test
+    void noScreenTextCallsAMessageToTheServiceARequestAndDebugModeHasItsName() {
+        JsonObject tw = lang("zh_tw");
+        for (String key : List.of("nyanlex.settings.cooldown", "nyanlex.settings.debug.tip", "screen.nyanlex.warmup.estimate")) {
+            assertFalse(tw.get(key).getAsString().contains("請求"), key);
+        }
+        assertEquals("偵錯模式：%s", tw.get("nyanlex.settings.debug").getAsString());
+        assertTrue(tw.get("nyanlex.settings.debug.tip").getAsString().contains("1000"));
+        assertTrue(tw.get("nyanlex.manual.s9.body").getAsString().contains("偵錯模式"));
+        assertEquals("偵錯紀錄", tw.get("nyanlex.files.debug_log").getAsString());
+        for (String code : HAND_WRITTEN) {
+            assertFalse(lang(code).get("nyanlex.manual.s10.body").getAsString().matches("(?s).*(AI 輔助|AI 辅助|AI assistance).*"), code);
+            assertTrue(lang(code).get("nyanlex.manual.s10.body").getAsString().contains(ProjectLinks.GITHUB_TOKEN), code);
+        }
+    }
 }

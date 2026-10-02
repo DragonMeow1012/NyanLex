@@ -154,6 +154,7 @@ public final class TranslationDebugLog {
             replaced.add(new Entry(entry.requestId, entry.engine, entry.text, translation,
                     entry.batchSize, entry.submittedAtMs, status,
                     normalizedFailureReason(status, failureReason)));
+            reportFailure(entry, status, normalizedFailureReason(status, failureReason));
             item++;
         }
         entries.clear();
@@ -194,6 +195,7 @@ public final class TranslationDebugLog {
         if (!anyStale) return;
         List<Entry> replaced = new ArrayList<>(entries.size());
         for (Entry entry : entries) {
+            if (isStaleInFlight(entry, now)) reportFailure(entry, Status.FAILED, "timed out (no response)");
             // submittedAtMs is re-stamped to NOW (not kept at its original, long-past
             // submission time): otherwise this resolved row would be older than
             // COMPLETED_TTL_MS already and the ordinary completed-row sweep right below
@@ -206,6 +208,14 @@ public final class TranslationDebugLog {
         }
         entries.clear();
         entries.addAll(replaced);
+    }
+
+    /** 偵錯模式's error log: a request that failed is written there (nothing else is). */
+    private static void reportFailure(Entry entry, Status status, String reason) {
+        if (status != Status.FAILED && status != Status.RATE_LIMITED) return;
+        DebugErrorLog.report(DebugErrorLog.typeForReason(reason), reason == null ? "unknown" : reason,
+                "engine", entry.engine, "request", Long.toString(entry.requestId),
+                "batch", Integer.toString(entry.batchSize), "text", entry.text == null ? "" : entry.text);
     }
 
     private static boolean isStaleInFlight(Entry entry, long now) {

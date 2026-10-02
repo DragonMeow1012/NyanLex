@@ -194,7 +194,7 @@ public final class SettingsCatalog {
                         c -> c.requestCooldownMs = nextStep(COOLDOWN_STEPS, c.requestCooldownMs))
                         .withSlider(new SettingEntry.Slider(COOLDOWN_STEPS,
                                 c -> c.requestCooldownMs, (c, v) -> c.requestCooldownMs = v))
-                        .withKeywords("cooldown", "429", "rate limit", "delay", "請求", "请求"),
+                        .withKeywords("cooldown", "429", "rate limit", "delay", "請求", "请求", "請求冷卻", "请求冷却", "冷卻", "冷却"),
                 cycle(SettingsPage.ADVANCED, "batch",
                         c -> millisState(c.batchWindowMs),
                         c -> c.batchWindowMs = nextStep(BATCH_WINDOW_STEPS, c.batchWindowMs))
@@ -208,7 +208,8 @@ public final class SettingsCatalog {
                 toggle(SettingsPage.ADVANCED, "debug", c -> c.debugTranslationOverlay,
                         c -> onOff(c.debugTranslationOverlay),
                         c -> c.debugTranslationOverlay = !c.debugTranslationOverlay,
-                        SettingEntry.SideEffect.CLEAR_DEBUG_LOG_WHEN_OFF))));
+                        SettingEntry.SideEffect.CLEAR_DEBUG_LOG_WHEN_OFF)
+                        .withKeywords("debug", "log", "error", "偵錯", "偵錯浮窗", "偵錯紀錄", "调试", "调试浮窗"))));
 
         return map;
     }
