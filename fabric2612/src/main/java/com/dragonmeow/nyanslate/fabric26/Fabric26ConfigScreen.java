@@ -39,19 +39,15 @@ public final class Fabric26ConfigScreen extends Screen {
 
     private static final long STATUS_MS = 4_000L;
 
-    // ------------------------------------------------------------------ hook points
+    // ------------------------------------------------------------------ warm-up wiring
 
     /**
-     * HOOK — "全物品預熱…" (warm every item). Returns {@code true} once the warm-up feature
-     * is merged; until then the button stays disabled with a "即將推出" note.
+     * "全物品預熱…" is only usable when item tooltips use the AI engine (machine translation
+     * has nothing to pre-warm); otherwise the button is disabled with an explanatory note.
      */
     static boolean itemWarmupAvailable() {
-        return false;
-    }
-
-    /** HOOK — builds the warm-up screen; only called when {@link #itemWarmupAvailable()}. */
-    static Screen openItemWarmupScreen(Screen parent) {
-        return null;
+        var service = NyanslateFabric26.service();
+        return service != null && service.isItemWarmupEngine();
     }
 
     // ------------------------------------------------------------------ state
@@ -74,6 +70,14 @@ public final class Fabric26ConfigScreen extends Screen {
     private final boolean showIntro;
     private SettingsPage page = SettingsPage.GENERAL;
     private int firstRow;
+    /** Scroll position remembered per page, restored when the player returns to a tab. */
+    private final java.util.EnumMap<SettingsPage, Integer> pageScroll = new java.util.EnumMap<>(SettingsPage.class);
+    /** Widget (tab "tab:N" or entry id) to refocus after the screen is rebuilt / re-entered. */
+    private String pendingFocusId;
+    private final java.util.Map<String, Button> focusTargets = new java.util.HashMap<>();
+    private boolean hubIntroShown;
+    private String helpCacheKey;
+    private List<FormattedCharSequence> helpCacheLines = List.of();
     private SettingsLayout layout;
     private List<SettingsRow> rows = List.of();
     private final List<CellButton> cellButtons = new ArrayList<>();
@@ -96,6 +100,7 @@ public final class Fabric26ConfigScreen extends Screen {
     @Override
     protected void init() {
         cellButtons.clear();
+        focusTargets.clear();
         layout = SettingsLayout.of(this.width, this.height, showIntro);
         rows = layout.rowsFor(page);
         firstRow = layout.clampFirstRow(firstRow, rows.size());
@@ -106,14 +111,22 @@ public final class Fabric26ConfigScreen extends Screen {
             SettingsPage p = pages.get(i);
             MutableComponent label = Component.translatable(p.tabKey());
             if (p == page) label = label.withStyle(ChatFormatting.YELLOW);
-            this.addRenderableWidget(Button.builder(label, b -> {
+            final String tabId = "tab:" + i;
+            Button tab = this.addRenderableWidget(Button.builder(fit(label, layout.tabW - 6), b -> {
+                pendingFocusId = tabId;
                 if (p != page) {
+                    pageScroll.put(page, firstRow);
                     page = p;
-                    firstRow = 0;
+                    firstRow = pageScroll.getOrDefault(p, 0);
+                    if (p == SettingsPage.HUB && !hubIntroShown && !NyanslateFabric26.config().hubIntroSeen) {
+                        hubIntroShown = true;
+                        setStatus(Component.translatable("screen.nyanslate.hub.intro"));
+                    }
                     this.rebuildWidgets();
                 }
             }).bounds(layout.tabsX + i * (layout.tabW + layout.tabGap), layout.tabsY,
                     layout.tabW, SettingsLayout.TAB_H).build());
+            focusTargets.put(tabId, tab);
         }
 
         helpButton = this.addRenderableWidget(Button.builder(
@@ -128,19 +141,28 @@ public final class Fabric26ConfigScreen extends Screen {
             SettingEntry entry = cell.entry();
             boolean warmup = entry.action() == SettingAction.OPEN_ITEM_WARMUP;
             boolean baseActive = !warmup || itemWarmupAvailable();
-            Button button = Button.builder(label(entry, cell.compactLabel()), b -> onPress(entry, cell, b))
+            Button button = Button.builder(label(entry, cell), b -> onPress(entry, cell, b))
                     .bounds(cell.x(), layout.listTop, cell.width(), SettingsLayout.BUTTON_H)
                     .tooltip(Tooltip.create(Component.translatable(entry.tipKey())))
                     .build();
             this.addRenderableWidget(button);
             cellButtons.add(new CellButton(entry, cell, button, baseActive));
+            focusTargets.put(entry.id(), button);
+            if (entry.id().equals(pendingFocusId)) {
+                // Keep the refocused row inside the visible window.
+                if (cell.row() < firstRow) firstRow = cell.row();
+                else if (cell.row() >= firstRow + layout.visibleRows) firstRow = cell.row() - layout.visibleRows + 1;
+                firstRow = layout.clampFirstRow(firstRow, rows.size());
+            }
         }
         positionRows();
 
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
                 .bounds(layout.doneX, layout.doneY, layout.doneW, SettingsLayout.BUTTON_H).build());
 
-        if (showIntro) this.setInitialFocus(helpButton);
+        Button refocus = pendingFocusId == null ? null : focusTargets.get(pendingFocusId);
+        if (refocus != null && refocus.visible && refocus.active) this.setInitialFocus(refocus);
+        else if (showIntro) this.setInitialFocus(helpButton);
     }
 
     private void positionRows() {
@@ -171,11 +193,23 @@ public final class Fabric26ConfigScreen extends Screen {
         return Component.translatable(text.key(), args);
     }
 
-    private Component label(SettingEntry entry, boolean compact) {
+    /** Shortens {@code text} with an ellipsis when it would overflow {@code maxWidth} pixels. */
+    private Component fit(Component text, int maxWidth) {
+        if (this.font == null || this.font.width(text) <= maxWidth) return text;
+        String cut = this.font.plainSubstrByWidth(text.getString(),
+                Math.max(4, maxWidth - this.font.width("…"))).stripTrailing();
+        return Component.literal(cut + "…").withStyle(text.getStyle());
+    }
+
+    private Component label(SettingEntry entry, SettingsLayout.Cell cell) {
+        return fit(labelRaw(entry, cell.compactLabel()), cell.width() - 8);
+    }
+
+    private Component labelRaw(SettingEntry entry, boolean compact) {
         TranslatorConfig cfg = NyanslateFabric26.config();
         if (entry.action() == SettingAction.OPEN_ITEM_WARMUP && !itemWarmupAvailable()) {
             return Component.translatable(entry.labelKey()).append(" ")
-                    .append(Component.translatable(SettingsCatalog.KEY_COMING_SOON).withStyle(ChatFormatting.GRAY));
+                    .append(Component.translatable(SettingsCatalog.KEY_NEEDS_AI).withStyle(ChatFormatting.GRAY));
         }
         if (entry.action() == SettingAction.HUB_DOWNLOAD) {
             Component progress = downloadProgressLabel();
@@ -200,9 +234,14 @@ public final class Fabric26ConfigScreen extends Screen {
     // ------------------------------------------------------------------ actions
 
     private void onPress(SettingEntry entry, SettingsLayout.Cell cell, Button button) {
+        pendingFocusId = entry.id();
         switch (entry.type()) {
             case TOGGLE, CYCLE -> {
                 TranslatorConfig cfg = NyanslateFabric26.config();
+                if (entry.id().equals("share") && !cfg.hubShareConsent && !cfg.hubIntroSeen) {
+                    confirmShareConsent(); // first time: explain the hub and ask before sharing anything
+                    return;
+                }
                 entry.press(cfg);
                 switch (entry.sideEffect()) {
                     case CLEAR_PENDING -> NyanslateFabric26.clearFtbPending();
@@ -212,7 +251,7 @@ public final class Fabric26ConfigScreen extends Screen {
                     default -> { }
                 }
                 NyanslateFabric26.saveConfig(); // also drops the render memo so new engines/modes apply
-                button.setMessage(label(entry, cell.compactLabel()));
+                button.setMessage(label(entry, cell));
             }
             case SUBSCREEN, ACTION -> run(entry.action());
         }
@@ -231,7 +270,7 @@ public final class Fabric26ConfigScreen extends Screen {
             case OPEN_PROVIDER -> open(new Fabric26ProviderScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new Fabric26RequestsScreen(this));
             case OPEN_ITEM_WARMUP -> {
-                if (itemWarmupAvailable()) open(openItemWarmupScreen(this));
+                if (itemWarmupAvailable()) NyanslateFabric26.openItemWarmupScreen(this);
             }
             case HUB_DOWNLOAD -> NyanslateFabric26.startHubIdentifyAndPlan(this);
             case HUB_OPEN_REPO -> confirmOpenRepo();
@@ -249,6 +288,18 @@ public final class Fabric26ConfigScreen extends Screen {
             if (this.minecraft != null) this.minecraft.setScreenAndShow(this);
         }, title, message, Component.translatable(SettingsCatalog.KEY_CONFIRM_YES),
                 Component.translatable("gui.cancel")));
+    }
+
+    /** First enabling of "分享翻譯": show the hub explanation + consent question once. */
+    private void confirmShareConsent() {
+        confirm(Component.translatable("screen.nyanslate.hub.title"),
+                Component.translatable("screen.nyanslate.hub.intro").append("\n\n")
+                        .append(Component.translatable("screen.nyanslate.hub.consent.question")), () -> {
+                    TranslatorConfig cfg = NyanslateFabric26.config();
+                    cfg.hubShareConsent = true;
+                    cfg.hubIntroSeen = true;
+                    NyanslateFabric26.saveConfig();
+                });
     }
 
     private void confirmClearCache() {
@@ -367,7 +418,8 @@ public final class Fabric26ConfigScreen extends Screen {
         // Live labels: the hub download button shows its progress while a job runs.
         for (CellButton cb : cellButtons) {
             if (cb.entry.action() == SettingAction.HUB_DOWNLOAD) {
-                cb.button.setMessage(label(cb.entry, cb.cell.compactLabel()));
+                cb.button.setMessage(label(cb.entry, cb.cell));
+                cb.button.active = cb.button.visible && cb.baseActive && !NyanslateFabric26.hubPlanning();
             }
         }
         super.extractRenderState(g, mouseX, mouseY, partialTick);
@@ -405,10 +457,32 @@ public final class Fabric26ConfigScreen extends Screen {
         int bx = layout.contentX;
         int bw = layout.contentW;
         g.fill(bx - 2, layout.helpY - 1, bx + bw + 2, layout.helpY + layout.helpLines * SettingsLayout.LINE_H + 1, 0x70000000);
-        List<FormattedCharSequence> lines = this.font.split(text, bw - 4);
+        List<FormattedCharSequence> lines = helpLines(text, bw - 4);
         for (int i = 0; i < Math.min(lines.size(), layout.helpLines); i++) {
             g.text(this.font, lines.get(i), bx + 2, layout.helpY + i * SettingsLayout.LINE_H, color, false);
         }
+    }
+
+    /**
+     * Wraps the help text into at most {@code layout.helpLines} lines; when it is longer the last
+     * line ends with an ellipsis (the full text is still in the button's native tooltip).
+     * Cached, because the wrap search is not free and the text rarely changes.
+     */
+    private List<FormattedCharSequence> helpLines(Component text, int width) {
+        String key = text.getString() + '\u0000' + width + '\u0000' + layout.helpLines;
+        if (key.equals(helpCacheKey)) return helpCacheLines;
+        List<FormattedCharSequence> lines = this.font.split(text, width);
+        if (lines.size() > layout.helpLines) {
+            String shown = text.getString();
+            while (shown.length() > 1) {
+                shown = shown.substring(0, shown.length() - 1).stripTrailing();
+                lines = this.font.split(Component.literal(shown + "…").withStyle(text.getStyle()), width);
+                if (lines.size() <= layout.helpLines) break;
+            }
+        }
+        helpCacheKey = key;
+        helpCacheLines = lines;
+        return lines;
     }
 
     /** Single-line "已翻譯：N 進行中：M" to the left of the "?" button, when it fits. */

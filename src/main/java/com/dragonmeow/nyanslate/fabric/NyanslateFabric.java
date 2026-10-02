@@ -601,6 +601,25 @@ public final class NyanslateFabric implements ClientModInitializer {
      * running, skips straight to {@link HubDownloadProgressScreen} instead -- this is
      * the "識別當前伺服器/MOD下載並匯入翻譯檔" button's click handler.
      */
+    private static final java.util.concurrent.atomic.AtomicBoolean HUB_PLANNING =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** True while a hub identify/plan pass runs in the background (settings UI disables its button). */
+    public static boolean hubPlanning() {
+        return HUB_PLANNING.get();
+    }
+
+    private static Runnable clearPlanningOnCrash(Runnable task) {
+        return () -> {
+            try {
+                task.run();
+            } catch (RuntimeException | Error e) {
+                HUB_PLANNING.set(false);
+                throw e;
+            }
+        };
+    }
+
     public static void startHubIdentifyAndPlan(net.minecraft.client.gui.screens.Screen hubScreen) {
         if (hubDownloader == null) return;
         if (hubDownloadJob.isRunning()) {
@@ -608,7 +627,8 @@ public final class NyanslateFabric implements ClientModInitializer {
             if (mc != null) mc.setScreen(new HubDownloadProgressScreen(hubScreen));
             return;
         }
-        runHubBackground(() -> {
+        if (!HUB_PLANNING.compareAndSet(false, true)) return; // a plan is already being built: ignore double clicks
+        runHubBackground(clearPlanningOnCrash(() -> {
             String host = null;
             String modpackLabel = null;
             List<String> modIds = loadedModIds();
@@ -635,8 +655,12 @@ public final class NyanslateFabric implements ClientModInitializer {
             final HubPlan finalPlan = plan;
             final String finalError = error;
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null) return;
+            if (mc == null) {
+                HUB_PLANNING.set(false);
+                return;
+            }
             mc.execute(() -> {
+                HUB_PLANNING.set(false);
                 if (finalPlan == null) {
                     status(Component.translatable("screen.nyanslate.hub.progress.failed",
                             finalError == null ? "" : finalError).getString());
@@ -645,7 +669,7 @@ public final class NyanslateFabric implements ClientModInitializer {
                 mc.setScreen(new HubDownloadConfirmScreen(hubScreen, finalPlan, finalHost,
                         finalModpackLabel, finalModCount));
             });
-        });
+        }));
     }
 
     /** Fired on every {@link HubDownloadJob} state change; only terminal states matter

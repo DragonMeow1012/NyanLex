@@ -255,4 +255,15 @@ class SettingsCatalogTest {
             for (SettingsRow row : single) assertNull(row.secondary());
         }
     }
+
+    @Test
+    void engineButtonsHaveDistinctPerSurfaceLabelsForTheOneColumnLayout() {
+        Set<String> labels = new HashSet<>();
+        for (SettingEntry e : SettingsCatalog.entries(SettingsPage.DISPLAY)) {
+            if (!e.id().endsWith(".engine")) continue;
+            assertTrue(labels.add(e.labelKey()), "duplicate engine label " + e.labelKey());
+            assertEquals("nyanslate.settings." + e.id(), e.labelKey());
+        }
+        assertEquals(9, labels.size());
+    }
 }

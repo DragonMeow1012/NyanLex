@@ -35,7 +35,7 @@ public final class SettingsCatalog {
     public static final String KEY_INTRO = "nyanslate.settings.intro";
     public static final String KEY_DEFAULT_TIP = "nyanslate.settings.default_tip";
     public static final String KEY_TIP_PREFIX = "nyanslate.settings.tip_prefix";
-    public static final String KEY_COMING_SOON = "nyanslate.settings.coming_soon";
+    public static final String KEY_NEEDS_AI = "nyanslate.settings.needs_ai";
     public static final String KEY_CONFIRM_YES = "nyanslate.settings.confirm.yes";
     public static final String KEY_CLEAR_CACHE_CONFIRM_TITLE = "nyanslate.settings.clear_cache.confirm.title";
     public static final String KEY_CLEAR_CACHE_CONFIRM_MESSAGE = "nyanslate.settings.clear_cache.confirm.message";
@@ -112,7 +112,7 @@ public final class SettingsCatalog {
     public static List<String> allLangKeys() {
         List<String> keys = new ArrayList<>(List.of(
                 KEY_TITLE, KEY_HELP_BUTTON, KEY_HELP_BUTTON_TIP, KEY_INTRO, KEY_DEFAULT_TIP,
-                KEY_TIP_PREFIX, KEY_COMING_SOON, KEY_CONFIRM_YES,
+                KEY_TIP_PREFIX, KEY_NEEDS_AI, KEY_CONFIRM_YES,
                 KEY_CLEAR_CACHE_CONFIRM_TITLE, KEY_CLEAR_CACHE_CONFIRM_MESSAGE,
                 KEY_CLEAR_HUB_CONFIRM_TITLE, KEY_CLEAR_HUB_CONFIRM_MESSAGE,
                 STATE_ON, STATE_OFF, STATE_ORIGINAL, STATE_BOTH, STATE_TRANSLATION, STATE_MACHINE,
@@ -261,7 +261,11 @@ public final class SettingsCatalog {
                 null, null, action, SettingEntry.SideEffect.NONE, false);
     }
 
-    /** A display row: the mode cycle button plus its engine (機翻／AI) toggle on the right. */
+    /**
+     * A display row: the mode cycle button plus its engine (機翻／AI) toggle on the right.
+     * The engine entry has its own per-surface label ("聊天引擎：%s") so that in the one-column
+     * layout (where it is not compact) the nine engine buttons stay distinguishable.
+     */
     private static SettingsRow surface(String id,
                                        Function<TranslatorConfig, DisplayMode> getMode,
                                        java.util.function.BiConsumer<TranslatorConfig, DisplayMode> setMode,
@@ -272,7 +276,7 @@ public final class SettingsCatalog {
                 c -> setMode.accept(c, getMode.apply(c).next()),
                 null, SettingEntry.SideEffect.NONE, false);
         SettingEntry engine = new SettingEntry(id + ".engine", SettingsPage.DISPLAY,
-                SettingEntry.Type.TOGGLE, label("engine"), tip("engine"),
+                SettingEntry.Type.TOGGLE, label(id + ".engine"), tip("engine"),
                 c -> engineState(getAi.test(c)),
                 c -> setAi.accept(c, !getAi.test(c)),
                 null, SettingEntry.SideEffect.NONE, true);
