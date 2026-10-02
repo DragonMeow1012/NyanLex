@@ -27,6 +27,28 @@ class UrlHttpTransportTest {
     }
 
     @Test
+    void theGoogleMachineTranslationRequestUsesHttp1() {
+        java.net.http.HttpRequest request = UrlHttpTransport.buildGetRequest(
+                "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-TW&dt=t&q=hello%20world",
+                Duration.ofSeconds(5));
+        assertEquals(java.util.Optional.of(java.net.http.HttpClient.Version.HTTP_1_1), request.version(),
+                "that endpoint answers 429 to HTTP/2 clients");
+        assertEquals("GET", request.method());
+    }
+
+    @Test
+    void otherRequestsKeepTheClientsDefaultVersion() {
+        for (String url : new String[] {
+                "https://generativelanguage.googleapis.com/v1beta/openai/models",
+                "https://api.openai.com/v1/models",
+                "https://raw.githubusercontent.com/x/y/index.json",
+                "http://127.0.0.1:11434/v1/models"}) {
+            assertEquals(java.util.Optional.empty(),
+                    UrlHttpTransport.buildGetRequest(url, Duration.ofSeconds(5)).version(), url);
+        }
+    }
+
+    @Test
     void readsNormalFixedLengthUtf8Response() throws Exception {
         String expected = "{\"translation\":\"繁體中文\"}";
         String url = serve("/fixed", exchange -> sendFixed(exchange, 200,
