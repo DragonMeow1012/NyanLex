@@ -142,7 +142,7 @@ public final class TextFilter {
         if (isTargetChinese(targetLang)
                 && !knownJapaneseOrKorean
                 && !containsJapaneseKanaOrHangul(languageSample)
-                && isMostlyCjk(languageSample)) return false;
+                && isAlreadyChinese(languageSample)) return false;
         return true;
     }
 
@@ -300,6 +300,71 @@ public final class TextFilter {
         }
         if (letters == 0) return false;
         return (double) cjk / letters >= CJK_THRESHOLD;
+    }
+
+    /**
+     * Whether {@code text} is already Chinese for the purpose of skipping the translator:
+     * CJK letters make up at least {@value #CJK_THRESHOLD} of the letters that could still
+     * need translating. Names that stay in Latin script inside a Chinese UI are not such
+     * letters, so they no longer drag a Chinese row below the line: all-capital
+     * abbreviations ("FPS", "TNT", "UHC", "XP"), identifiers and mixed-case brand spellings
+     * ("sRGB", "PvP", "iPhone"), anything with a digit ("Mipmap 4", "v2"), a lone capital
+     * letter ("X"), and capitalised words that could be proper nouns ("Minecraft", "Hypixel",
+     * "Mipmap"). Ordinary lower-case English words do count, so "Right click to open 設定"
+     * is still English that needs translating, and text without any CJK letter is never
+     * "already Chinese" however its capitals fall.
+     *
+     * <p>{@link #isMostlyCjk} keeps the plain ratio (every letter counts); this is the one
+     * the pre-send filter uses. Kana and Hangul are rejected before it is asked.</p>
+     */
+    public static boolean isAlreadyChinese(String text) {
+        if (text == null) return false;
+        int cjk = 0;
+        int prose = 0;
+        int n = text.length();
+        int i = 0;
+        while (i < n) {
+            char c = text.charAt(i);
+            if (isAsciiAlnum(c)) {
+                int start = i;
+                int letters = 0;
+                int upper = 0;
+                boolean digit = false;
+                boolean innerUpper = false;
+                while (i < n && isAsciiAlnum(text.charAt(i))) {
+                    char w = text.charAt(i);
+                    if (w >= '0' && w <= '9') {
+                        digit = true;
+                    } else {
+                        letters++;
+                        if (w >= 'A' && w <= 'Z') {
+                            upper++;
+                            if (i > start) innerUpper = true;
+                        }
+                    }
+                    i++;
+                }
+                if (letters == 0 || digit) continue;                 // numbers, ids, versions
+                if (upper == letters) continue;                       // abbreviation or a lone capital
+                boolean titlecase = text.charAt(start) >= 'A' && text.charAt(start) <= 'Z'
+                        && upper == 1;
+                if (titlecase || innerUpper) continue;                // proper noun, brand, identifier
+                prose += letters;                                     // plain lower-case word
+                continue;
+            }
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if (Character.isLetter(cp)) {
+                if (isCjk(cp)) cjk++;
+                else prose++;
+            }
+        }
+        if (cjk == 0) return false;
+        return (double) cjk / (cjk + prose) >= CJK_THRESHOLD;
+    }
+
+    private static boolean isAsciiAlnum(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
     }
 
     public static boolean isCjk(int cp) {

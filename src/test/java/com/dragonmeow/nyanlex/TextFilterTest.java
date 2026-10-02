@@ -505,4 +505,49 @@ class TextFilterTest {
         assertFalse(TextFilter.hasForeignUrl("Connect the dots", "請連接這些點 (dot) 來完成圖案"));
         assertFalse(TextFilter.hasForeignUrl("Hello", "你好 (打招呼)"));
     }
+
+    // ------------------------------------------------------------------ already-Chinese rows with Latin names in them
+
+    @Test
+    void chineseRowsKeepingAnAbbreviationOrNameAreNotSentToTheTranslator() {
+        // Vanilla options and server UI in a zh-TW game: all of these used to count as English
+        // (CJK letters were under half of ALL letters) and went to the AI twice.
+        for (String row : new String[] {
+                "最大 FPS", "限制 FPS", "Mipmap 等級", "TNT 礦車", "Minecraft 伺服器", "Hypixel 伺服器",
+                "UHC 模式", "sRGB 色彩", "PvP 競技場", "GUI 縮放", "OpenGL 版本", "Java 版", "VSync 垂直同步",
+                "FOV 效果", "玩家 XP 等級", "顯示 X 座標", "Level 5 勇者", "Hypixel's 商店"}) {
+            assertFalse(TextFilter.shouldTranslate(row, "zh-TW"), row);
+            assertFalse(TextFilter.shouldTranslate(row, "zh-CN"), row);
+            assertTrue(TextFilter.isAlreadyChinese(row), row);
+        }
+    }
+
+    @Test
+    void englishStaysEnglishWhateverItsCapitalsAndAnyCjkIsOutnumbered() {
+        for (String text : new String[] {
+                "Teleports you to the Hub", "Right click to open the Chest", "TNT Minecart", "Max FPS",
+                "Hypixel Server", "Click to open the menu", "Mipmap Levels", "Hello World",
+                "Right click to open 設定 menu", "Hello 世界 everyone here now", "Open 設定 and select a world to play",
+                "Your Minecraft client could not connect to 伺服器 because the host is offline"}) {
+            assertTrue(TextFilter.shouldTranslate(text, "zh-TW"), text);
+            assertFalse(TextFilter.isAlreadyChinese(text), text);
+        }
+    }
+
+    @Test
+    void chineseWithRealEnglishWordsStillFollowsTheLetterRatio() {
+        // The plain ratio for ordinary lower-case words is unchanged: half or more Chinese is skipped.
+        assertTrue(TextFilter.isAlreadyChinese("傳送到 hub"));
+        assertFalse(TextFilter.isAlreadyChinese("傳 hub spawn point"));
+        assertFalse(TextFilter.isAlreadyChinese(null));
+        assertFalse(TextFilter.isAlreadyChinese(""));
+        assertFalse(TextFilter.isAlreadyChinese("FPS TNT UHC"), "no Chinese at all is never already Chinese");
+    }
+
+    @Test
+    void japaneseAndKoreanAreStillNotMistakenForChineseWithTheNewRule() {
+        assertTrue(TextFilter.shouldTranslate("最大 FPS", "zh-TW", "ja_jp"));
+        assertTrue(TextFilter.shouldTranslate("Mipmap レベル", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("최대 FPS", "zh-TW"));
+    }
 }
