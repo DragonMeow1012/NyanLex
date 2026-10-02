@@ -12,6 +12,8 @@ base {
 
 // Final jar name: nyanlex-1.0.7-Fabric-26.3.jar (name-version-loader-mcversion)
 tasks.named('jar') {
+    // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.
+    exclude 'assets/nyanslate/**', 'assets/mctranslator/**'
     archiveClassifier = "Fabric-${project.minecraft_version}"
     from('../LICENSE') {
         rename { 'LICENSE_NyanLex' }

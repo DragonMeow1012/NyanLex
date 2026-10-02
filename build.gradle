@@ -16,6 +16,8 @@ tasks.named('remapJar') {
 }
 
 tasks.named('jar') {
+    // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.
+    exclude 'assets/nyanslate/**', 'assets/mctranslator/**'
     // Author-only tooling (translation-hub export) never ships inside the mod jar.
     exclude 'com/dragonmeow/nyanlex/hub/tool/**'
     from('LICENSE') {

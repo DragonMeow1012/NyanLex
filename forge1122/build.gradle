@@ -65,6 +65,8 @@ dependencies {
 
 // Example for how to get properties into the manifest for reading by the runtime..
 jar {
+    // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.
+    exclude 'assets/nyanslate/**', 'assets/mctranslator/**'
     classifier = 'Forge-1.12.2'
     from('../LICENSE') {
         rename { 'LICENSE_NyanLex' }

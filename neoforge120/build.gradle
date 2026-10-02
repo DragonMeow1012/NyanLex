@@ -6,6 +6,8 @@ version = project.mod_version
 group = project.maven_group
 base { archivesName = 'nyanlex' }
 tasks.named('jar') {
+    // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.
+    exclude 'assets/nyanslate/**', 'assets/mctranslator/**'
     archiveClassifier = 'NeoForge-1.20.1'
     from('../LICENSE') { rename { 'LICENSE_NyanLex' } }
 }
