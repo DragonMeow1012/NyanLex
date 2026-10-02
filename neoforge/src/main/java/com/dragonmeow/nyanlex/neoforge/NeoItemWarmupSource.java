@@ -107,6 +107,24 @@ final class NeoItemWarmupSource implements ItemWarmupSource {
         }
 
         @Override
+        public boolean interactiveBusy() {
+            TranslationService s = NyanLexNeoForge.service();
+            return s != null && s.isInteractiveTranslationBusy();
+        }
+
+        @Override
+        public boolean usesCodex() {
+            TranslationService s = NyanLexNeoForge.service();
+            return s != null && s.isCodexEngine();
+        }
+
+        @Override
+        public boolean needsNoTranslation(String source) {
+            TranslationService s = NyanLexNeoForge.service();
+            return s != null && s.isItemTextNativeOrUntranslatable(source);
+        }
+
+        @Override
         public void warm(List<String> sources) {
             TranslationService s = NyanLexNeoForge.service();
             if (s != null) s.warmTooltipBatchBackground(sources);

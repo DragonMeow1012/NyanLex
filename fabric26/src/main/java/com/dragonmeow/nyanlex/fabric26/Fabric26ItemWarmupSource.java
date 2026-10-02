@@ -107,6 +107,24 @@ final class Fabric26ItemWarmupSource implements ItemWarmupSource {
         }
 
         @Override
+        public boolean interactiveBusy() {
+            TranslationService s = NyanLexFabric26.service();
+            return s != null && s.isInteractiveTranslationBusy();
+        }
+
+        @Override
+        public boolean usesCodex() {
+            TranslationService s = NyanLexFabric26.service();
+            return s != null && s.isCodexEngine();
+        }
+
+        @Override
+        public boolean needsNoTranslation(String source) {
+            TranslationService s = NyanLexFabric26.service();
+            return s != null && s.isItemTextNativeOrUntranslatable(source);
+        }
+
+        @Override
         public void warm(List<String> sources) {
             TranslationService s = NyanLexFabric26.service();
             if (s != null) s.warmTooltipBatchBackground(sources);

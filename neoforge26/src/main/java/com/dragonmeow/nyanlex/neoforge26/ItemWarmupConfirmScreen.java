@@ -108,7 +108,7 @@ public final class ItemWarmupConfirmScreen extends Screen {
         }
         g.centeredText(this.font,
                 Component.translatable("screen.nyanlex.warmup.summary",
-                        plan.totalItems(), plan.cachedItems(), plan.missingItems()),
+                        plan.totalItems(), plan.cachedItems(), plan.nativeItems(), plan.missingItems()),
                 centerX, y, 0xFFE0E0E0);
         y += 14;
         if (scanner != null && scanner.failed() > 0) {
@@ -123,13 +123,14 @@ public final class ItemWarmupConfirmScreen extends Screen {
             return;
         }
         y = paragraph(g, Component.translatable("screen.nyanlex.warmup.estimate",
-                plan.willSubmitItems(), plan.estimatedRequests(), formatTokens(plan.estimatedTokens())),
+                plan.willSubmitItems(), plan.estimatedRequests(), formatTokens(plan.estimatedTokens()),
+                plan.estimatedMinutes()),
                 left, y, wrap, 0xFFFFD700);
         y += 6;
-        for (int i = 1; i <= 4; i++) {
+        for (int i = 1; i <= 5; i++) {
             if (y > this.height - 40) break;
             y = paragraph(g, Component.translatable("screen.nyanlex.warmup.warn." + i),
-                    left, y, wrap, i == 3 ? 0xFFFF9090 : 0xFFC0C0C0);
+                    left, y, wrap, i == 2 || i == 5 ? 0xFFFF9090 : 0xFFC0C0C0);
             y += 3;
         }
     }
