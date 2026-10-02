@@ -2,7 +2,7 @@
 
 > 讀者：專案維護者 DragonMeow，以及之後新開對話的 AI 助手。
 > 目標：不必重新研究，照著做就能**製作、更新、驗證、發佈、下架**倉庫資料。
-> 基準：分支 `release/nyanlex-1.0.0` @ `64cec54`，2026-10-02 驗證。倉庫當時有 17 個 mod 來源（合計 9,160 列）加 1 個伺服器來源（55,734 列）。
+> 基準：分支 `release/nyanlex-1.0.0` @ `64cec54`，2026-10-02 驗證。倉庫當時有 17 個 mod 來源（合計 9,160 列）加 1 個伺服器來源（55,734 列）。之後依「只收簡單授權」規則移除了 9 個來源（見 §4.1），現在是 8 個 mod 來源（合計 561 列）加同一個伺服器來源。
 > 本文件自己也遵守鐵則：範例一律用 `<modId>`、`<slug>`、`<host>` 這類代號，不寫真實模組名稱。
 
 ## 目錄
@@ -177,6 +177,7 @@ hub key = `SHA-256( UTF-8( masked.text() ) )`。`masked.text()` 是畫面上實�
 
 - 倉庫資料（譯文）採 **CC BY-NC-SA 4.0**（`translation-hub/LICENSE`；程式碼仍是 repo 根目錄的 MIT）。署名方式：「Nyanlex Translation Hub contributors」加 repo 連結。
 - 原文的著作權屬原權利人（遊戲、伺服器、模組作者）；倉庫不收原文、不散布原文。
+- **來源專案的授權**：倉庫只收簡單授權的專案（MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、Zlib、CC0-1.0、Unlicense、CC-BY-3.0、CC-BY-4.0），外加使用者核准的一個例外 Polyform Shield。GPL、LGPL、AGPL、MPL，以及所有帶 SA、NC 或 ND 的 CC 授權一律不收（細節見 §4.1）。
 - **下架管道**：權利人在 GitHub repo 開 Issue，標題 `[Takedown] <伺服器網域或模組 id> <語言>`（範本在 `.github/ISSUE_TEMPLATE/hub-takedown.md`）。處理方式見 §6.2。
 
 ### 1.6 玩家端怎麼偵測、下載、查詢
@@ -212,7 +213,7 @@ hub key = `SHA-256( UTF-8( masked.text() ) )`。`masked.text()` 是畫面上實�
 |---|---|---|
 | 1 | **不存原文**。倉庫只有 `sha256(key)` → 譯文 | `hub_check.py`（欄位白名單、key 皆 64 位小寫十六進位）；`--originals` 做洩漏檢查 |
 | 2 | **伺服器資料不收聊天**。`hubExport` 預設就排除聊天；`-PincludeChat` 只在使用者明確要求公開聊天時才用（見 §3.2） | 匯出輸出的 `droppedChat` 不是 0；`hub_subset.py` 對照上一版 |
-| 3 | **授權白名單**（`LangPackBuilder.licenseAccepted`：解析 SPDX 運算式後，逐項**精確**比對）：MIT、Apache-2.0、BSD-*、MPL-2.0、LGPL-*、GPL-*（**不含 AGPL**）、CC-BY-*（含 NC、SA、ND 變體）、Polyform-Shield、CC0-1.0、Unlicense。**不收**：All Rights Reserved、自訂授權、查不到授權、AGPL，以及所有 `LicenseRef-*`（Polyform Shield 的 `LicenseRef-Polyform-Shield-*` 寫法除外）。`LicenseRef-*` 要看實際授權文字再判斷；裁定結果寫成標準 SPDX 式字串放進輸入檔的 `license` 欄位（例：程式 LGPL＋素材 CC BY-NC-SA 4.0 → `LGPL-2.1 AND CC-BY-NC-SA-4.0`，要記錄裁定） | `langPackBuild` 輸出的 `LICENSE ACCEPT/REFUSE` 行；`hub_modrinth.py info`（見 §4.1） |
+| 3 | **授權只收簡單授權**（`LangPackBuilder.licenseAccepted`：解析 SPDX 運算式後，逐項**精確**比對）：MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、Zlib、CC0-1.0、Unlicense、CC-BY-3.0、CC-BY-4.0，外加使用者核准的例外 Polyform-Shield（含 Modrinth 的寫法 `LicenseRef-Polyform-Shield-1.0.0`）。**一律不收**：GPL、LGPL、AGPL、MPL（任何版本）、所有帶 SA、NC 或 ND 的 CC 授權、All Rights Reserved、自訂授權、查不到授權，以及其餘所有 `LicenseRef-*`。不在清單的就是不收，沒有人工裁定的通道 | `langPackBuild` 輸出的 `LICENSE ACCEPT/REFUSE` 行；`hub_modrinth.py info`（見 §4.1） |
 | 4 | **jar、zip、英文原文、使用者快取副本都不得進 repo**；快取副本用完立刻刪除 | `git status`、`git diff --cached --stat`；`hub_check.py` 會對 `translation-hub/` 內任何非資料檔報 FAIL |
 | 5 | **不讀含 API 金鑰的設定檔**（玩家 config 資料夾的 `nyanlex.json` 就有） | 匯出只複製**單一檔案** `nyanlex-ai-cache-<lang>.json` 到暫存資料夾再處理（§3.1） |
 | 6 | **key 一律用執行時同一套程式產生**，不准自己重寫正規化 | 只用 `langPackBuild`／`hubExport`；要查某個 key 的雜湊只能 `printf %s "<key>" \| sha256sum`（連結尾空白都要一樣） |
@@ -400,7 +401,7 @@ git -C <wt> show HEAD:translation-hub/servers/<host>/zh-tw.json | wc -c
 
 ### 4.1 選項目、用 Modrinth API 查授權
 
-選項目的原則：常用的客戶端模組與光影包、授權允許衍生作品、確實有可翻的介面字串。
+選項目的原則：常用的客戶端模組與光影包、授權在下面的「簡單授權」清單內、確實有可翻的介面字串。
 
 ```bash
 # 【已實測】附錄 A.6：查專案授權與各 MC／loader 的最新版本（只送 GET，每秒不超過 2 個請求）
@@ -414,27 +415,20 @@ python <tools>/hub_modrinth.py info <slug> [<slug> ...] [--mc 1.21.1] [--loader 
   version=… type=release mc=['1.21', '1.21.1'] loaders=['fabric', 'quilt'] file=….jar (… bytes)
 ```
 
-**以 `license.id` 為準判斷**（`LangPackBuilder.licenseAccepted`，輸入檔的 `license` 欄位會直接走這個閘門）：
+**以 `license.id` 為準判斷**（`LangPackBuilder.licenseAccepted`，輸入檔的 `license` 欄位會直接走這個閘門）。倉庫**只收簡單授權**：
 
 | 結果 | `license.id` 的樣子 |
 |---|---|
-| **收** | `MIT`、`Apache-2.0`、`BSD-*`、`MPL-2.0`、`LGPL-*`、`GPL-*`、`CC-BY-*`（含 `CC-BY-NC-SA-4.0` 與 `*-ND` 變體）、`Polyform-Shield-*`（Modrinth 的寫法 `LicenseRef-Polyform-Shield-1.0.0` 視為同一個授權，是唯一被放行的 `LicenseRef`）、`CC0-1.0`、`Unlicense` |
-| **不收** | `AGPL-*`、`LicenseRef-All-Rights-Reserved`、`All Rights Reserved`、`ARR`、其餘所有 `LicenseRef-*`、空白或 `LicenseRef-`（查不到授權）、不是合法 SPDX 運算式的字串（例如 `Some Mod License (LicenseRef-Some-Mod-License)`） |
-| **要人判斷** | 雙授權專案（程式碼一種、素材／語言文字另一種，Modrinth 只給一個 id）、`LicenseRef-*` 但實際條款允許衍生 |
+| **收** | `MIT`、`Apache-2.0`、`BSD-2-Clause`、`BSD-3-Clause`、`ISC`、`Zlib`、`CC0-1.0`、`Unlicense`、`CC-BY-3.0`、`CC-BY-4.0`；另有使用者明確核准的一個例外：`Polyform-Shield`（Modrinth 的寫法 `LicenseRef-Polyform-Shield-1.0.0` 視為同一個授權，是唯一被放行的 `LicenseRef`） |
+| **不收** | GPL、LGPL、AGPL、MPL（任何版本，含 `-only`、`-or-later`）；所有帶 SA、NC 或 ND 的 CC 授權（`CC-BY-SA-*`、`CC-BY-NC-*`、`CC-BY-NC-SA-*`、`CC-BY-ND-*`、`CC-BY-NC-ND-*`）；`LicenseRef-All-Rights-Reserved`、`All Rights Reserved`、`ARR`；其餘所有 `LicenseRef-*`；空白或 `LicenseRef-`（查不到授權）；不是合法 SPDX 運算式的字串（例如 `Some Mod License (LicenseRef-Some-Mod-License)`）；以及任何不在上面「收」那一列的授權 |
 
-「要人判斷」的做法：
-
-1. 去專案的 repo 讀 `LICENSE`、`ASSET_LICENSE`（或同義檔）的實際文字。
-2. 譯文本身在倉庫就是 CC BY-NC-SA 4.0，所以**素材是 CC BY-NC-SA 4.0 的可以收**（允許衍生、要求相同方式分享，與倉庫相容）。例：程式 LGPL-2.1＋素材 CC BY-NC-SA 4.0 → 收。
-3. 把你的**裁定寫成標準的 SPDX 式字串**放進輸入檔的 `license` 欄位，例如 `LGPL-2.1 AND CC-BY-NC-SA-4.0`，並在報告裡寫明依據。轉換器不讀授權文字，這個字串就是裁定本身。
-4. 非常重要：這種裁定要讓使用者知道並留紀錄（過去的做法是主對話裁定、報告註明）。
+沒有「要人判斷」這一類：不在清單的一律不收，閘門不讀授權文字，也不接受人工改寫 `license` 欄位來放行。要改清單，必須改程式並經使用者同意。
 
 閘門的注意事項（讀 `LangPackBuilder.licenseAccepted`）：
 
-- 它**解析 SPDX 運算式**：支援 `AND`、`OR`、括號、`WITH <例外>` 與結尾的 `+`；`AND`／`OR`／`WITH` **大小寫都認**（`and`、`And` 都行），`AND` 優先於 `OR`。`A AND B` 兩邊都要收，`A OR B` 任一邊收。
-- 每個授權 id **逐項與白名單精確比對**（不分大小寫），不是子字串：`AGPL-3.0` 不會因含 `gpl` 被收，`limited`、`permit` 也不會因含 `mit` 被收；沒有版本號的簡寫（`BSD`、`GPL`、`CC-BY`）不是 SPDX id，不收。
-- 不是合法運算式的字串（括號不成對、懸空的 `AND`、自由文字的授權名稱）一律不收；要收就把裁定寫成標準 SPDX 式字串。
-- 非商用（NC）、相同方式分享（SA）、禁止衍生（ND）的 CC BY 變體都在白名單裡（依維護者的白名單規格）。遇到 ND 時，`LICENSE ACCEPT` 行要特別人眼複核該專案的條款是否真的允許翻譯，不確定就當成「要人判斷」，並在報告寫明。
+- 它**解析 SPDX 運算式**：支援 `AND`、`OR`、括號與 `WITH <例外>`；`AND`／`OR`／`WITH` **大小寫都認**（`and`、`And` 都行），`AND` 優先於 `OR`。`A AND B` 兩邊都要在清單內，`A OR B` 任一邊在清單內即可（作者本來就提供寬鬆的那一邊）。
+- 每個授權 id **逐項與清單精確比對**（不分大小寫），不是子字串、也不是前綴：`AGPL-3.0` 不會因含 `gpl` 被收，`limited`、`permit` 也不會因含 `mit` 被收；沒有版本號的簡寫（`BSD`、`CC-BY`、`CC0`）不是 SPDX id，不收；`BSD-3-Clause-Clear`、`CC-BY-3.0-IGO`、`CC-BY-2.0` 這類不在清單上的變體也不收。
+- 不是合法運算式的字串（括號不成對、懸空的 `AND`、自由文字的授權名稱）一律不收。
 - `LICENSE ACCEPT` 行一律要人眼對照 Modrinth 的 `license.id` 複核；與預期不同就停下來回報，不要自己改 `license` 欄位。
 
 **選到的項目要記下**：slug、真正的 mod id、版本、授權、既有 zh_tw 狀態、翻了幾條。不收的項目也要留紀錄（含原因）。已翻完才發現授權不收的，輸出檔可以留在暫存區，但**不要放進 `-Pin` 的路徑**。
@@ -602,7 +596,7 @@ python <tools>/hub_vanilla_glossary.py --mc 1.21.1 --out <scratch>/vanilla.json 
   "version": "<版本號>",
   "mcVersion": "1.21.1",
   "loader": "fabric",
-  "license": "<Modrinth 的 license.id；雙授權寫裁定後的 SPDX 式字串>",
+  "license": "<Modrinth 的 license.id，原樣照抄>",
   "existingZhTw": "none | partial | full",
   "entries": [
     { "ns": "<lang 的 namespace>", "key": "<lang key>", "en": "<英文原文，含 %s>", "zh_tw": "<譯文，含 %s>" }
@@ -667,7 +661,7 @@ $GRADLE -p <wt> langPackBuild --offline -q \
 ```
 examplemod: entries=7 entriesWithRows=5 rows=6 skipped=2 {NON_NUMERIC_ARG=1, UNCHANGED=1} sources=[example-shader.json, examplemod.json]
 LICENSE REFUSE mod arrmod [All Rights Reserved] arrmod.json
-LICENSE ACCEPT shaderpack - [LGPL-3.0-or-later] example-shader.json
+LICENSE ACCEPT shaderpack - [Apache-2.0] example-shader.json
 LICENSE ACCEPT mod examplemod [MIT] examplemod.json
 TOTAL rows=6 files=1
 ```
@@ -790,7 +784,7 @@ $GRADLE -p <wt> runClient --offline
 6. **執行時才組合的字串**（`COMPOSED_AT_RUNTIME`）、**不是 lang 的資料**（模組中繼資料描述）、**純符號或帶符號前綴的字串**、**註解抽取抓不到的下拉選項**：不在倉庫涵蓋範圍。
 7. **一個來源一個語言一個檔**，上限 100,000 列／32 MiB；目前只有 `zh-tw`。
 8. **命中時驗證不過的列會被丟棄**，且從本機快取刪掉：若 key 的形狀（數字、色碼段、段落換行的個數）與資料不合，該列永遠不會顯示。
-9. **授權閘門只看輸入檔的 `license` 欄位字串**（§4.1）：它解析 SPDX 運算式並逐項精確比對白名單，但不讀授權文字；雙授權等需要人判斷的專案，裁定要先寫成標準 SPDX 式字串。
+9. **授權閘門只看輸入檔的 `license` 欄位字串**（§4.1）：它解析 SPDX 運算式並逐項精確比對簡單授權清單，但不讀授權文字；不在清單的一律不收，沒有人工裁定的通道。
 10. **`core.autocrlf=true`** 讓工作目錄的資料檔變 CRLF。建議（**未實施，需改 repo 並先問使用者**）在 `.gitattributes` 加一行 `translation-hub/** -text`，讓資料檔永遠不被換行轉換，工作目錄與 blob 位元組相同。
 
 ---
@@ -815,7 +809,7 @@ python <tools>/hub_apply.py --repo <wt> --hub <wt>/translation-hub --scratch <sc
 python <tools>/hub_apply.py --repo <wt> --hub <wt>/translation-hub --scratch <scratch>/hub-out --write
 ```
 
-- **【已實測】** 以真實輸入（17 個 mod 檔＋被拒絕的項目一併放進 `-Pin`）重產到暫存副本：`TOTAL rows=9160 files=17`；`hub_check.py --compare-dir` 17 個檔**全部 IDENTICAL**（與 git blob 位元組相同）；`hub_apply.py` 回報 `nothing to apply`。伺服器那份檔案根本沒被碰（`langPackBuild` 不寫 `servers/`）。
+- **【已實測】** 以真實輸入（所有輸入檔，含授權被拒絕的項目，一併放進 `-Pin`）重產到空的暫存資料夾：`TOTAL rows=561 files=8`；8 個保留的檔與 git blob 逐檔 `cmp` **全部位元組相同**，其餘 9 個來源在 `LICENSE REFUSE` 行被閘門擋掉、沒有產出。伺服器那份檔案根本沒被碰（`langPackBuild` 不寫 `servers/`）。（採用簡單授權規則之前的紀錄：17 個檔、9,160 列，同樣全部相同。）
 - 「byte-identical」只適用於**資料檔**。`index.json` 的 `updatedAt` 每次重產都會變（已實測：資料檔相同、index 只有被重產來源的 `updatedAt` 不同），這就是用 `hub_apply.py` 的原因：它只改真正有變的來源的 index 條目，其餘位元組不動（已實測：新增一個來源後，其他條目與原本位元組相同）。
 - 比對的是 **git blob**（LF）；`--compare-dir` 讀暫存檔時會先把 CRLF 換成 LF。
 - 變動的檔案要能解釋：新增的 mod、用語修正（例如把「生物群系」改成「生態域」）、授權變更。解釋不了的差異先別提交。
@@ -881,7 +875,7 @@ git -C <wt> commit -F - <<'EOF'
 hub: add zh-TW translation files for <N> mods
 
 Rows are sha256(key) -> translation; no source text. Only mods and shader
-packs under licenses that allow derivative works are included.
+packs under simple permissive licenses are included.
 
 Co-Authored-By: Claude <model> <noreply@anthropic.com>
 EOF
@@ -893,7 +887,7 @@ EOF
 2. `$GRADLE -p <wt> test --tests "com.dragonmeow.nyanlex.hub.*" --offline` 全綠。
 3. `git -C <wt> grep -i -E 'bor[w]en'` 0 命中；`git -C <wt> diff --cached` 沒有 jar／zip／英文原文／`skips.tsv`／快取副本。
 4. `git -C <wt> diff --cached --stat` 的檔案清單與你預期的完全一致（伺服器那份檔案沒出現，除非本來就要動它）。
-5. 新增或有授權裁定的來源，裁定有寫在報告／commit 內文（不寫模組名，寫「dual-licensed, assets CC BY-NC-SA 4.0」）。
+5. 新增的來源，授權都在簡單授權清單內（或是 Polyform Shield 這個例外）；授權寫在報告裡（commit 內文不寫模組名）。
 
 **落點**：目前資料 commit 都在 `release/nyanlex-1.0.0`（由整合中的主 worktree 持有）。不要在別人持有的分支上直接 commit；在自己的 worktree 開分支提交，再交給使用者或整合者合併。
 
@@ -905,7 +899,7 @@ EOF
 
 - 要推的 commit 清單，與 `git diff --stat origin/main..<branch> -- translation-hub`。
 - 已跑的檢查結果（`hub_check.py`、測試、byte-identical 比對）。
-- 授權裁定與下架風險（新增了哪些來源、授權為何）。
+- 授權與下架風險（新增或移除了哪些來源、授權為何）。
 - **範圍提醒**：截至 2026-10-02，`origin/main` 在 `7ab9c92`（最後一個 hub 資料 commit），`release/nyanlex-1.0.0` 領先它 33 個 commit，兩者是祖先關係（fast-forward）。直接把 release 推成 main 會**連同所有程式碼 commit 一起發佈**；只想發佈資料時，要從 `origin/main` 開分支、只 cherry-pick 資料 commit。這個選擇也要問使用者。
 
 ```bash
@@ -955,8 +949,9 @@ hub_vanilla_glossary.py、hub_selfcheck.py
 【步驟】
 1. 查授權並下載（只放 <scratch>/jars/<slug>/，jar、zip 絕不進 repo）：
    python <tools>/hub_modrinth.py info <slug>      # 看 license.id、可用版本
-   授權不在白名單就停手，寫進報告，不要翻譯（白名單：MIT、Apache、BSD、MPL、LGPL、GPL、CC BY 系列（不含 ND）、
-   Polyform Shield、CC0；不收：All Rights Reserved、自訂授權、查不到授權；LicenseRef 類要回報給我裁定，不要自己決定）
+   授權不在白名單就停手，寫進報告，不要翻譯（白名單：MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、Zlib、CC0-1.0、
+   Unlicense、CC-BY-3.0、CC-BY-4.0，外加使用者核准的例外 Polyform Shield；其餘一律不收：GPL／LGPL／AGPL／MPL、
+   所有帶 SA／NC／ND 的 CC 授權、All Rights Reserved、自訂授權、查不到授權、所有其他 LicenseRef-*；不要自己裁定，回報即可）
    python <tools>/hub_modrinth.py get <slug> --dest <scratch>/jars --mc 1.21.1 --loader fabric
    （光影包用 --loader none。沒有 1.21.1 fabric 版：改選 neoforge 版；兩者都沒有就選最新正式版，並把實際的
    mcVersion 與 loader 寫進輸出檔。找不到可用版本就跳過並寫進報告。）
@@ -987,7 +982,7 @@ hub_vanilla_glossary.py、hub_selfcheck.py
 6. 自我檢查（每完成一個檔就跑，不符的修好）：
    python <tools>/hub_selfcheck.py <scratch>/out/<group>      # 要 RESULT PASS
 7. 回報：寫 <scratch>/out/<group>/REPORT.md：每個項目的 mod id、版本、授權、既有 zh_tw 狀態、翻了幾條；
-   跳過的項目與原因；自我檢查結果；任何你覺得需要人裁定的事（授權、翻不準的詞）。
+   跳過的項目與原因（含授權不在白名單的）；自我檢查結果；任何你覺得需要人裁定的事（翻不準的詞）。
 
 【鐵則（違反任一條就是做錯）】
 - 不准再派子 agent。只能寫 <scratch>；不修改 repo、不 commit、不 push、不用 git stash。
@@ -998,7 +993,7 @@ hub_vanilla_glossary.py、hub_selfcheck.py
 - 不殺任何不是你啟動的行程。
 - jar、zip、英文原文、使用者快取副本都不得進 repo。
 - 程式、註解、文件、commit 不得出現其他模組名稱（你的輸出檔與報告可以有，它們只在 <scratch>）；不得出現使用者 email 前綴的個人識別字串（檢查：git grep -i -E 'bor[w]en' 必須 0 命中）。
-- 授權只收白名單；ARR、自訂授權、查不到授權的不翻。
+- 授權只收簡單授權白名單（§4.1）；GPL／LGPL／MPL、帶 SA／NC／ND 的 CC、ARR、自訂授權、查不到授權的不翻。
 ```
 
 ### 8.2 範本 2：轉換與驗證組
@@ -1020,7 +1015,7 @@ hub_vanilla_glossary.py、hub_selfcheck.py
    $GRADLE -p <wt> langPackBuild --offline -q "-Pin=<輸入資料夾 1>;<輸入資料夾 2>…" "-Pout=<scratch>/hub-out" \
      -PshaderTarget=<modId> -PmergeIndex "-Preport=<scratch>/report.txt" "-Pskips=<scratch>/skips.tsv"
    - 每個目標 mod 的所有輸入檔（本體、圖鑑、光影包…）都要帶齊；-PshaderTarget 沒給，光影輸入會被整個忽略。
-   - 逐行看 "LICENSE ACCEPT|REFUSE"：授權閘門解析 SPDX 運算式後精確比對白名單（不收 AGPL 與所有 LicenseRef-*），ACCEPT 的仍要對照 Modrinth 的 license.id 複核；
+   - 逐行看 "LICENSE ACCEPT|REFUSE"：授權閘門解析 SPDX 運算式後精確比對簡單授權白名單（只有 Polyform Shield 這個例外；GPL／LGPL／AGPL／MPL、帶 SA／NC／ND 的 CC、所有其他 LicenseRef-* 一律 REFUSE），ACCEPT 的仍要對照 Modrinth 的 license.id 複核；
      與預期不同就停下來回報，不要自己改 license 欄位。
    - skips.tsv 含英文原文，只能留在 <scratch>，用完刪除。
 3. 比對與驗證：
@@ -1046,7 +1041,7 @@ hub_vanilla_glossary.py、hub_selfcheck.py
 - 不殺任何不是你啟動的行程。
 - jar、zip、英文原文、skips.tsv、使用者快取副本都不得進 repo。
 - 程式、註解、文件、commit 不得出現其他模組名稱（資料檔與資料夾名稱除外）；不得出現使用者 email 前綴的個人識別字串（檢查：git grep -i -E 'bor[w]en' 必須 0 命中）。
-- 授權只收白名單；ARR、自訂授權、查不到授權的不轉換。
+- 授權只收簡單授權白名單（§4.1）；GPL／LGPL／MPL、帶 SA／NC／ND 的 CC、ARR、自訂授權、查不到授權的不轉換。
 ```
 
 ---
@@ -2209,7 +2204,7 @@ print(f"{len(rows)} rows -> {target}")
 | `hubExport` 缺來源／`-Pserver=localhost` | 已實測 | exit 2，訊息如 §9.5 |
 | `gradle langPackBuild …`（`-Pin;` 多路徑、`-Pout -PshaderTarget -PmergeIndex -Preport -Pskips`） | 已實測 | 假資料：ARR 被 REFUSE、光影併入 `-PshaderTarget`、`X: ` 列、`%s` 被略過、`UNCHANGED` |
 | `langPackBuild -Plang` | 依程式碼 | 預設 `zh-TW` 即實測用的值；沒有另外實測其他語言 |
-| 真實輸入完整重產 | 已實測 | `TOTAL rows=9160 files=17`；17 個檔與 git blob **全部位元組相同**；兩次（`b01ebac`、`64cec54`） |
+| 真實輸入完整重產 | 已實測 | 簡單授權規則下 `TOTAL rows=561 files=8`；8 個檔與 git blob **全部位元組相同**，其餘 9 個來源被 REFUSE。（規則改前：`TOTAL rows=9160 files=17`、17 個檔相同，兩次：`b01ebac`、`64cec54`） |
 | 重產冪等性 | 已實測 | 連跑兩次，資料檔相同，index 只有 `updatedAt` 不同 |
 | `gradle test --tests "com.dragonmeow.nyanlex.hub.*"` | 已實測 | 17 個類別、184 項、0 失敗 |
 | 附錄 A.1 `hub_check.py`（含 `--compare-dir`、`--originals`、`--raw`） | 已實測 | 對倉庫與線上 `origin/main` 皆 `RESULT PASS` |

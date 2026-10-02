@@ -32,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
@@ -411,20 +412,27 @@ public final class LangPackBuilder {
 
     // ------------------------------------------------------------------ license policy
 
+    /** The simple licenses the repository accepts, compared exactly (lower case). */
+    private static final Set<String> SIMPLE_LICENSES = Set.of("mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause",
+            "isc", "zlib", "cc0-1.0", "unlicense", "cc-by-3.0", "cc-by-4.0");
+
+    /** The one approved exception to the simple-license rule: Polyform Shield, with or without a version. */
+    private static final Pattern POLYFORM_SHIELD = Pattern.compile("polyform-shield(?:-\\d+\\.\\d+\\.\\d+)?");
+
     /**
-     * The license gate: the {@code license} field of an input file is an SPDX expression, parsed with
-     * {@code AND}, {@code OR} (any letter case; {@code AND} binds tighter than {@code OR}), parentheses,
-     * {@code WITH <exception>} and a trailing {@code +}, and every license id in it is compared exactly
-     * (never as a substring) with the whitelist: MIT, Apache-2.0, BSD-*, MPL-2.0, LGPL-*, GPL-* (AGPL is
-     * not GPL-*), CC-BY-* (the NC, SA and ND variants too), Polyform-Shield, CC0-1.0 and Unlicense.
-     * {@code A AND B} needs both sides accepted, {@code A OR B} either.
+     * The license gate: the repository only takes translations of projects under a simple license. The
+     * {@code license} field of an input file is an SPDX expression, parsed with {@code AND}, {@code OR}
+     * (any letter case; {@code AND} binds tighter than {@code OR}), parentheses and
+     * {@code WITH <exception>}, and every license id in it is compared exactly (never as a substring) with
+     * the whitelist: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, CC0-1.0, Unlicense, CC-BY-3.0
+     * and CC-BY-4.0, plus Polyform Shield as the one approved exception. {@code A AND B} needs both sides
+     * accepted, {@code A OR B} either.
      *
-     * <p>Every {@code LicenseRef-*} is refused, All Rights Reserved and custom licenses included, with one
-     * exception: Modrinth reports Polyform Shield as {@code LicenseRef-Polyform-Shield-<version>}, which is
-     * the whitelisted license under its other spelling. Anything that is not a well-formed expression
-     * (a free-text license name, unbalanced parentheses, a dangling operator) is refused. For a dual-licensed
-     * project, the author's ruling goes into the file's {@code license} field as a plain SPDX expression
-     * such as {@code LGPL-2.1 AND CC-BY-NC-SA-4.0}; that string is then the decision.</p>
+     * <p>Everything else is refused: GPL, LGPL, AGPL and MPL in every version, every CC license with an SA,
+     * NC or ND term, All Rights Reserved and every other {@code LicenseRef-*}. The one {@code LicenseRef}
+     * that passes is Modrinth's spelling of Polyform Shield, {@code LicenseRef-Polyform-Shield-<version>},
+     * which is the same license under another name. Anything that is not a well-formed expression (a
+     * free-text license name, unbalanced parentheses, a dangling operator) is refused.</p>
      */
     public static boolean licenseAccepted(String license) {
         if (license == null || license.isBlank()) return false;
@@ -434,21 +442,14 @@ public final class LangPackBuilder {
         return new SpdxExpression(tokens).accepted();
     }
 
-    /** One license id against the whitelist (exact id, or the documented id family prefix). */
+    /** One license id against the whitelist (exact id, no prefix or substring matching). */
     static boolean licenseIdAccepted(String id) {
         String s = id.toLowerCase(Locale.ROOT);
-        if (s.endsWith("+")) s = s.substring(0, s.length() - 1); // "or later"
         if (s.startsWith("licenseref-")) {
             s = s.substring("licenseref-".length());
-            return isPolyformShield(s); // every other custom reference is refused
+            return POLYFORM_SHIELD.matcher(s).matches(); // every other custom reference is refused
         }
-        return s.equals("mit") || s.equals("apache-2.0") || s.startsWith("bsd-") || s.equals("mpl-2.0")
-                || s.startsWith("lgpl-") || s.startsWith("gpl-") || s.startsWith("cc-by-")
-                || isPolyformShield(s) || s.equals("cc0-1.0") || s.equals("unlicense");
-    }
-
-    private static boolean isPolyformShield(String lowerCaseId) {
-        return lowerCaseId.equals("polyform-shield") || lowerCaseId.startsWith("polyform-shield-");
+        return SIMPLE_LICENSES.contains(s) || POLYFORM_SHIELD.matcher(s).matches();
     }
 
     /** Recursive-descent evaluation of an SPDX expression: {@code or := and (OR and)*}, {@code and := term (AND term)*}. */
