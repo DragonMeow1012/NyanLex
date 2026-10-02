@@ -8,12 +8,17 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 
 ## Privacy (read this first)
 
-- **All translation is OFF by default.** A fresh install sends no text anywhere until you turn a surface on.
-- Once you turn something on, the text on that surface (this can include chat messages, possibly private messages, and player names) is sent to the translation service you selected.
-- **Machine translation:** the default source, Google, uses an **unofficial** web endpoint that may be rate-limited or stop working at any time. DeepL and Microsoft Translator are available through their **official APIs with your own API key**.
-- **AI translation:** goes to the OpenAI-compatible service (or ChatGPT/Codex sign-in) that **you** configure; nothing is sent to any service the mod picks for you.
-- **API keys are stored only in your local Minecraft config folder** and are sent only to the provider you chose. They are masked in the settings screen and never written to logs or debug dumps.
-- **The GitHub translation hub only downloads** public files (`index.json` plus the files you confirm). The mod never uploads any local data, chat, or translations.
+- **Online translation is a master switch, and it is off on a new install.** While it is off, no translation service receives any of your text.
+- You can turn it on in three ways: from the prompt card shown on the title screen the first time you start (choose free machine translation, AI translation, or "not now"); by pressing the translate-item key (default `R`) or translate-screen key (default `P`) while it is off, which first opens a confirmation window and only sends after you press "Start translating"; or in Settings > General.
+- Things that work without turning it on, and send nothing: translations already in your local cache, translation packs you downloaded by hand, the built-in glossary, and the vanilla text from the game's own language files.
+- Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
+- The text goes to the translation service you choose:
+  - **Google without a key** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.
+  - **DeepL and Microsoft Translator** use their **official APIs** and need your own API key.
+  - **AI engines** (OpenAI-compatible endpoints, or ChatGPT/Codex sign-in) also need your own key or sign-in, and go only to the service you configure.
+- **API keys are stored only in the config file on your machine**, are sent only to the provider you chose, are masked in the settings screen, and are never written to logs or debug dumps.
+- Users upgrading from an earlier version keep their existing settings: if you were already translating, online translation stays on.
+- **The GitHub translation hub is manual download only.** It fetches public files from GitHub (`index.json` plus the files you confirm) and never uploads anything.
 - Player names from the TAB list are masked locally before sending; other server text may still contain user-provided content.
 
 ## Compatibility
