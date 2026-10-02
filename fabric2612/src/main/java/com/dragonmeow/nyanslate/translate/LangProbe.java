@@ -102,6 +102,7 @@ public final class LangProbe {
     private final Map<String, KeyStats> keys = new LinkedHashMap<>();
     private final Map<String, Long> argTypeCounts = new TreeMap<>();
     private long keyOverflow;
+    private long nonKeyLiterals;
     private long nodesTotal;
     private boolean dirty;
     private ScheduledExecutorService scheduler;
@@ -152,10 +153,30 @@ public final class LangProbe {
         ensureScheduler();
     }
 
+    /** Stand-in recorded for translate "keys" that are not shaped like a lang key (privacy). */
+    public static final String NON_KEY = "<non-key>";
+
+    /** A real lang key: lowercase letters, digits, underscore, dot, dash (and bounded length). */
+    static boolean looksLikeLangKey(String key) {
+        if (key == null || key.isEmpty() || key.length() > MAX_KEY_LENGTH) return false;
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            boolean ok = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-';
+            if (!ok) return false;
+        }
+        return true;
+    }
+
     private void recordKey(String surface, Node n, boolean pureRoot) {
         nodesTotal++;
         for (String t : n.argTypes) argTypeCounts.merge(t, 1L, Long::sum);
-        String key = n.key.length() > MAX_KEY_LENGTH ? n.key.substring(0, MAX_KEY_LENGTH) : n.key;
+        String key = n.key;
+        if (!looksLikeLangKey(key)) {
+            // Servers/plugins sometimes put literal text (player names, chat) in "translate":
+            // never keep it, only count it.
+            nonKeyLiterals++;
+            key = NON_KEY;
+        }
         KeyStats ks = keys.get(key);
         if (ks == null) {
             if (keys.size() >= MAX_KEYS) {
@@ -163,7 +184,8 @@ public final class LangProbe {
                 return;
             }
             ks = new KeyStats();
-            ks.argTypes = List.copyOf(n.argTypes);
+            ks.argTypes = NON_KEY.equals(key) ? List.of() : List.copyOf(n.argTypes);
+            if (NON_KEY.equals(key)) ks.resolved = true; // nothing to look up
             keys.put(key, ks);
         }
         ks.count++;
@@ -212,6 +234,9 @@ public final class LangProbe {
             }
         }
         LangLookup l = lookup;
+        // info() may trigger a heavy resource load: never call it while holding the lock that
+        // observe() (render thread) contends on.
+        Map<String, Object> lookupInfo = l == null ? null : safeInfo(l);
         Map<String, Boolean[]> resolved = new LinkedHashMap<>();
         if (l != null) {
             for (String k : toResolve) {
@@ -231,7 +256,7 @@ public final class LangProbe {
                 ks.englishHas = e.getValue()[1];
                 ks.resolved = ks.targetHas != null;
             }
-            report = buildReport(l);
+            report = buildReport(lookupInfo);
             dirty = false;
         }
         write(report);
@@ -239,16 +264,26 @@ public final class LangProbe {
 
     /** Package-visible for tests: builds the JSON-shaped report map. */
     Map<String, Object> buildReport() {
+        LangLookup l = lookup;
+        Map<String, Object> info = l == null ? null : safeInfo(l);
         synchronized (lock) {
-            return buildReport(lookup);
+            return buildReport(info);
         }
     }
 
-    private Map<String, Object> buildReport(LangLookup l) {
+    private static Map<String, Object> safeInfo(LangLookup l) {
+        try {
+            return l.info();
+        } catch (RuntimeException e) {
+            return Map.of("infoError", String.valueOf(e.getClass().getSimpleName()));
+        }
+    }
+
+    private Map<String, Object> buildReport(Map<String, Object> lookupInfo) {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("note", "Measurement only. Args recorded by type, never value. Keys come only from "
                 + "TranslatableContents nodes present in observed Component trees.");
-        if (l != null) root.put("lookup", l.info());
+        if (lookupInfo != null) root.put("lookup", lookupInfo);
         Map<String, Object> surf = new LinkedHashMap<>();
         for (Map.Entry<String, SurfaceStats> e : surfaces.entrySet()) {
             SurfaceStats s = e.getValue();
@@ -288,6 +323,7 @@ public final class LangProbe {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("distinctKeysRecorded", keys.size());
         summary.put("keysOverCap", keyOverflow);
+        summary.put("nonKeyLiterals", nonKeyLiterals);
         summary.put("translatableNodesRecorded", nodesTotal);
         summary.put("keysInTargetLang", targetYes);
         summary.put("keysMissingFromTargetLang", targetNo);

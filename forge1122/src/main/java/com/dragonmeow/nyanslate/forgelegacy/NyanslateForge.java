@@ -322,6 +322,8 @@ public final class NyanslateForge {
             }
         } catch (Throwable guardError) {
             HookGuard.fail("event.onChat", guardError);
+            // Never lose a line: if we cancelled the vanilla message before failing, let it through.
+            if (event.isCanceled()) event.setCanceled(false);
         }
     }
 

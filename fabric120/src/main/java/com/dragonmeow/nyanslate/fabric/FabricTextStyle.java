@@ -833,19 +833,25 @@ public final class FabricTextStyle {
      * are emitted as one run (never one {@link Component} per character).
      */
     private static void appendGradient(MutableComponent out, String chunk, List<Style> gradient) {
-        int targetLen = chunk.length();
+        // Walk by code point: a supplementary-plane character or emoji must never be split into
+        // lone surrogates (each half would render as '?').
+        int targetLen = chunk.codePointCount(0, chunk.length());
         int sourceLen = gradient.size();
         int i = 0;
+        int charPos = 0;
         while (i < targetLen) {
             int srcIdx = com.dragonmeow.nyanslate.style.ColorShapeMatcher
                     .sourceIndexFor(targetLen, sourceLen, i);
             Style style = gradient.get(srcIdx);
             int j = i + 1;
+            int endChar = chunk.offsetByCodePoints(charPos, 1);
             while (j < targetLen && com.dragonmeow.nyanslate.style.ColorShapeMatcher
                     .sourceIndexFor(targetLen, sourceLen, j) == srcIdx) {
+                endChar = chunk.offsetByCodePoints(endChar, 1);
                 j++;
             }
-            out.append(Component.literal(chunk.substring(i, j)).setStyle(style));
+            out.append(Component.literal(chunk.substring(charPos, endChar)).setStyle(style));
+            charPos = endChar;
             i = j;
         }
     }

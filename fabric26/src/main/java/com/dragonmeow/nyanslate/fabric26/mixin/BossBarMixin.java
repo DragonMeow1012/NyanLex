@@ -30,7 +30,10 @@ public abstract class BossBarMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)V"),
             require = 0)
     private void nyanslate$bossBar(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int color) {
-        if (!HookGuard.enter("BossBar.bossBar")) return;
+        if (!HookGuard.enter("BossBar.bossBar")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.text(font, text, x, y, color));
+            return;
+        }
         try {
             TranslationService service = NyanslateFabric26.service();
             if (service != null && text != null) {
@@ -58,6 +61,7 @@ public abstract class BossBarMixin {
                     () -> g.text(font, text, x, y, color));
         } catch (Throwable guardError) {
             HookGuard.fail("BossBar.bossBar", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.text(font, text, x, y, color));
         }
     }
 }

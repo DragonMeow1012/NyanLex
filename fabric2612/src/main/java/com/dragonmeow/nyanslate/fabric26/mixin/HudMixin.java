@@ -235,7 +235,10 @@ public abstract class HudMixin {
             require = 0)
     private void nyanslate$scoreboard(GuiGraphicsExtractor g, Font font, Component text,
                                          int x, int y, int color, boolean shadow) {
-        if (!HookGuard.enter("Hud.scoreboard")) return;
+        if (!HookGuard.enter("Hud.scoreboard")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.text(font, text, x, y, color, shadow));
+            return;
+        }
         try {
             Component next = nyanslate$scoreboardSources.peekFirst();
             Component toDraw = text;
@@ -248,6 +251,7 @@ public abstract class HudMixin {
                     () -> g.text(font, rendered, x, y, color, shadow));
         } catch (Throwable guardError) {
             HookGuard.fail("Hud.scoreboard", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.text(font, text, x, y, color, shadow));
         }
     }
 
@@ -258,7 +262,10 @@ public abstract class HudMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$heldName(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int width, int color) {
-        if (!HookGuard.enter("Hud.heldName")) return;
+        if (!HookGuard.enter("Hud.heldName")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
+            return;
+        }
         try {
             TranslationService s = NyanslateFabric26.service();
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
@@ -268,6 +275,7 @@ public abstract class HudMixin {
             nyanslate$backdrop("held", g, font, text, x, y, width, color, s == null ? null : s::translateHeld);
         } catch (Throwable guardError) {
             HookGuard.fail("Hud.heldName", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
         }
     }
 
@@ -278,12 +286,16 @@ public abstract class HudMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$title(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int width, int color) {
-        if (!HookGuard.enter("Hud.title")) return;
+        if (!HookGuard.enter("Hud.title")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
+            return;
+        }
         try {
             TranslationService s = NyanslateFabric26.service();
             nyanslate$backdrop("title", g, font, text, x, y, width, color, s == null ? null : s::translateTitle);
         } catch (Throwable guardError) {
             HookGuard.fail("Hud.title", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
         }
     }
 
@@ -294,12 +306,16 @@ public abstract class HudMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$actionBar(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int width, int color) {
-        if (!HookGuard.enter("Hud.actionBar")) return;
+        if (!HookGuard.enter("Hud.actionBar")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
+            return;
+        }
         try {
             TranslationService s = NyanslateFabric26.service();
             nyanslate$backdrop("actionBar", g, font, text, x, y, width, color, s == null ? null : s::translateActionBar);
         } catch (Throwable guardError) {
             HookGuard.fail("Hud.actionBar", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
         }
     }
 

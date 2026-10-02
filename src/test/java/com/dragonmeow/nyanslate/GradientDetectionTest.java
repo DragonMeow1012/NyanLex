@@ -183,4 +183,24 @@ class GradientDetectionTest {
         assertTrue(Set.of(0xFF5555, 0x5555FF).containsAll(colours(rendered)),
                 colours(rendered).toString());
     }
+
+    @Test
+    void gradientNeverSplitsSupplementaryCharactersIntoLoneSurrogates() {
+        Component source = perChar("MYTHIC DUNGEON BOW", 0xFF0000, 0x001133);
+        String zh = "神\uD83D\uDE00話\uD842\uDFB7城弓\uD83D\uDE00";
+        Component rendered = FabricTextStyle.styledAnchored(source, 0, zh);
+        assertEquals(zh, rendered.getString());
+        for (FabricTextStyle.Seg seg : FabricTextStyle.segments(rendered)) {
+            String t = seg.text();
+            for (int k = 0; k < t.length(); k++) {
+                char ch = t.charAt(k);
+                if (Character.isHighSurrogate(ch)) {
+                    assertTrue(k + 1 < t.length() && Character.isLowSurrogate(t.charAt(k + 1)), t);
+                    k++;
+                } else {
+                    assertTrue(!Character.isLowSurrogate(ch), "lone low surrogate in segment");
+                }
+            }
+        }
+    }
 }

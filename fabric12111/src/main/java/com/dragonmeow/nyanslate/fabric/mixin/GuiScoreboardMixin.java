@@ -166,7 +166,10 @@ public abstract class GuiScoreboardMixin {
             require = 0)
     private void nyanslate$scoreboard(GuiGraphics g, Font font, Component text,
                                         int x, int y, int color, boolean shadow) {
-        if (!HookGuard.enter("GuiScoreboard.scoreboard")) return;
+        if (!HookGuard.enter("GuiScoreboard.scoreboard")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.drawString(font, text, x, y, color, shadow));
+            return;
+        }
         try {
             // Do not fall back to translating this isolated row: the outer hook already
             // queued its complete blank-line-delimited paragraph (or intentionally kept it).
@@ -177,6 +180,7 @@ public abstract class GuiScoreboardMixin {
                     () -> g.drawString(font, rendered, x, y, color, shadow));
         } catch (Throwable guardError) {
             HookGuard.fail("GuiScoreboard.scoreboard", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.drawString(font, text, x, y, color, shadow));
         }
     }
 
@@ -187,7 +191,10 @@ public abstract class GuiScoreboardMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$heldName(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {
-        if (!HookGuard.enter("GuiScoreboard.heldName")) return;
+        if (!HookGuard.enter("GuiScoreboard.heldName")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.drawStringWithBackdrop(font, text, x, y, width, color));
+            return;
+        }
         try {
             TranslationService s = NyanslateFabric.service();
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
@@ -197,6 +204,7 @@ public abstract class GuiScoreboardMixin {
             nyanslate$backdrop("held", g, font, text, x, y, width, color, s == null ? null : s::translateHeld);
         } catch (Throwable guardError) {
             HookGuard.fail("GuiScoreboard.heldName", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.drawStringWithBackdrop(font, text, x, y, width, color));
         }
     }
 
@@ -207,12 +215,16 @@ public abstract class GuiScoreboardMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$title(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {
-        if (!HookGuard.enter("GuiScoreboard.title")) return;
+        if (!HookGuard.enter("GuiScoreboard.title")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.drawStringWithBackdrop(font, text, x, y, width, color));
+            return;
+        }
         try {
             TranslationService s = NyanslateFabric.service();
             nyanslate$backdrop("title", g, font, text, x, y, width, color, s == null ? null : s::translateTitle);
         } catch (Throwable guardError) {
             HookGuard.fail("GuiScoreboard.title", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.drawStringWithBackdrop(font, text, x, y, width, color));
         }
     }
 
@@ -223,12 +235,16 @@ public abstract class GuiScoreboardMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {
-        if (!HookGuard.enter("GuiScoreboard.actionBar")) return;
+        if (!HookGuard.enter("GuiScoreboard.actionBar")) {
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.drawStringWithBackdrop(font, text, x, y, width, color));
+            return;
+        }
         try {
             TranslationService s = NyanslateFabric.service();
             nyanslate$backdrop("actionBar", g, font, text, x, y, width, color, s == null ? null : s::translateActionBar);
         } catch (Throwable guardError) {
             HookGuard.fail("GuiScoreboard.actionBar", guardError);
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(() -> g.drawStringWithBackdrop(font, text, x, y, width, color));
         }
     }
 
