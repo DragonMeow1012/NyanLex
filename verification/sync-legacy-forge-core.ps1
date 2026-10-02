@@ -22,7 +22,8 @@ $files = @(
     'KeybindMigration.java',
     'LegacySessionTokenUsage.java',
     'LegacyTemplateText.java',
-    'LegacyTranslator.java'
+    'LegacyTranslator.java',
+    'LegacyUiModel.java'
 )
 $canonicalPackage = 'com.dragonmeow.nyanlex.legacy'
 $forgePackage = 'com.dragonmeow.nyanlex.forgelegacy'
@@ -36,9 +37,9 @@ function Require {
 
 Require (Test-Path -LiteralPath $canonicalRoot -PathType Container) `
     "Canonical legacy root is missing: $canonicalRoot"
-Require ($files.Count -eq 9 -and
-        @($files | Select-Object -Unique).Count -eq 9) `
-    'Forge canonical transform must contain exactly nine unique files'
+Require ($files.Count -eq 10 -and
+        @($files | Select-Object -Unique).Count -eq 10) `
+    'Forge canonical transform must contain exactly ten unique files'
 
 foreach ($targetRoot in $targets) {
     Require (Test-Path -LiteralPath $targetRoot -PathType Container) `

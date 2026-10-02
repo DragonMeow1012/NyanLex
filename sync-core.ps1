@@ -169,6 +169,7 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     }
 }
 # Java 8 compatible boundaries shared unchanged by every loader.
+# (DebugErrorLog is intentionally not in this list; see the Java 8 block below.)
 foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122', 'forge1132')) {
     $sharedDestination = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\nyanlex\translate"
     New-Item -ItemType Directory -Force -Path $sharedDestination | Out-Null
@@ -180,6 +181,20 @@ foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122
             Put-File $sharedSource $sharedFile
             $copied++
         }
+    }
+}
+# The Java 8 DebugErrorLog is a hand-maintained trimmed port (the root one needs Java 11+ APIs and
+# OpenAiTranslator.ExchangeDumpSink, which the old trees do not have). fabric1144 holds the canonical
+# Java 8 copy; the other four old trees mirror it unchanged. It is deliberately NOT taken from root.
+$java8Canonical = Join-Path $root 'fabric1144\src\main\java\com\dragonmeow\nyanlex\translate\DebugErrorLog.java'
+if (-not (Test-Path $java8Canonical)) { throw "Java 8 DebugErrorLog missing: $java8Canonical" }
+foreach ($legacyTarget in @('fabric1152', 'fabric1165', 'forge1122', 'forge1132')) {
+    $dstDir = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\nyanlex\translate"
+    $dst = Join-Path $dstDir 'DebugErrorLog.java'
+    if (-not (Test-Path $dst) -or (Get-FileHash $java8Canonical).Hash -ne (Get-FileHash $dst).Hash) {
+        Put-File $java8Canonical $dst
+        Write-Output "sync: $legacyTarget\translate\DebugErrorLog.java (java8)"
+        $copied++
     }
 }
 if ($Check) {
