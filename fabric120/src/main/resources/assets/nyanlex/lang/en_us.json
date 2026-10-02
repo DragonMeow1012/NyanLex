@@ -112,7 +112,7 @@
   "message.nyanlex.show_translation": "Showing translations",
   "message.nyanlex.screen_scan": "Translating screen text... %s items",
   "message.nyanlex.retranslate": "Translating: %s",
-  "message.nyanlex.gt_gate.closed": "Google Translate has temporarily limited requests. Retrying automatically in about %s min.",
+  "message.nyanlex.gt_gate.closed": "Google Translate is temporarily limiting use. Retrying automatically in about %s min.",
   "message.nyanlex.gt_gate.blocked": "Google Translate is temporarily limited. Back in about %s min.",
 "message.nyanlex.tooltip_hint": "Press [%s] to translate",
 "message.nyanlex.tooltip_hint_pending": "Translating...",
