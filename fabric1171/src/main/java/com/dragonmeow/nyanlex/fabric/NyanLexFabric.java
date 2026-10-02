@@ -2620,8 +2620,11 @@ public final class NyanLexFabric implements ClientModInitializer {
     public static void toast(Component title, Component message) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
-        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToasts(),
-                net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds.TUTORIAL_HINT,
-                title, message));
+        // multiline(): on this version a plain toast is one fixed-width line, so a long message would run off screen
+        mc.execute(() -> {
+            mc.getToasts().addToast(net.minecraft.client.gui.components.toasts.SystemToast.multiline(mc,
+                    net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds.TUTORIAL_HINT,
+                    title, message));
+        });
     }
 }
