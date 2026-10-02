@@ -1,35 +1,43 @@
 package com.dragonmeow.nyanlex.fabric;
 
+import com.dragonmeow.nyanlex.config.DialogContent;
+import com.dragonmeow.nyanlex.config.DialogPanel;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
+import com.dragonmeow.nyanlex.config.WarmupConfirmDialog;
 import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.warmup.ItemWarmupPlan;
 import com.dragonmeow.nyanlex.warmup.ItemWarmupScanner;
 
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.narration.NarratedElementType;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.FormattedCharSequence;
 
-import java.util.List;
-import java.util.Locale;
+import org.lwjgl.glfw.GLFW;
 
 /**
- * "全物品預熱" scan-and-confirm screen. It never sends anything itself: it dry-runs the
- * item registry (a few tooltips per tick) to count items, cached items and the estimated
- * requests/tokens, shows the cost/429 warning and only then lets the player
- * start the background run ({@link ItemWarmupProgressScreen}). Under machine translation
- * it only explains why the feature is unavailable.
+ * "全物品預熱" scan-and-confirm screen. It never sends anything itself: it dry-runs the item
+ * registry (a few tooltips per tick) to count items, cached items and the estimated requests and
+ * tokens, shows the cost/429 warnings and only then lets the player start the background run
+ * ({@link ItemWarmupProgressScreen}). Under machine translation it only explains why the feature
+ * is unavailable. The text is one scrolling card (core's {@link WarmupConfirmDialog} on the shared
+ * {@link DialogPanel}): every paragraph wraps, nothing is dropped on a small window, and the
+ * [取消] / [開始預先翻譯] buttons stay pinned below it.
  */
 public final class ItemWarmupConfirmScreen extends Screen {
+    private static final DialogContent.Lang LANG = (key, args) -> Component.translatable(key, args).getString();
+
     private final Screen parent;
+    private final DialogPanel panel;
     private ItemWarmupScanner scanner;
     private ItemWarmupPlan plan;
-    private Button startButton;
+    private DialogPanel.Content shown;
 
     public ItemWarmupConfirmScreen(Screen parent) {
         super(Component.translatable("screen.nyanlex.warmup.title"));
         this.parent = parent;
+        this.panel = new DialogPanel(text -> this.font == null ? text.length() * 6 : this.font.width(text));
     }
 
     private static boolean eligibleEngine() {
@@ -41,25 +49,15 @@ public final class ItemWarmupConfirmScreen extends Screen {
         return this.minecraft != null && this.minecraft.level != null && this.minecraft.player != null;
     }
 
-    private static String skippedKey(boolean inWorld) {
-        return inWorld ? "screen.nyanlex.warmup.skipped.world" : "screen.nyanlex.warmup.skipped";
-    }
-
     @Override
     protected void init() {
-        int centerX = this.width / 2;
-        int y = this.height - 28;
-        this.addRenderableWidget(Button.builder(
-                Component.translatable("gui.cancel"), b -> onClose())
-                .bounds(centerX - 125, y, 120, 20).build());
-        startButton = this.addRenderableWidget(Button.builder(
-                Component.translatable("screen.nyanlex.warmup.start"), b -> onStart())
-                .bounds(centerX + 5, y, 120, 20).build());
-        startButton.active = false;
         if (eligibleEngine() && scanner == null) {
             scanner = new ItemWarmupScanner(new FabricItemWarmupSource(),
                     new FabricItemWarmupSource.Backend(() -> false));
         }
+        panel.setNarration(DialogContent.narration(LANG));
+        refresh();
+        panel.resize(this.width, this.height);
     }
 
     @Override
@@ -71,7 +69,30 @@ public final class ItemWarmupConfirmScreen extends Screen {
                         NyanLexFabric.tokenUsageSnapshot());
             }
         }
-        startButton.active = plan != null && !plan.nothingToDo() && eligibleEngine();
+        refresh();
+    }
+
+    /** Rebuilds the card only when what it shows changed (the scan counter, the finished plan). */
+    private void refresh() {
+        WarmupConfirmDialog.Scan scan = scanner == null ? null
+                : new WarmupConfirmDialog.Scan(scanner.scanned(), scanner.total(), scanner.failed());
+        DialogPanel.Content next = WarmupConfirmDialog.content(eligibleEngine(), scan, plan, inWorld(), LANG);
+        if (next.equals(shown)) return;
+        shown = next;
+        if (panel.hasContent()) panel.update(next);
+        else panel.set(next);
+    }
+
+    private boolean canStart() {
+        return plan != null && !plan.nothingToDo() && eligibleEngine();
+    }
+
+    private void handle(int id) {
+        if (id == WarmupConfirmDialog.START) {
+            if (canStart()) onStart();
+        } else if (id == WarmupConfirmDialog.CANCEL) {
+            onClose();
+        }
     }
 
     /** 線上翻譯 off: the player is asked on the spot first; either way the run then starts in the background. */
@@ -90,68 +111,60 @@ public final class ItemWarmupConfirmScreen extends Screen {
         if (this.minecraft != null) this.minecraft.setScreen(parent);
     }
 
+    // ------------------------------------------------------------------ input
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        return false; // Escape is 取消 and goes through the panel
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        handle(panel.mouseClicked((int) mouseX, (int) mouseY, button));
+        return true;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+        panel.mouseDragged((int) mouseX, (int) mouseY);
+        return true;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        panel.mouseReleased();
+        return true;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        panel.mouseScrolled((int) mouseX, (int) mouseY, scrollY);
+        return true;
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        handle(panel.keyPressed(keyCode, (modifiers & GLFW.GLFW_MOD_SHIFT) != 0));
+        if (panel.consumeNarrationRequest()) this.triggerImmediateNarration(true);
+        return true; // every other key does nothing: no button is ever focused unless Tab put it there
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        return true;
+    }
+
+    @Override
+    protected void updateNarratedWidget(NarrationElementOutput output) {
+        output.add(NarratedElementType.TITLE, Component.literal(panel.narration()));
+    }
+
+    // ------------------------------------------------------------------ render
+
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         super.render(g, mouseX, mouseY, partialTick);
-        int centerX = this.width / 2;
-        g.drawCenteredString(this.font, this.title, centerX, 12, 0xFFFFFFFF);
-        int wrap = Math.min(340, this.width - 30);
-        int left = centerX - wrap / 2;
-        int y = 30;
-
-        if (!eligibleEngine()) {
-            y = paragraph(g, Component.translatable("screen.nyanlex.warmup.unavailable.engine"),
-                    left, y, wrap, 0xFFFFD700);
-            return;
-        }
-        if (plan == null) {
-            g.drawCenteredString(this.font,
-                    Component.translatable("screen.nyanlex.warmup.scanning",
-                            scanner == null ? 0 : scanner.scanned(), scanner == null ? 0 : scanner.total()),
-                    centerX, y + 20, 0xFFE0E0E0);
-            return;
-        }
-        g.drawCenteredString(this.font,
-                Component.translatable("screen.nyanlex.warmup.summary",
-                        plan.totalItems(), plan.cachedItems(), plan.nativeItems(), plan.missingItems()),
-                centerX, y, 0xFFE0E0E0);
-        y += 14;
-        if (scanner != null && scanner.failed() > 0) {
-            g.drawCenteredString(this.font,
-                    Component.translatable(skippedKey(inWorld()), scanner.failed()), centerX, y, 0xFFC0C0C0);
-            y += 12;
-        }
-        if (plan.nothingToDo()) {
-            g.drawCenteredString(this.font,
-                    Component.translatable("screen.nyanlex.warmup.nothing"), centerX, y, 0xFF80FF80);
-            return;
-        }
-        y = paragraph(g, Component.translatable("screen.nyanlex.warmup.estimate",
-                plan.willSubmitItems(), plan.estimatedRequests(), formatTokens(plan.estimatedTokens()),
-                plan.estimatedMinutes()),
-                left, y, wrap, 0xFFFFD700);
-        y += 6;
-        for (int i = 1; i <= 5; i++) {
-            if (y > this.height - 40) break;
-            y = paragraph(g, Component.translatable("screen.nyanlex.warmup.warn." + i),
-                    left, y, wrap, i == 2 || i == 5 ? 0xFFFF9090 : 0xFFC0C0C0);
-            y += 3;
-        }
-    }
-
-    private int paragraph(GuiGraphics g, Component text, int x, int y, int width, int color) {
-        List<FormattedCharSequence> lines = this.font.split(text, width);
-        for (FormattedCharSequence line : lines) {
-            g.drawString(this.font, line, x, y, color);
-            y += 10;
-        }
-        return y;
-    }
-
-    static String formatTokens(long tokens) {
-        if (tokens >= 1_000_000L) return String.format(Locale.ROOT, "%.1fM", tokens / 1_000_000.0);
-        if (tokens >= 1_000L) return String.format(Locale.ROOT, "%.0fK", tokens / 1_000.0);
-        return Long.toString(tokens);
+        panel.render(new GuiCanvas(g, this.font), mouseX, mouseY);
     }
 
     @Override

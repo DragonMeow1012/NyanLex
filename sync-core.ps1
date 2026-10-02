@@ -152,7 +152,7 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     # The questionnaire, the manual, the shared dialog card, the lang-file guard and the no-chat-message
     # check belong to the new screens and sources of the root and fabric2612 trees.
     if ($f.Name -in 'DialogPanelTest.java', 'QuickSetupPanelTest.java', 'ManualPanelTest.java',
-            'LangFilesTest.java', 'NoChatMessagesTest.java') { continue }
+            'LangFilesTest.java', 'NoChatMessagesTest.java', 'WarmupConfirmDialogTest.java') { continue }
     $relative = $f.FullName.Substring($testSrcDir.Length + 1)
     # hub.tool is an author-only sub-package (HubExportTool/ChatLineClassifier/
     # UnmaskedNameConverter) this script deliberately never mirrors into any tree's
