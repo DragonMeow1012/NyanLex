@@ -220,7 +220,7 @@ class SettingsPanelTest {
         List<String> shown = new ArrayList<>();
         for (Text t : c.texts) shown.add(t.s());
         assertTrue(shown.contains("完"), "short Done label");
-        assertTrue(shown.contains("AI"));
+        assertTrue(shown.contains("服務"));
         assertFalse(shown.contains("翻譯設定"), "no title in the collapsed sidebar");
         assertFalse(shown.stream().anyMatch(t -> t.startsWith("已翻譯")), "no counters in the collapsed sidebar");
     }
@@ -232,7 +232,7 @@ class SettingsPanelTest {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 427, 240);
         boolean before = host.cfg.translationRequestsEnabled;
-        click(p, p.cardBounds("master"));
+        click(p, p.focusBounds("master", 0));
         assertEquals(!before, host.cfg.translationRequestsEnabled);
         assertEquals(1, host.saves);
         assertEquals(List.of(SettingEntry.SideEffect.CLEAR_PENDING), host.effects);
@@ -244,7 +244,7 @@ class SettingsPanelTest {
         host.allowToggle = false;
         SettingsPanel p = panel(host, 427, 240);
         boolean before = host.cfg.translationRequestsEnabled;
-        click(p, p.cardBounds("master"));
+        click(p, p.focusBounds("master", 0));
         assertEquals(before, host.cfg.translationRequestsEnabled);
         assertEquals(0, host.saves);
     }
@@ -290,6 +290,10 @@ class SettingsPanelTest {
         p.setCategory(SettingsCategory.ADVANCED);
         int[] card = p.cardBounds("file.config");
         assertNotNull(card);
+        for (int i = 0; i < 60 && (card[1] < p.listRect()[1] || card[1] + card[3] > p.listRect()[1] + p.listRect()[3]); i++) {
+            p.keyPressed(SettingsPanel.KEY_DOWN, false, false);
+            card = p.cardBounds("file.config");
+        }
         Rec c = new Rec();
         p.render(c, -1, -1);
         String full = host.fileLocations().get(0).path().toString();
@@ -320,45 +324,49 @@ class SettingsPanelTest {
     }
 
     @Test
-    void privacyNoticeIsReadableAtTheTopOfGeneralInEveryLanguage() {
-        String[][] expect = {{"zh_tw", "隱私", "Google"}, {"zh_hk", "隱私", "Google"},
-                {"zh_cn", "隐私", "Google"}, {"en_us", "Privacy", "Google"}};
+    void onlineTranslationCardStatesTheThreeSentencesInEveryLanguage() {
+        String[][] expect = {{"zh_tw", "送什麼", "送去哪", "怎麼停", "隱私說明"}, {"zh_hk", "送什麼", "送去哪", "怎麼停", "隱私說明"},
+                {"zh_cn", "发送什么", "发送到哪", "怎么停", "隐私说明"}, {"en_us", "What is sent", "Where it goes", "How to stop", "Privacy"}};
         for (String[] e : expect) {
             FakeHost host = new FakeHost();
             host.lang = e[0];
-            SettingsPanel p = panel(host, 320, 240);
+            SettingsPanel p = panel(host, 427, 240);
             assertEquals(SettingsCategory.GENERAL, p.category());
-            int[] card = p.cardBounds(SettingsModel.PRIVACY_ID);
+            int[] card = p.cardBounds("master");
             assertNotNull(card, e[0]);
-            assertEquals(p.listRect()[1], card[1], e[0] + ": first card, no click needed");
             Rec c = new Rec();
             p.render(c, -1, -1);
-            assertTrue(c.texts.stream().anyMatch(t -> t.s().equals(e[1])), e[0] + " title");
-            String body = c.texts.stream().map(Text::s).reduce("", String::concat);
-            assertTrue(body.contains(e[2]), e[0] + " body names the default machine service");
+            String all = c.texts.stream().map(Text::s).reduce("", String::concat);
+            assertTrue(all.contains(e[1]) && all.contains(e[2]) && all.contains(e[3]), e[0] + " says what, where, how to stop");
+            assertTrue(c.texts.stream().anyMatch(t -> t.s().equals(e[4])), e[0] + " has the privacy button");
             int saves = host.saves;
-            click(p, card);
-            assertEquals(saves, host.saves);
+            click(p, new int[] {card[0] + 2, card[1] + 2, 4, 4});
+            assertEquals(saves, host.saves, "clicking the card's text changes nothing");
             assertTrue(host.actions.isEmpty());
         }
     }
 
     @Test
-    void privacyCardCarriesTheSameMasterSwitchAsTheGeneralCard() {
+    void theOnlineTranslationCardHasOneSwitchAndAPrivacyButton() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 427, 240);
         assertFalse(host.cfg.translationRequestsEnabled, "fresh install: nothing is sent");
         Rec off = new Rec();
         p.render(off, -1, -1);
-        assertTrue(off.texts.stream().anyMatch(t -> t.s().equals("線上翻譯：關，不會送出任何文字")), "grey status row on the card");
-        click(p, p.controlBounds(SettingsModel.PRIVACY_ID));
+        assertTrue(off.texts.stream().anyMatch(t -> t.s().equals("關：不會送出任何文字")), "grey status row on the card");
+        assertTrue(off.texts.stream().anyMatch(t -> t.s().equals("隱私說明")));
+        int[] sw = p.focusBounds("master", 0);
+        click(p, sw);
         assertTrue(host.cfg.translationRequestsEnabled);
         assertEquals(List.of(SettingEntry.SideEffect.CLEAR_PENDING), host.effects);
         Rec on = new Rec();
         p.render(on, -1, -1);
-        assertTrue(on.texts.stream().anyMatch(t -> t.s().startsWith("線上翻譯：開（")), "green status row names the engine");
-        click(p, p.cardBounds("master"));
+        assertTrue(on.texts.stream().anyMatch(t -> t.s().startsWith("開：送往 ")), "green status row names the service");
+        click(p, p.focusBounds("master", 0));
         assertFalse(host.cfg.translationRequestsEnabled);
+        click(p, p.focusBounds("master", 1));
+        assertEquals(List.of(SettingAction.OPEN_PRIVACY), host.actions);
+        assertFalse(host.cfg.translationRequestsEnabled, "the privacy button never flips the switch");
     }
 
     @Test
@@ -381,13 +389,16 @@ class SettingsPanelTest {
     }
 
     @Test
-    void helpButtonNextToSearchJumpsToTheAboutCategory() {
+    void helpButtonNextToSearchOpensTheManualAndStaysWhereItWas() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 427, 240);
-        assertEquals(SettingsCategory.GENERAL, p.category());
+        p.setCategory(SettingsCategory.DISPLAY);
+        p.keyPressed(SettingsPanel.KEY_DOWN, false, false);
+        int scroll = p.scroll();
         int[] s = p.searchRect();
         p.mouseClicked(s[0] + s[2] + 4 + 6, s[1] + 5, 0);
-        assertEquals(SettingsCategory.ABOUT, p.category());
+        assertEquals(SettingsCategory.DISPLAY, p.category(), "coming back from the manual lands on the same category");
+        assertEquals(scroll, p.scroll(), "...at the same scroll position");
         assertEquals(List.of(SettingAction.OPEN_MANUAL), host.actions, "the ? button opens the manual straight away");
     }
 
@@ -397,19 +408,25 @@ class SettingsPanelTest {
         SettingsPanel p = panel(host, 480, 270);
         Rec general = new Rec();
         p.render(general, -1, -1);
-        assertTrue(general.texts.stream().anyMatch(t -> t.s().equals("設定")), "keybind card button says 設定");
-        assertFalse(general.texts.stream().anyMatch(t -> t.s().equals("開啟")));
-        p.setCategory(SettingsCategory.REQUESTS);
-        Rec requests = new Rec();
-        p.render(requests, -1, -1);
-        assertTrue(requests.texts.stream().anyMatch(t -> t.s().equals("編輯")), "do-not-translate card button says 編輯");
+        p.keyPressed(SettingsPanel.KEY_END, false, false);
+        Rec general2 = new Rec();
+        p.render(general2, -1, -1);
+        assertTrue(general.texts.stream().anyMatch(t -> t.s().equals("開始")), "quick setup card button says 開始");
+        assertTrue(general2.texts.stream().anyMatch(t -> t.s().equals("變更")), "language card button says 變更");
+        assertTrue(general2.texts.stream().anyMatch(t -> t.s().equals("設定")), "keybind card button says 設定");
+        assertFalse(general2.texts.stream().anyMatch(t -> t.s().equals("開啟")));
+        p.setCategory(SettingsCategory.DISPLAY);
+        p.keyPressed(SettingsPanel.KEY_END, false, false);
+        Rec display = new Rec();
+        p.render(display, -1, -1);
+        assertTrue(display.texts.stream().anyMatch(t -> t.s().equals("編輯")), "do-not-translate card button says 編輯");
     }
 
     @Test
     void sliderDragSnapsToStepsAndSavesOnRelease() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 480, 270);
-        p.setCategory(SettingsCategory.REQUESTS);
+        p.setCategory(SettingsCategory.ADVANCED);
         int[] ctl = p.controlBounds("cooldown");
         int trackY = ctl[1] + SettingsPanel.LINE_H + 3 + 3;
         p.mouseClicked(ctl[0] + ctl[2] - 4, trackY, 0); // far right
@@ -440,7 +457,6 @@ class SettingsPanelTest {
         click(p, p.buttonBounds("chat", 0));
         assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.chatMode, "原文 → 雙語 → 譯文 → 原文");
         assertEquals(3, host.saves);
-        assertFalse(p.dropdownOpen());
         boolean before = host.cfg.aiChat;
         click(p, p.buttonBounds("chat", 1));
         assertEquals(!before, host.cfg.aiChat);
@@ -478,7 +494,7 @@ class SettingsPanelTest {
         assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("全部項目")));
         assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("一次設定下面所有項目")));
         assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("顯示方式")), "column header over the mode column");
-        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("翻譯引擎")), "column header over the engine column");
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("翻譯服務")), "column header over the service column");
         // defaults: chat 雙語, the rest 譯文 -> the display columns differ -> 混合; every engine is 機翻
         assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("混合")));
         // pressing the mixed mode button: everything becomes 譯文
@@ -645,7 +661,7 @@ class SettingsPanelTest {
         SettingsPanel p = panel(host, 427, 240);
         p.setQuery("聊天");
         click(p, p.categoryBounds(3));
-        assertEquals(SettingsCategory.REQUESTS, p.category());
+        assertEquals(SettingsCategory.PACK, p.category());
         assertEquals("", p.query());
     }
 
@@ -719,7 +735,7 @@ class SettingsPanelTest {
     void warmupCardStartsThroughTheHostAndShowsStateButtons() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 480, 270);
-        p.setCategory(SettingsCategory.REQUESTS);
+        p.setCategory(SettingsCategory.MINE);
         p.keyPressed(SettingsPanel.KEY_END, false, false);
         // idle: one start button
         assertNotNull(p.warmButtonBounds(0));
@@ -755,24 +771,26 @@ class SettingsPanelTest {
     }
 
     @Test
-    void warmupStartIsDisabledWithoutAiEngine() {
+    void warmupWithoutAiServiceLeadsToTheServiceCategoryInsteadOfADeadEnd() {
         FakeHost host = new FakeHost();
         host.warm = WarmupStatus.UNAVAILABLE;
         SettingsPanel p = panel(host, 480, 270);
-        p.setCategory(SettingsCategory.REQUESTS);
-        p.keyPressed(SettingsPanel.KEY_END, false, false);
-        click(p, p.warmButtonBounds(0));
-        assertTrue(host.commands.isEmpty());
+        p.setCategory(SettingsCategory.MINE);
         Rec c = new Rec();
         p.render(c, -1, -1);
-        assertTrue(c.texts.stream().anyMatch(t -> t.s().contains("需要 AI 引擎")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().contains("需要 AI 翻譯服務")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("改用 AI…")), "the start button becomes 改用 AI…");
+        assertTrue(c.texts.stream().noneMatch(t -> t.s().equals("開始…")));
+        click(p, p.warmButtonBounds(0));
+        assertTrue(host.commands.isEmpty(), "nothing is started");
+        assertEquals(SettingsCategory.SERVICE, p.category(), "it jumps to 翻譯服務");
     }
 
     @Test
-    void warmupHudToggleCardIsInRequests() {
+    void warmupHudToggleCardIsInMyTranslations() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 480, 270);
-        p.setCategory(SettingsCategory.REQUESTS);
+        p.setCategory(SettingsCategory.MINE);
         p.keyPressed(SettingsPanel.KEY_END, false, false);
         assertTrue(host.cfg.itemWarmupHud);
         click(p, p.cardBounds("warmup_hud"));

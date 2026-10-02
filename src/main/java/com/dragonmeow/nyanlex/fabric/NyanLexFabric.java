@@ -105,7 +105,6 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static HubDownloadState hubDownloadState;
     private static HubDownloader hubDownloader;
     private static final HubDownloadJob hubDownloadJob = new HubDownloadJob();
-    private static volatile boolean hubStartupChecked;
     private static boolean firstRunTried;
     private static volatile HubPlan firstRunHubPlan;
     private static volatile int firstRunModCount;
@@ -830,8 +829,7 @@ public final class NyanLexFabric implements ClientModInitializer {
             return;
         }
         firstRunTried = true;
-        hubStartupChecked = true;
-        if (hubDownloader != null && !config.hubStartupPromptDisabled) {
+        if (hubDownloader != null) {
             runHubBackground(() -> {
                 try {
                     List<String> modIds = loadedModIds();
@@ -846,31 +844,6 @@ public final class NyanLexFabric implements ClientModInitializer {
             });
         }
         mc.setScreen(new FirstRunScreen(mc.screen));
-    }
-
-    private void maybeStartHubStartupCheck(Minecraft mc) {
-        if (hubStartupChecked || mc == null || mc.screen == null) return;
-        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
-        hubStartupChecked = true;
-        if (hubDownloader == null || config.hubStartupPromptDisabled) return;
-        runHubBackground(() -> {
-            try {
-                List<String> modIds = loadedModIds();
-                Optional<ModpackIdentity> modpack = ModpackDetector.detect(hubCandidateRoots(), modIds, null);
-                HubPlan plan = hubDownloader.planStartupMods(false, modpack.orElse(null), modIds,
-                        config.targetLang, hubDownloadState);
-                if (plan.downloadable().isEmpty()) return;
-                Minecraft client = Minecraft.getInstance();
-                if (client == null) return;
-                client.execute(() -> {
-                    if (client.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
-                        client.setScreen(new HubStartupPromptScreen(client.screen, plan));
-                    }
-                });
-            } catch (IOException | RuntimeException ignored) {
-                // Startup check is best-effort and silent on failure.
-            }
-        });
     }
 
     public static CodexAppServerClient codexClient() {
@@ -2253,7 +2226,6 @@ public final class NyanLexFabric implements ClientModInitializer {
     private void onClientTick(Minecraft mc) {
         ConsentOverlay.tick();
         maybeStartFirstRun(mc);
-        maybeStartHubStartupCheck(mc);
         maybeMigrateKeybinds(mc);
         SCREEN_RENDER_STACK.remove();
         refreshScannedScreen();

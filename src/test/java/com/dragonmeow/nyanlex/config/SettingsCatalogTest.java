@@ -40,18 +40,18 @@ class SettingsCatalogTest {
 
     @Test
     void hasSixPagesInDesignOrder() {
-        assertEquals(List.of(SettingsPage.GENERAL, SettingsPage.DISPLAY, SettingsPage.AI,
-                SettingsPage.REQUESTS, SettingsPage.HUB, SettingsPage.ADVANCED), SettingsCatalog.pages());
+        assertEquals(List.of(SettingsPage.GENERAL, SettingsPage.DISPLAY, SettingsPage.SERVICE,
+                SettingsPage.PACK, SettingsPage.MINE, SettingsPage.ADVANCED), SettingsCatalog.pages());
     }
 
     @Test
     void entryCountsPerPage() {
-        assertEquals(3, SettingsCatalog.entries(SettingsPage.GENERAL).size());
-        assertEquals(18, SettingsCatalog.entries(SettingsPage.DISPLAY).size());
+        assertEquals(4, SettingsCatalog.entries(SettingsPage.GENERAL).size(), "快速設定, 線上翻譯, 翻譯語言, 快捷鍵");
+        assertEquals(18 + 1, SettingsCatalog.entries(SettingsPage.DISPLAY).size(), "nine surfaces with their service, plus 不翻譯詞彙");
         assertEquals(9, SettingsCatalog.rows(SettingsPage.DISPLAY).size());
-        assertEquals(2, SettingsCatalog.entries(SettingsPage.AI).size());
-        assertEquals(6, SettingsCatalog.entries(SettingsPage.REQUESTS).size());
-        assertEquals(4, SettingsCatalog.entries(SettingsPage.HUB).size());
+        assertEquals(2, SettingsCatalog.entries(SettingsPage.SERVICE).size());
+        assertEquals(1, SettingsCatalog.entries(SettingsPage.PACK).size(), "only 偵測並下載");
+        assertEquals(5, SettingsCatalog.entries(SettingsPage.MINE).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
     }
 
@@ -116,13 +116,7 @@ class SettingsCatalogTest {
         fallback.press(cfg);
         assertFalse(cfg.disableGoogleFallbackForAi);
         assertEquals(SettingsCatalog.STATE_ON, fallback.state(cfg).key());
-
-        SettingEntry startup = SettingsCatalog.byId("startup");
-        cfg.hubStartupPromptDisabled = false; // check runs at startup
-        assertEquals(SettingsCatalog.STATE_ON, startup.state(cfg).key());
-        startup.press(cfg);
-        assertTrue(cfg.hubStartupPromptDisabled);
-        assertEquals(SettingsCatalog.STATE_OFF, startup.state(cfg).key());
+        assertNull(SettingsCatalog.byId("startup"), "the startup check no longer exists");
     }
 
     @Test
@@ -220,10 +214,14 @@ class SettingsCatalogTest {
     @Test
     void actionsAndDestructiveMarking() {
         assertTrue(SettingsCatalog.byId("clear_cache").destructive());
-        assertTrue(SettingsCatalog.byId("clear_hub").destructive());
+        assertNull(SettingsCatalog.byId("clear_hub"), "the downloaded packs are cleared with the saved translations");
+        assertNull(SettingsCatalog.byId("open_repo"));
         assertFalse(SettingsCatalog.byId("export").destructive());
         assertEquals(SettingAction.OPEN_ITEM_WARMUP, SettingsCatalog.byId("warmup").action());
-        assertEquals(SettingsPage.REQUESTS, SettingsCatalog.byId("warmup").page());
+        assertEquals(SettingsPage.MINE, SettingsCatalog.byId("warmup").page());
+        assertEquals(SettingsPage.DISPLAY, SettingsCatalog.byId("dnt").page());
+        assertEquals(SettingsPage.ADVANCED, SettingsCatalog.byId("cooldown").page());
+        assertEquals(SettingAction.OPEN_QUICK_SETUP, SettingsCatalog.byId("quick").action());
         assertNull(SettingsCatalog.byId("export").state(new TranslatorConfig()));
         // pressing a non-config entry never touches the config
         TranslatorConfig cfg = new TranslatorConfig();
@@ -248,10 +246,14 @@ class SettingsCatalogTest {
     }
 
     @Test
-    void oldConfigWithRemovedShareFieldsStillLoads() {
+    void oldConfigWithRemovedShareFieldsStillLoadsAndTheStartupFlagIsIgnoredAndNeverWritten() {
         TranslatorConfig cfg = TranslatorConfig.fromReader(new java.io.StringReader(
                 "{\"hubShareConsent\":true,\"hubIntroSeen\":true,\"hubStartupPromptDisabled\":true}"));
-        assertTrue(cfg.hubStartupPromptDisabled, "known fields still load; removed ones are ignored");
+        assertFalse(cfg.hubStartupPromptDisabled, "removed fields are ignored when read");
+        cfg.hubStartupPromptDisabled = true; // legacy glue may still set it in memory
+        java.io.StringWriter out = new java.io.StringWriter();
+        cfg.writeTo(out);
+        assertFalse(out.toString().contains("hubStartupPromptDisabled"), "and it is never written back");
     }
 
     @Test
@@ -263,11 +265,13 @@ class SettingsCatalogTest {
     }
 
     @Test
-    void singleColumnRowsFlattenEveryEntryOnce() {
+    void everySettingIdLivesOnExactlyOnePage() {
+        Set<String> seen = new HashSet<>();
         for (SettingsPage page : SettingsPage.values()) {
-            List<SettingsRow> single = SettingsCatalog.singleColumnRows(page);
-            assertEquals(SettingsCatalog.entries(page).size(), single.size());
-            for (SettingsRow row : single) assertNull(row.secondary());
+            for (SettingEntry e : SettingsCatalog.entries(page)) {
+                assertEquals(page, e.page(), e.id());
+                assertTrue(seen.add(e.id()), "setting " + e.id() + " appears on more than one page");
+            }
         }
     }
 

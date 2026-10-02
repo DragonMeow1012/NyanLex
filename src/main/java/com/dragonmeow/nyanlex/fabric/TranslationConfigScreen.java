@@ -204,13 +204,13 @@ public final class TranslationConfigScreen extends Screen {
         switch (action) {
             case OPEN_LANGUAGE -> open(new TranslationLanguageScreen(this));
             case OPEN_KEYBINDS -> open(new TranslationKeybindScreen(this));
+            case OPEN_QUICK_SETUP -> open(new FirstRunScreen(this));
             case OPEN_MANUAL -> open(new TranslationManualScreen(this));
+            case OPEN_PRIVACY -> open(new TranslationManualScreen(this));
             case OPEN_AI -> open(new AiConfigScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new TranslationRequestsScreen(this));
             case OPEN_ITEM_WARMUP -> NyanLexFabric.openItemWarmupScreen(this);
             case HUB_DOWNLOAD -> NyanLexFabric.startHubIdentifyAndPlan(this);
-            case HUB_OPEN_REPO -> confirmOpenRepo();
-            case HUB_CLEAR -> confirmClearHub();
             case EXPORT_TRANSLATIONS -> NyanLexFabric.translationFile(false);
             case IMPORT_TRANSLATIONS -> NyanLexFabric.translationFile(true);
             case CLEAR_CACHE -> confirmClearCache();
@@ -234,33 +234,6 @@ public final class TranslationConfigScreen extends Screen {
                     FabricTextStyle.clearRenderMemo();
                     setStatus(Component.translatable("config.nyanlex.cache.cleared"));
                 });
-    }
-
-    private void confirmClearHub() {
-        int count = NyanLexFabric.hubLocalCache().size();
-        confirm(Component.translatable(SettingsCatalog.KEY_CLEAR_HUB_CONFIRM_TITLE),
-                Component.translatable(SettingsCatalog.KEY_CLEAR_HUB_CONFIRM_MESSAGE, count), () -> {
-                    int removed = NyanLexFabric.hubLocalCache().size();
-                    String language = NyanLexFabric.hubLocalCache().language();
-                    NyanLexFabric.hubLocalCache().clearAll();
-                    // Also drop this language's sha256 throttling ledger, or the next
-                    // identify/download pass would report "already up to date".
-                    NyanLexFabric.hubDownloadState().forgetLanguage(language);
-                    Component done = Component.translatable("message.nyanlex.hub.cleared", removed);
-                    NyanLexFabric.postHubStatus(done.getString());
-                    setStatus(done);
-                });
-    }
-
-    private void confirmOpenRepo() {
-        if (this.minecraft == null) return;
-        this.minecraft.setScreen(new ConfirmScreen(yes -> {
-            if (yes) Util.getPlatform().openUri(TranslationHubScreen.HUB_URL);
-            if (this.minecraft != null) this.minecraft.setScreen(this);
-        }, Component.translatable("screen.nyanlex.hub.open_repo.title"),
-                Component.translatable("screen.nyanlex.hub.open_repo.message"),
-                Component.translatable("screen.nyanlex.hub.open_repo.confirm"),
-                Component.translatable("gui.cancel")));
     }
 
     private void setStatus(Component message) {

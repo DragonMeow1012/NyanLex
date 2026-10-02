@@ -19,20 +19,36 @@ public final class SettingsModel {
         public boolean isGroup() { return group != null; }
     }
 
-    public static final String KEY_PRIVACY_TITLE = "nyanlex.ui.privacy.title";
-    public static final String KEY_PRIVACY_BODY = "nyanlex.ui.privacy.body";
-    public static final String PRIVACY_ID = "privacy";
-    /** AI and machine: the fixed "machine source: Google (unofficial endpoint)" line. */
+    /** The one 線上翻譯 card (first card of 一般 after 快速設定). */
+    public static final String MASTER_ID = "master";
+    /** 翻譯服務: the fixed "machine translation: Google (unofficial endpoint)" line. */
     public static final String PROVIDER_INFO_ID = "provider_info";
     public static final String KEY_PROVIDER_FIXED = "nyanlex.settings.provider";
     public static final String KEY_PROVIDER_FIXED_DESC = "screen.nyanlex.provider.unofficial_warning";
     public static final String KEY_ENGINE_LABEL = "nyanlex.settings.engine";
+    /** Words that older builds (or other tools) used for the translation service; searching them still finds the service rows. */
+    private static final String ENGINE_SEARCH_WORDS = "引擎 翻譯引擎 来源 來源 服務 服务 engine provider source service";
     public static final String KEY_MODE = "nyanlex.ui.mode";
     public static final String KEY_MODE_TIP = "nyanlex.ui.mode.tip";
     public static final String KEY_SEARCH_HINT = "nyanlex.ui.search.hint";
     public static final String KEY_SEARCH_EMPTY = "nyanlex.ui.search.empty";
     public static final String KEY_BTN_OPEN = "nyanlex.ui.btn.open";
     public static final String KEY_BTN_RUN = "nyanlex.ui.btn.run";
+    public static final String KEY_BTN_START = "nyanlex.ui.btn.start";
+    public static final String KEY_BTN_CHANGE = "nyanlex.ui.btn.change";
+    public static final String KEY_BTN_PRIVACY = "nyanlex.ui.btn.privacy";
+    public static final String KEY_BTN_USE_AI = "nyanlex.ui.btn.use_ai";
+    public static final String KEY_CURRENT = "nyanlex.ui.current";
+    /** Narrator phrases of the keyboard-driven screens ({@code %s} = the item's name and, where it has one, its value). */
+    public static final String KEY_NARRATE_CATEGORY = "nyanlex.narrate.category";
+    public static final String KEY_NARRATE_SEARCH = "nyanlex.narrate.search";
+    public static final String KEY_NARRATE_BUTTON = "nyanlex.narrate.button";
+    public static final String KEY_NARRATE_SWITCH = "nyanlex.narrate.switch";
+    public static final String KEY_NARRATE_SLIDER = "nyanlex.narrate.slider";
+    public static final String KEY_NARRATE_VALUE = "nyanlex.narrate.value";
+    public static final String KEY_NARRATE_GROUP = "nyanlex.narrate.group";
+    public static final String KEY_NARRATE_OPEN = "nyanlex.narrate.open";
+    public static final String KEY_NARRATE_CLOSED = "nyanlex.narrate.closed";
     public static final String KEY_BTN_SETTINGS = "nyanlex.ui.btn.settings";
     public static final String KEY_BTN_EDIT = "nyanlex.ui.btn.edit";
     public static final String KEY_BTN_DETECT = "nyanlex.ui.btn.detect";
@@ -135,8 +151,8 @@ public final class SettingsModel {
         String[] words = tokens(query);
         if (words.length == 0) return out;
         for (SettingCard card : allCards()) {
-            // the guide and the privacy notice are read, not searched
-            if (card.kind() == SettingCard.Kind.INFO || card.kind() == SettingCard.Kind.NOTICE) continue;
+            // plain information cards are read, not searched
+            if (card.kind() == SettingCard.Kind.INFO) continue;
             String hay = haystack(card, lang);
             boolean all = true;
             for (String w : words) {
@@ -165,9 +181,10 @@ public final class SettingsModel {
             sb.append(SettingCard.stripState(lang.apply(card.groupTitleKey()))).append('\n');
         }
         if (card.entry() != null) for (String k : card.entry().keywords()) sb.append(k).append('\n');
-        if (card.engineEntry() != null) {
-            sb.append(SettingCard.stripState(lang.apply(KEY_ENGINE_LABEL))).append('\n')
-                    .append(lang.apply(card.engineEntry().tipKey())).append('\n');
+        if (card.engineEntry() != null || card.kind() == SettingCard.Kind.ALL) {
+            sb.append(SettingCard.stripState(lang.apply(KEY_ENGINE_LABEL))).append('\n');
+            if (card.engineEntry() != null) sb.append(lang.apply(card.engineEntry().tipKey())).append('\n');
+            sb.append(ENGINE_SEARCH_WORDS).append('\n');
         }
         return sb.toString().toLowerCase(Locale.ROOT);
     }
@@ -181,7 +198,10 @@ public final class SettingsModel {
                 KEY_BTN_SETTINGS, KEY_BTN_EDIT, KEY_BTN_DETECT, KEY_BTN_EXPORT, KEY_BTN_IMPORT,
                 KEY_ALL_TITLE, KEY_ALL_DESC, KEY_ALL_COL_MODE, KEY_ALL_COL_ENGINE, KEY_ALL_MIXED,
                 KEY_MANUAL_TITLE, KEY_MANUAL_BACK, KEY_MANUAL_CARD, KEY_MANUAL_CARD + ".tip",
-                KEY_PRIVACY_TITLE, KEY_PRIVACY_BODY,
+                KEY_BTN_START, KEY_BTN_CHANGE, KEY_BTN_PRIVACY, KEY_BTN_USE_AI, KEY_CURRENT,
+                KEY_NARRATE_CATEGORY, KEY_NARRATE_SEARCH, KEY_NARRATE_BUTTON, KEY_NARRATE_SWITCH,
+                KEY_NARRATE_SLIDER, KEY_NARRATE_VALUE, KEY_NARRATE_GROUP, KEY_NARRATE_OPEN,
+                KEY_NARRATE_CLOSED,
                 KEY_ABOUT_TITLE, KEY_ABOUT_VERSION, KEY_WARMUP_START,
                 KEY_WARMUP_DETAILS, KEY_WARMUP_IDLE, KEY_WARMUP_HUD_RUNNING, KEY_WARMUP_HUD_PAUSED,
                 KEY_WARMUP_HUD_DONE, KEY_WARMUP_RESUMED, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING,
@@ -213,16 +233,13 @@ public final class SettingsModel {
         Map<SettingsCategory, List<Node>> map = new EnumMap<>(SettingsCategory.class);
         for (SettingsCategory category : SettingsCategory.values()) {
             List<Node> nodes = new ArrayList<>();
-            if (category == SettingsCategory.GENERAL) {
-                // First thing on the first page, readable without opening anything.
-                // It carries the master switch (the very same setting as the 一般 card below).
-                nodes.add(new Node(new SettingCard(PRIVACY_ID, SettingCard.Kind.NOTICE, category,
-                        SettingsCatalog.byId("master"), KEY_PRIVACY_TITLE, KEY_PRIVACY_BODY, null, null), null));
-            }
             if (category == SettingsCategory.DISPLAY) {
                 nodes.add(new Node(allCard(), null));
                 for (SettingsRow row : SettingsCatalog.rows(SettingsPage.DISPLAY)) {
                     nodes.add(new Node(surfaceCard(row), null));
+                }
+                for (SettingEntry entry : SettingsCatalog.displayExtras()) {
+                    nodes.add(new Node(card(entry, category), null));
                 }
             } else if (category == SettingsCategory.ABOUT) {
                 nodes.add(new Node(new SettingCard("about_info", SettingCard.Kind.INFO, category, null,
@@ -232,7 +249,7 @@ public final class SettingsModel {
             } else {
                 for (SettingEntry entry : SettingsCatalog.entries(category.page())) {
                     nodes.add(new Node(card(entry, category), null));
-                    if (category == SettingsCategory.AI && entry.id().equals("ai")) {
+                    if (category == SettingsCategory.SERVICE && entry.id().equals("ai")) {
                         // Google is the only machine source: a fixed line, not a picker.
                         nodes.add(new Node(new SettingCard(PROVIDER_INFO_ID, SettingCard.Kind.INFO, category, null,
                                 KEY_PROVIDER_FIXED, KEY_PROVIDER_FIXED_DESC, null, null), null));
@@ -272,6 +289,7 @@ public final class SettingsModel {
     private static SettingCard card(SettingEntry entry, SettingsCategory category) {
         SettingCard.Kind kind;
         if (entry.action() == SettingAction.OPEN_ITEM_WARMUP) kind = SettingCard.Kind.WARMUP;
+        else if (entry.id().equals(MASTER_ID)) kind = SettingCard.Kind.MASTER;
         else if (entry.slider() != null) kind = SettingCard.Kind.SLIDER;
         else if (entry.type() == SettingEntry.Type.TOGGLE) kind = SettingCard.Kind.TOGGLE;
         else kind = SettingCard.Kind.BUTTON;

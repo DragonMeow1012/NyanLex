@@ -41,6 +41,20 @@ class SettingsModelTest {
     }
 
     @Test
+    void legacyCategoryIdsMapToTheirNewHome() {
+        assertEquals(SettingsCategory.SERVICE, SettingsCategory.fromId("ai"));
+        assertEquals(SettingsCategory.PACK, SettingsCategory.fromId("hub"));
+        assertEquals(SettingsCategory.ADVANCED, SettingsCategory.fromId("requests"));
+        assertEquals(SettingsCategory.DISPLAY, SettingsCategory.fromId("Display"));
+        assertEquals(SettingsCategory.GENERAL, SettingsCategory.fromId("no-such-category"));
+        assertEquals(SettingsCategory.GENERAL, SettingsCategory.fromId(null));
+        for (SettingsCategory c : SettingsCategory.values()) assertEquals(c, SettingsCategory.fromId(c.id()));
+        SettingsPanel.rememberCategory("requests");
+        assertEquals(SettingsCategory.ADVANCED, SettingsPanel.sessionState().category);
+        SettingsPanel.rememberCategory(SettingsCategory.GENERAL);
+    }
+
+    @Test
     void sevenCategoriesWithAboutLast() {
         assertEquals(7, SettingsModel.categories().size());
         assertEquals(SettingsCategory.ABOUT, SettingsModel.categories().get(6));
@@ -52,10 +66,15 @@ class SettingsModelTest {
         List<String> cardIds = ids(SettingsModel.allCards());
         assertEquals(cardIds.size(), new HashSet<>(cardIds).size(), "card ids are unique");
         // every entry once (a display surface's engine entry rides on its surface card), plus the one
-        // 全部項目 row, the privacy notice, the fixed machine-source line, the two 關於 cards (version, manual) and one FILE card per mod file
+        // 全部項目 row, the fixed machine-service line, the two 關於 cards (version, manual) and one FILE card per mod file
         int surfaces = SettingsCatalog.rows(SettingsPage.DISPLAY).size();
-        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 1 + 1 + 2 + 1
+        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 1 + 1 + 2
                 + FileLocations.IDS.size(), cardIds.size());
+        for (SettingCard card : SettingsModel.allCards()) {
+            if (card.entry() != null && card.category().page() != null) {
+                assertEquals(card.category().page(), card.entry().page(), card.id() + " sits on its own category");
+            }
+        }
         for (SettingEntry entry : SettingsCatalog.allEntries()) {
             if (entry.id().endsWith(".engine")) continue;
             assertNotNull(SettingsModel.byId(entry.id()), entry.id());
@@ -64,12 +83,13 @@ class SettingsModelTest {
 
     @Test
     void cardKindsFollowTheEntries() {
-        assertEquals(SettingCard.Kind.TOGGLE, SettingsModel.byId("master").kind());
+        assertEquals(SettingCard.Kind.MASTER, SettingsModel.byId("master").kind());
         assertEquals(SettingCard.Kind.SURFACE, SettingsModel.byId("chat").kind());
         assertEquals("chat.engine", SettingsModel.byId("chat").engineEntry().id());
-        assertEquals(SettingCard.Kind.NOTICE, SettingsModel.byId(SettingsModel.PRIVACY_ID).kind());
-        assertEquals(SettingsModel.PRIVACY_ID, SettingsModel.nodes(SettingsCategory.GENERAL).get(0).card().id(),
-                "the privacy card is the first thing on the first page");
+        assertEquals(List.of("quick", "master", "language", "keybind"),
+                ids(SettingsModel.cards(SettingsCategory.GENERAL)), "一般: one 線上翻譯 card, no duplicate privacy card");
+        assertEquals(SettingCard.Kind.BUTTON, SettingsModel.byId("quick").kind());
+        assertNull(SettingsModel.byId("privacy"));
         assertEquals(SettingCard.Kind.ALL, SettingsModel.byId("all_items").kind());
         assertEquals(SettingCard.Kind.SLIDER, SettingsModel.byId("cooldown").kind());
         assertEquals(SettingCard.Kind.SLIDER, SettingsModel.byId("batch").kind());
@@ -88,11 +108,12 @@ class SettingsModelTest {
     @Test
     void displayCategoryIsOneAllItemsRowThenOneSurfaceRowEach() {
         List<SettingsModel.Node> nodes = SettingsModel.nodes(SettingsCategory.DISPLAY);
-        assertEquals(1 + 9, nodes.size());
+        assertEquals(1 + 9 + 1, nodes.size());
         for (SettingsModel.Node node : nodes) assertFalse(node.isGroup(), "no folding groups on the display page");
         assertEquals("all_items", nodes.get(0).card().id());
         assertEquals(SettingCard.Kind.ALL, nodes.get(0).card().kind());
-        for (int i = 1; i < nodes.size(); i++) {
+        assertEquals("dnt", nodes.get(10).card().id(), "不翻譯詞彙 sits under the surfaces");
+        for (int i = 1; i < 10; i++) {
             SettingCard card = nodes.get(i).card();
             assertEquals(SettingCard.Kind.SURFACE, card.kind());
             assertEquals(SettingEntry.Type.CYCLE, card.entry().type());
@@ -106,12 +127,13 @@ class SettingsModelTest {
     void titlesDropTheStatePartAndEllipsis() throws Exception {
         Function<String, String> lang = zhTw();
         assertEquals("線上翻譯", SettingsModel.title(SettingsModel.byId("master"), lang));
-        assertEquals("全物品預熱", SettingsModel.title(SettingsModel.byId("warmup"), lang));
-        assertEquals("清除快取", SettingsModel.title(SettingsModel.byId("clear_cache"), lang));
+        assertEquals("預先翻譯全部物品", SettingsModel.title(SettingsModel.byId("warmup"), lang));
+        assertEquals("清除已存的翻譯", SettingsModel.title(SettingsModel.byId("clear_cache"), lang));
+        assertEquals("快速設定", SettingsModel.title(SettingsModel.byId("quick"), lang));
         assertEquals("聊天", SettingsModel.title(SettingsModel.byId("chat"), lang));
         assertEquals("全部項目", SettingsModel.title(SettingsModel.byId("all_items"), lang));
         assertEquals("說明書", SettingsModel.title(SettingsModel.byId("about_manual"), lang));
-        assertEquals("偵測伺服器／模組並下載翻譯包", SettingsModel.title(SettingsModel.byId("download"), lang));
+        assertEquals("偵測並下載翻譯包", SettingsModel.title(SettingsModel.byId("download"), lang));
         assertEquals("檔案位置", SettingsModel.groupTitle(SettingsModel.groupById(SettingsModel.FILES_GROUP_ID), lang));
         for (SettingCard card : SettingsModel.allCards()) {
             String title = SettingsModel.title(card, lang);
@@ -142,8 +164,16 @@ class SettingsModelTest {
         assertFalse(ids(SettingsModel.search("聊天 引擎", lang)).contains("tooltip"));
         // the guide on 關於 is read, never listed as a search hit
         assertTrue(ids(SettingsModel.search("冷卻", lang)).stream().noneMatch(id -> id.startsWith("about_")));
-        // category name
-        assertTrue(ids(SettingsModel.search("倉庫", lang)).containsAll(List.of("startup", "download")));
+        // the words of older builds still find the new cards (synonyms)
+        assertTrue(ids(SettingsModel.search("倉庫", lang)).contains("download"));
+        assertTrue(ids(SettingsModel.search("預熱", lang)).contains("warmup"));
+        assertTrue(ids(SettingsModel.search("快取", lang)).contains("clear_cache"));
+        assertTrue(ids(SettingsModel.search("引擎", lang)).containsAll(List.of("all_items", "chat", "screen")));
+        assertTrue(ids(SettingsModel.search("請求", lang)).containsAll(List.of("master", "cooldown")));
+        // the new words and the category names
+        assertTrue(ids(SettingsModel.search("翻譯包", lang)).contains("download"));
+        assertTrue(ids(SettingsModel.search("翻譯服務", lang)).contains("ai"));
+        assertTrue(ids(SettingsModel.search("隱私", lang)).contains("master"));
         assertTrue(SettingsModel.search("   ", lang).isEmpty());
         assertTrue(SettingsModel.search(null, lang).isEmpty());
         assertTrue(SettingsModel.search("zzzzqqq", lang).isEmpty());

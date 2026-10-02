@@ -76,7 +76,7 @@ public final class FirstRunScreen extends Screen {
             case DialogContent.FIRST_LATER -> finish(false);
             case DialogContent.FIRST_AI -> {
                 awaitingAi = true;
-                open(SettingsCategory.AI);
+                open(SettingsCategory.SERVICE);
             }
             case DialogContent.FIRST_CHANGE, DialogContent.FIRST_PRIVACY -> open(SettingsCategory.GENERAL);
             case DialogContent.FIRST_HUB -> {

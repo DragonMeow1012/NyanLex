@@ -211,7 +211,7 @@ class HubDownloaderTest {
     @Test
     void startupPlanMakesNoNetworkCallWhenDisabled() throws IOException {
         HttpTransport neverCalled = url -> {
-            fail("must not call the network when hubStartupPromptDisabled is true: " + url);
+            fail("must not call the network when the check is disabled: " + url);
             return null;
         };
         HubDownloader downloader = new HubDownloader(new HubRepository(neverCalled, BASE));
