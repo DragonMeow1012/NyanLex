@@ -20,7 +20,7 @@ import java.util.List;
  */
 public final class TranslationHubScreen extends Screen {
 
-    private static final String HUB_URL =
+    static final String HUB_URL =
             "https://github.com/DragonMeow1012/Nyanslate/tree/main/translation-hub";
     private static final int W = 300;
 
