@@ -61,10 +61,6 @@ public final class TemplateText {
                     + "(?:\\s+|\\s*\\u27E6\\s*WS\\s*\\d+\\s*\\u27E7\\s*)"
                     + "(?=[A-Za-z][A-Za-z0-9_-]{2,11}(?![A-Za-z0-9_-]))"
                     + "(?=[A-Za-z0-9_-]*\\d)[A-Za-z][A-Za-z0-9_-]*");
-    // Full/abbreviated English month names, for the calendar-date slot below.
-    private static final String MONTH_NAME =
-            "(?:January|February|March|April|May|June|July|August|September|October"
-                    + "|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)";
     // A full "Month d, yyyy" calendar date ("November 15, 2026", "Obtained: November
     // 15, 2026") becomes ONE opaque value slot instead of leaving the month name as
     // untemplated prose while only the day/year numbers templated away: 12 otherwise
@@ -72,8 +68,10 @@ public final class TemplateText {
     // own translation. The cache always restores the captured substring byte-for-byte
     // (Prepared.restore()), so the English wording is never rewritten here; a zh-family
     // target localises it to "2026年11月15日" at TranslationService's display layer only.
+    // Also "Oct 14 2026", "14 Oct 2026", "14th of October, 2026" and "10/14/2026": see
+    // CalendarDates, which owns the shapes and the zh display conversion.
     private static final Pattern CALENDAR_DATE = Pattern.compile(
-            "(?i)" + DYNAMIC_START + MONTH_NAME + "\\.?\\s+\\d{1,2},\\s+\\d{4}(?![A-Za-z0-9])");
+            "(?i)" + DYNAMIC_START + CalendarDates.REGEX);
     private static final Pattern TIME = Pattern.compile("(?i)" + DYNAMIC_START + "\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:[ap]\\.?m\\.?)?(?![A-Za-z_⟧])");
     // Countdown / duration runs ("59s", "10min", "2h 30m", "1m30s", "1天2小時3分30秒"):
     // scoreboards tick these every second, so an untemplated duration mints a brand-new

@@ -223,7 +223,7 @@ public final class RealCacheReplay {
     private static int copyCacheFiles(Path from, Path to) throws IOException {
         Files.createDirectories(to);
         Pattern allowed = Pattern.compile(
-                "nyanlex-(?:ai-cache|cache(?:-(?:youdao|deepl|microsoft))?|failures)-" + LANG_TAG + "\\.json");
+                "nyanlex-(?:ai-cache|cache(?:-(?:deepl_api|microsoft_api))?|failures)-" + LANG_TAG + "\\.json");
         int copied = 0;
         try (DirectoryStream<Path> files = Files.newDirectoryStream(from)) {
             for (Path file : files) {
@@ -238,8 +238,8 @@ public final class RealCacheReplay {
 
     // ================================================================== orchestration
     /** Known failure-ledger namespaces; anything else is printed as "(other)", never verbatim. */
-    private static final Set<String> KNOWN_NAMESPACES = Set.of("ai", "gt", "gt-google", "gt-youdao",
-            "gt-deepl", "gt-microsoft");
+    private static final Set<String> KNOWN_NAMESPACES = Set.of("ai", "gt", "gt-google",
+            "gt-deepl_api", "gt-microsoft_api");
 
     /** @return 0 every asserted scenario passed, 1 a scenario failed, 4 nothing to replay */
     private int execute() throws Exception {
@@ -356,7 +356,7 @@ public final class RealCacheReplay {
 
     private static String detectProvider(Path dir) {
         if (Files.isRegularFile(dir.resolve("nyanlex-cache-" + LANG_TAG + ".json"))) return "google";
-        for (String provider : List.of("deepl", "youdao", "microsoft")) {
+        for (String provider : List.of("deepl_api", "microsoft_api")) {
             if (Files.isRegularFile(dir.resolve("nyanlex-cache-" + provider + "-" + LANG_TAG + ".json"))) {
                 return provider;
             }

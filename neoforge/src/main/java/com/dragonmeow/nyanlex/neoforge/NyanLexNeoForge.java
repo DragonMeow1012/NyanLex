@@ -1052,7 +1052,8 @@ public final class NyanLexNeoForge {
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(
                 transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
-                new RequestPacer(() -> config.requestCooldownMs));
+                new RequestPacer(() -> config.requestCooldownMs),
+                () -> config);
         OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
@@ -1077,7 +1078,8 @@ public final class NyanLexNeoForge {
         // diagnosis. See ExchangeDumpWriter's class doc (root tree).
         ExchangeDumpWriter exchangeDump = new ExchangeDumpWriter(
                 configPath.getParent().resolve("nyanlex-debug"),
-                () -> config != null && config.debugTranslationOverlay, 20);
+                () -> config != null && config.debugTranslationOverlay, 20,
+                () -> config == null ? java.util.List.of() : config.secretValues());
         apiAi.setExchangeDumpSink(exchangeDump);
         codexAi.setExchangeDumpSink(exchangeDump);
         SwitchingAiTranslator ai = new SwitchingAiTranslator(

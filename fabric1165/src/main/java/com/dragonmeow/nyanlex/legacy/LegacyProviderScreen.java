@@ -15,10 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Searchable key-free machine-provider picker for MC 1.16. */
+/** Searchable machine-provider picker for MC 1.16. */
 final class LegacyProviderScreen extends Screen {
     private static final String[] PROVIDERS = {
-            "google", "youdao", "deepl", "microsoft"
+            "google", "deepl_api", "microsoft_api"
     };
 
     private final Screen parent;
@@ -49,6 +49,12 @@ final class LegacyProviderScreen extends Screen {
             config.machineTranslationProvider =
                     LegacyConfig.normalizeMachineProvider(selected.provider);
             LegacyTranslatorMod.saveConfig();
+            // Official APIs need the player own key: ask for it right after the pick.
+            if (!"google".equals(config.machineTranslationProvider)) {
+                minecraft.setScreen(new LegacyMachineKeyScreen(parent,
+                        config.machineTranslationProvider));
+                return;
+            }
         }
         minecraft.setScreen(parent);
     }

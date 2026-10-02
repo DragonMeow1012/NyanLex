@@ -44,16 +44,16 @@ class ProviderLanguageFileStoreTest {
                 temp, "nyanlex-cache", "zh-TW", provider::get);
         store.put("Sword", "Google 劍");
 
-        provider.set("youdao");
+        provider.set("deepl_api");
         assertNull(store.get("Sword"));
-        store.put("Sword", "Youdao 劍");
+        store.put("Sword", "DeepL 劍");
 
         provider.set("google");
         assertEquals("Google 劍", store.get("Sword"));
-        provider.set("youdao");
-        assertEquals("Youdao 劍", store.get("Sword"));
+        provider.set("deepl_api");
+        assertEquals("DeepL 劍", store.get("Sword"));
         assertTrue(Files.isRegularFile(temp.resolve("nyanlex-cache-zh-tw.json")));
-        assertTrue(Files.isRegularFile(temp.resolve("nyanlex-cache-youdao-zh-tw.json")));
+        assertTrue(Files.isRegularFile(temp.resolve("nyanlex-cache-deepl_api-zh-tw.json")));
     }
 
     @Test
@@ -62,7 +62,7 @@ class ProviderLanguageFileStoreTest {
         ProviderLanguageFileStore store = new ProviderLanguageFileStore(
                 temp, "nyanlex-cache", "zh-TW", provider::get);
         store.put("A", "G");
-        provider.set("deepl");
+        provider.set("microsoft_api");
         store.put("A", "D");
         store.clear();
         assertNull(store.get("A"));
@@ -72,7 +72,7 @@ class ProviderLanguageFileStoreTest {
 
     @Test
     void switchingManyProvidersRetainsOnlyTheActiveStoreInMemory() {
-        String[] providers = {"google", "youdao", "deepl", "microsoft"};
+        String[] providers = {"google", "deepl_api", "microsoft_api"};
         AtomicReference<String> provider = new AtomicReference<>(providers[0]);
         ProviderLanguageFileStore store = new ProviderLanguageFileStore(
                 temp, "nyanlex-cache", "zh-TW", provider::get);
@@ -101,7 +101,7 @@ class ProviderLanguageFileStoreTest {
                 temp, "nyanlex-cache", "zh-TW", provider::get);
         assertEquals("traditional", store.get("legacy"));
 
-        provider.set("deepl");
+        provider.set("microsoft_api");
         assertNull(store.get("legacy"));
         store.setLanguage("zh-CN");
         provider.set("google");
@@ -143,7 +143,7 @@ class ProviderLanguageFileStoreTest {
         worker.start();
         assertTrue(entered.await(2, TimeUnit.SECONDS));
 
-        provider.set("deepl");
+        provider.set("microsoft_api");
         cache.reloadProviderPartition();
         release.countDown();
         assertEquals("舊結果", oldRequest.get(2, TimeUnit.SECONDS));
@@ -157,7 +157,7 @@ class ProviderLanguageFileStoreTest {
         provider.set("google");
         cache.reloadProviderPartition();
         assertNull(cache.getCached("Hello"), "Google partition must not receive DeepL wording");
-        provider.set("deepl");
+        provider.set("microsoft_api");
         cache.reloadProviderPartition();
         assertEquals("新結果", cache.getCached("Hello"));
     }

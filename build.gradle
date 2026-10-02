@@ -16,6 +16,8 @@ tasks.named('remapJar') {
 }
 
 tasks.named('jar') {
+    // Author-only tooling (translation-hub export) never ships inside the mod jar.
+    exclude 'com/dragonmeow/nyanlex/hub/tool/**'
     from('LICENSE') {
         rename { 'LICENSE_NyanLex' }
     }

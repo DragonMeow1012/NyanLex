@@ -426,7 +426,7 @@ final class LegacyTranslator {
     private int totalWaiters;
     private final Map<String, FailureBackoff> failedUntil = boundedMap(MAX_FAILURE_BACKOFFS);
     private final Map<String, Long> keyUnavailableUntil = boundedMap(MAX_KEY_BACKOFFS);
-    private final LegacyMachineProvider experimentalProviders = new LegacyMachineProvider();
+    private final LegacyMachineProvider officialProviders = new LegacyMachineProvider();
     private final AtomicInteger keyCursor = new AtomicInteger();
     private final List<DebugEntry> debug = Collections.synchronizedList(new ArrayList<DebugEntry>());
     private final Object dispatchLock = new Object();
@@ -1130,13 +1130,13 @@ final class LegacyTranslator {
             // Keep the historical Google path byte-for-byte equivalent.
             return requestGoogleBatch(batch, sourceLang, target, cooldown);
         }
-        // Experimental sources always carry anchors, including a one-item batch. A
+        // Official-API sources always carry anchors, including a one-item batch. A
         // malformed/error-shaped response therefore cannot be accepted as cache data.
         TokenBatch tokens = encodeTemplateTokens(canonicalSources(batch));
         BatchWire wire = buildBatchWire(tokens.texts);
         pace(false, cooldown);
-        String translated = experimentalProviders.translate(
-                selected, wire.text, sourceLang, target);
+        String translated = officialProviders.translate(
+                selected, wire.text, sourceLang, target, batch.get(0).config);
         return tokens.decodeItems(splitBatchEncoded(
                 translated, batch.size(), wire.anchorBase, tokens.sentinels()));
     }

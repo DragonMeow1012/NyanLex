@@ -1,76 +1,70 @@
 # NyanLex Translator 1.0.0
 
-[English](README_EN.md)
+[繁體中文](README.zh-TW.md)
 
-NyanLex Translator是純客戶端即時翻譯模組。它只翻譯畫面上需要翻譯的文字，不修改伺服器資料，也不會代替玩家送出聊天訊息。
+NyanLex Translator is a client-side real-time translation mod. It translates text that needs translation on screen without changing server data or sending chat messages for the player.
 
-## 主要功能
+> **Unofficial.** NyanLex Translator is an independent community-style fan project. It is not affiliated with, endorsed by, or sponsored by Mojang, Microsoft, Hypixel, or any mod author. Minecraft is a trademark of Mojang AB / Microsoft.
 
-- 翻譯聊天、物品名稱、提示框、記分板、名牌、Boss Bar、標題、Action Bar、書本與模組介面。
-- 每個顯示區域可選原文、譯文或原文＋譯文。
-- 支援 Google、Youdao、DeepL、Microsoft 網頁翻譯與 OpenAI 相容 API。
-- 所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設使用 `gpt-5.6-terra`／`medium`。
-- 非同步批次、優先佇列、磁碟快取與失敗退避，避免畫面卡頓及重複請求。
-- 玩家名只依 TAB 名單遮罩；物品名稱不再因 `with Chest` 等普通文字被誤判。
-- **物品與模組介面改為手動翻譯**：游標指向物品按 `R`、重新掃描目前介面按 `P`；已有翻譯會直接從快取顯示，未看過的文字不會自動送出請求。聊天、記分板、名牌、Boss Bar、標題、Action Bar、書本不受影響，仍自動翻譯。
-- **提示框分段快取**：長提示框（標題＋多行內文）依段落快取與還原，只有真正變動的段落才需要重新請求。
-- **GitHub AI 翻譯倉庫**：啟動時（可在設定關閉）安靜檢查目前伺服器／模組包／已安裝模組是否有現成翻譯可下載，你按下下載確認後才會下載（確認畫面列出每個來源的大小與預計總大小、存放位置）並合併到本機快取；只會讀取倉庫的 `index.json` 與你確認的檔案，不會上傳任何個人資料或翻譯內容。倉庫內容由維護者整理，只含譯文與雜湊、不含原文，資料以 CC BY-NC-SA 4.0 授權，詳見 [translation-hub/README.md](translation-hub/README.md)。
-- **設定畫面整理**：新增「不翻譯清單」畫面，可暫停送出新翻譯請求（仍顯示已有的快取翻譯）並維護逐字比對、不分大小寫的不翻譯詞彙表。
-- 匯出／匯入翻譯 JSON，將朋友的翻譯合併到本機，保留自己已有的翻譯。
+## Privacy (read this first)
 
+- **All translation is OFF by default.** A fresh install sends no text anywhere until you turn a surface on.
+- Once you turn something on, the text on that surface (this can include chat messages, possibly private messages, and player names) is sent to the translation service you selected.
+- **Machine translation:** the default source, Google, uses an **unofficial** web endpoint that may be rate-limited or stop working at any time. DeepL and Microsoft Translator are available through their **official APIs with your own API key**.
+- **AI translation:** goes to the OpenAI-compatible service (or ChatGPT/Codex sign-in) that **you** configure; nothing is sent to any service the mod picks for you.
+- **API keys are stored only in your local Minecraft config folder** and are sent only to the provider you chose. They are masked in the settings screen and never written to logs or debug dumps.
+- **The GitHub translation hub only downloads** public files (`index.json` plus the files you confirm). The mod never uploads any local data, chat, or translations.
+- Player names from the TAB list are masked locally before sending; other server text may still contain user-provided content.
 
-## 分享翻譯
+## Compatibility
 
-在翻譯設定選擇「匯出翻譯」，把產生的 JSON 傳給朋友。**1.0.5 支援自動分檔匯出與批次合併匯入**：資料較少時產生單一檔案；超過每份上限時，自動產生 `translations.part-0001.json`、`translations.part-0002.json` 等檔案，請把同一批檔案一起分享。朋友選擇相同目標語言與機器翻譯來源，再按「匯入翻譯」，使用 Ctrl／Shift 一次選取多份 JSON。匯入只補齊缺少的有效翻譯，不覆蓋已有內容，也不送出翻譯請求。檔案不包含 API Key、登入資料或模組設定。
+- Fabric, NeoForge, and Forge targets are listed below (Minecraft 1.12.2 to 26.3).
+- Quest and task-book screens in modpacks get extra optimization (long paragraphs, colored text, tooltips).
+- This is a client-side mod; it does not modify servers and does not send chat for you.
 
-Fabric 1.17.1 以上與 NeoForge 可互相分享；Fabric 1.14.4～1.16.5 與 Forge 1.12.2～1.13.2 可互相分享。這兩組的文字模板格式不同，不能跨組匯入。**每份**檔案上限為 32 MiB、10 萬筆翻譯；這不是整批分享的總量上限，超過時會自動分檔。既有單檔 JSON 仍可匯入；超過上限的舊 JSON 請由持有快取的一方重新匯出。
+## Features
 
-批次匯入依檔名順序逐檔合併，先匯入的有效譯文優先；單份檔案損壞、格式不符或容量不足，不會阻止其他檔案繼續處理。完成訊息會列出新增筆數、成功／總檔數及失敗資訊；已成功匯入的內容不會回滾。匯出不會覆蓋同名檔案，遇到重名請換一個檔名。
+- Translates chat, item names, tooltips, scoreboards, name tags, boss bars, titles, action bars, books, and mod screens.
+- Each surface can show original text, translated text, or both.
+- Supports Google machine translation (unofficial endpoint), DeepL and Microsoft Translator official APIs (your own key), and OpenAI-compatible APIs.
+- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-5.6-terra` / `medium`.
+- Async batching, priority queues, disk caches, and failure backoff reduce stalls and duplicate requests.
+- Player names are masked only from the TAB list; ordinary item text such as `with Chest` is no longer guessed as a player name.
+- **Items and mod screens now translate on demand**: press `R` on the item under your cursor, or `P` to rescan the current screen. Anything already translated is served straight from the cache; text you haven't triggered is never requested automatically. Chat, scoreboards, name tags, boss bars, titles, action bars, and books are unaffected and keep translating automatically.
+- **Segmented tooltip cache**: long tooltips (title plus multi-line body) cache and restore per segment, so only the segment that actually changed needs a fresh request.
+- **GitHub AI translation hub**: at startup (can be turned off in settings), the mod quietly checks whether ready-made translations exist for your current server, modpack, or installed mods, and downloads only after you confirm (the confirmation screen lists each source with its size, the expected total and where the files will be stored), merging them into the local cache. It only reads the hub's `index.json` and the files you confirm - nothing local is ever uploaded. Hub content is curated by the maintainers, holds only translated text and hashes (never the original text) and is licensed CC BY-NC-SA 4.0; see [translation-hub/README.md](translation-hub/README.md).
+- **Reorganized settings**: a new "do-not-translate filter" screen holds the pause-new-requests switch (still shows cached translations) and a case-insensitive, whole-word do-not-translate term list.
+- Export/import translation JSON to merge a friend's translations locally while keeping your own.
 
-舊版共用快取上限仍為 8,192 筆；若某份檔案合併後超過上限，會拒絕該份檔案，避免擠掉原有翻譯。現代版本的每份磁碟快取預設最多保留 10 萬筆，超出時仍會依既有策略汰換舊項目。自動分檔不會提高遊戲端的快取容量。
+## In-game screenshots
 
+### Chat translation
 
-## 實際遊戲展示
+Player names in this screenshot are masked.
 
-### 物品提示與聊天翻譯
+Chat can display the original message and its translation together for comparison.
 
-直接在伺服器內閱讀翻譯後的物品說明，保留文字顏色、數值與格式。下列圖片中的玩家名稱已打碼。
-
-| 英文原文 | 繁體中文翻譯 |
-| --- | --- |
-| ![物品提示原文](docs/images/promo/hypixel-potion-en.png) | ![物品提示翻譯](docs/images/promo/hypixel-potion-zh-TW.png) |
-
-聊天可以同時顯示原文與譯文，方便閱讀與對照。
-
-![伺服器聊天雙語對照，玩家名稱已打碼](docs/images/promo/hypixel-chat-bilingual.png)
-
-### 模組包：任務說明翻譯
-
-Better Minecraft 任務介面的實際翻譯前後，包含任務標題、長段落說明與彩色文字。點擊圖片可查看完整尺寸。
-
-| 英文原文 | 繁體中文翻譯 |
-| --- | --- |
-| ![Better Minecraft 任務原文](docs/images/promo/modpack-quest-en.png) | ![Better Minecraft 任務翻譯](docs/images/promo/modpack-quest-zh-TW.png) |
+![Bilingual server chat with player names masked](docs/images/promo/hypixel-chat-bilingual.png)
 
 <details>
-<summary>多種翻譯目標語言，選擇自己熟悉的語言</summary>
+<summary>Choose a familiar language from the translation language list</summary>
 
-![翻譯目標語言選擇](docs/images/promo/language-selector.png)
+![Translation language selection](docs/images/promo/language-selector.png)
 
 </details>
 
-## 直接下載
+## Direct downloads
 
-每個 JAR 只支援檔名標示的 Minecraft 版本與 Loader，不可混用。
+Each JAR supports only the exact Minecraft version and loader in its filename.
 
-[下載包含全部版本與分類資料夾的 ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip)
+[Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip)
 
 
 ### Fabric
 
-Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
+Fabric targets require matching Fabric Loader and Fabric API versions.
 
-| Minecraft | Java | 下載 |
+| Minecraft | Java | Download |
 | --- | ---: | --- |
 | 1.14.4 | 8 | [nyanlex-1.0.0-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) |
 | 1.15.2 | 8 | [nyanlex-1.0.0-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) |
@@ -87,7 +81,7 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 
 ### NeoForge
 
-| Minecraft | Java | 下載 |
+| Minecraft | Java | Download |
 | --- | ---: | --- |
 | 1.20.1 | 17 | [nyanlex-1.0.0-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) |
 | 1.21.1 | 21 | [nyanlex-1.0.0-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) |
@@ -96,96 +90,104 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 
 ### Forge
 
-| Minecraft | Java | 下載 |
+| Minecraft | Java | Download |
 | --- | ---: | --- |
 | 1.12.2 | 8 | [nyanlex-1.0.0-Forge-1.12.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) |
 | 1.13.2 | 8 | [nyanlex-1.0.0-Forge-1.13.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) |
 
-## 安裝
+## Installation
 
-1. 從上表下載完全相符的 JAR。
-2. 安裝相同 Minecraft 版本的 Fabric、NeoForge 或 Forge。
-3. 將 JAR 放入該遊戲實例的 `mods` 資料夾。
-4. 使用表格標示的 Java 版本啟動遊戲。
+1. Download the exact JAR from the tables above.
+2. Install the same Minecraft version of Fabric, NeoForge, or Forge.
+3. Put the JAR in that instance's `mods` directory.
+4. Start the game with the Java version shown in the table.
 
-## 翻譯來源
+## Translation sources
 
-| 來源 | API Key | 說明 |
+| Source | API key | Notes |
 | --- | --- | --- |
-| Google | 不需要 | 預設機器翻譯來源。 |
-| Youdao／DeepL／Microsoft | 不需要 | 實驗性網頁介面，可能受限流或網站改版影響。 |
-| OpenAI 相容 API | 視服務而定 | 可設定 Base URL、模型、API Key、詞彙表與 GT 回退。 |
-| ChatGPT／Codex | 使用 ChatGPT 登入 | 所有表列版本均支援；需先安裝 Codex CLI，可選模型、推理強度並查看 token。 |
+| Google | Not required | Default machine translation source. **Unofficial endpoint** that may be limited or stop working at any time. |
+| DeepL (official API) | Your own key | Free and Pro keys supported. The key stays in your local config. |
+| Microsoft Translator (official API) | Your own key + region | The key stays in your local config. |
+| OpenAI-compatible API | Depends on service | Configurable Base URL, model, API key, glossary, and GT fallback. |
+| ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, effort, and token controls. |
 
-## 快捷鍵
+## Sharing translations
 
-Fabric 1.17.1 以上與 NeoForge：
+Use **Export translations** in Translation Settings. **1.0.5 supports automatic split exports and batch imports**: small exports produce one JSON file; larger exports produce `translations.part-0001.json`, `translations.part-0002.json`, and so on. Share the entire set. Your friend selects the same target language and machine provider, then uses Ctrl/Shift to select multiple JSON files in **Import translations**. Import merges valid missing entries, keeps existing translations, and makes no translation requests. Files contain translation rows only, without API keys, login credentials, or settings.
 
-| 按鍵 | 功能 |
+Fabric 1.17.1+ and NeoForge share one compatible format. Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2 share the legacy format. Files cannot be imported across these two format families. Each part is limited to 32 MiB and 100,000 entries; this is **not a limit on the total export**, which splits automatically. Existing single-file exports remain compatible. For an older oversized JSON, re-export from the client holding the cached translations.
+
+Batch imports process files in filename order; the first valid translation wins. A damaged, incompatible, or over-capacity file does not stop other files. The completion message reports added translations, successful/total files, and failures. Successful imports are not rolled back. Exports never overwrite existing files; choose another name if a destination already exists.
+
+Legacy clients retain their 8,192-entry shared cache limit. A file exceeding the remaining capacity is rejected without replacing existing translations. Modern disk cache files retain up to 100,000 entries by default; overflow still evicts older entries under the existing cache policy. Splitting exports does not increase client cache capacity.
+
+
+## Keyboard shortcuts
+
+Fabric 1.17.1+ and NeoForge:
+
+| Key | Action |
 | --- | --- |
-| `G` | 切換原文／譯文顯示 |
-| `R` | 翻譯／重新翻譯游標指向的物品 |
-| `P` | 翻譯／重新翻譯目前介面的可見文字與提示框 |
-| 未綁定 | 開啟翻譯設定 |
+| `G` | Toggle original/translated display |
+| `R` | Translate / retranslate the item under the pointer |
+| `P` | Translate / retranslate visible text and tooltips on the current screen |
+| Unbound | Open Translation Settings |
 
-舊版介面：
+Legacy UI:
 
-| 版本 | 按鍵 |
+| Targets | Keys |
 | --- | --- |
-| Fabric 1.14.4～1.16.5 | `G` 開啟翻譯設定；`P` 重新翻譯目前介面 |
-| Forge 1.12.2～1.13.2 | `G` 開啟翻譯設定；`H` 啟用／停用翻譯；`P` 重新翻譯目前介面 |
+| Fabric 1.14.4-1.16.5 | `G` opens Translation Settings; `P` retranslates the current screen |
+| Forge 1.12.2-1.13.2 | `G` opens Translation Settings; `H` enables/disables translation; `P` retranslates the current screen |
 
-`P` 擷取當下可見的文字，不包含尚未捲動到的內容；輸入文字時不會觸發。物品與介面文字改為手動觸發（見上方「主要功能」），`R`／`P` 是取得這些翻譯的方式，而不只是「重新」翻譯。重新翻譯完成時間取決於所選翻譯服務。
+`P` captures currently visible text, including a hovered tooltip; it does not scan off-screen content or activate while typing. Items and mod-screen text now translate on demand (see Features above), so `R`/`P` are how you get those translations in the first place, not just a "re-" translate. Completion time depends on the translation service.
 
-升級後若快捷鍵改回預設值：這個版本把模組 id 改成 `nyanlex`，首次啟動會自動把舊版（含更早使用過的名稱）的設定檔、翻譯快取與 `options.txt` 裡的舊快捷鍵複製到新名稱（不刪除舊檔），只做一次。
+If your keybinds look reset after upgrading: this release changes the mod id from `mctranslator` to `nyanlex`. The first launch automatically copies your old config file, translation caches, and any custom `options.txt` keybinds over to the new name (the old files are kept, not deleted), once.
 
-## 1.0.0 重點
+## 1.0.0 highlights
 
-- **模組更名為 NyanLex Translator**：套件、mod id、設定與快取檔名前綴、GitHub 翻譯倉庫全部換成新名稱；首次啟動自動從舊名稱的設定檔／快取／快捷鍵複製一份到新名稱（原檔不刪除、不覆蓋既有新檔）。
-- 物品與模組介面翻譯改為手動觸發（`R`／`P`），聊天等即時文字維持自動翻譯，避免翻譯還沒看到的格子。
-- 提示框改用分段快取，減少長提示框重複請求整段文字的次數。
-- 新增 GitHub AI 翻譯倉庫的啟動偵測與下載確認流程，可下載維護者整理的翻譯（需你自己按下下載），並可在設定關閉啟動檢查。
-- 新增「不翻譯清單」設定畫面，整理原本散落的翻譯請求開關與詞彙表。
+- **Renamed to NyanLex Translator**: the package, mod id, config/cache filename prefix, and GitHub translation hub all moved to the new name. The first launch automatically copies your config, caches, and keybinds saved under any earlier name to the new name (originals are kept; existing new-named files are never overwritten).
+- Item and mod-screen translation now triggers on demand (`R`/`P`); chat and other live text keep translating automatically, so nothing you haven't looked at gets translated ahead of time.
+- Tooltips now cache per segment, cutting down on re-requesting an entire long tooltip for one changed line.
+- Adds a startup check and download-confirmation flow for the GitHub AI translation hub, letting you download the translations curated by the maintainers (only when you press download); the startup check can be turned off in settings.
+- Adds a "do-not-translate filter" settings screen that consolidates the previously scattered request toggle and term list.
 
-## 1.0.6 重點
+## 1.0.6 highlights
 
-- 針對遊戲中偶發卡頓做了三項純效能修正，翻譯結果、快取檔與設定完全不變：
-  - 聊天遲到的譯文一批回填時只重排聊天框一次（原本每則各重排一次）。
-  - 名牌文字與線上玩家名單的比對加入記憶化，名單更新時自動失效。
-  - 翻譯模板還原時的數值槽正規表示式改為預編譯快取（原本快取命中路徑每次都重新編譯）。
-- 全部 18 個 Minecraft／Loader 目標同步更新。偶發卡頓的實際改善仍需實機比較，未宣稱完全消除。
+- Three performance-only fixes aimed at occasional in-game hitches; translation output, cache files, and settings are unchanged:
+  - Late chat translations that arrive as a batch now re-layout the chat box once instead of once per message.
+  - Name-tag matching against the online player list is memoized and invalidated whenever the list refreshes.
+  - Number-slot regular expressions used when restoring translation templates are precompiled and cached instead of being rebuilt on every cache hit.
+- All 18 Minecraft/loader targets are updated together. Real-world hitch reduction still needs in-game comparison; this release does not claim to eliminate it.
 
-## 1.0.5 重點
+## 1.0.5 highlights
 
-- `P` 重新翻譯目前介面的可見文字，包含模組任務段落與正在顯示的提示框。
-- 新增翻譯檔匯出／匯入，分享既有譯文並保留本機已有內容。
-- 減少現代版本每幀重複驗證記憶體快取的負擔；長時間卡頓改善仍需實機複測。
-- 本次發布包含全部 18 個 Minecraft／Loader 目標，26.3 已整合進全版本 ZIP。
+- `P` retranslates visible current-screen text, including mod quest paragraphs and hovered tooltips.
+- Adds translation-file export/import to share existing translations while keeping local entries.
+- Removes repeated validation of modern in-memory cache hits; long-session stutter improvements still need in-game comparison.
+- Includes all 18 Minecraft/loader targets, with 26.3 included in the all-versions ZIP.
 
-## 1.0.4 重點
+## 1.0.4 highlights
 
-- 修正長時間遊玩後開啟背包／容器時 CPU、記憶體與磁碟讀寫暴增：現代版快取改用有上限的追加式日誌，不再因單筆物品翻譯就在主執行緒排序並重寫整份快取。
-- 背包、容器、快捷欄與副手改為 350 ms 間隔的差異掃描；舊版也改用不註冊 callback 的預取，避免每 tick 重送全部格子及累積等待者。
-- 為翻譯佇列、執行器、同時請求、callback、重試、Codex 狀態及記憶體快取加上界限與完成後清理，避免使用時間越久資源占用越高。
-- 快取命中走快速路徑，失敗重試改為按需掃描，並減少玩家名遮罩、正規表示式與翻譯上下文的重複配置；現代版 HTTP 原始回應限制為 4 MiB，舊版亦保留串流字元上限。
-- 同一套修復已移植至歷來 Release 提供的全部 16 個 Minecraft／Loader 目標，並逐一建置與成品回歸驗證。
+- Fixes runaway CPU, memory, and disk I/O when opening inventories or containers after a long session. Modern targets now use a bounded append journal instead of sorting and rewriting the entire cache for each item translation on the render thread.
+- Changes inventory, container, hotbar, and off-hand warming to a 350 ms delta scan. Legacy targets also use callback-free prefetching, preventing every slot from being resubmitted each tick or accumulating waiters.
+- Bounds translation queues, executor work, in-flight requests, callbacks, retries, Codex state, and memory caches, and releases completed state so resource use does not grow with play time.
+- Adds cache-hit fast paths and on-demand retry scans, reduces repeated player-name, regex, and context allocations, caps raw HTTP responses at 4 MiB on modern targets, and retains a streaming character cap on legacy targets.
+- Ports the same fixes to all 16 Minecraft/loader targets ever offered by the project releases, with per-target builds and final-JAR regression checks.
 
-## 1.0.3 重點
+## 1.0.3 highlights
 
-- 以 1.0.2 穩定架構為基礎，保留原本翻譯流程。
-- 新增 ChatGPT／Codex 登入、模型選擇與 token 顯示。
-- Codex 翻譯停用不需要的工具與摘要、取消額外等待並使用可用的 priority tier，縮短回應時間。
-- 玩家名遮罩只讀 TAB 名單；移除文字模板與快取中的玩家名猜測。
-- 修正 `Bloom Boat with Chest` 被送成 `Bloom Boat with {值}` 的問題。
+- Keeps the stable 1.0.2 translation architecture.
+- Adds ChatGPT/Codex sign-in, model selection, and token display.
+- Speeds up Codex by disabling unused tools and summaries, avoiding cleanup waits, and using the advertised priority tier.
+- Masks player names only from TAB and removes name guessing from templates and caches.
+- Fixes `Bloom Boat with Chest` being sent as `Bloom Boat with {value}`.
 
-## 隱私
+## Credits
 
-- 只將需要翻譯的文字送到所選來源。
-- API Key 儲存在本機 Minecraft 設定資料夾。
-- TAB 名單中的玩家名會先在本機遮罩；其他伺服器文字仍可能包含使用者提供的內容。
-- GitHub 翻譯倉庫檢查只下載（`index.json` 與所需翻譯檔），不會上傳任何本機資料；可在設定關閉啟動時的檢查。
-- 回報問題前請遮住 API Key、Authorization header 與私人伺服器資訊。
+The icon was made with AI assistance.
 
-## 原始碼與回報
+## Source and issues
 
-各版本建置方式與 Release 資料夾結構請見 [PACKAGING.md](PACKAGING.md)。問題請提交到 [GitHub Issues](https://github.com/DragonMeow1012/NyanLex/issues)。
+See [PACKAGING.md](PACKAGING.md) for build commands and the release folder layout. Report problems through [GitHub Issues](https://github.com/DragonMeow1012/NyanLex/issues).

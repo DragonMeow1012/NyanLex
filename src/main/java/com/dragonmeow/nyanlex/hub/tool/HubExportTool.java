@@ -280,7 +280,9 @@ public final class HubExportTool {
     }
 
     public enum Disposition {
-        KEPT, DROPPED_CHAT, REJECTED_VALIDATION, REJECTED_FOREIGN_URL, REJECTED_UNMASKED_NAME
+        KEPT, DROPPED_CHAT, REJECTED_VALIDATION, REJECTED_FOREIGN_URL, REJECTED_UNMASKED_NAME,
+        /** Source or translation names another client mod (e.g. a mod-printed chat prefix). */
+        REJECTED_THIRD_PARTY
     }
 
     /** One classified row, in memory only — never written anywhere by this class. The
@@ -301,6 +303,10 @@ public final class HubExportTool {
         Options options = Options.parse(args);
         List<ClassifiedRow> rows = classify(options.cacheDir, options.language, options.dropChat);
         ExportStats stats = ExportStats.counted(rows);
+        int rejectedThirdParty = 0;
+        for (ClassifiedRow row : rows) {
+            if (row.disposition() == Disposition.REJECTED_THIRD_PARTY) rejectedThirdParty++;
+        }
         if (stats.exportedRows() == 0) {
             out.println("NOTHING_TO_EXPORT totalRows=" + stats.totalRows()
                     + " droppedChat=" + stats.droppedChat()
@@ -379,6 +385,7 @@ public final class HubExportTool {
                 + " rejectedValidation=" + stats.rejectedValidation()
                 + " rejectedForeignUrl=" + stats.rejectedForeignUrl()
                 + " rejectedUnmaskedName=" + stats.rejectedUnmaskedName()
+                + " rejectedThirdParty=" + rejectedThirdParty
                 + " nameConversionSucceeded=" + stats.nameConversionSucceeded()
                 + " duplicateKeyGroups=" + stats.duplicateKeyGroups()
                 + " duplicateRowsDropped=" + stats.duplicateRowsDropped()
@@ -449,6 +456,10 @@ public final class HubExportTool {
         // decision) instead of discarding the row: every downstream check below then
         // runs on the CONVERTED text.
         boolean nameConverted = false;
+        // Another mod's own chat output / prefix is not server content: never publish it.
+        if (ThirdPartyModFilter.mentionsMod(key) || ThirdPartyModFilter.mentionsMod(value)) {
+            return new ClassifiedRow(key, value, Disposition.REJECTED_THIRD_PARTY, "third-party-mod");
+        }
         if (!PlayerNamePatterns.nameSpans(key).isEmpty()) {
             UnmaskedNameConverter.Result converted = UnmaskedNameConverter.convert(key, value);
             if (!converted.ok()) {

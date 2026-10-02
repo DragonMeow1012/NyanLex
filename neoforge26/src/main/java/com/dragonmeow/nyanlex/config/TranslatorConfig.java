@@ -107,8 +107,17 @@ public final class TranslatorConfig {
     /** Google source language. {@code auto} lets Google detect it. */
     public String sourceLang = "auto";
 
-    /** Key-free machine source: google, youdao, deepl, or microsoft. */
+    /** Machine source: google (unofficial key-free endpoint), deepl_api, or microsoft_api. */
     public String machineTranslationProvider = MachineTranslationProvider.GOOGLE.id();
+
+    /** Player-supplied DeepL API key (official API). Stored locally only; never logged. */
+    public String deeplApiKey = "";
+
+    /** Player-supplied Microsoft Translator key (official API). Stored locally only. */
+    public String microsoftApiKey = "";
+
+    /** Azure region of the Microsoft Translator resource (e.g. {@code eastus}); may be empty. */
+    public String microsoftApiRegion = "";
 
     /**
      * Mask online player names before sending text to the translator, so names are
@@ -251,11 +260,46 @@ public final class TranslatorConfig {
         GSON.toJson(this, writer);
     }
 
+    /**
+     * Set by {@link #normalized()} when a loaded file selected a web endpoint this build no
+     * longer supports (youdao / deepl web / microsoft web); the source was reset to Google.
+     * Not persisted. Loaders log it once via {@link #takeRetiredProviderReset()}.
+     */
+    private transient String retiredProviderReset;
+
+    /** Returns the retired provider id that was reset to Google during load, once, else null. */
+    public String takeRetiredProviderReset() {
+        String value = retiredProviderReset;
+        retiredProviderReset = null;
+        return value;
+    }
+
+    /** Every secret value held in this config (for redaction in logs / debug dumps). */
+    public java.util.List<String> secretValues() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (aiApiKeys != null) out.addAll(aiApiKeys);
+        if (aiKeysByEndpoint != null) {
+            for (String joined : aiKeysByEndpoint.values()) {
+                if (joined == null) continue;
+                for (String part : joined.split("[,\\s]+")) if (!part.isBlank()) out.add(part);
+            }
+        }
+        if (deeplApiKey != null && !deeplApiKey.isBlank()) out.add(deeplApiKey.strip());
+        if (microsoftApiKey != null && !microsoftApiKey.isBlank()) out.add(microsoftApiKey.strip());
+        return out;
+    }
+
     /** Fill in sane defaults for any missing / invalid fields. */
     public TranslatorConfig normalized() {
         if (targetLang == null || targetLang.isBlank()) targetLang = "zh-TW";
         if (sourceLang == null || sourceLang.isBlank()) sourceLang = "auto";
+        if (MachineTranslationProvider.isRetiredId(machineTranslationProvider)) {
+            retiredProviderReset = machineTranslationProvider.strip();
+        }
         machineTranslationProvider = MachineTranslationProvider.normalize(machineTranslationProvider);
+        if (deeplApiKey == null) deeplApiKey = "";
+        if (microsoftApiKey == null) microsoftApiKey = "";
+        if (microsoftApiRegion == null) microsoftApiRegion = "";
         if (chatMode == null) chatMode = DisplayMode.BOTH;
         if (tooltipMode == null) tooltipMode = DisplayMode.TRANSLATION;
         if (scoreboardMode == null) scoreboardMode = DisplayMode.TRANSLATION;
@@ -359,6 +403,12 @@ public final class TranslatorConfig {
                 // input reader is closed, so a later user choice cannot be mistaken for
                 // an untouched legacy default on the next launch.
                 loaded.save(path);
+                String retired = loaded.takeRetiredProviderReset();
+                if (retired != null) {
+                    java.util.logging.Logger.getLogger("nyanlex").warning(
+                            "Machine translation source '" + retired
+                                    + "' is no longer supported; switched back to Google.");
+                }
                 return loaded;
             }
         } catch (IOException | RuntimeException ignored) {

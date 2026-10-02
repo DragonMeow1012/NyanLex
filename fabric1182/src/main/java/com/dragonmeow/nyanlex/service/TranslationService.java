@@ -1916,26 +1916,6 @@ public final class TranslationService {
     // TranslationDecision.unchanged()/a null callback before reaching this method — so a
     // line that stays in English is never touched, matching "原文不轉".
 
-    private static final String MONTH_NAME_DISPLAY =
-            "(?:January|February|March|April|May|June|July|August|September|October"
-                    + "|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)";
-    private static final java.util.regex.Pattern DISPLAY_CALENDAR_DATE =
-            java.util.regex.Pattern.compile("(?i)\\b(" + MONTH_NAME_DISPLAY
-                    + ")\\.?\\s+(\\d{1,2}),\\s+(\\d{4})(?![A-Za-z0-9])");
-    private static final java.util.Map<String, Integer> MONTH_NUMBERS_BY_NAME = monthNumbers();
-
-    private static java.util.Map<String, Integer> monthNumbers() {
-        java.util.Map<String, Integer> months = new java.util.HashMap<>();
-        String[] full = {"january", "february", "march", "april", "may", "june", "july",
-                "august", "september", "october", "november", "december"};
-        for (int i = 0; i < full.length; i++) months.put(full[i], i + 1);
-        months.put("jan", 1); months.put("feb", 2); months.put("mar", 3); months.put("apr", 4);
-        months.put("jun", 6); months.put("jul", 7); months.put("aug", 8);
-        months.put("sep", 9); months.put("sept", 9);
-        months.put("oct", 10); months.put("nov", 11); months.put("dec", 12);
-        return java.util.Collections.unmodifiableMap(months);
-    }
-
     // Bounded LRU, same eviction discipline as TemplateText's own per-string MEMO
     // (single-entry eviction on overflow, never a whole-table clear): this method runs
     // on every DisplayMode surface's render-frame lookup, but the SAME finished string
@@ -1963,40 +1943,15 @@ public final class TranslationService {
     }
 
     private static String localizeCalendarDatesForDisplay(String text) {
-        // Literal prefilter: every date this can match has a comma, so a plain indexOf
-        // rejects the common case (most translated lines) without ever building a
+        // Literal prefilter: every date this can match has a four-digit year, so a plain
+        // scan rejects the common case (most translated lines) without ever building a
         // Matcher — the "字面預篩" this per-frame path is required to have.
-        if (text.indexOf(',') < 0) return text;
+        if (!com.dragonmeow.nyanlex.translate.CalendarDates.mayContainDate(text)) return text;
         String memoized = DISPLAY_DATE_MEMO.get(text);
         if (memoized != null) return memoized;
-        String converted = convertCalendarDatesToChinese(text);
+        String converted = com.dragonmeow.nyanlex.translate.CalendarDates.toChinese(text);
         DISPLAY_DATE_MEMO.put(text, converted);
         return converted;
-    }
-
-    private static String convertCalendarDatesToChinese(String text) {
-        java.util.regex.Matcher matcher = DISPLAY_CALENDAR_DATE.matcher(text);
-        StringBuilder out = null;
-        int last = 0;
-        while (matcher.find()) {
-            Integer month = MONTH_NUMBERS_BY_NAME.get(
-                    matcher.group(1).toLowerCase(java.util.Locale.ROOT));
-            if (month == null) continue;
-            int day, year;
-            try {
-                day = Integer.parseInt(matcher.group(2));
-                year = Integer.parseInt(matcher.group(3));
-            } catch (NumberFormatException notADate) {
-                continue;
-            }
-            if (out == null) out = new StringBuilder(text.length());
-            out.append(text, last, matcher.start());
-            out.append(year).append('年').append(month).append('月').append(day).append('日');
-            last = matcher.end();
-        }
-        if (out == null) return text;
-        out.append(text, last, text.length());
-        return out.toString();
     }
 
     private boolean shouldTranslateItem(String source) {
