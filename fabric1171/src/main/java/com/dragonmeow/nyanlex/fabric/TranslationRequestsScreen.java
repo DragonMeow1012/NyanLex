@@ -101,6 +101,7 @@ public final class TranslationRequestsScreen extends Screen {
 
     @Override
     public void render(PoseStack graphics, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
         GuiComponent.drawCenteredString(graphics, this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);
         this.font.draw(graphics, new TranslatableComponent("screen.nyanlex.requests.terms"),

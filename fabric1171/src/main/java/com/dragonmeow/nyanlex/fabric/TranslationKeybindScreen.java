@@ -25,11 +25,12 @@ public final class TranslationKeybindScreen extends Screen {
         bindingRows.clear();
         buttonWidth = Math.max(80, Math.min(W, width - 20));
         int x = width / 2 - buttonWidth / 2;
-        int y = 46;
+        int y = 40;
         y = rebind("screen.nyanlex.keybind.retranslate", NyanLexFabric.retranslateKeyMapping(), x, y);
         y = rebind("screen.nyanlex.keybind.screenscan", NyanLexFabric.screenScanKeyMapping(), x, y);
         y = rebind("screen.nyanlex.keybind.toggle", NyanLexFabric.toggleKeyMapping(), x, y);
-        addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.keybind.reset"), b -> resetBindings())
+        y = rebind("screen.nyanlex.keybind.mode", NyanLexFabric.modeKeyMapping(), x, y);
+        addRenderableWidget(LegacyButton.builder(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.keybind.reset"), b -> resetBindings())
                 .bounds(width / 2 - buttonWidth / 2, y + 8, buttonWidth, 20).build());
         addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(new net.minecraft.network.chat.TranslatableComponent("gui.done"), b -> onClose())
                 .bounds(width / 2 - buttonWidth / 2, y + 32, buttonWidth, 20).build());
@@ -72,8 +73,10 @@ public final class TranslationKeybindScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
     @Override public void render(PoseStack graphics, int mouseX, int mouseY, float delta) {
+        this.renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, delta);
-        GuiComponent.drawCenteredString(graphics, font, title, width / 2, 16, 0xFFFFFF);
+        GuiComponent.drawCenteredString(graphics, font, title, width / 2, 10, 0xFFFFFFFF);
+        GuiComponent.drawCenteredString(graphics, font, new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.keybind.hint"), width / 2, 22, 0xFFA4A9B8);
     }
     @Override public void onClose() { minecraft.setScreen(parent); }
 }

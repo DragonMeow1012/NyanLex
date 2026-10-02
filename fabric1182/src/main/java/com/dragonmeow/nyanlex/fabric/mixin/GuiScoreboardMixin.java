@@ -119,6 +119,7 @@ public abstract class GuiScoreboardMixin {
     @Redirect(method = "render", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/gui/Font;drawShadow(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/network/chat/Component;FFI)I"), require = 0)
     private int nyanlex$hud(Font font, PoseStack pose, Component text, float x, float y, int color) {
+        if (NyanLexFabric.isOwnFeedback(text)) return font.drawShadow(pose, text, x, y, color);
         if (!HookGuard.enter("GuiScoreboard.hud")) return font.drawShadow(pose, text, x, y, color);
         try {
             TranslationService service = NyanLexFabric.service();

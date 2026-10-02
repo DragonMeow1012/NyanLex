@@ -11,6 +11,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.util.FormattedCharSequence;
 
 import java.util.List;
 import java.util.Locale;
@@ -24,14 +25,19 @@ import java.util.Locale;
  * works unmodified on every Minecraft version this mod supports.
  */
 public final class HubDownloadConfirmScreen extends Screen {
-    private static final int PAGE_SIZE = 6;
+    private static final int ROW_H = 12;
+    private static final int INFO_TOP = 28;
 
     private final Screen parent;
     private final HubPlan plan;
     private final String serverHost;
     private final String modpackLabel;
     private final int installedModCount;
+    private final List<HubPlanItem> shown = new java.util.ArrayList<>();
+    private final int othersWithoutPack;
     private int page;
+    private int pageSize = 6;
+    private List<FormattedCharSequence> pathLines = List.of();
     private Button prevButton;
     private Button nextButton;
 
@@ -43,21 +49,38 @@ public final class HubDownloadConfirmScreen extends Screen {
         this.serverHost = serverHost;
         this.modpackLabel = modpackLabel;
         this.installedModCount = installedModCount;
+        // only what has a pack is listed; the mods without one are summed up in one grey line
+        int others = 0;
+        for (HubPlanItem item : plan.items()) {
+            if (item.hasContent()) shown.add(item);
+            else if (item.source().kind() == HubSource.Kind.MOD) others++;
+        }
+        this.othersWithoutPack = others;
     }
 
     private int totalPages() {
-        return Math.max(1, (plan.items().size() + PAGE_SIZE - 1) / PAGE_SIZE);
+        return Math.max(1, (shown.size() + pageSize - 1) / pageSize);
     }
 
     @Override
     protected void init() {
         int centerX = this.width / 2;
         int bottomY = this.height - 28;
+        // Footer text (path) wraps to the content width; the page size then follows from
+        // the space left between the info lines and the footer so nothing overlaps.
+        int contentW = Math.min(this.width - 20, 340);
+        pathLines = this.font.split(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.path", storagePath()),
+                contentW);
+        int listTop = INFO_TOP + 3 * 12 + 8;
+        int footerH = 4 + ROW_H + (othersWithoutPack > 0 ? ROW_H : 0) + pathLines.size() * (this.font.lineHeight + 1) + 6;
+        int navY = bottomY - 24;
+        int availableForRows = navY - 4 - listTop - footerH;
+        pageSize = Math.max(1, availableForRows / ROW_H);
 
-        if (plan.isEmpty()) {
+        if (shown.isEmpty()) {
             int w = Math.min(200, this.width - 40);
             this.addRenderableWidget(LegacyButton.builder(
-                    new TranslatableComponent("screen.nyanlex.hub.confirm.back"),
+                    new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.cancel"),
                     b -> onClose()).bounds(centerX - w / 2, bottomY, w, 20).build());
             return;
         }
@@ -67,20 +90,20 @@ public final class HubDownloadConfirmScreen extends Screen {
         prevButton = this.addRenderableWidget(LegacyButton.builder(
                 new TranslatableComponent("screen.nyanlex.hub.confirm.prev"),
                 b -> { page = Math.max(0, page - 1); updatePageButtons(); })
-                .bounds(centerX - 180, bottomY - 24, 70, 20).build());
+                .bounds(Math.max(4, centerX - 180), bottomY - 24, 70, 20).build());
         nextButton = this.addRenderableWidget(LegacyButton.builder(
                 new TranslatableComponent("screen.nyanlex.hub.confirm.next"),
                 b -> { page = Math.min(totalPages() - 1, page + 1); updatePageButtons(); })
-                .bounds(centerX + 110, bottomY - 24, 70, 20).build());
+                .bounds(Math.min(this.width - 74, centerX + 110), bottomY - 24, 70, 20).build());
 
         boolean hasDownload = !plan.downloadable().isEmpty();
-        Button downloadButton = this.addRenderableWidget(LegacyButton.builder(
-                new TranslatableComponent("screen.nyanlex.hub.confirm.download"),
-                b -> onDownload()).bounds(centerX - 125, bottomY, 120, 20).build());
-        downloadButton.active = hasDownload;
         this.addRenderableWidget(LegacyButton.builder(
-                new TranslatableComponent("screen.nyanlex.hub.confirm.back"),
-                b -> onClose()).bounds(centerX + 5, bottomY, 120, 20).build());
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.cancel"),
+                b -> onClose()).bounds(centerX - 125, bottomY, 120, 20).build());
+        Button downloadButton = this.addRenderableWidget(LegacyButton.builder(
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.download"),
+                b -> onDownload()).bounds(centerX + 5, bottomY, 120, 20).build());
+        downloadButton.active = hasDownload;
         updatePageButtons();
     }
 
@@ -97,14 +120,19 @@ public final class HubDownloadConfirmScreen extends Screen {
         this.minecraft.setScreen(new HubDownloadProgressScreen(parent));
     }
 
+    private static String storagePath() {
+        return NyanLexFabric.hubLocalCache().activeFile().toAbsolutePath().toString();
+    }
+
     @Override
     public void render(PoseStack g, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(g);
         super.render(g, mouseX, mouseY, partialTick);
         int centerX = this.width / 2;
         GuiComponent.drawCenteredString(g, this.font, this.title, centerX, 12, 0xFFFFFFFF);
 
-        int y = 30;
-        Component serverLine = new TranslatableComponent("screen.nyanlex.hub.confirm.server",
+        int y = INFO_TOP;
+        Component serverLine = new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.server",
                 serverHost != null ? serverHost
                         : new TranslatableComponent("screen.nyanlex.hub.confirm.server.singleplayer"));
         GuiComponent.drawCenteredString(g, this.font, serverLine, centerX, y, 0xFFE0E0E0);
@@ -122,35 +150,54 @@ public final class HubDownloadConfirmScreen extends Screen {
                 .filter(it -> it.source().kind() == HubSource.Kind.MOD && it.hasContent()).count();
         GuiComponent.drawCenteredString(g, this.font, new TranslatableComponent("screen.nyanlex.hub.confirm.mods",
                 installedModCount, (int) modItemCount), centerX, y, 0xFFE0E0E0);
-        y += 18;
+        y += 20;
 
-        if (plan.isEmpty()) {
-            GuiComponent.drawCenteredString(g, this.font, new TranslatableComponent("screen.nyanlex.hub.confirm.empty"),
+        if (shown.isEmpty()) {
+            GuiComponent.drawCenteredString(g, this.font, new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.empty"),
                     centerX, y + 10, 0xFFFFD700);
             return;
         }
 
-        List<HubPlanItem> items = plan.items();
-        int start = page * PAGE_SIZE;
-        int end = Math.min(items.size(), start + PAGE_SIZE);
-        int listLeft = Math.max(10, centerX - 160);
-        int listRight = Math.min(this.width - 10, centerX + 160);
+        List<HubPlanItem> items = shown;
+        int start = page * pageSize;
+        int end = Math.min(items.size(), start + pageSize);
+        int listLeft = Math.max(10, centerX - 170);
+        int listRight = Math.min(this.width - 10, centerX + 170);
         for (int i = start; i < end; i++) {
             HubPlanItem item = items.get(i);
-            GuiComponent.drawString(g, this.font, item.label(), listLeft, y, 0xFFFFFFFF);
             Component status = itemStatus(item);
             int statusWidth = this.font.width(status);
-            GuiComponent.drawString(g, this.font, status, listRight - statusWidth, y, statusColor(item));
-            y += 12;
+            int labelMax = Math.max(20, listRight - listLeft - statusWidth - 10);
+            String label = item.label();
+            if (this.font.width(label) > labelMax) {
+                label = this.font.plainSubstrByWidth(label, labelMax - this.font.width("...")) + "...";
+            }
+            this.font.drawShadow(g, label, listLeft, y, 0xFFFFFFFF);
+            this.font.drawShadow(g, status, listRight - statusWidth, y, statusColor(item));
+            y += ROW_H;
+        }
+
+        if (othersWithoutPack > 0) {
+            this.font.drawShadow(g, new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.others", othersWithoutPack), listLeft, y, 0xFF808080);
+            y += ROW_H;
+        }
+
+        // The last row of the table is the expected total, then where the files will be stored.
+        GuiComponent.fill(g, listLeft, y + 1, listRight, y + 2, 0xFF606060);
+        y += 4;
+        Component total = new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.total",
+                formatBytes(plan.totalDownloadBytes()));
+        this.font.drawShadow(g, total, listLeft, y, 0xFFFFD700);
+        y += ROW_H;
+        for (FormattedCharSequence line : pathLines) {
+            this.font.drawShadow(g, line, listLeft, y, 0xFFB0C8E0);
+            y += this.font.lineHeight + 1;
         }
 
         int bottomY = this.height - 28;
         GuiComponent.drawCenteredString(g, this.font,
-                new TranslatableComponent("screen.nyanlex.hub.confirm.page", page + 1, totalPages()),
-                centerX, bottomY - 40, 0xFFA0A0A0);
-        GuiComponent.drawCenteredString(g, this.font,
-                new TranslatableComponent("screen.nyanlex.hub.confirm.total", formatBytes(plan.totalDownloadBytes())),
-                centerX, bottomY - 14, 0xFFFFD700);
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.hub.confirm.page", page + 1, totalPages()),
+                centerX, bottomY - 18, 0xFFA0A0A0);
     }
 
     private static Component itemStatus(HubPlanItem item) {
