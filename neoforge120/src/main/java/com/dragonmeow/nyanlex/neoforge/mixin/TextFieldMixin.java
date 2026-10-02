@@ -20,14 +20,10 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * Gated by {@code screenTextMode} via {@link NyanLexFabric#screenText(Component)}.</p>
  */
 @Pseudo
-@Mixin(targets = TextFieldMixin.TARGET)
+@Mixin(targets = "dev.ftb.mods.ftblibrary.ui.TextField")
 public abstract class TextFieldMixin {
-    static final String TARGET = "dev.ftb.mods.ftblibrary.ui.TextField";
-    static final String SET_TEXT =
-            "setText(Lnet/minecraft/network/chat/Component;)Ldev/ftb/mods/ftblibrary/ui/TextField;";
-
     @ModifyVariable(
-            method = SET_TEXT,
+            method = "setText(Lnet/minecraft/network/chat/Component;)Ldev/ftb/mods/ftblibrary/ui/TextField;",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private Component nyanlex$translateWhole(Component component) {
         if (!HookGuard.enter("TextField.translateWhole")) return component;

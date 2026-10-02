@@ -13,8 +13,7 @@
     "GuiGraphicsTextMixin",
     "GuiScoreboardMixin",
     "EntityNameTagMixin",
-    "OptionsScreenMixin",
-    "TextFieldMixin"
+    "OptionsScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 0

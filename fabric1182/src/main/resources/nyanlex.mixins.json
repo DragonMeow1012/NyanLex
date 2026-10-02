@@ -12,8 +12,7 @@
     "EntityNameTagMixin",
     "FontSplitMixin",
     "GuiScoreboardMixin",
-    "OptionsScreenMixin",
-    "TextFieldMixin"
+    "OptionsScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 0

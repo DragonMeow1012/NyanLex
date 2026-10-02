@@ -5,6 +5,9 @@ license = "MIT"
 [[mixins]]
 config = "nyanlex.neoforge26.mixins.json"
 
+[[mixins]]
+config = "nyanlex.neoforge26.compat.mixins.json"
+
 [[mods]]
 iconFile="icon.png"
 modId = "nyanlex"

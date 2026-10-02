@@ -13,7 +13,6 @@
     "BookPageMixin",
     "GuiGraphicsTextMixin",
     "FontSplitMixin",
-    "TextFieldMixin",
     "EntityNameTagMixin"
   ],
   "injectors": {
