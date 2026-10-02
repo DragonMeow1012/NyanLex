@@ -19,58 +19,85 @@ public final class TranslationKeybindScreen extends Screen {
     private Button listeningButton;
     private String listeningPrefix;
     private final List<BindingRow> bindingRows = new ArrayList<>();
-    public TranslationKeybindScreen(Screen parent) { super(Component.translatable("screen.nyanlex.keybind.title")); this.parent = parent; }
+
+    public TranslationKeybindScreen(Screen parent) {
+        super(Component.translatable("screen.nyanlex.keybind.title"));
+        this.parent = parent;
+    }
+
     @Override protected void init() {
         bindingRows.clear();
         buttonWidth = Math.max(80, Math.min(W, width - 20));
         int x = width / 2 - buttonWidth / 2;
-        int y = 46;
+        int y = 40;
         y = rebind("screen.nyanlex.keybind.retranslate", NyanLexNeoForge.retranslateKeyMapping(), x, y);
         y = rebind("screen.nyanlex.keybind.screenscan", NyanLexNeoForge.screenScanKeyMapping(), x, y);
         y = rebind("screen.nyanlex.keybind.toggle", NyanLexNeoForge.toggleKeyMapping(), x, y);
+        y = rebind("screen.nyanlex.keybind.mode", NyanLexNeoForge.modeKeyMapping(), x, y);
         addRenderableWidget(Button.builder(Component.translatable("screen.nyanlex.keybind.reset"), b -> resetBindings())
                 .bounds(width / 2 - buttonWidth / 2, y + 8, buttonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
                 .bounds(width / 2 - buttonWidth / 2, y + 32, buttonWidth, 20).build());
     }
+
     private int rebind(String prefix, KeyMapping key, int x, int y) {
         if (key == null) return y;
         Button button = Button.builder(label(prefix, key), b -> {
-            listening = key; listeningButton = b; listeningPrefix = prefix;
+            listening = key;
+            listeningButton = b;
+            listeningPrefix = prefix;
             b.setMessage(Component.translatable("screen.nyanlex.keybind.listening"));
         }).bounds(x, y, buttonWidth, 20).build();
         addRenderableWidget(button);
         bindingRows.add(new BindingRow(prefix, key, button));
         return y + 24;
     }
+
     private void resetBindings() {
         if (minecraft == null) return;
-        listening = null; listeningButton = null; listeningPrefix = null;
+        listening = null;
+        listeningButton = null;
+        listeningPrefix = null;
         for (BindingRow row : bindingRows) {
             minecraft.options.setKey(row.key(), row.key().getDefaultKey());
             row.button().setMessage(label(row.prefix(), row.key()));
         }
-        KeyMapping.resetMapping(); minecraft.options.save();
+        KeyMapping.resetMapping();
+        minecraft.options.save();
     }
-    private record BindingRow(String prefix, KeyMapping key, Button button) { }
-    public boolean isListening() { return listening != null; }
+
+    private record BindingRow(String prefix, KeyMapping key, Button button) {
+    }
+
+    /** Whether this screen is currently waiting for the next keypress to bind. */
+    public boolean isListening() {
+        return listening != null;
+    }
+
     private static Component label(String prefix, KeyMapping key) {
         return Component.translatable(prefix).append(key.getTranslatedKeyMessage());
     }
+
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (listening != null && minecraft != null) {
             if (keyCode != GLFW.GLFW_KEY_ESCAPE) {
                 minecraft.options.setKey(listening, InputConstants.getKey(keyCode, scanCode));
-                KeyMapping.resetMapping(); minecraft.options.save();
+                KeyMapping.resetMapping();
+                minecraft.options.save();
             }
             if (listeningButton != null) listeningButton.setMessage(label(listeningPrefix, listening));
-            listening = null; listeningButton = null; return true;
+            listening = null;
+            listeningButton = null;
+            return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
+
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         super.render(graphics, mouseX, mouseY, delta);
-        graphics.drawCenteredString(font, title, width / 2, 16, 0xFFFFFF);
+        graphics.drawCenteredString(font, title, width / 2, 10, 0xFFFFFFFF);
+        graphics.drawCenteredString(font, Component.translatable("screen.nyanlex.keybind.hint"), width / 2, 22, 0xFFA4A9B8);
     }
+
     @Override public void onClose() { minecraft.setScreen(parent); }
 }
