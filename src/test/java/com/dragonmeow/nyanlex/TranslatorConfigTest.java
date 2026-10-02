@@ -144,8 +144,8 @@ class TranslatorConfigTest {
     @Test
     void machineProviderNormalizesUnknownValuesToGoogle() {
         TranslatorConfig valid = TranslatorConfig.fromReader(
-                new StringReader("{ \"machineTranslationProvider\": \"deepl_api\" }"));
-        assertEquals(MachineTranslationProvider.DEEPL_API.id(), valid.machineTranslationProvider);
+                new StringReader("{ \"machineTranslationProvider\": \"google\" }"));
+        assertEquals(MachineTranslationProvider.GOOGLE.id(), valid.machineTranslationProvider);
 
         TranslatorConfig invalid = TranslatorConfig.fromReader(
                 new StringReader("{ \"machineTranslationProvider\": \"baidu\" }"));

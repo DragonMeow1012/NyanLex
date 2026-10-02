@@ -37,12 +37,11 @@ public final class DialogContent {
                 "nyanlex.ui.first.hub", "nyanlex.ui.first.hub_btn", "nyanlex.ui.first.privacy",
                 "nyanlex.ui.privacy.status.on", "nyanlex.ui.privacy.status.off",
                 "message.nyanlex.tooltip_hint_start", "screen.nyanlex.provider.google",
-                "screen.nyanlex.provider.deepl_api",
-                "screen.nyanlex.provider.microsoft_api", "config.nyanlex.language.follow",
+                "config.nyanlex.language.follow",
                 "nyanlex.settings.language");
     }
 
-    /** "Google 翻譯（非官方端點）" / "DeepL（官方 API，自備金鑰）" / "AI（model）": the service one surface sends to. */
+    /** "Google 翻譯（非官方端點）" / "AI（model）": the service one surface sends to. */
     public static String engineName(TranslatorConfig cfg, boolean ai, Lang lang) {
         if (ai) return lang.get("nyanlex.ui.engine.ai", cfg.aiModel == null ? "" : cfg.aiModel);
         MachineTranslationProvider provider = MachineTranslationProvider.fromId(cfg.machineTranslationProvider);

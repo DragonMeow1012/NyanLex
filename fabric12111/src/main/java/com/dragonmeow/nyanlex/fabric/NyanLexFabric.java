@@ -1070,8 +1070,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(transport,
                 () -> config.sourceLang,
                 () -> config.machineTranslationProvider,
-                new RequestPacer(() -> config.requestCooldownMs),
-                () -> config);
+                new RequestPacer(() -> config.requestCooldownMs));
         OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
@@ -2007,7 +2006,6 @@ public final class NyanLexFabric implements ClientModInitializer {
         if (service == null) return;
         if (screen instanceof TranslationConfigScreen || screen instanceof AiConfigScreen
                 || screen instanceof TranslationKeybindScreen || screen instanceof TranslationLanguageScreen
-                || screen instanceof MachineProviderScreen
                 || screen instanceof TranslationRequestsScreen
                 || screen instanceof CodexModelScreen || screen instanceof CodexEffortScreen) return;
         // Keys typed into a text input (chat, signs, books, search boxes) are text, not hotkeys.

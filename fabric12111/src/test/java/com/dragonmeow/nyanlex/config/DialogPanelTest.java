@@ -123,6 +123,12 @@ class DialogPanelTest {
         }
     }
 
+    private static int countOf(String text, String needle) {
+        int n = 0;
+        for (int i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + needle.length())) n++;
+        return n;
+    }
+
     @Test
     void consentNamesTheEngineAndMarksGoogleAsUnofficial() {
         TranslatorConfig cfg = new TranslatorConfig();
@@ -131,8 +137,12 @@ class DialogPanelTest {
         assertTrue(DialogContent.engineName(cfg, false, tw).contains("Google"));
         assertTrue(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
         assertEquals("AI（gemini-test）", DialogContent.engineName(cfg, true, tw));
-        cfg.machineTranslationProvider = "deepl";
-        assertFalse(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
+        assertEquals(1, countOf(DialogContent.engineName(cfg, false, tw), "非官方端點"), "marked once, not twice");
+        for (String old : new String[] {"deepl_api", "microsoft_api", "youdao"}) {
+            // a stale id from an old config still resolves to the one Google label
+            cfg.machineTranslationProvider = old;
+            assertEquals(1, countOf(DialogContent.engineName(cfg, false, tw), "非官方端點"), old);
+        }
         cfg.machineTranslationProvider = "google";
 
         DialogPanel p = new DialogPanel(DialogPanelTest::width);

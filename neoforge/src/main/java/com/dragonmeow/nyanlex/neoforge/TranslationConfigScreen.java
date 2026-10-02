@@ -74,9 +74,10 @@ public final class TranslationConfigScreen extends Screen {
         this.addRenderableWidget(Button.builder(langLabel(cfg),
                         b -> this.minecraft.setScreen(new TranslationLanguageScreen(this)))
                 .bounds(left, y, rowWidth, 20).build());
-        this.addRenderableWidget(Button.builder(providerLabel(cfg),
-                        b -> this.minecraft.setScreen(new TranslationMachineProviderScreen(this)))
-                .bounds(right, y, rowWidth, 20).build());
+        var providerButton = Button.builder(providerLabel(cfg), b -> { })
+                .bounds(right, y, rowWidth, 20).build();
+        providerButton.active = false; // Google is the only machine source
+        this.addRenderableWidget(providerButton);
         y += 22;
         // Row 1: debug overlay | request cooldown + batch window sub-screen.
         this.addRenderableWidget(Button.builder(debugLabel(cfg), b -> {
@@ -163,10 +164,8 @@ public final class TranslationConfigScreen extends Screen {
     }
 
     private static Component providerLabel(TranslatorConfig cfg) {
-        MachineTranslationProvider provider = MachineTranslationProvider.fromId(
-                cfg.machineTranslationProvider);
         return Component.translatable("config.nyanlex.machine_provider",
-                Component.translatable("screen.nyanlex.provider." + provider.id()));
+                Component.translatable("screen.nyanlex.provider.google"));
     }
 
     private static Component chatDeliveryLabel(TranslatorConfig cfg) {

@@ -52,9 +52,9 @@ class SettingsModelTest {
         List<String> cardIds = ids(SettingsModel.allCards());
         assertEquals(cardIds.size(), new HashSet<>(cardIds).size(), "card ids are unique");
         // every entry once (a display surface's engine entry rides on its surface card), plus the one
-        // 全部項目 row, the privacy notice, the two 關於 cards (version, manual) and one FILE card per mod file
+        // 全部項目 row, the privacy notice, the fixed machine-source line, the two 關於 cards (version, manual) and one FILE card per mod file
         int surfaces = SettingsCatalog.rows(SettingsPage.DISPLAY).size();
-        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 1 + 1 + 2
+        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 1 + 1 + 2 + 1
                 + FileLocations.IDS.size(), cardIds.size());
         for (SettingEntry entry : SettingsCatalog.allEntries()) {
             if (entry.id().endsWith(".engine")) continue;

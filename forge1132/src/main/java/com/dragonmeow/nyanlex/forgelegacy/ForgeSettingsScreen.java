@@ -21,7 +21,9 @@ final class ForgeSettingsScreen extends GuiScreen implements ForgeButton.Handler
         addButton(new ForgeButton(6,x,110,310,20,I18n.format("screen.nyanlex.ai.title"),this));
         // Request cooldown + batch window merged into one submenu (was two half-width cyclers).
         addButton(new ForgeButton(7,x,130,310,20,I18n.format("config.nyanlex.request_cooldown.open"),this));
-        addButton(new ForgeButton(9,x,150,152,20,"Machine: "+LegacyConfig.normalizeMachineProvider(c.machineTranslationProvider),this));
+        ForgeButton machine=new ForgeButton(9,x,150,152,20,"Machine: Google (unofficial)",this);
+        machine.enabled=false; // Google is the only machine source
+        addButton(machine);
         addButton(new ForgeButton(10,x+158,150,152,20,"Debug HUD: "+(c.debugTranslationOverlay?"ON":"OFF"),this));
         addButton(new ForgeButton(11,x,170,310,20,chatDeliveryLabel(c),this));
         addButton(new ForgeButton(15,x,height-46,310,20,requestsToggleLabel(c),this));
@@ -63,16 +65,6 @@ final class ForgeSettingsScreen extends GuiScreen implements ForgeButton.Handler
         if(b.id==7){
             mc.displayGuiScreen(new ForgeCooldownScreen(this));
             return;
-        }
-        if(b.id==9){
-            String p=LegacyConfig.normalizeMachineProvider(c.machineTranslationProvider);
-            c.machineTranslationProvider="google".equals(p)?"deepl_api":"deepl_api".equals(p)?"microsoft_api":"google";
-            // Official APIs need the player's own key: ask for it right after the pick.
-            if(!"google".equals(c.machineTranslationProvider)){
-                NyanLexForge.save();
-                mc.displayGuiScreen(new ForgeMachineKeyScreen(this,c.machineTranslationProvider));
-                return;
-            }
         }
         if(b.id==10){
             c.debugTranslationOverlay=!c.debugTranslationOverlay;

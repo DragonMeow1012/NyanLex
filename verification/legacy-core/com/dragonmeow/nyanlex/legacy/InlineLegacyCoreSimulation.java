@@ -417,7 +417,6 @@ public final class InlineLegacyCoreSimulation {
                         @Override public void accept(String value) { oldDone.countDown(); }
                     });
             mutable.sourceLang = "fr";
-            mutable.machineTranslationProvider = "deepl";
             mutable.aiModel = "new-model";
             mutable.requestCooldownMs = 99;
             mutable.disableGoogleFallbackForAi = true;
@@ -508,7 +507,6 @@ public final class InlineLegacyCoreSimulation {
             check(strictApiFirst.await(10L, TimeUnit.SECONDS), "strict API seed timed out");
             int afterStrictApi = backendCalls.get();
             strictApi.sourceLang = "ja";
-            strictApi.machineTranslationProvider = "deepl";
             final CountDownLatch strictApiHit = new CountDownLatch(1);
             translator.translate("Strict API x2", "zh-TW", true, false, strictApi,
                     countDownConsumer(strictApiHit));
@@ -526,7 +524,6 @@ public final class InlineLegacyCoreSimulation {
             check(strictCodexFirst.await(10L, TimeUnit.SECONDS), "strict Codex seed timed out");
             int afterStrictCodex = backendCalls.get();
             strictCodex.sourceLang = "ko";
-            strictCodex.machineTranslationProvider = "microsoft";
             final CountDownLatch strictCodexHit = new CountDownLatch(1);
             translator.translate("Strict Codex x2", "zh-TW", true, false, strictCodex,
                     countDownConsumer(strictCodexHit));
@@ -547,7 +544,6 @@ public final class InlineLegacyCoreSimulation {
             check(fallbackFirst.await(10L, TimeUnit.SECONDS), "fallback AI seed timed out");
             int beforeFallbackChange = backendCalls.get();
             fallback.sourceLang = "fr";
-            fallback.machineTranslationProvider = "deepl";
             final CountDownLatch fallbackChanged = new CountDownLatch(1);
             translator.translate("Fallback AI x2", "zh-TW", true, false, fallback,
                     countDownConsumer(fallbackChanged));
@@ -1444,10 +1440,6 @@ public final class InlineLegacyCoreSimulation {
         changed.sourceLang = "en";
         check(!original.equals(LegacyChatRequestProfile.capture(changed, "zh-TW")),
                 "source-language change did not invalidate chat profile");
-        changed = base.snapshotForRequest();
-        changed.machineTranslationProvider = "deepl";
-        check(!original.equals(LegacyChatRequestProfile.capture(changed, "zh-TW")),
-                "machine provider change did not invalidate chat profile");
 
         LegacyConfig ai = base.snapshotForRequest();
         ai.aiEnabled = true;
@@ -1465,13 +1457,11 @@ public final class InlineLegacyCoreSimulation {
                 "AI fallback policy did not invalidate chat profile");
         LegacyConfig strictMachineChange = fallback.snapshotForRequest();
         strictMachineChange.sourceLang = "ja";
-        strictMachineChange.machineTranslationProvider = "deepl";
         check(strictAiProfile.equals(
                         LegacyChatRequestProfile.capture(strictMachineChange, "zh-TW")),
                 "strict AI profile included inactive machine settings");
         LegacyConfig fallbackMachineChange = ai.snapshotForRequest();
         fallbackMachineChange.sourceLang = "ja";
-        fallbackMachineChange.machineTranslationProvider = "deepl";
         check(!aiProfile.equals(
                         LegacyChatRequestProfile.capture(fallbackMachineChange, "zh-TW")),
                 "fallback-enabled AI profile omitted active machine settings");
@@ -1489,7 +1479,6 @@ public final class InlineLegacyCoreSimulation {
         LegacyChatRequestProfile strictCodexProfile =
                 LegacyChatRequestProfile.capture(strictCodex, "zh-TW");
         strictCodex.sourceLang = "fr";
-        strictCodex.machineTranslationProvider = "microsoft";
         check(strictCodexProfile.equals(
                         LegacyChatRequestProfile.capture(strictCodex, "zh-TW")),
                 "strict Codex profile included inactive machine settings");
@@ -2479,18 +2468,6 @@ public final class InlineLegacyCoreSimulation {
             client.close();
         }
 
-        Method providerRead = privateMethod(LegacyMachineProvider.class,
-                "read", HttpURLConnection.class, boolean.class);
-        HttpURLConnection connection = new SyntheticConnection(
-                new RepeatingInputStream(2_000_001));
-        try {
-            providerRead.invoke(null, connection, false);
-            throw new AssertionError("experimental provider accepted an oversize HTTP response");
-        } catch (InvocationTargetException expected) {
-            check(expected.getCause() instanceof Exception
-                            && expected.getCause().getMessage().contains("too large"),
-                    "experimental provider oversize failure was not bounded");
-        }
     }
 
     // ---------------------------------------------------------------------------------------

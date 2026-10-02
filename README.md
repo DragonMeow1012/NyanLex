@@ -13,8 +13,7 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 - Things that work without turning it on, and send nothing: translations already in your local cache, translation packs you downloaded by hand, the built-in glossary, and the vanilla text from the game's own language files.
 - Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
 - The text goes to the translation service you choose:
-  - **Google without a key** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.
-  - **DeepL and Microsoft Translator** use their **official APIs** and need your own API key.
+  - **Machine translation (Google, no key)** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.
   - **AI engines** (OpenAI-compatible endpoints, or ChatGPT/Codex sign-in) also need your own key or sign-in, and go only to the service you configure.
 - **API keys are stored only in the config file on your machine**, are sent only to the provider you chose, are masked in the settings screen, and are never written to logs or debug dumps.
 - Users upgrading from an earlier version keep their existing settings: if you were already translating, online translation stays on.
@@ -31,7 +30,7 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 
 - Translates chat, item names, tooltips, scoreboards, name tags, boss bars, titles, action bars, books, and mod screens.
 - Each surface can show original text, translated text, or both.
-- Supports Google machine translation (unofficial endpoint), DeepL and Microsoft Translator official APIs (your own key), and OpenAI-compatible APIs.
+- Supports Google machine translation (unofficial endpoint) and OpenAI-compatible APIs.
 - Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-5.6-terra` / `medium`.
 - Async batching, priority queues, disk caches, and failure backoff reduce stalls and duplicate requests.
 - Player names are masked only from the TAB list; ordinary item text such as `with Chest` is no longer guessed as a player name.
@@ -111,15 +110,13 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 
 | Source | API key | Notes |
 | --- | --- | --- |
-| Google | Not required | Default machine translation source. **Unofficial endpoint** that may be limited or stop working at any time. |
-| DeepL (official API) | Your own key | Free and Pro keys supported. The key stays in your local config. |
-| Microsoft Translator (official API) | Your own key + region | The key stays in your local config. |
+| Google | Not required | The only machine translation source. **Unofficial endpoint** that may be limited or stop working at any time. |
 | OpenAI-compatible API | Depends on service | Configurable Base URL, model, API key, glossary, and GT fallback. |
 | ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, effort, and token controls. |
 
 ## Sharing translations
 
-Use **Export translations** in Translation Settings. **1.0.5 supports automatic split exports and batch imports**: small exports produce one JSON file; larger exports produce `translations.part-0001.json`, `translations.part-0002.json`, and so on. Share the entire set. Your friend selects the same target language and machine provider, then uses Ctrl/Shift to select multiple JSON files in **Import translations**. Import merges valid missing entries, keeps existing translations, and makes no translation requests. Files contain translation rows only, without API keys, login credentials, or settings.
+Use **Export translations** in Translation Settings. **1.0.5 supports automatic split exports and batch imports**: small exports produce one JSON file; larger exports produce `translations.part-0001.json`, `translations.part-0002.json`, and so on. Share the entire set. Your friend selects the same target language, then uses Ctrl/Shift to select multiple JSON files in **Import translations**. Import merges valid missing entries, keeps existing translations, and makes no translation requests. Files contain translation rows only, without API keys, login credentials, or settings.
 
 Fabric 1.17.1+ and NeoForge share one compatible format. Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2 share the legacy format. Files cannot be imported across these two format families. Each part is limited to 32 MiB and 100,000 entries; this is **not a limit on the total export**, which splits automatically. Existing single-file exports remain compatible. For an older oversized JSON, re-export from the client holding the cached translations.
 

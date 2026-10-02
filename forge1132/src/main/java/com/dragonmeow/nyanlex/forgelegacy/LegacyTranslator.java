@@ -426,7 +426,6 @@ final class LegacyTranslator {
     private int totalWaiters;
     private final Map<String, FailureBackoff> failedUntil = boundedMap(MAX_FAILURE_BACKOFFS);
     private final Map<String, Long> keyUnavailableUntil = boundedMap(MAX_KEY_BACKOFFS);
-    private final LegacyMachineProvider officialProviders = new LegacyMachineProvider();
     private final AtomicInteger keyCursor = new AtomicInteger();
     private final List<DebugEntry> debug = Collections.synchronizedList(new ArrayList<DebugEntry>());
     private final Object dispatchLock = new Object();
@@ -1125,20 +1124,8 @@ final class LegacyTranslator {
     private List<String> requestMachineBatch(List<Pending> batch, String sourceLang,
                                              String target, String provider,
                                              int cooldown) throws Exception {
-        String selected = LegacyConfig.normalizeMachineProvider(provider);
-        if ("google".equals(selected)) {
-            // Keep the historical Google path byte-for-byte equivalent.
-            return requestGoogleBatch(batch, sourceLang, target, cooldown);
-        }
-        // Official-API sources always carry anchors, including a one-item batch. A
-        // malformed/error-shaped response therefore cannot be accepted as cache data.
-        TokenBatch tokens = encodeTemplateTokens(canonicalSources(batch));
-        BatchWire wire = buildBatchWire(tokens.texts);
-        pace(false, cooldown);
-        String translated = officialProviders.translate(
-                selected, wire.text, sourceLang, target, batch.get(0).config);
-        return tokens.decodeItems(splitBatchEncoded(
-                translated, batch.size(), wire.anchorBase, tokens.sentinels()));
+        // Google is the only machine source; keep its historical path unchanged.
+        return requestGoogleBatch(batch, sourceLang, target, cooldown);
     }
 
     private static List<String> canonicalSources(List<Pending> batch) {

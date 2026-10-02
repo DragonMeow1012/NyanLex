@@ -82,9 +82,6 @@ function Convert-Fabric1171Core {
         'translate\CodexAppServerClient.java' {
             return Replace-Expected -Content $Content -From 'JsonParser.parseString(' -To 'new JsonParser().parse(' -ExpectedCount 2 -Label $Relative
         }
-        'translate\OfficialApiTranslator.java' {
-            return Replace-Expected -Content $Content -From 'JsonParser.parseString(' -To 'new JsonParser().parse(' -ExpectedCount 2 -Label $Relative
-        }
         'service\ChatDeliveryQueue.java' {
             return Replace-Expected -Content $Content -From 'new IdentityHashMap<>()' -To 'new IdentityHashMap<T, Boolean>()' -ExpectedCount 1 -Label $Relative
         }

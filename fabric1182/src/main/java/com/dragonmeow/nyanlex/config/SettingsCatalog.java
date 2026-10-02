@@ -163,9 +163,6 @@ public final class SettingsCatalog {
 
         map.put(SettingsPage.AI, pairs(List.of(
                 sub(SettingsPage.AI, "ai", SettingAction.OPEN_AI, null),
-                sub(SettingsPage.AI, "provider", SettingAction.OPEN_PROVIDER,
-                        c -> StateText.of("screen.nyanlex.provider."
-                                + MachineTranslationProvider.fromId(c.machineTranslationProvider).id())),
                 // Stored inverted (disableGoogleFallbackForAi); shown as "on = fallback allowed".
                 toggle(SettingsPage.AI, "ai_fallback", c -> !c.disableGoogleFallbackForAi,
                         c -> onOff(!c.disableGoogleFallbackForAi),

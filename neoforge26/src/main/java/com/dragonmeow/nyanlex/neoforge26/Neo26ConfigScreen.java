@@ -76,9 +76,10 @@ public final class Neo26ConfigScreen extends Screen {
         this.addRenderableWidget(Button.builder(langLabel(cfg),
                         b -> this.minecraft.setScreenAndShow(new Neo26LanguageScreen(this)))
                 .bounds(left, y, rowWidth, 18).build());
-        this.addRenderableWidget(Button.builder(providerLabel(cfg),
-                        b -> this.minecraft.setScreenAndShow(new Neo26ProviderScreen(this)))
-                .bounds(right, y, rowWidth, 18).build());
+        var providerButton = Button.builder(providerLabel(cfg), b -> { })
+                .bounds(right, y, rowWidth, 18).build();
+        providerButton.active = false; // Google is the only machine source
+        this.addRenderableWidget(providerButton);
         y += step;
         // Row 1: debug overlay | request cooldown + batch window sub-screen.
         this.addRenderableWidget(Button.builder(debugLabel(cfg), b -> {
@@ -165,10 +166,8 @@ public final class Neo26ConfigScreen extends Screen {
     }
 
     private static Component providerLabel(TranslatorConfig cfg) {
-        MachineTranslationProvider provider = MachineTranslationProvider.fromId(
-                cfg.machineTranslationProvider);
         return Component.translatable("config.nyanlex.machine_provider",
-                Component.translatable("screen.nyanlex.provider." + provider.id()));
+                Component.translatable("screen.nyanlex.provider.google"));
     }
 
     private static Component chatDeliveryLabel(TranslatorConfig cfg) {

@@ -206,7 +206,6 @@ public final class TranslationConfigScreen extends Screen {
             case OPEN_KEYBINDS -> open(new TranslationKeybindScreen(this));
             case OPEN_MANUAL -> open(new TranslationManualScreen(this));
             case OPEN_AI -> open(new AiConfigScreen(this));
-            case OPEN_PROVIDER -> open(new TranslationMachineProviderScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new TranslationRequestsScreen(this));
             case OPEN_ITEM_WARMUP -> NyanLexFabric.openItemWarmupScreen(this);
             case HUB_DOWNLOAD -> NyanLexFabric.startHubIdentifyAndPlan(this);

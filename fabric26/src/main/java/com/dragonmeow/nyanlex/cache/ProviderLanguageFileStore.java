@@ -9,17 +9,16 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Language cache additionally partitioned by the selected machine provider.
- * Google deliberately keeps the historical filename; experimental providers use
- * their own sibling files, so switching never deletes or silently reuses another
- * provider's wording.
+ * Language cache for the machine-translation source. Google is the only source, so
+ * this always resolves to the historical filename; the partition logic is kept so an
+ * old config naming a removed source keeps reading the same file.
  */
 public final class ProviderLanguageFileStore implements PersistentStore {
     private final Path directory;
     private final String basePrefix;
     private final Supplier<String> provider;
     private final int maxEntries;
-    /** Normalized provider ids are a fixed four-value domain. */
+    /** Normalized provider ids are a fixed one-value domain. */
     private final Set<String> legacyMigrationConsidered = new HashSet<>();
     private volatile String language;
     private volatile ActivePartition active;

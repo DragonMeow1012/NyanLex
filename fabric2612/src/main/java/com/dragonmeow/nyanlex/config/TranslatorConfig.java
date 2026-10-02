@@ -105,17 +105,8 @@ public final class TranslatorConfig {
     /** Google source language. {@code auto} lets Google detect it. */
     public String sourceLang = "auto";
 
-    /** Machine source: google (unofficial key-free endpoint), deepl_api, or microsoft_api. */
+    /** Machine source: always google (unofficial key-free endpoint); other ids migrate to it on load. */
     public String machineTranslationProvider = MachineTranslationProvider.GOOGLE.id();
-
-    /** Player-supplied DeepL API key (official API). Stored locally only; never logged. */
-    public String deeplApiKey = "";
-
-    /** Player-supplied Microsoft Translator key (official API). Stored locally only. */
-    public String microsoftApiKey = "";
-
-    /** Azure region of the Microsoft Translator resource (e.g. {@code eastus}); may be empty. */
-    public String microsoftApiRegion = "";
 
     /**
      * Mask online player names before sending text to the translator, so names are
@@ -278,7 +269,7 @@ public final class TranslatorConfig {
 
     /**
      * Set by {@link #normalized()} when a loaded file selected a web endpoint this build no
-     * longer supports (youdao / deepl web / microsoft web); the source was reset to Google.
+     * longer supports (youdao, deepl, microsoft, bing, deepl_api, microsoft_api ...); the source was reset to Google.
      * Not persisted. Loaders log it once via {@link #takeRetiredProviderReset()}.
      */
     private transient String retiredProviderReset;
@@ -300,8 +291,6 @@ public final class TranslatorConfig {
                 for (String part : joined.split("[,\\s]+")) if (!part.isBlank()) out.add(part);
             }
         }
-        if (deeplApiKey != null && !deeplApiKey.isBlank()) out.add(deeplApiKey.strip());
-        if (microsoftApiKey != null && !microsoftApiKey.isBlank()) out.add(microsoftApiKey.strip());
         return out;
     }
 
@@ -313,9 +302,6 @@ public final class TranslatorConfig {
             retiredProviderReset = machineTranslationProvider.strip();
         }
         machineTranslationProvider = MachineTranslationProvider.normalize(machineTranslationProvider);
-        if (deeplApiKey == null) deeplApiKey = "";
-        if (microsoftApiKey == null) microsoftApiKey = "";
-        if (microsoftApiRegion == null) microsoftApiRegion = "";
         if (chatMode == null) chatMode = DisplayMode.BOTH;
         if (tooltipMode == null) tooltipMode = DisplayMode.TRANSLATION;
         if (scoreboardMode == null) scoreboardMode = DisplayMode.TRANSLATION;

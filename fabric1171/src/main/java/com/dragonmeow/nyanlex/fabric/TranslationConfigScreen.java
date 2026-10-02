@@ -74,10 +74,11 @@ public final class TranslationConfigScreen extends Screen {
         this.addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(langLabel(cfg),
                         b -> this.minecraft.setScreen(new TranslationLanguageScreen(this)))
                 .bounds(left, y, rowWidth, 20).build());
-        this.addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(
-                        machineProviderLabel(cfg),
-                        b -> this.minecraft.setScreen(new TranslationMachineProviderScreen(this)))
-                .bounds(right, y, rowWidth, 20).build());
+        var providerButton = com.dragonmeow.nyanlex.fabric.LegacyButton.builder(
+                        machineProviderLabel(cfg), b -> { })
+                .bounds(right, y, rowWidth, 20).build();
+        providerButton.active = false; // Google is the only machine source
+        this.addRenderableWidget(providerButton);
         y += 22;
         // Row 1: debug overlay | request cooldown + batch window sub-screen.
         this.addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(debugLabel(cfg), b -> {
@@ -165,11 +166,9 @@ public final class TranslationConfigScreen extends Screen {
     }
 
     private static Component machineProviderLabel(TranslatorConfig cfg) {
-        MachineTranslationProvider provider = MachineTranslationProvider.fromId(
-                cfg.machineTranslationProvider);
         return new net.minecraft.network.chat.TranslatableComponent(
                 "config.nyanlex.machine_provider",
-                TranslationMachineProviderScreen.providerLabel(provider));
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.provider.google"));
     }
 
     private static Component chatDeliveryLabel(TranslatorConfig cfg) {

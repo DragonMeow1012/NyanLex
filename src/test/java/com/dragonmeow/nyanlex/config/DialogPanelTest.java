@@ -138,12 +138,11 @@ class DialogPanelTest {
         assertTrue(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
         assertEquals("AI（gemini-test）", DialogContent.engineName(cfg, true, tw));
         assertEquals(1, countOf(DialogContent.engineName(cfg, false, tw), "非官方端點"), "marked once, not twice");
-        cfg.machineTranslationProvider = "deepl_api";
-        assertTrue(DialogContent.engineName(cfg, false, tw).contains("DeepL（官方 API"));
-        assertFalse(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
-        cfg.machineTranslationProvider = "microsoft_api";
-        assertTrue(DialogContent.engineName(cfg, false, tw).contains("Microsoft Translator（官方 API"));
-        assertFalse(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
+        for (String old : new String[] {"deepl_api", "microsoft_api", "youdao"}) {
+            // a stale id from an old config still resolves to the one Google label
+            cfg.machineTranslationProvider = old;
+            assertEquals(1, countOf(DialogContent.engineName(cfg, false, tw), "非官方端點"), old);
+        }
         cfg.machineTranslationProvider = "google";
 
         DialogPanel p = new DialogPanel(DialogPanelTest::width);

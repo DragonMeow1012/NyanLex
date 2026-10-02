@@ -49,7 +49,7 @@ class SettingsCatalogTest {
         assertEquals(3, SettingsCatalog.entries(SettingsPage.GENERAL).size());
         assertEquals(18, SettingsCatalog.entries(SettingsPage.DISPLAY).size());
         assertEquals(9, SettingsCatalog.rows(SettingsPage.DISPLAY).size());
-        assertEquals(3, SettingsCatalog.entries(SettingsPage.AI).size());
+        assertEquals(2, SettingsCatalog.entries(SettingsPage.AI).size());
         assertEquals(6, SettingsCatalog.entries(SettingsPage.REQUESTS).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.HUB).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
@@ -200,7 +200,7 @@ class SettingsCatalogTest {
     }
 
     @Test
-    void languageAndProviderStates() {
+    void languageStateAndFixedProviderLine() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.followGameLanguage = true;
         cfg.targetLang = "zh-TW";
@@ -212,8 +212,9 @@ class SettingsCatalogTest {
         assertTrue(fixed.isLiteral());
         assertEquals("zh-TW", fixed.literalText());
 
-        cfg.machineTranslationProvider = "deepl_api";
-        assertEquals("screen.nyanlex.provider.deepl_api", SettingsCatalog.byId("provider").state(cfg).key());
+        // Google is the only machine source: no picker entry, a fixed info card instead.
+        assertNull(SettingsCatalog.byId("provider"));
+        assertEquals(SettingCard.Kind.INFO, SettingsModel.byId(SettingsModel.PROVIDER_INFO_ID).kind());
     }
 
     @Test

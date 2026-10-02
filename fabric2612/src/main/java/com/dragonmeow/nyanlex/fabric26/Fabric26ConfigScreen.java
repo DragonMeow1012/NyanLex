@@ -209,7 +209,6 @@ public final class Fabric26ConfigScreen extends Screen {
             case OPEN_KEYBINDS -> open(new Fabric26KeybindScreen(this));
             case OPEN_MANUAL -> open(new Fabric26ManualScreen(this));
             case OPEN_AI -> open(new Fabric26AiScreen(this));
-            case OPEN_PROVIDER -> open(new Fabric26ProviderScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new Fabric26RequestsScreen(this));
             case OPEN_ITEM_WARMUP -> NyanLexFabric26.openItemWarmupScreen(this);
             case HUB_DOWNLOAD -> NyanLexFabric26.startHubIdentifyAndPlan(this);

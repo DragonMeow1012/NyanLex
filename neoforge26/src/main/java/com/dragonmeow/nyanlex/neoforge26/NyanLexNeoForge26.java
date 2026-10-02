@@ -898,8 +898,7 @@ public final class NyanLexNeoForge26 {
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(
                 transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
-                new RequestPacer(() -> config.requestCooldownMs),
-                () -> config);
+                new RequestPacer(() -> config.requestCooldownMs));
         OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
@@ -1994,7 +1993,6 @@ public final class NyanLexNeoForge26 {
         
             if (screen instanceof Neo26ConfigScreen || screen instanceof Neo26AiScreen
                     || screen instanceof Neo26KeybindScreen || screen instanceof Neo26LanguageScreen
-                    || screen instanceof Neo26ProviderScreen
                     || screen instanceof Neo26RequestsScreen
                     || screen instanceof Neo26CodexModelScreen || screen instanceof Neo26CodexEffortScreen) return;
             // Keys typed into a text input (chat, signs, books, search boxes) are text, not hotkeys.

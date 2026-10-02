@@ -1235,8 +1235,7 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(transport,
                 () -> config.sourceLang,
                 () -> config.machineTranslationProvider,
-                new RequestPacer(() -> config.requestCooldownMs),
-                () -> config);
+                new RequestPacer(() -> config.requestCooldownMs));
         OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
@@ -2223,7 +2222,6 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         
         if (screen instanceof Fabric26ConfigScreen || screen instanceof Fabric26AiScreen
                 || screen instanceof Fabric26KeybindScreen || screen instanceof Fabric26LanguageScreen
-                || screen instanceof Fabric26ProviderScreen
                 || screen instanceof Fabric26RequestsScreen
                 || screen instanceof Fabric26CodexModelScreen || screen instanceof Fabric26CodexEffortScreen) return;
         // Keys typed into a text input (chat, signs, books, search boxes) are text, not hotkeys.

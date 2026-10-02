@@ -984,8 +984,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(
                 transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
-                new RequestPacer(() -> config.requestCooldownMs),
-                () -> config);
+                new RequestPacer(() -> config.requestCooldownMs));
         OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));

@@ -49,8 +49,10 @@ final class LegacySettingsScreen extends Screen {
         addButton(new Button(width / 2 - 155, 130, 310, 20,
                 new TranslatableComponent("config.nyanlex.request_cooldown.open"),
                 button -> minecraft.setScreen(new LegacyCooldownScreen(this))));
-        addButton(new Button(width / 2 - 155, 150, 310, 20, providerLabel(cfg),
-                button -> minecraft.setScreen(new LegacyProviderScreen(this))));
+        Button providerButton = new Button(width / 2 - 155, 150, 310, 20, providerLabel(cfg),
+                button -> { });
+        providerButton.active = false; // Google is the only machine source
+        addButton(providerButton);
         addButton(new Button(width / 2 - 155, 170, 152, 20,
                 new TranslatableComponent("config.nyanlex.debug.short",
                         cfg.debugTranslationOverlay ? "ON" : "OFF"),
@@ -105,9 +107,8 @@ final class LegacySettingsScreen extends Screen {
     }
 
     private static Component providerLabel(LegacyConfig cfg) {
-        String provider = LegacyConfig.normalizeMachineProvider(cfg.machineTranslationProvider);
         return new TranslatableComponent("config.nyanlex.provider",
-                new TranslatableComponent("screen.nyanlex.provider." + provider));
+                new TranslatableComponent("screen.nyanlex.provider.google"));
     }
 
     private static Component chatDeliveryLabel(LegacyConfig cfg) {

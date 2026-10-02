@@ -10,7 +10,6 @@ public enum SettingAction {
     /** Opens the stand-alone manual screen (說明書). */
     OPEN_MANUAL,
     OPEN_AI,
-    OPEN_PROVIDER,
     OPEN_DO_NOT_TRANSLATE,
     /** Opens the "warm every item" screen; the glue reports it unavailable until wired. */
     OPEN_ITEM_WARMUP,

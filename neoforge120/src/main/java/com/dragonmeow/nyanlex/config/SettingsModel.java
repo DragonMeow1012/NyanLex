@@ -22,6 +22,10 @@ public final class SettingsModel {
     public static final String KEY_PRIVACY_TITLE = "nyanlex.ui.privacy.title";
     public static final String KEY_PRIVACY_BODY = "nyanlex.ui.privacy.body";
     public static final String PRIVACY_ID = "privacy";
+    /** AI and machine: the fixed "machine source: Google (unofficial endpoint)" line. */
+    public static final String PROVIDER_INFO_ID = "provider_info";
+    public static final String KEY_PROVIDER_FIXED = "nyanlex.settings.provider";
+    public static final String KEY_PROVIDER_FIXED_DESC = "screen.nyanlex.provider.unofficial_warning";
     public static final String KEY_ENGINE_LABEL = "nyanlex.settings.engine";
     public static final String KEY_MODE = "nyanlex.ui.mode";
     public static final String KEY_MODE_TIP = "nyanlex.ui.mode.tip";
@@ -181,7 +185,8 @@ public final class SettingsModel {
                 KEY_ABOUT_TITLE, KEY_ABOUT_VERSION, KEY_WARMUP_START,
                 KEY_WARMUP_DETAILS, KEY_WARMUP_IDLE, KEY_WARMUP_HUD_RUNNING, KEY_WARMUP_HUD_PAUSED,
                 KEY_WARMUP_HUD_DONE, KEY_WARMUP_RESUMED, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING,
-                KEY_FILES_GROUP, KEY_FILES_GROUP_DESC));
+                KEY_FILES_GROUP, KEY_FILES_GROUP_DESC,
+                KEY_PROVIDER_FIXED, KEY_PROVIDER_FIXED_DESC));
         keys.addAll(DialogContent.allLangKeys());
         for (int i = 1; i <= MANUAL_SECTIONS; i++) {
             keys.add(manualTitleKey(i));
@@ -227,6 +232,11 @@ public final class SettingsModel {
             } else {
                 for (SettingEntry entry : SettingsCatalog.entries(category.page())) {
                     nodes.add(new Node(card(entry, category), null));
+                    if (category == SettingsCategory.AI && entry.id().equals("ai")) {
+                        // Google is the only machine source: a fixed line, not a picker.
+                        nodes.add(new Node(new SettingCard(PROVIDER_INFO_ID, SettingCard.Kind.INFO, category, null,
+                                KEY_PROVIDER_FIXED, KEY_PROVIDER_FIXED_DESC, null, null), null));
+                    }
                 }
             }
             if (category == SettingsCategory.ADVANCED) nodes.add(new Node(null, filesGroup()));

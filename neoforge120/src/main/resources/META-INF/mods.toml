@@ -10,7 +10,7 @@ logoFile="icon.png"
 modId = "nyanlex"
 version = "${version}"
 displayName = "NyanLex Translator"
-description = "Client-side translation into multiple target languages with OpenAI-compatible AI or machine translation (an unofficial Google endpoint, or your own DeepL / Microsoft Translator API key). Unofficial: not affiliated with or endorsed by Mojang, Microsoft, Hypixel or any mod author."
+description = "Client-side translation into multiple target languages with OpenAI-compatible AI or machine translation (an unofficial Google endpoint). Unofficial: not affiliated with or endorsed by Mojang, Microsoft, Hypixel or any mod author."
 authors = "DragonMeow"
 displayTest = "IGNORE_ALL_VERSION"
 
