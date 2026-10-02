@@ -145,7 +145,6 @@ public final class Neo26ConfigScreen extends Screen {
                 case RESUME -> driver.resume();
                 case STOP -> {
                     driver.stop();
-                    NyanLexNeoForge26.config().itemWarmupEnabled = false;
                     NyanLexNeoForge26.saveConfig();
                 }
             }

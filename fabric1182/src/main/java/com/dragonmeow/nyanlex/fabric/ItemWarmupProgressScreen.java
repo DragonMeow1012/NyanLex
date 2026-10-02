@@ -33,7 +33,6 @@ public final class ItemWarmupProgressScreen extends Screen {
         stopButton = this.addRenderableWidget(LegacyButton.builder(
                 new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.warmup.stop"), b -> {
                     NyanLexFabric.itemWarmupDriver().stop();
-                    NyanLexFabric.config().itemWarmupEnabled = false;
                     NyanLexFabric.saveConfig();
                 }).bounds(centerX - 60, y, 120, 20).build());
         this.addRenderableWidget(LegacyButton.builder(
@@ -44,7 +43,7 @@ public final class ItemWarmupProgressScreen extends Screen {
     private void togglePause() {
         ItemWarmupDriver d = NyanLexFabric.itemWarmupDriver();
         ItemWarmupDriver.Progress p = d.progress();
-        if (p.state() == ItemWarmupDriver.State.PAUSED && p.pauseReason() == ItemWarmupDriver.PauseReason.USER) {
+        if (p.state() == ItemWarmupDriver.State.PAUSED && p.pauseReason() != ItemWarmupDriver.PauseReason.RATE_LIMITED) {
             d.resume();
         } else if (p.state() == ItemWarmupDriver.State.RUNNING) {
             d.pause();
@@ -61,7 +60,7 @@ public final class ItemWarmupProgressScreen extends Screen {
         GuiComponent.drawCenteredString(g, this.font, this.title, centerX, 12, 0xFFFFFFFF);
 
         boolean userPaused = p.state() == ItemWarmupDriver.State.PAUSED
-                && p.pauseReason() == ItemWarmupDriver.PauseReason.USER;
+                && p.pauseReason() != ItemWarmupDriver.PauseReason.RATE_LIMITED;
         pauseButton.setMessage(new net.minecraft.network.chat.TranslatableComponent(
                 userPaused ? "screen.nyanlex.warmup.resume" : "screen.nyanlex.warmup.pause"));
         pauseButton.active = p.state() == ItemWarmupDriver.State.RUNNING || userPaused;

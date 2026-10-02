@@ -890,14 +890,15 @@ class SettingsPanelTest {
         click(p, p.warmButtonBounds(0));
         assertEquals(List.of(WarmupCommand.RESUME), host.commands);
 
-        // automatic pause (left the world): no resume button, reason shown
+        // paused for a reason of its own (no world): it does not lift by itself, so the card
+        // offers Continue and shows the reason
         host.commands.clear();
         host.warm = new WarmupStatus(true, ItemWarmupDriver.State.PAUSED, ItemWarmupDriver.PauseReason.NO_WORLD, 120, 400, 30, false);
         Rec c2 = new Rec();
         p.render(c2, -1, -1);
         assertTrue(c2.texts.stream().anyMatch(t -> t.s().contains("尚未進入世界")));
-        click(p, p.warmButtonBounds(0)); // pause button, disabled while not running
-        assertTrue(host.commands.isEmpty());
+        click(p, p.warmButtonBounds(0));
+        assertEquals(List.of(WarmupCommand.RESUME), host.commands);
     }
 
     @Test
@@ -1165,6 +1166,53 @@ class SettingsPanelTest {
             long states = c.texts.stream().map(Text::s)
                     .filter(t -> t.equals("開") || t.equals("關") || t.equals("依序") || t.equals("先到先顯示")).count();
             assertTrue(switches > 0 && states >= switches, cat + ": " + switches + " switches, " + states + " states");
+        }
+    }
+
+    @Test
+    void anUnfinishedRunShowsWhereItStoppedAndAContinueButtonButNothingStartsByItself() {
+        for (String code : new String[] {"zh_tw", "en_us"}) {
+            FakeHost host = new FakeHost();
+            host.lang = code;
+            SettingsPanel p = panel(host, 427, 240);
+            p.setCategory(SettingsCategory.MINE);
+            host.warm = new WarmupStatus(true, ItemWarmupDriver.State.STOPPED, ItemWarmupDriver.PauseReason.NONE,
+                    120, 400, 30, false, 20, 0, -1, false, 700, 1332, true, 0);
+            p.invalidate();
+            Rec c = new Rec();
+            p.render(c, -1, -1);
+            String joined = String.join("", c.texts.stream().map(t -> t.s().replace(" ", "")).toList());
+            assertTrue(joined.contains("700/1332"), code + ": where it stopped: " + joined);
+            assertEquals(List.of(), host.commands, code + ": the card never starts anything by drawing itself");
+            // the button is Continue (a START command: it opens the confirm card, the player presses again)
+            assertTrue(c.texts.stream().anyMatch(t -> t.s().equals(host.text(SettingsModel.KEY_WARMUP_CONTINUE))), code);
+            assertFalse(c.texts.stream().anyMatch(t -> t.s().equals(host.text(SettingsModel.KEY_WARMUP_START))), code);
+            click(p, p.warmButtonBounds(0));
+            assertEquals(List.of(WarmupCommand.START), host.commands, code);
+        }
+    }
+
+    @Test
+    void theCardSaysHowManyItemsNeedAWorldAndHowToGetThem() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 427, 240);
+        p.setCategory(SettingsCategory.MINE);
+        host.warm = new WarmupStatus(true, ItemWarmupDriver.State.DONE, ItemWarmupDriver.PauseReason.NONE,
+                400, 400, 30, false, 30, 0, -1, false, 400, 400, false, 12);
+        p.invalidate();
+        Rec c = new Rec();
+        p.render(c, -1, -1);
+        String all = String.join("", c.texts.stream().map(t -> t.s().replace(" ", "")).toList());
+        assertTrue(all.contains("12個物品需要進入世界後才能翻譯"), all);
+        assertTrue(all.contains("可以再按一次「開始」"), all);
+    }
+
+    @Test
+    void everyPauseButARateLimitWaitsForTheContinueButton() {
+        for (ItemWarmupDriver.PauseReason reason : ItemWarmupDriver.PauseReason.values()) {
+            if (reason == ItemWarmupDriver.PauseReason.NONE) continue;
+            WarmupStatus paused = new WarmupStatus(true, ItemWarmupDriver.State.PAUSED, reason, 120, 400, 30, false);
+            assertEquals(reason != ItemWarmupDriver.PauseReason.RATE_LIMITED, paused.canResume(), reason.name());
         }
     }
 }

@@ -33,9 +33,15 @@ import java.util.function.Supplier;
  * {@value #YIELD_CAP_MS} ms of uninterrupted yielding so a busy surface cannot starve the
  * run forever.</p>
  *
- * <p>Before every dispatch it re-checks the master switch, the engine, the world and the
- * shared 429 gate; any of them failing pauses the run (auto-resumes when it clears).
- * Progress is "already cached": a restart skips what is done without any cursor.</p>
+ * <p><b>Only the player starts it.</b> A run begins when the player presses Start or Continue
+ * ({@link #start}) and never by itself: not at launch, not when a world loads, not after the
+ * previous run ended. Before every dispatch the run re-checks the master switch, the engine, the
+ * source and the shared 429 gate; any of them failing pauses it. Only a 429 pause lifts by itself
+ * when the gate reopens (the same run the player started); every other pause, the player's own
+ * included, waits for the player to press Continue ({@link #resume}).
+ * Progress is "already cached": a later Start or Continue skips what is done without any cursor.
+ * Where the last run stopped is kept in the config ({@code itemWarmupLast*}) so the card can offer
+ * "Continue".</p>
  */
 public final class ItemWarmupDriver {
     /** Safety net only: the character budget decides the batch size. */
@@ -74,13 +80,19 @@ public final class ItemWarmupDriver {
      * @param yielding         dispatch is held back for an interactive translation
      * @param itemsPerMinute   recent throughput of finished items, {@code 0} while unknown
      * @param etaMinutes       estimated minutes left, {@code -1} while unknown
+     * @param lastScanned      where the last run stopped (items looked at), from the config
+     * @param lastTotal        items in the registry at that time
+     * @param resumable        no run is active and the last one did not finish: the card offers Continue
+     * @param needsWorldItems  items skipped only because the run had no world (translate them by
+     *                         pressing Start again inside a world), {@code 0} when none
      */
     public record Progress(State state, PauseReason pauseReason, int scanned, int totalItems,
                            int skippedCached, int submittedItems, int sessionLimit,
                            boolean limitReached, int skippedFailed,
                            int translatedItems, int failedItems, int skippedNative,
                            int inflightRequests, int concurrency, boolean yielding,
-                           int itemsPerMinute, int etaMinutes) {
+                           int itemsPerMinute, int etaMinutes,
+                           int lastScanned, int lastTotal, boolean resumable, int needsWorldItems) {
     }
 
     /** One request in flight. */
@@ -101,6 +113,11 @@ public final class ItemWarmupDriver {
     private final Supplier<TranslatorConfig> config;
     private final LongSupplier clock;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
+    /** Saves the config (the loader's own save); called at most every {@value #SAVE_EVERY_MS} ms while running. */
+    private volatile Runnable progressSaver = () -> { };
+    private static final long SAVE_EVERY_MS = 15_000L;
+    private long lastSavedAt = Long.MIN_VALUE;
+    private boolean startedInWorld = true;
 
     private State state = State.IDLE;
     private PauseReason pauseReason = PauseReason.NONE;
@@ -147,16 +164,34 @@ public final class ItemWarmupDriver {
         listeners.remove(listener);
     }
 
+    /** The loader's config save, used to keep where the run stopped across launches. */
+    public void setProgressSaver(Runnable saver) {
+        progressSaver = saver == null ? () -> { } : saver;
+    }
+
     /** Whether {@link #start()} would be accepted right now. */
     public synchronized boolean canStart() {
         TranslatorConfig cfg = config.get();
-        return cfg != null && cfg.itemWarmupEnabled && backend.isAiEngine()
-                && state != State.RUNNING && state != State.PAUSED;
+        return cfg != null && backend.isAiEngine() && state != State.RUNNING && state != State.PAUSED;
     }
 
-    /** Start (or restart) a run. A per-launch item budget, if configured, is shared across runs. */
+    /** Start (or restart) a run the player asked for; see {@link #start(boolean)}. */
     public synchronized boolean start() {
+        return start(true);
+    }
+
+    /**
+     * Start (or restart) a run. This is only ever called by a player action (the Start / Continue
+     * button, after the consent box when online translation is off): nothing in the core or the
+     * loaders starts a run by itself. A per-launch item budget, if configured, is shared across runs.
+     *
+     * @param inWorld whether a world is loaded: items whose tooltip cannot be built without one are
+     *                skipped and counted, and the card then tells the player to press Start again
+     *                inside a world
+     */
+    public synchronized boolean start(boolean inWorld) {
         if (!canStart()) return false;
+        startedInWorld = inWorld;
         source.reset();
         state = State.RUNNING;
         pauseReason = PauseReason.NONE;
@@ -214,23 +249,32 @@ public final class ItemWarmupDriver {
         TranslatorConfig cfg = config.get();
         int limit = cfg == null ? 0 : Math.max(0, cfg.itemWarmupMaxItemsPerSession);
         int rate = itemsPerMinute();
+        boolean active = state == State.RUNNING || state == State.PAUSED;
+        int lastScanned = cfg == null ? 0 : cfg.itemWarmupLastScanned;
+        int lastTotal = cfg == null ? 0 : cfg.itemWarmupLastTotal;
+        boolean resumable = !active && cfg != null && cfg.itemWarmupLastTotal > 0
+                && !cfg.itemWarmupLastFinished;
+        int needsWorld = active ? (startedInWorld ? 0 : skippedFailed)
+                : cfg != null && cfg.itemWarmupLastNeedsWorld ? cfg.itemWarmupLastSkipped : 0;
         return new Progress(state, pauseReason, scanned, source.totalItemCount(), skippedCached,
                 submitted, limit, limitReached, skippedFailed, translated, failedItems,
                 skippedNative, inflight.size(), effectiveConcurrency(), yielding, rate,
-                etaMinutes(rate));
+                etaMinutes(rate), lastScanned, lastTotal, resumable, needsWorld);
     }
 
     /** One client tick. Cheap when nothing is due. */
     public synchronized void tick() {
         if (state != State.RUNNING && state != State.PAUSED) return;
         TranslatorConfig cfg = config.get();
-        if (cfg == null || !cfg.itemWarmupEnabled) {
+        if (cfg == null) {
             stop();
             return;
         }
         long now = clock.getAsLong();
         settleFinished(now);
-        if (state == State.PAUSED && pauseReason == PauseReason.USER) return;
+        // A pause lifts by itself only for a 429 (the gate reopening: the same run the player
+        // started). The player's own pause, and a pause for any other reason, wait for Continue.
+        if (state == State.PAUSED && pauseReason != PauseReason.RATE_LIMITED) return;
         PauseReason blocker = blocker();
         if (blocker != PauseReason.NONE) {
             if (blocker == PauseReason.RATE_LIMITED) {
@@ -490,6 +534,35 @@ public final class ItemWarmupDriver {
     }
 
     private void notifyChanged() {
+        rememberProgress();
         for (Listener l : listeners) l.onChanged(this);
+    }
+
+    /** Keeps where this run stands in the config so a later launch can offer Continue. */
+    private void rememberProgress() {
+        TranslatorConfig cfg = config.get();
+        if (cfg == null) return;
+        boolean finished = state == State.DONE && !limitReached;
+        int total = source.totalItemCount();
+        boolean needsWorld = !startedInWorld && skippedFailed > 0;
+        boolean changed = cfg.itemWarmupLastScanned != scanned || cfg.itemWarmupLastTotal != total
+                || cfg.itemWarmupLastFinished != finished || cfg.itemWarmupLastSkipped != skippedFailed
+                || cfg.itemWarmupLastNeedsWorld != needsWorld;
+        if (!changed) return;
+        cfg.itemWarmupLastScanned = scanned;
+        cfg.itemWarmupLastTotal = total;
+        cfg.itemWarmupLastFinished = finished;
+        cfg.itemWarmupLastSkipped = skippedFailed;
+        cfg.itemWarmupLastNeedsWorld = needsWorld;
+        long now = clock.getAsLong();
+        boolean terminal = state != State.RUNNING;
+        if (terminal || lastSavedAt == Long.MIN_VALUE || now - lastSavedAt >= SAVE_EVERY_MS) {
+            lastSavedAt = now;
+            try {
+                progressSaver.run();
+            } catch (RuntimeException ignored) {
+                // a loader save failure must never break the client tick
+            }
+        }
     }
 }

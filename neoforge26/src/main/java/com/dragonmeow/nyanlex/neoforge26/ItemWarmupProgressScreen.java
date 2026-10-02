@@ -32,7 +32,6 @@ public final class ItemWarmupProgressScreen extends Screen {
         stopButton = this.addRenderableWidget(Button.builder(
                 Component.translatable("screen.nyanlex.warmup.stop"), b -> {
                     NyanLexNeoForge26.itemWarmupDriver().stop();
-                    NyanLexNeoForge26.config().itemWarmupEnabled = false;
                     NyanLexNeoForge26.saveConfig();
                 }).bounds(centerX - 60, y, 120, 20).build());
         this.addRenderableWidget(Button.builder(
@@ -43,7 +42,7 @@ public final class ItemWarmupProgressScreen extends Screen {
     private void togglePause() {
         ItemWarmupDriver d = NyanLexNeoForge26.itemWarmupDriver();
         ItemWarmupDriver.Progress p = d.progress();
-        if (p.state() == ItemWarmupDriver.State.PAUSED && p.pauseReason() == ItemWarmupDriver.PauseReason.USER) {
+        if (p.state() == ItemWarmupDriver.State.PAUSED && p.pauseReason() != ItemWarmupDriver.PauseReason.RATE_LIMITED) {
             d.resume();
         } else if (p.state() == ItemWarmupDriver.State.RUNNING) {
             d.pause();
@@ -59,7 +58,7 @@ public final class ItemWarmupProgressScreen extends Screen {
         g.centeredText(this.font, this.title, centerX, 12, 0xFFFFFFFF);
 
         boolean userPaused = p.state() == ItemWarmupDriver.State.PAUSED
-                && p.pauseReason() == ItemWarmupDriver.PauseReason.USER;
+                && p.pauseReason() != ItemWarmupDriver.PauseReason.RATE_LIMITED;
         pauseButton.setMessage(Component.translatable(
                 userPaused ? "screen.nyanlex.warmup.resume" : "screen.nyanlex.warmup.pause"));
         pauseButton.active = p.state() == ItemWarmupDriver.State.RUNNING || userPaused;

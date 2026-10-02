@@ -11,7 +11,8 @@ import com.dragonmeow.nyanlex.warmup.ItemWarmupDriver;
 public record WarmupStatus(boolean available, ItemWarmupDriver.State state,
                            ItemWarmupDriver.PauseReason reason, int scanned, int total,
                            int submitted, boolean limitReached, int translated,
-                           int itemsPerMinute, int etaMinutes, boolean yielding) {
+                           int itemsPerMinute, int etaMinutes, boolean yielding,
+                           int lastScanned, int lastTotal, boolean resumable, int needsWorldItems) {
 
     public static final WarmupStatus UNAVAILABLE = new WarmupStatus(false,
             ItemWarmupDriver.State.IDLE, ItemWarmupDriver.PauseReason.NONE, 0, 0, 0, false);
@@ -23,11 +24,21 @@ public record WarmupStatus(boolean available, ItemWarmupDriver.State state,
         this(available, state, reason, scanned, total, submitted, limitReached, 0, 0, -1, false);
     }
 
+    /** Without any record of an earlier run. */
+    public WarmupStatus(boolean available, ItemWarmupDriver.State state,
+                        ItemWarmupDriver.PauseReason reason, int scanned, int total,
+                        int submitted, boolean limitReached, int translated,
+                        int itemsPerMinute, int etaMinutes, boolean yielding) {
+        this(available, state, reason, scanned, total, submitted, limitReached, translated,
+                itemsPerMinute, etaMinutes, yielding, 0, 0, false, 0);
+    }
+
     /** From the driver's progress; {@code available} is whether a run could start now. */
     public static WarmupStatus of(boolean available, ItemWarmupDriver.Progress p) {
         return new WarmupStatus(available, p.state(), p.pauseReason(), p.scanned(),
                 p.totalItems(), p.submittedItems(), p.limitReached(), p.translatedItems(),
-                p.itemsPerMinute(), p.etaMinutes(), p.yielding());
+                p.itemsPerMinute(), p.etaMinutes(), p.yielding(), p.lastScanned(), p.lastTotal(),
+                p.resumable(), p.needsWorldItems());
     }
 
     public boolean active() {
@@ -36,6 +47,14 @@ public record WarmupStatus(boolean available, ItemWarmupDriver.State state,
 
     public boolean userPaused() {
         return state == ItemWarmupDriver.State.PAUSED && reason == ItemWarmupDriver.PauseReason.USER;
+    }
+
+    /**
+     * Paused and waiting for the player: every pause but a 429 (which lifts by itself when the
+     * gate reopens) is resumed only by pressing Continue.
+     */
+    public boolean canResume() {
+        return state == ItemWarmupDriver.State.PAUSED && reason != ItemWarmupDriver.PauseReason.RATE_LIMITED;
     }
 
     /** Scan fraction 0..1 (1 when finished without hitting the per-launch limit). */

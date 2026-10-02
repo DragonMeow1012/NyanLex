@@ -28,13 +28,23 @@ public final class WarmupConfirmDialog {
     /** Scanner progress: items looked at, items to look at, items whose tooltip could not be built. */
     public record Scan(int scanned, int total, int failed) {}
 
+    /** Where the last run stopped, when it did not finish: the card then offers Continue instead of Start. */
+    public record Last(boolean resumable, int scanned, int total) {
+        public static final Last NONE = new Last(false, 0, 0);
+
+        public static Last of(com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.Progress p) {
+            return p == null ? NONE : new Last(p.resumable(), p.lastScanned(), p.lastTotal());
+        }
+    }
+
     /** Every lang key the card uses (for the lang-file test). */
     public static List<String> allLangKeys() {
         List<String> keys = new ArrayList<>(List.of("screen.nyanlex.warmup.title",
                 "screen.nyanlex.warmup.unavailable.engine", "screen.nyanlex.warmup.scanning",
                 "screen.nyanlex.warmup.summary", "screen.nyanlex.warmup.skipped",
                 "screen.nyanlex.warmup.skipped.world", "screen.nyanlex.warmup.nothing",
-                "screen.nyanlex.warmup.estimate", "screen.nyanlex.warmup.start"));
+                "screen.nyanlex.warmup.estimate", "screen.nyanlex.warmup.start",
+                "screen.nyanlex.warmup.continue", "screen.nyanlex.warmup.last"));
         for (int i = 1; i <= WARNING_COUNT; i++) keys.add("screen.nyanlex.warmup.warn." + i);
         return keys;
     }
@@ -49,6 +59,13 @@ public final class WarmupConfirmDialog {
      */
     public static DialogPanel.Content content(boolean eligible, Scan scan, ItemWarmupPlan plan, boolean inWorld,
                                               DialogContent.Lang lang) {
+        return content(eligible, scan, plan, inWorld, Last.NONE, lang);
+    }
+
+    /** As above, with where the last run stopped ({@code last}) so an unfinished one is offered as Continue. */
+    public static DialogPanel.Content content(boolean eligible, Scan scan, ItemWarmupPlan plan, boolean inWorld,
+                                              Last last, DialogContent.Lang lang) {
+        if (last == null) last = Last.NONE;
         List<DialogPanel.Block> blocks = new ArrayList<>();
         boolean canStart = false;
         if (!eligible) {
@@ -67,6 +84,10 @@ public final class WarmupConfirmDialog {
                 blocks.add(new DialogPanel.Text(lang.get("screen.nyanlex.warmup.nothing"), GREEN));
             } else {
                 canStart = true;
+                if (last.resumable()) {
+                    blocks.add(new DialogPanel.Text(lang.get("screen.nyanlex.warmup.last",
+                            last.scanned(), last.total()), DialogPanel.C_MUTED));
+                }
                 blocks.add(new DialogPanel.Text(lang.get("screen.nyanlex.warmup.estimate",
                         plan.willSubmitItems(), plan.estimatedRequests(), formatTokens(plan.estimatedTokens()),
                         plan.estimatedMinutes()), GOLD));
@@ -79,7 +100,9 @@ public final class WarmupConfirmDialog {
         }
         return new DialogPanel.Content(lang.get("screen.nyanlex.warmup.title"), blocks,
                 DialogPanel.Footer.of(new DialogPanel.Btn(CANCEL, lang.get("gui.cancel")),
-                        new DialogPanel.Btn(START, lang.get("screen.nyanlex.warmup.start"), true, false, canStart)),
+                        new DialogPanel.Btn(START, lang.get(last.resumable() && canStart
+                                ? "screen.nyanlex.warmup.continue" : "screen.nyanlex.warmup.start"),
+                                true, false, canStart)),
                 CANCEL);
     }
 

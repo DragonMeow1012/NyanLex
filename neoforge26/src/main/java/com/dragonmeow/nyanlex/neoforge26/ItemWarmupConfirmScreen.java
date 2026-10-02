@@ -77,7 +77,8 @@ public final class ItemWarmupConfirmScreen extends Screen {
     private void refresh() {
         WarmupConfirmDialog.Scan scan = scanner == null ? null
                 : new WarmupConfirmDialog.Scan(scanner.scanned(), scanner.total(), scanner.failed());
-        DialogPanel.Content next = WarmupConfirmDialog.content(eligibleEngine(), scan, plan, inWorld(), LANG);
+        DialogPanel.Content next = WarmupConfirmDialog.content(eligibleEngine(), scan, plan, inWorld(),
+                WarmupConfirmDialog.Last.of(NyanLexNeoForge26.itemWarmupDriver().progress()), LANG);
         if (next.equals(shown)) return;
         shown = next;
         if (panel.hasContent()) panel.update(next);
@@ -103,10 +104,10 @@ public final class ItemWarmupConfirmScreen extends Screen {
 
     private void startNow() {
         TranslatorConfig cfg = NyanLexNeoForge26.config();
-        cfg.itemWarmupEnabled = true;
         cfg.itemWarmupWarningAcknowledged = true;
         NyanLexNeoForge26.saveConfig();
-        NyanLexNeoForge26.itemWarmupDriver().start();
+        // the player pressed Start / Continue (after the consent box when online translation was off)
+        NyanLexNeoForge26.itemWarmupDriver().start(inWorld());
         // straight back to the screen the player came from; the run goes on in the background
         // (corner readout everywhere, details from the settings card)
         if (this.minecraft != null) this.minecraft.setScreenAndShow(parent);

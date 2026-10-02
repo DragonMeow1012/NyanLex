@@ -147,7 +147,6 @@ public final class TranslationConfigScreen extends Screen {
                 case RESUME -> driver.resume();
                 case STOP -> {
                     driver.stop();
-                    NyanLexFabric.config().itemWarmupEnabled = false;
                     NyanLexFabric.saveConfig();
                 }
             }

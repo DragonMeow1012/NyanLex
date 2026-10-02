@@ -131,9 +131,7 @@ class ItemWarmupDriverTest {
     }
 
     private static TranslatorConfig cfg() {
-        TranslatorConfig c = TestConfigs.translating();
-        c.itemWarmupEnabled = true;
-        return c;
+        return TestConfigs.translating();
     }
 
     private static ItemWarmupDriver driver(FakeSource s, FakeBackend b, TranslatorConfig c,
@@ -584,7 +582,7 @@ class ItemWarmupDriverTest {
     }
 
     @Test
-    void masterSwitchOffSendsNothingAndResumesWhenOn() {
+    void masterSwitchOffSendsNothingAndWaitsForTheContinueButtonWhenOnAgain() {
         FakeSource source = new FakeSource(fatItems(20));
         FakeBackend backend = new FakeBackend();
         backend.requests = false;
@@ -600,7 +598,16 @@ class ItemWarmupDriverTest {
         assertEquals(ItemWarmupDriver.State.PAUSED, d.state());
         assertEquals(ItemWarmupDriver.PauseReason.REQUESTS_OFF, d.progress().pauseReason());
 
+        // Online translation back on: only the player's Continue lifts this pause (a 429 is the
+        // one pause that lifts by itself).
         backend.requests = true;
+        for (int i = 0; i < 5; i++) {
+            d.tick();
+            clock.addAndGet(60_000);
+        }
+        assertEquals(0, backend.warmed.size(), "paused for another reason than a 429: no self-resume");
+        assertEquals(ItemWarmupDriver.State.PAUSED, d.state());
+        d.resume();
         d.tick();
         assertEquals(1, backend.warmed.size());
         assertEquals(ItemWarmupDriver.PauseReason.NONE, d.progress().pauseReason());
@@ -649,7 +656,7 @@ class ItemWarmupDriverTest {
     }
 
     @Test
-    void noWorldPausesAndUserPauseNeedsResume() {
+    void noWorldAndUserPausesBothNeedResume() {
         FakeSource source = new FakeSource(fatItems(40));
         FakeBackend backend = new FakeBackend();
         AtomicLong clock = new AtomicLong();
@@ -659,6 +666,9 @@ class ItemWarmupDriverTest {
         d.tick();
         assertEquals(ItemWarmupDriver.PauseReason.NO_WORLD, d.progress().pauseReason());
         source.available = true;
+        d.tick();
+        assertEquals(0, backend.warmed.size(), "a pause that is not a 429 waits for the player");
+        d.resume();
         d.tick();
         assertEquals(1, backend.warmed.size());
 
@@ -713,12 +723,12 @@ class ItemWarmupDriverTest {
     }
 
     @Test
-    void refusesToStartWhenDisabledOrMachineTranslation() {
+    void refusesToStartUnderMachineTranslationAndTheLegacyFlagGatesNothing() {
         FakeSource source = new FakeSource(items(3));
         FakeBackend backend = new FakeBackend();
         TranslatorConfig c = cfg();
-        c.itemWarmupEnabled = false;
-        assertFalse(driver(source, backend, c, new AtomicLong()).start());
+        c.itemWarmupEnabled = false; // the legacy "auto-resume" flag no longer means anything
+        assertTrue(driver(source, backend, c, new AtomicLong()).start());
 
         backend.ai = false;
         assertFalse(driver(source, backend, cfg(), new AtomicLong()).start());
@@ -883,5 +893,226 @@ class ItemWarmupDriverTest {
         s.warmTooltipBatchBackground(List.of("Iron sword", "A very sharp blade"));
         s.flushBatches();
         assertEquals(0, calls.get(), "online translation off: zero requests");
+    }
+
+    // ---------------------------------------------------------------- 2026-10-03: only the player starts it
+
+    private static final String LEGACY_AUTO_RESUME_CONFIG =
+            "{\"itemWarmupEnabled\": true, \"itemWarmupWarningAcknowledged\": true}";
+
+    @Test
+    void aLegacyAutoResumeFlagIsReadAsOffAndNeverWrittenBack() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        TranslatorConfig loaded = gson.fromJson(LEGACY_AUTO_RESUME_CONFIG, TranslatorConfig.class).normalized();
+        assertFalse(loaded.itemWarmupEnabled, "an old file that asked for auto-resume is read as: do not run by itself");
+        assertTrue(loaded.itemWarmupWarningAcknowledged, "the rest of that file is untouched");
+
+        TranslatorConfig written = new TranslatorConfig();
+        written.itemWarmupEnabled = true;
+        assertFalse(gson.toJson(written).contains("itemWarmupEnabled"), "the flag is never saved again");
+    }
+
+    @Test
+    void nothingStartsAtLaunchOrWhenAWorldLoads() {
+        TranslatorConfig loaded = new com.google.gson.Gson()
+                .fromJson(LEGACY_AUTO_RESUME_CONFIG, TranslatorConfig.class).normalized();
+        loaded.translationRequestsEnabled = true;
+        FakeSource source = new FakeSource(items(30));
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        ItemWarmupDriver d = driver(source, backend, loaded, clock);
+
+        // launch, the title screen, then a world loads: many client ticks with nobody pressing anything
+        for (int tick = 0; tick < 3000; tick++) {
+            source.available = tick % 2 == 0;
+            d.tick();
+            clock.addAndGet(50);
+        }
+
+        assertEquals(ItemWarmupDriver.State.IDLE, d.state());
+        assertEquals(0, backend.warmed.size(), "no request goes out without a press");
+        assertEquals(0, source.probeCalls, "not even a probe of the item registry");
+        assertFalse(d.progress().resumable(), "and there is nothing to continue from");
+    }
+
+    @Test
+    void aFinishedRunNeverStartsANewOneByItself() {
+        FakeSource source = new FakeSource(items(6));
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        ItemWarmupDriver d = driver(source, backend, cfg(), clock);
+        d.start();
+        runToEnd(d, clock, 200);
+        assertEquals(ItemWarmupDriver.State.DONE, d.state());
+        int sent = backend.warmedUnits();
+
+        // the player now walks into a world: ticks, a changing source, hours of play
+        for (int tick = 0; tick < 5000; tick++) {
+            source.available = tick % 3 != 0;
+            d.tick();
+            clock.addAndGet(1000);
+        }
+
+        assertEquals(ItemWarmupDriver.State.DONE, d.state(), "the run that ended stays ended");
+        assertEquals(sent, backend.warmedUnits());
+    }
+
+    @Test
+    void itemsThatNeedAWorldAreCountedAndLeftForThePlayerToPressStartAgain() {
+        List<ItemWarmupTarget> list = new ArrayList<>(items(3));
+        list.add(ItemWarmupTarget.failed("mod:needsworld1", "mod"));
+        list.add(ItemWarmupTarget.failed("mod:needsworld2", "mod"));
+        FakeSource source = new FakeSource(list);
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        TranslatorConfig c = cfg();
+        ItemWarmupDriver d = driver(source, backend, c, clock);
+
+        assertTrue(d.start(false), "started from the title screen: no world");
+        runToEnd(d, clock, 200);
+        assertEquals(ItemWarmupDriver.State.DONE, d.state());
+        assertEquals(2, d.progress().skippedFailed());
+        assertEquals(2, d.progress().needsWorldItems(), "the card tells how many need a world");
+        assertTrue(c.itemWarmupLastNeedsWorld);
+        assertEquals(2, c.itemWarmupLastSkipped);
+        int sent = backend.warmedUnits();
+
+        // entering the world changes nothing by itself ...
+        for (int tick = 0; tick < 2000; tick++) {
+            d.tick();
+            clock.addAndGet(1000);
+        }
+        assertEquals(sent, backend.warmedUnits());
+        assertEquals(2, d.progress().needsWorldItems(), "... and the hint stays until the player runs it again");
+
+        // ... pressing Start inside the world does: the tooltips can be built now and only they are sent
+        source.items.set(3, item(3));
+        source.items.set(4, item(4));
+        assertTrue(d.start(true));
+        runToEnd(d, clock, 200);
+        assertEquals(ItemWarmupDriver.State.DONE, d.state());
+        assertEquals(sent + 4, backend.warmedUnits(), "only the two missing items (2 units each) were sent");
+        assertEquals(0, d.progress().needsWorldItems());
+        assertFalse(c.itemWarmupLastNeedsWorld);
+    }
+
+    @Test
+    void failuresInsideAWorldAreNotReportedAsNeedingOne() {
+        List<ItemWarmupTarget> list = new ArrayList<>(items(2));
+        list.add(ItemWarmupTarget.failed("mod:broken", "mod"));
+        FakeSource source = new FakeSource(list);
+        AtomicLong clock = new AtomicLong();
+        ItemWarmupDriver d = driver(source, new FakeBackend(), cfg(), clock);
+        d.start(true);
+        runToEnd(d, clock, 100);
+        assertEquals(1, d.progress().skippedFailed());
+        assertEquals(0, d.progress().needsWorldItems());
+    }
+
+    @Test
+    void aPauseOfThePlayerNeverLiftsByItself() {
+        FakeSource source = new FakeSource(fatItems(40));
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        ItemWarmupDriver d = driver(source, backend, cfg(), clock);
+        d.start();
+        d.tick();
+        d.pause();
+        int sent = backend.warmedUnits();
+
+        for (int tick = 0; tick < 3000; tick++) {
+            d.tick();
+            clock.addAndGet(1000);
+        }
+        assertEquals(ItemWarmupDriver.State.PAUSED, d.state());
+        assertEquals(ItemWarmupDriver.PauseReason.USER, d.progress().pauseReason());
+        assertEquals(sent, backend.warmedUnits());
+
+        d.resume(); // the player presses Continue
+        d.tick();
+        assertTrue(backend.warmedUnits() > sent);
+    }
+
+    @Test
+    void aRateLimitResumesInsideTheSameRunButTheNextRunNeedsAPress() {
+        FakeSource source = new FakeSource(items(6));
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        ItemWarmupDriver d = driver(source, backend, cfg(), clock);
+        d.start();
+        backend.limited = true;
+        d.tick();
+        assertEquals(ItemWarmupDriver.PauseReason.RATE_LIMITED, d.progress().pauseReason());
+        assertEquals(0, backend.warmedUnits());
+
+        backend.limited = false; // the gate reopens: the same run, started by the player, goes on
+        for (int i = 0; i < 200 && d.state() != ItemWarmupDriver.State.DONE; i++) {
+            d.tick();
+            clock.addAndGet(60_000);
+        }
+        assertEquals(ItemWarmupDriver.State.DONE, d.state());
+        assertEquals(6 * 2, backend.warmedUnits());
+
+        // a 429 later, with no run active, opens nothing
+        backend.limited = true;
+        for (int i = 0; i < 100; i++) d.tick();
+        backend.limited = false;
+        for (int i = 0; i < 3000; i++) {
+            d.tick();
+            clock.addAndGet(1000);
+        }
+        assertEquals(ItemWarmupDriver.State.DONE, d.state());
+        assertEquals(6 * 2, backend.warmedUnits(), "the next round only ever begins with a press");
+    }
+
+    @Test
+    void whereTheRunStoppedIsKeptSoTheNextLaunchOffersContinueAndStartsNothingByItself() {
+        FakeSource source = new FakeSource(fatItems(40));
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        TranslatorConfig c = cfg();
+        AtomicInteger saves = new AtomicInteger();
+        ItemWarmupDriver d = driver(source, backend, c, clock);
+        d.setProgressSaver(saves::incrementAndGet);
+        d.start();
+        for (int i = 0; i < 6; i++) {
+            d.tick();
+            clock.addAndGet(5000);
+        }
+        d.stop();
+        assertTrue(saves.get() >= 1, "the stop is written to the config file");
+        assertTrue(c.itemWarmupLastScanned > 0);
+        assertEquals(40, c.itemWarmupLastTotal);
+        assertFalse(c.itemWarmupLastFinished);
+
+        // next launch: a fresh driver over the same (reloaded) config
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        TranslatorConfig reloaded = gson.fromJson(gson.toJson(c), TranslatorConfig.class).normalized();
+        reloaded.translationRequestsEnabled = true;
+        FakeBackend later = new FakeBackend();
+        later.ready.addAll(backend.ready); // what was stored stays stored
+        ItemWarmupDriver next = driver(new FakeSource(fatItems(40)), later, reloaded, clock);
+        for (int i = 0; i < 2000; i++) {
+            next.tick();
+            clock.addAndGet(1000);
+        }
+        assertEquals(ItemWarmupDriver.State.IDLE, next.state(), "launching never resumes it");
+        assertEquals(0, later.warmed.size());
+        ItemWarmupDriver.Progress p = next.progress();
+        assertTrue(p.resumable(), "the card shows where it stopped and offers Continue");
+        assertEquals(c.itemWarmupLastScanned, p.lastScanned());
+        assertEquals(40, p.lastTotal());
+
+        // the player presses Continue: what is stored is skipped, only the rest is sent
+        assertTrue(next.start());
+        for (int i = 0; i < 400 && next.state() != ItemWarmupDriver.State.DONE; i++) {
+            next.tick();
+            clock.addAndGet(60_000);
+        }
+        assertEquals(ItemWarmupDriver.State.DONE, next.state());
+        assertTrue(next.progress().skippedCached() > 0, "items already stored are skipped, never resent");
+        assertEquals(40 * 2, later.ready.size());
+        assertFalse(next.progress().resumable(), "finished: nothing left to continue");
+        assertTrue(reloaded.itemWarmupLastFinished);
     }
 }

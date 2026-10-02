@@ -480,8 +480,6 @@ public final class NyanLexNeoForge {
 
     private static volatile java.util.function.BooleanSupplier aiRateLimitedProbe = () -> false;
     private static com.dragonmeow.nyanlex.warmup.ItemWarmupDriver itemWarmupDriver;
-    private static int warmupWorldTicks;
-    private static boolean warmupAutoResumeTried;
 
     /** The single per-launch warm-up driver (also keeps the per-launch item budget). */
     public static synchronized com.dragonmeow.nyanlex.warmup.ItemWarmupDriver itemWarmupDriver() {
@@ -490,6 +488,7 @@ public final class NyanLexNeoForge {
                     new NeoItemWarmupSource(),
                     new NeoItemWarmupSource.Backend(() -> aiRateLimitedProbe.getAsBoolean()),
                     NyanLexNeoForge::config, System::currentTimeMillis);
+            itemWarmupDriver.setProgressSaver(NyanLexNeoForge::saveConfig);
         }
         return itemWarmupDriver;
     }
@@ -579,19 +578,14 @@ public final class NyanLexNeoForge {
         warmupPrevState = state;
     }
 
-    /** Per client tick: drive the warm-up, and resume it once per launch if the player opted in. */
+    /**
+     * Per client tick: drive the warm-up. It never starts or restarts a run by itself (not at
+     * launch, not when a world loads, not after a run ended): only the player's Start / Continue
+     * button does, through the confirm screen.
+     */
     private static void tickItemWarmup(Minecraft mc) {
         if (config == null || service == null) return;
         var driver = itemWarmupDriver();
-        if (mc != null && mc.player != null && mc.level != null) {
-            if (!warmupAutoResumeTried && config.itemWarmupEnabled
-                    && config.itemWarmupWarningAcknowledged && ++warmupWorldTicks >= 400) {
-                warmupAutoResumeTried = true;
-                driver.start();
-            }
-        } else {
-            warmupWorldTicks = 0;
-        }
         driver.tick();
         trackWarmupTransitions(driver);
     }

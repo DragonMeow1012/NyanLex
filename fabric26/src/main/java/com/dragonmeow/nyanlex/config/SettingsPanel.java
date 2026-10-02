@@ -1031,7 +1031,7 @@ public final class SettingsPanel {
     private List<WarmButton> warmButtons(WarmupStatus st) {
         List<WarmButton> out = new ArrayList<>();
         if (st.active()) {
-            if (st.userPaused()) {
+            if (st.canResume()) {
                 out.add(new WarmButton(host.text("screen.nyanlex.warmup.resume"), WarmupCommand.RESUME, true, false));
             } else {
                 out.add(new WarmButton(host.text("screen.nyanlex.warmup.pause"), WarmupCommand.PAUSE,
@@ -1042,7 +1042,9 @@ public final class SettingsPanel {
         } else if (warmupNeedsAi(st)) {
             out.add(new WarmButton(host.text(SettingsModel.KEY_BTN_USE_AI), WarmupCommand.OPEN_SERVICE, true, false));
         } else {
-            out.add(new WarmButton(host.text(SettingsModel.KEY_WARMUP_START), WarmupCommand.START, true, false));
+            // A run that stopped before the end is picked up again by the player pressing Continue.
+            out.add(new WarmButton(host.text(st.resumable() ? SettingsModel.KEY_WARMUP_CONTINUE
+                    : SettingsModel.KEY_WARMUP_START), WarmupCommand.START, true, false));
         }
         return out;
     }
@@ -1066,6 +1068,18 @@ public final class SettingsPanel {
 
     private String warmStatusText(WarmupStatus st) {
         if (!st.available() && !st.active()) return host.text(SettingsCatalog.KEY_NEEDS_AI);
+        // A run that stopped before the end says where, and the button then reads Continue.
+        String base = !st.active() && st.resumable()
+                ? host.text(SettingsModel.KEY_WARMUP_LAST, st.lastScanned(), st.lastTotal())
+                : warmStateText(st);
+        // Items skipped for want of a world: say how to get them (nothing ever re-runs by itself).
+        if (!st.active() && st.needsWorldItems() > 0) {
+            return base + " " + host.text(SettingsModel.KEY_WARMUP_NEEDS_WORLD, st.needsWorldItems());
+        }
+        return base;
+    }
+
+    private String warmStateText(WarmupStatus st) {
         switch (st.state()) {
             case RUNNING:
                 if (st.hasSpeed()) {
@@ -1098,6 +1112,11 @@ public final class SettingsPanel {
         texts.add(host.text("screen.nyanlex.warmup.state.done"));
         texts.add(host.text("screen.nyanlex.warmup.state.stopped"));
         texts.add(host.text(SettingsModel.KEY_WARMUP_IDLE));
+        texts.add(host.text(SettingsModel.KEY_WARMUP_LAST, 99999, 99999));
+        String needsWorld = " " + host.text(SettingsModel.KEY_WARMUP_NEEDS_WORLD, 99999);
+        texts.add(host.text("screen.nyanlex.warmup.state.done") + needsWorld);
+        texts.add(host.text("screen.nyanlex.warmup.state.stopped") + needsWorld);
+        texts.add(host.text(SettingsModel.KEY_WARMUP_LAST, 99999, 99999) + needsWorld);
         texts.add(host.text(SettingsCatalog.KEY_NEEDS_AI));
         for (ItemWarmupDriver.PauseReason reason : ItemWarmupDriver.PauseReason.values()) {
             texts.add(host.text("screen.nyanlex.warmup.reason." + reason.name().toLowerCase(java.util.Locale.ROOT)));

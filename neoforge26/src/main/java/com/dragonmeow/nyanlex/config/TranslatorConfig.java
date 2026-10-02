@@ -166,8 +166,24 @@ public final class TranslatorConfig {
      */
     public transient boolean hubStartupPromptDisabled = false;
 
-    /** All-item warm-up (AI engine only, off by default). */
-    public boolean itemWarmupEnabled = false;
+    /**
+     * Legacy: older builds used this as "resume the pre-translation by itself after the next
+     * launch". The pre-translation now only ever runs after the player presses Start or Continue
+     * (and, within that same run, after a 429 pause), so a config file that still carries this key
+     * is read without error and the value is ignored; it is never written back ({@code transient}).
+     * Kept only so older loader glue keeps compiling.
+     */
+    public transient boolean itemWarmupEnabled = false;
+
+    /** Where the last pre-translation run stopped: items looked at / items in the registry. */
+    public int itemWarmupLastScanned = 0;
+    public int itemWarmupLastTotal = 0;
+    /** The last run reached the end (not stopped, not cut short by the per-launch limit). */
+    public boolean itemWarmupLastFinished = false;
+    /** Items the last run skipped because their tooltip could not be built. */
+    public int itemWarmupLastSkipped = 0;
+    /** The last run started without a world, so those skipped items only need a world to be translated. */
+    public boolean itemWarmupLastNeedsWorld = false;
 
     /** The player has seen and accepted the cost/429 warning of the item warm-up. */
     public boolean itemWarmupWarningAcknowledged = false;
@@ -338,6 +354,9 @@ public final class TranslatorConfig {
         if (itemWarmupMaxItemsPerSession == LEGACY_WARMUP_MAX_ITEMS) itemWarmupMaxItemsPerSession = 0;
         if (itemWarmupChunkDelayMs < 500) itemWarmupChunkDelayMs = 500;
         if (itemWarmupMaxItemsPerSession < 0) itemWarmupMaxItemsPerSession = 0;
+        if (itemWarmupLastScanned < 0) itemWarmupLastScanned = 0;
+        if (itemWarmupLastTotal < 0) itemWarmupLastTotal = 0;
+        if (itemWarmupLastSkipped < 0) itemWarmupLastSkipped = 0;
         if (pacingDefaultsVersion < PACING_DEFAULTS_VERSION) {
             if (requestCooldownMs == LEGACY_REQUEST_COOLDOWN_MS) requestCooldownMs = 10000;
             pacingDefaultsVersion = PACING_DEFAULTS_VERSION;

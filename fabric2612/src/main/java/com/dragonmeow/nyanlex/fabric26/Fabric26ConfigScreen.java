@@ -147,7 +147,6 @@ public final class Fabric26ConfigScreen extends Screen {
                 case RESUME -> driver.resume();
                 case STOP -> {
                     driver.stop();
-                    NyanLexFabric26.config().itemWarmupEnabled = false;
                     NyanLexFabric26.saveConfig();
                 }
             }

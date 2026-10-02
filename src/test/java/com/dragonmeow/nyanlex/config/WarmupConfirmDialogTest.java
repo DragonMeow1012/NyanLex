@@ -220,4 +220,40 @@ class WarmupConfirmDialogTest {
             }
         }
     }
+
+    @Test
+    void anUnfinishedRunIsOfferedAsContinueAndSaysWhereItStopped() {
+        for (String code : LANGS) {
+            DialogContent.Lang lang = DialogPanelTest.lang(code);
+            WarmupConfirmDialog.Scan scan = new WarmupConfirmDialog.Scan(1332, 1332, 0);
+            DialogPanel.Content fresh = WarmupConfirmDialog.content(true, scan, plan(), true, lang);
+            DialogPanel.Content resumed = WarmupConfirmDialog.content(true, scan, plan(), true,
+                    new WarmupConfirmDialog.Last(true, 700, 1332), lang);
+            DialogPanel freshPanel = panel(fresh, SIZES[0]);
+            DialogPanel resumedPanel = panel(resumed, SIZES[0]);
+            assertTrue(freshPanel.shownLabels().contains(lang.get("screen.nyanlex.warmup.start")), code);
+            assertFalse(freshPanel.shownLabels().contains(lang.get("screen.nyanlex.warmup.continue")), code);
+            assertTrue(resumedPanel.shownLabels().contains(lang.get("screen.nyanlex.warmup.continue")), code);
+            assertFalse(resumedPanel.shownLabels().contains(lang.get("screen.nyanlex.warmup.start")), code);
+            assertTrue(squash(String.join("", resumedPanel.shownTexts()))
+                    .contains(squash(lang.get("screen.nyanlex.warmup.last", 700, 1332))), code);
+            assertFalse(squash(String.join("", freshPanel.shownTexts()))
+                    .contains(squash(lang.get("screen.nyanlex.warmup.last", 700, 1332))), code);
+            // a run that finished (or never ran) is a plain Start
+            assertEquals(fresh, WarmupConfirmDialog.content(true, scan, plan(), true,
+                    new WarmupConfirmDialog.Last(false, 1332, 1332), lang), code);
+        }
+    }
+
+    @Test
+    void theTitleScreenSkippedLineSaysToPressStartAgainInsideAWorld() {
+        for (String code : LANGS) {
+            DialogContent.Lang lang = DialogPanelTest.lang(code);
+            String text = lang.get("screen.nyanlex.warmup.skipped", 7);
+            assertTrue(text.contains("7"), code + ": " + text);
+        }
+        DialogContent.Lang tw = DialogPanelTest.lang("zh_tw");
+        assertEquals("有 7 個物品需要進入世界後才能翻譯，進入世界後可以再按一次「開始」",
+                tw.get("screen.nyanlex.warmup.skipped", 7));
+    }
 }
