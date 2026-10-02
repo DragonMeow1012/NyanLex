@@ -1,0 +1,4 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":3,"entries":{
+"ba99ff7720db748f08617a33d7330e86330a8619e2ae58a7d4dae3f9effb1bff":"船上物品檢視"
+,"f535151db6fe55e6c02d3402cb3a49fc31de343e77cec01e6d7e06d48dc630c0":"移動中的船上要顯示的物品"
+,"f6f954ebd3194d6a25bd70e33feee90d33b671ceade78f812009369b00071819":"在移動中的船上顯示物品"}}

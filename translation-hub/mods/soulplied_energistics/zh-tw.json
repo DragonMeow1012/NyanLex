@@ -1,0 +1,5 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":4,"entries":{
+"2407fc50a57972836ae043db050905628c5aedf92165973c2e54cc03691bbc4a":"靈魂"
+,"4647e26ab41ccc1ebb6b29b74dcbfb4263f433d6ab21389d10e832f51a32bbca":"*可用於 AE2 介面來請求靈魂*"
+,"ae935cd8dca2884ec302078a885685fd7ec05dc44e65c6272f34a22244cf29fc":"伏守者靈魂"
+,"cf79683bceec48080f16082379ebcf7cbf9c77d494ce7e3d7ff5ab65b22fdbe0":"*可在頂面使用 AE2 儲存匯流排存取靈魂*"}}

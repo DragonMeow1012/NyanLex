@@ -1,0 +1,8 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-or-later","rows":7,"entries":{
+"1543d7cf7be1b1d50ab1d5d72eef0d609299a6080009544e58bf2450aa9b83aa":"渲染已裝備的圖騰"
+,"154e65ecfdd4ace5c5f685e862d2424129826362bd8289df4b90fbc806ec9958":"啟用後，會在玩家身上渲染已裝備的圖騰。"
+,"5ec208f172c08543adc6a2e4ce98e54e9f6418fc3da4a25d4f78fb8842bf852a":"垂直渲染偏移"
+,"a828181d770481c8b695af25fd4bedfb7b36c5619d5de6ffdc00da4d7ddcd897":"在玩家身上渲染圖騰的水平偏移。"
+,"bec0ee1bbe14ecd0c08952d87871a00393c27a7312d3ee739934790e9c338e8f":"在玩家身上渲染圖騰的垂直偏移。"
+,"cb202ce740ea23b09a039a51724a26f05a05cbd44cb1fb5692f72a7c406b4201":"護符"
+,"cde49a39343e6dbf75157c0be7736ec3fbff9bc10c23d7d80ca5137af4f270ec":"水平渲染偏移"}}

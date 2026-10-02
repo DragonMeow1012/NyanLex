@@ -1,0 +1,15 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":14,"entries":{
+"31ec7ef0b96fd973c49d78a368adac0c6d97c60b17d87b0c2229aa7737b494d0":"自動監控設定檔，並在其於遊戲外被修改時重新載入。"
+,"457a219ee6666c746f640e1c9db9a6a189b3858d0b39367652eb2f76570198f6":"自動檔案監控"
+,"5dcf1b3c09f4d62efeaf62fad184054317edbd36cfd1dfa9901d9a7aa12f8099":"變更穩定延遲"
+,"61221091acf0c87d6a88eb2e101f83bc39c6d037ac0a746aa1685371aaeaa358":"控制 MezzConfig 的選用診斷日誌。"
+,"6b69a46a429857bf30e41a2ba1569391f190f5b1c56dfc0a359442caaf183fba":"需重新啟動世界後才會生效。"
+,"86b732738008d192dd94f9fde53b66213f18dce0b98235a67b6c6afe8bcffc0f":"最後一次檔案系統事件發生後，重新載入已變更設定檔前等待的毫秒數。"
+,"89458ab4d6cce7382b3e1c72290cb2625391174438c15ebb5dcdac073a98be4a":"缺少目錄重試間隔"
+,"9f1c93a723253e67a13b3a58f0c1aed02c183d396bd2de17222458beea037507":"控制設定檔的自動監控與重新載入時機。"
+,"a5d0009d24e8f222788585bf300313cdc4d790a85f9f37b3a10f796e7080772e":"記錄未翻譯的鍵"
+,"d3ef01b4a9c9910364c9b26b2499c8787a0461d2d24ab80376fff736a288b34c":"日誌記錄"
+,"e2038dc42719d57baee60860a8c3d16b4e438879befa9456d21edb9769e16d24":"檔案監控"
+,"e275cc9eebba956bdfb3c6215b6647310ed3a472ab58033bd11662f0733d51fc":"嘗試開始監控尚不存在的設定目錄之間的間隔毫秒數。"
+,"ecd69e7d29f3c85646048a1e1b5f0c18e3882ecfd33c3adb121c2a366e5f6889":"記錄目前語言中缺少的類別與值在地化鍵。在開發環境中預設啟用。"
+,"fb8cbde20b3bfdee55d73c87ff781c9ae57560591f122c8f11bd69a3c9573d6f":"需重新啟動遊戲後才會生效。"}}

@@ -1,0 +1,10 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":9,"entries":{
+"19e4f2d86dd749eaba770f4c850fe266aedd593cc0d657fd2a6cb086f1a42ee5":"是否在 Better Jungle Temples 中生成 PYP 毒鏢。"
+,"26e59fff73bdd9bed0d80701557bd41a52c95364b35cf15d95431179ffd74fff":"啟用 Pick Your Poison 相容性"
+,"2d4e5dae0b764e73e7ddf95bac34daa35f21e8ce671d35623ec7add339907af4":"模組相容性"
+,"520e9c22197e3054407f54a4398f18624e73ea6121662a212acd5e9b23f6d095":"請改用 /locate structure betterjungletemples:jungle_temple！"
+,"7c02c115f4c44b27fd4df4f162756bfab40908299774cd5a21e095a0e5a9f5d3":"是否停用原版叢林神廟。"
+,"a182a83b458c76255ffe088270eeb2a3f6a0674f66eb307e7cdc94d0b55c6090":"模組相容性設定"
+,"c910d474dcd724bff83ddedeb06bf1eceaf9fb3af7c76bb282be057f36e6dffa":"一般"
+,"de322f87b5f5957b54dc467054983c18cbd04a213066155347d00d04b34215e2":"一般設定"
+,"e5cc44c4fc2fce1d9ee5599734a9be20484cc1a25a43f4cc46cf1cc51344559c":"停用原版叢林神廟"}}

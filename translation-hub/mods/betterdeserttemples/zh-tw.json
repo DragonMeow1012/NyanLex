@@ -1,0 +1,12 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":11,"entries":{
+"0075355d04a2f561b2e0cce997e7af82bf1e9e010add08635c00bf4a5c774e4b":"是否停用原版沙漠金字塔。"
+,"06e175632ad5f7f4ccf4783525638e9e4bfc6ecc1fbe0214c59273e90509631e":"停用原版金字塔"
+,"0f39e4a93b1f325fd62b1976add04ddfc7f9835d5841be2fb29a3fbde9bf9ae8":"永恆沉眠"
+,"3bee96aec57c4e00e57c03341baad8df2a3917c73a5d8488c40b4a9ec467c362":"擊殺法老王，讓神廟擺脫他的詛咒"
+,"497988dff4ea74b33dc695deb736222ab0b130769835e501a13395cabe0d8c45":"請改用 /locate structure betterdeserttemples:desert_temple！"
+,"4e73fd4182bc01765c3d7d604cf42b7cdd93e48fab7203f46972f21f89d4c6bc":"在沙漠深處的某處……"
+,"827f578e1275996d6ff02a6ccaadcc5a92d08ea43d78c34694bf135c6a691871":"若神廟尚未被清除。"
+,"85943097112f8c4e28ec16829aeedeffd3dcc39e395874517b7282aa4ed1acb5":"是否對神廟內的玩家施加挖掘疲勞"
+,"8db5710f8e8f822885997d0b123f1d4ed2f6bc2970828526b7b49a2b921d8b45":"施加挖掘疲勞"
+,"9a509cce75866d2908cb9a65b8fce557a7cc335e85c044c7d586de2d5bce4f70":"發現一座 Better Desert Temple"
+,"bba1c3130dbc42e0a910ecb825864952d7e5d7c798e98781cf9c273908ba0bfb":"古老的陵墓"}}

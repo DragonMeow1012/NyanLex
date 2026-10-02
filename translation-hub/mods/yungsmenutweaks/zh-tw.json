@@ -1,0 +1,12 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":11,"entries":{
+"140497f6d07f0bb001eba01cfb7a95df14bd69ccf4bcf29b9831ba98cde09c54":"允許在滑桿上捲動滑鼠滾輪來修改使用滑桿的選項"
+,"2748863fe2ad4df7b94f5dacdc5c4922004cc777423574f59047e716e9abce7f":"啟用自訂背景材質"
+,"41e5e191642db057333efe9b69537c3a2000cf3824bc79729ad4ea5d990108c9":"滑鼠滾輪可調整滑桿"
+,"4f532213242a35f26a8e5aaac1b12b882787445ccba15ba16d5634933e4aaa27":"只有在「啟用自訂背景材質」選項為 true 時才會生效。"
+,"6151a826f8c8cb187f220da65bd059bd1d8198b938ca843ee9e1beffb9c42787":"用作自訂背景的 16x16 材質，取代一般的泥土。"
+,"624fa19eacf98b5bff3b1580d81b8e2c5eba3dc938ecc73c34561c352b70cac7":"自訂背景材質"
+,"cdd201c37d5d38cb2ab27539cb915d400a82e21cf506be74ffb085b199d73183":"右鍵反向操作循環按鈕"
+,"cfe648353a5f9620a8e908681c1ff1b399729ce88ee2b96fe9395d7d64d015cb":"當游標停留在滑桿上時。"
+,"e55f263d7eb217dd890f65118335f223d16427101b2972db6a54dbd6141ff4e1":"所使用的材質由下方的「自訂背景材質」選項指定。"
+,"f55b40b26984917263ed8ab6b1d4f75a1195b52e0e528f5cdb61e50f9baef548":"啟用後，會盡可能使用自訂背景材質。"
+,"fe867c1dfe076e0f595ecf49c636b48df32cbd1261f97475842d3cb547f44fc8":"允許對部分按鈕按右鍵，以反向循環切換。"}}

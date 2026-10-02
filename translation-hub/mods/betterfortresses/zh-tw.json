@@ -1,0 +1,4 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":3,"entries":{
+"68ac18ec4f5236814d5f377f6530add50da442143aeef7e89062e484e5c2a9f8":"是否停用原版地獄要塞。"
+,"74c6d5c1abcd21d9e629759a284b6c8c98d5631ebe1a37adfacc8448325e766a":"停用原版地獄要塞"
+,"7ae45a58671fc7710c2a28711e49f5d3d62ef361d84e41060f65931398e9efd8":"請改用 /locate structure betterfortresses:fortress！"}}

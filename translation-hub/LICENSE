@@ -13,6 +13,12 @@ license (CC BY-NC-SA 4.0):
     https://creativecommons.org/licenses/by-nc-sa/4.0/
     Legal code: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
+Exception: a data file that carries a "license" field (and its entry in index.json) is
+licensed under the license that field names instead. This is the case for translations of
+projects released under an LGPL license (for example LGPL-3.0-only): such a translation keeps
+that license. Where one file merges several sources, every license listed in the field applies
+to it.
+
 This directory does not contain, and does not license, any original source text.
 Original text, names and trademarks remain the property of their respective owners
 (the game, server and mod authors). Nothing here is affiliated with, endorsed by or

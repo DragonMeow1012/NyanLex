@@ -1,0 +1,6 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":5,"entries":{
+"06896a178b7c8d2817cc3c5fe5c656e875f225fb4beb49c4ca99b8dcabcd4a83":"目標無法移動、使用物品或攻擊。"
+,"1f4d64e32bc24f6a7ac08683a49e41883be9edd3d117f69e943d1fd6d4542abd":"盾擊會造成額外擊退，並隨附魔等級提升。"
+,"2ee18f3fbc8e97dec4a2c5272c6e3d35a4fe621f74e2d0f6ec14bd4bfa5419fb":"活力"
+,"6f9e89b67d77112fe25395befc2692931d3ff19a5b4d61065a23c39237fb4e16":"暈眩"
+,"928701f11df5c2297f7e7f1ca501ff89bacc345e881774a296340381edeb4986":"暈眩免疫"}}

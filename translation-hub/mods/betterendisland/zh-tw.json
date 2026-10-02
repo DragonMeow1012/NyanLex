@@ -1,0 +1,13 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":12,"entries":{
+"048fabf3e40a9c33b7220c9b50156c17762fc1da058d7c7817e436b4c707fddc":"重新召喚時重新生成中央塔"
+,"063ce5d8ddaa6b952c46f74a98f38bc91312baf1008845fbea16329833fb701d":"重新召喚終界龍時，是否在終界重新生成中央塔"
+,"2af47b129d2767e1e3ba8bc8bf9051de4dc1a61887476da514d963a3a3680193":"生成原版終界折躍門"
+,"490e95e452b73b8d79fb9f1925a6fbfccfed006b127d661e65bf11d2c80681fb":"初始生成中央塔"
+,"663be1e1bd8ce4a0cf99413f5636ff13238b32361a01f5c88416cd4ce31319a8":"是否在終界生成原版終界折躍門，而非改版後的折躍門"
+,"6c9820e62fb01f86c6b3822c1bbfcb9f43a49ab75a8cb4dc42fda6e56a07128e":"生成原版黑曜石平台"
+,"8594e2a7bee167e0e3589dd81df8c4627dccede85e284281b11dca12c82bb599":"播放鐘聲"
+,"9b9f4a56702e33a7629e25191a27db04f502ef0ab042f5e25dcd63179bb36ae9":"世界首次生成時，是否在終界生成中央塔"
+,"bbd2ac21ff5a66af0556c658d5a91d58828063bcf8a295bbb2f4c7c330956ae4":"終界龍每次被擊敗時是否掉落龍蛋"
+,"da87080e6fc38ef6a784486aa9c97d24e30106fffefb74dbdc49368d79407679":"是否在首次召喚終界龍之前與重新召喚期間播放鐘聲"
+,"e3b583459002f16291cfe046acd925e2709cb7c5d99b3686227352b3bd1722f3":"重新召喚的終界龍掉落龍蛋"
+,"e5cacdea735561061f593024c97f674613e124cd7e79fbeb4f5c1e3a79422afc":"是否在終界生成原版黑曜石平台，而非改版後的平台"}}

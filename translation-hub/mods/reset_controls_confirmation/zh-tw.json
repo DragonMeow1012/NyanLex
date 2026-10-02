@@ -1,0 +1,5 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":4,"entries":{
+"2623c71a51440766d8a0598b237f1b26d618fff9894934fc4990ba43b291fdf4":"這會將所有按鍵綁定還原為預設值"
+,"26f5c0ea25fd1a8d0366ccc1d6c4c7683ccaa4f8097508c0ab262daf0260227f":"確定要重設所有按鍵綁定嗎？"
+,"50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c":"範例"
+,"948fe603f61dc036b5c596dc09fe3ce3f3d30dc90f024c85f3c82db2ccab679d":"客戶端"}}

@@ -1,0 +1,3 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":2,"entries":{
+"16e14c6de8668f5d710287487dfd72ef4ec75bf9bdf19baac6c9d7db40734268":"已安裝 Does It Tick，但未安裝 FTB Chunks。如果你發現自己離生物農場很遠時它就停止運作，請嘗試安裝 FTB Chunks / OPAC 並認領其區塊。你可以在 Does It Tick 的設定中停用此訊息。"
+,"77a2dd27d97f32ebd3e584ed50f1c1c4c9779922f3665203c8bb5575d7d9f9dc":"此伺服器已安裝 Does It Tick。如果你發現自己離生物農場很遠時它就停止運作，請嘗試使用 FTB Chunks / OPAC 來認領其區塊。你可以在 Does It Tick 的設定中停用此訊息。"}}

@@ -1,0 +1,5 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":4,"entries":{
+"16e7dfdf2cc78d45496e904bca20d3608814d2910195aca9b51845e842470ac9":"啟用此選項以便在渲染前對方塊實體排序。\\r\\n這能修正透明度問題：部分方塊實體位於另一個方塊實體後方時無法正確顯示。\\r\\n可能影響效能。"
+,"280613d21d59ec8841400d7f07c11c3721f8995311270d6c2906edeaa4138742":"啟用方塊實體排序"
+,"683396fcff9a37cb0a0adf74752268d7c13567d03bd6f61935f108592139a592":"使用 /malisis <config|version> [modid] 顯示目前版本，或該模組的設定介面。"
+,"b332c3492d5eb10a118eb6d8b0dcd689bc2477ce2ae16b303753b942b54377bc":"設定"}}

@@ -1,0 +1,7 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":6,"entries":{
+"5402f3d0765093720ba4615cf66f2fb763d32cceccb74d5e0fb28f1e1ee41cf1":"已將控制器記錄至主控台"
+,"667f24e21ab2477dac305777b5e9f3f47210700144d78183dde9b0231e28bddd":"最低溫度"
+,"75bf02f428310c17b866990d70b0f560aeeb8bbcc9c4d983d07c6eb00a97929a":"目標不是活體實體！"
+,"92fee0e7e99ebaa6366a43831694e89f1518bb9e285430d7e33c7f7d2de72f1b":"炎熱抗性"
+,"b89bdc77010c46eaf2ed3dde0173461d0ba2fb35df0a3eccdbdcc8ad127bca50":"最高溫度"
+,"ff3ea832046f187c52480e2053ab3dedf7d4205c0c5badb57e2b9c5615bb966a":"寒冷抗性"}}
