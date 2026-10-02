@@ -205,7 +205,7 @@
   "nyanlex.settings.keybind": "快捷鍵",
   "nyanlex.settings.keybind.tip": "設定翻譯物品、翻譯整個介面、切換原文與譯文、開啟設定的按鍵。",
   "nyanlex.settings.chat": "聊天：%s",
-  "nyanlex.settings.chat.tip": "聊天訊息的顯示方式：不翻譯、雙語（原文加譯文）或只顯示譯文。預設不翻譯。",
+  "nyanlex.settings.chat.tip": "聊天訊息的顯示方式：不翻譯、雙語（原文加譯文）或只顯示譯文。",
   "nyanlex.settings.tooltip": "物品提示：%s",
   "nyanlex.settings.tooltip.tip": "物品說明框與物品名稱的顯示方式。",
   "nyanlex.settings.scoreboard": "記分板：%s",

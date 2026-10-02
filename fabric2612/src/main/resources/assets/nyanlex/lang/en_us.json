@@ -218,7 +218,7 @@
   "nyanlex.settings.keybind": "Hotkeys",
   "nyanlex.settings.keybind.tip": "Set the keys that translate an item, translate the whole screen, toggle original/translation and open settings.",
   "nyanlex.settings.chat": "Chat: %s",
-  "nyanlex.settings.chat.tip": "How chat messages are shown: off (not translated), bilingual, or translation only. Off by default.",
+  "nyanlex.settings.chat.tip": "How chat messages are shown: off (not translated), bilingual, or translation only.",
   "nyanlex.settings.tooltip": "Item tooltips: %s",
   "nyanlex.settings.tooltip.tip": "How item tooltips and item names are shown.",
   "nyanlex.settings.scoreboard": "Scoreboard: %s",

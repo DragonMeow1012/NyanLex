@@ -85,7 +85,7 @@ public final class ItemWarmupProgressScreen extends Screen {
             boolean inWorld = this.minecraft != null && this.minecraft.level != null;
             g.centeredText(this.font, Component.translatable(inWorld
                             ? "screen.nyanlex.warmup.skipped.world" : "screen.nyanlex.warmup.skipped",
-                            p.skippedFailed()), centerX, barY + 62, 0xFFC0C0C0);
+                            p.skippedFailed()), centerX, barY + 76, 0xFFC0C0C0);
         }
 
         Component state = Component.translatable("screen.nyanlex.warmup.state."

@@ -531,24 +531,13 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         }
     }
 
-    private static Item.TooltipContext offlineTooltipContext;
-
     /**
-     * Tooltip context for the warm-up: the live level's when a world is open, otherwise one
-     * over the built-in registries so that the title screen can probe items too.
+     * Tooltip context for the warm-up: the live level's when a world is open, otherwise the
+     * registry-less {@code EMPTY} one so that the title screen can probe items too (the
+     * built-in registry lookup has unbound tags and makes every tooltip throw).
      */
     private static Item.TooltipContext warmupTooltipContext(Minecraft mc) {
-        if (mc.level != null) return Item.TooltipContext.of(mc.level);
-        if (offlineTooltipContext == null) {
-            Item.TooltipContext ctx;
-            try {
-                ctx = Item.TooltipContext.of(net.minecraft.data.registries.VanillaRegistries.createLookup());
-            } catch (RuntimeException | LinkageError e) {
-                ctx = Item.TooltipContext.EMPTY;
-            }
-            offlineTooltipContext = ctx;
-        }
-        return offlineTooltipContext;
+        return mc.level != null ? Item.TooltipContext.of(mc.level) : Item.TooltipContext.EMPTY;
     }
 
     /**
