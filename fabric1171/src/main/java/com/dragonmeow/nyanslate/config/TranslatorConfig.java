@@ -146,6 +146,12 @@ public final class TranslatorConfig {
     /** The player has agreed to share their own AI translations to the community hub. */
     public boolean hubShareConsent = false;
 
+    /**
+     * Whether the settings screen's first-open hint ("第一次使用？按右上 ? 看說明") has already
+     * been shown once. Field type is part of the persisted format and must never change.
+     */
+    public boolean settingsIntroSeen = false;
+
     /** Whether the hub screen's first-open explanation has already been shown once. */
     public boolean hubIntroSeen = false;
 
