@@ -159,7 +159,8 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
 foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122', 'forge1132')) {
     $sharedDestination = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\nyanslate\translate"
     New-Item -ItemType Directory -Force -Path $sharedDestination | Out-Null
-    foreach ($sharedName in @('ScreenTranslationCapture.java', 'TranslationFile.java', 'TranslationFileDialog.java')) {
+    foreach ($sharedName in @('ScreenTranslationCapture.java', 'TranslationFile.java', 'TranslationFileDialog.java',
+            'HookHealth.java', 'HookGuard.java')) {
         $sharedSource = Join-Path $root "src\main\java\com\dragonmeow\nyanslate\translate\$sharedName"
         $sharedFile = Join-Path $sharedDestination $sharedName
         if (-not (Test-Path $sharedFile) -or (Get-FileHash $sharedSource).Hash -ne (Get-FileHash $sharedFile).Hash) {

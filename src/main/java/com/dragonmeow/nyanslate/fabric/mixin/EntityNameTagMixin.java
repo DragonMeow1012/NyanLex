@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric.FabricTextStyle;
 import com.dragonmeow.nyanslate.fabric.NyanslateFabric;
 
@@ -36,9 +37,15 @@ public abstract class EntityNameTagMixin {
     private Component nyanslate$translateNameTag(Component name, Entity entity, Component original,
                                                     PoseStack poseStack, MultiBufferSource buffers,
                                                     int light, float partialTick) {
-        // Target-arg capture (appended after the modified variable) hands us the ENTITY, so
-        // the glue can skip real TAB-listed players' name tags (player IDs never translate).
-        return NyanslateFabric.nameTag(entity, name);
+        if (!HookGuard.enter("EntityNameTag.translateNameTag")) return name;
+        try {
+            // Target-arg capture (appended after the modified variable) hands us the ENTITY, so
+            // the glue can skip real TAB-listed players' name tags (player IDs never translate).
+            return NyanslateFabric.nameTag(entity, name);
+        } catch (Throwable guardError) {
+            HookGuard.fail("EntityNameTag.translateNameTag", guardError);
+            return name;
+        }
     }
 
     @Redirect(
@@ -52,18 +59,24 @@ public abstract class EntityNameTagMixin {
     private int nyanslate$stackedNameTag(Font font, Component text, float x, float y, int color,
                                             boolean dropShadow, Matrix4f matrix, MultiBufferSource buffers,
                                             Font.DisplayMode mode, int bgColor, int light) {
-        List<Component> lines = FabricTextStyle.splitLines(text);
-        if (lines.size() <= 1) {
+        if (!HookGuard.enter("EntityNameTag.stackedNameTag")) return font.drawInBatch(text, x, y, color, dropShadow, matrix, buffers, mode, bgColor, light);
+        try {
+            List<Component> lines = FabricTextStyle.splitLines(text);
+            if (lines.size() <= 1) {
+                return font.drawInBatch(text, x, y, color, dropShadow, matrix, buffers, mode, bgColor, light);
+            }
+            int n = lines.size();
+            int ret = 0;
+            for (int k = 0; k < n; k++) {
+                Component line = lines.get(k);
+                float lx = -font.width(line) / 2f;                         // re-centre each line
+                float ly = y - (n - 1 - k) * (float) FabricTextStyle.STACK_LINE_GAP; // stack upward (原文 top, 譯文 baseline)
+                ret = font.drawInBatch(line, lx, ly, color, dropShadow, matrix, buffers, mode, bgColor, light);
+            }
+            return ret;
+        } catch (Throwable guardError) {
+            HookGuard.fail("EntityNameTag.stackedNameTag", guardError);
             return font.drawInBatch(text, x, y, color, dropShadow, matrix, buffers, mode, bgColor, light);
         }
-        int n = lines.size();
-        int ret = 0;
-        for (int k = 0; k < n; k++) {
-            Component line = lines.get(k);
-            float lx = -font.width(line) / 2f;                         // re-centre each line
-            float ly = y - (n - 1 - k) * (float) FabricTextStyle.STACK_LINE_GAP; // stack upward (原文 top, 譯文 baseline)
-            ret = font.drawInBatch(line, lx, ly, color, dropShadow, matrix, buffers, mode, bgColor, light);
-        }
-        return ret;
     }
 }

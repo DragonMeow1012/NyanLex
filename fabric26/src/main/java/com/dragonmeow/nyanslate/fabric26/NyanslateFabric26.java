@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric26;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.cache.LanguageFileStore;
 import com.dragonmeow.nyanslate.cache.DynamicNamespacedStore;
 import com.dragonmeow.nyanslate.cache.NamespacedStore;
@@ -1004,6 +1005,7 @@ public final class NyanslateFabric26 implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        NyanslateHooks.register(LOGGER::info, LOGGER::warn);
         Path configDir = FabricLoader.getInstance().getConfigDir();
         configPath = configDir.resolve(MOD_ID + ".json");
         LegacyDataMigration.migrate(configPath.getParent(), LOGGER::info);
@@ -1198,26 +1200,27 @@ public final class NyanslateFabric26 implements ClientModInitializer {
     private void registerEvents() {
         
         
-        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
-            if (overlay) return handleOverlayMessage(message);
-            return !translateAndInject(message, null);
-        });
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> HookGuard.call("event.allowGame",
+                () -> overlay ? handleOverlayMessage(message) : !translateAndInject(message, null),
+                () -> true));
         
         
         ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-                !translateAndInject(message, params));
+                HookGuard.call("event.allowChat", () -> !translateAndInject(message, params), () -> true));
 
         Identifier tooltipPhase = Identifier.tryParse(MOD_ID + ":tooltip_translation");
         ItemTooltipCallback.EVENT.addPhaseOrdering(Event.DEFAULT_PHASE, tooltipPhase);
         ItemTooltipCallback.EVENT.register(tooltipPhase,
-                (stack, context, type, lines) -> onItemTooltip(stack, lines));
+                (stack, context, type, lines) -> HookGuard.run("event.itemTooltip", () -> onItemTooltip(stack, lines)));
 
-        ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
+        ClientTickEvents.END_CLIENT_TICK.register(
+                tickClient -> HookGuard.run("event.clientTick", () -> onClientTick(tickClient)));
 
         
         
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) ->
-                ScreenKeyboardEvents.afterKeyPress(screen).register((scr, keyEvent) -> onScreenKey(scr, keyEvent)));
+                ScreenKeyboardEvents.afterKeyPress(screen).register((scr, keyEvent) ->
+                        HookGuard.run("event.screenKey", () -> onScreenKey(scr, keyEvent))));
     }
 
     private boolean handleOverlayMessage(Component message) {

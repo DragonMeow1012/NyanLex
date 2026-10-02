@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.legacy.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
@@ -13,21 +14,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class DebugHudMixin {
     @Inject(method = "render", at = @At("TAIL"), require = 0)
     private void nyanslate$debug(PoseStack pose, float delta, CallbackInfo ci) {
-        if (!LegacyTranslatorMod.debugEnabled()) return;
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null || minecraft.font == null) return;
-        boolean previous = LegacyTranslatorMod.beginInternalRender();
+        if (!HookGuard.enter("DebugHud.debug")) return;
         try {
-            java.util.List<String> lines = LegacyTranslatorMod.debugLines();
-            int y = 6;
-            minecraft.font.drawShadow(pose, LegacyTranslatorMod.tokenUsageLine(), 6, y, 0x80D8FF);
-            y += 11;
-            for (String line : lines) {
-                int color = line.contains("failed (429 rate limit)") ? 0xFFFF40FF
-                        : line.contains("failed (") ? 0xFFFF8080 : 0x80FF80;
-                minecraft.font.drawShadow(pose, line, 6, y, color);
-                y += 10;
-            }
-        } finally { LegacyTranslatorMod.endInternalRender(previous); }
+            if (!LegacyTranslatorMod.debugEnabled()) return;
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft == null || minecraft.font == null) return;
+            boolean previous = LegacyTranslatorMod.beginInternalRender();
+            try {
+                java.util.List<String> lines = LegacyTranslatorMod.debugLines();
+                int y = 6;
+                minecraft.font.drawShadow(pose, LegacyTranslatorMod.tokenUsageLine(), 6, y, 0x80D8FF);
+                y += 11;
+                for (String line : lines) {
+                    int color = line.contains("failed (429 rate limit)") ? 0xFFFF40FF
+                            : line.contains("failed (") ? 0xFFFF8080 : 0x80FF80;
+                    minecraft.font.drawShadow(pose, line, 6, y, color);
+                    y += 10;
+                }
+            } finally { LegacyTranslatorMod.endInternalRender(previous); }
+        } catch (Throwable guardError) {
+            HookGuard.fail("DebugHud.debug", guardError);
+        }
     }
 }

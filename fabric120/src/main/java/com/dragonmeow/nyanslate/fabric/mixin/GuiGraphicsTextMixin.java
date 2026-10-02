@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric.NyanslateFabric;
 
 import net.minecraft.client.gui.GuiGraphics;
@@ -30,34 +31,64 @@ public abstract class GuiGraphicsTextMixin {
     @ModifyVariable(method = "renderTooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;Ljava/util/Optional;II)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private List<Component> nyanslate$visibleTooltip(List<Component> lines) {
-        return NyanslateFabric.visibleTooltip(lines);
+        if (!HookGuard.enter("GuiGraphicsText.visibleTooltip")) return lines;
+        try {
+            return NyanslateFabric.visibleTooltip(lines);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiGraphicsText.visibleTooltip", guardError);
+            return lines;
+        }
     }
 
     @ModifyVariable(method = "renderComponentTooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;II)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private List<Component> nyanslate$visibleComponentTooltip(List<Component> lines) {
-        return NyanslateFabric.visibleTooltip(lines);
+        if (!HookGuard.enter("GuiGraphicsText.visibleComponentTooltip")) return lines;
+        try {
+            return NyanslateFabric.visibleTooltip(lines);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiGraphicsText.visibleComponentTooltip", guardError);
+            return lines;
+        }
     }
 
     @ModifyVariable(
             method = "drawString(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)I",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private String nyanslate$screenTextString(String text) {
-        return NyanslateFabric.screenText(text);
+        if (!HookGuard.enter("GuiGraphicsText.screenTextString")) return text;
+        try {
+            return NyanslateFabric.screenText(text);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiGraphicsText.screenTextString", guardError);
+            return text;
+        }
     }
 
     @ModifyVariable(
             method = "drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)I",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private Component nyanslate$screenTextComponent(Component text) {
-        return NyanslateFabric.screenText(text);
+        if (!HookGuard.enter("GuiGraphicsText.screenTextComponent")) return text;
+        try {
+            return NyanslateFabric.screenText(text);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiGraphicsText.screenTextComponent", guardError);
+            return text;
+        }
     }
 
     @ModifyVariable(
             method = "drawCenteredString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private Component nyanslate$screenTextCentered(Component text) {
-        return NyanslateFabric.screenText(text);
+        if (!HookGuard.enter("GuiGraphicsText.screenTextCentered")) return text;
+        try {
+            return NyanslateFabric.screenText(text);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiGraphicsText.screenTextCentered", guardError);
+            return text;
+        }
     }
 
     /**
@@ -69,6 +100,12 @@ public abstract class GuiGraphicsTextMixin {
             method = "drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/util/FormattedCharSequence;IIIZ)I",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private FormattedCharSequence nyanslate$screenTextOrdered(FormattedCharSequence text) {
-        return NyanslateFabric.screenText(text);
+        if (!HookGuard.enter("GuiGraphicsText.screenTextOrdered")) return text;
+        try {
+            return NyanslateFabric.screenText(text);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiGraphicsText.screenTextOrdered", guardError);
+            return text;
+        }
     }
 }

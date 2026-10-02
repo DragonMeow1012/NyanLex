@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.config.DisplayMode;
 import com.dragonmeow.nyanslate.fabric.NyanslateFabric;
 import com.dragonmeow.nyanslate.fabric.FabricTextStyle;
@@ -50,9 +51,14 @@ public abstract class BookPageMixin {
 
     @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V", at = @At("HEAD"))
     private void nyanslate$forceResplit(GuiGraphics g, int mouseX, int mouseY, float partial, CallbackInfo ci) {
-        TranslationService service = NyanslateFabric.service();
-        if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) {
-            this.cachedPage = -1; // re-split each frame so a late translation appears in place
+        if (!HookGuard.enter("BookPage.forceResplit")) return;
+        try {
+            TranslationService service = NyanslateFabric.service();
+            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) {
+                this.cachedPage = -1; // re-split each frame so a late translation appears in place
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("BookPage.forceResplit", guardError);
         }
     }
 
@@ -63,20 +69,26 @@ public abstract class BookPageMixin {
                             + "(Lnet/minecraft/network/chat/FormattedText;I)Ljava/util/List;"),
             require = 0)
     private List<FormattedCharSequence> nyanslate$translateBookPage(Font font, FormattedText text, int width) {
-        TranslationService service = NyanslateFabric.service();
-        if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY && text != null) {
-            Component src = preserveStyles(text);
-            service.warmBookBatch(FabricTextStyle.paragraphRequests(src));
-            Component translated = FabricTextStyle.renderTranslatedParagraphPage(
-                    src, service::translateBook, font);
-            if (translated != null) {
-                Component shown = service.bookMode() == DisplayMode.BOTH
-                        ? src.copy().append(Component.literal("\n")).append(translated)
-                        : translated;
-                return font.split(shown, width);
+        if (!HookGuard.enter("BookPage.translateBookPage")) return font.split(text, width);
+        try {
+            TranslationService service = NyanslateFabric.service();
+            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY && text != null) {
+                Component src = preserveStyles(text);
+                service.warmBookBatch(FabricTextStyle.paragraphRequests(src));
+                Component translated = FabricTextStyle.renderTranslatedParagraphPage(
+                        src, service::translateBook, font);
+                if (translated != null) {
+                    Component shown = service.bookMode() == DisplayMode.BOTH
+                            ? src.copy().append(Component.literal("\n")).append(translated)
+                            : translated;
+                    return font.split(shown, width);
+                }
             }
+            return font.split(text, width);
+        } catch (Throwable guardError) {
+            HookGuard.fail("BookPage.translateBookPage", guardError);
+            return font.split(text, width);
         }
-        return font.split(text, width);
     }
 
     private static Component preserveStyles(FormattedText text) {

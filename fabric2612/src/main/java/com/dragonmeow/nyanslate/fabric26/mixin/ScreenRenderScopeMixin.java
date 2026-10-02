@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric26.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric26.NyanslateFabric26;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -15,13 +16,23 @@ public abstract class ScreenRenderScopeMixin {
     private void nyanslate$beginVisibleScreen(
             GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick,
             CallbackInfo ci) {
-        NyanslateFabric26.beginScreenRender((Screen) (Object) this);
+        HookGuard.enterSticky("ScreenRenderScope.beginVisibleScreen");
+        try {
+            NyanslateFabric26.beginScreenRender((Screen) (Object) this);
+        } catch (Throwable guardError) {
+            HookGuard.fail("ScreenRenderScope.beginVisibleScreen", guardError);
+        }
     }
 
     @Inject(method = "extractRenderStateWithTooltipAndSubtitles", at = @At("RETURN"), require = 1)
     private void nyanslate$endVisibleScreen(
             GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick,
             CallbackInfo ci) {
-        NyanslateFabric26.endScreenRender((Screen) (Object) this);
+        HookGuard.enterSticky("ScreenRenderScope.endVisibleScreen");
+        try {
+            NyanslateFabric26.endScreenRender((Screen) (Object) this);
+        } catch (Throwable guardError) {
+            HookGuard.fail("ScreenRenderScope.endVisibleScreen", guardError);
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.forgelegacy;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.client.Minecraft;
@@ -90,30 +91,46 @@ public final class NyanslateForge {
     }
 
     @SubscribeEvent public void beforeScreen(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre event) {
-        renderingScreen = event.getGui();
+        HookGuard.enterSticky("event.beforeScreen");
+        try {
+            renderingScreen = event.getGui();
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.beforeScreen", guardError);
+        }
     }
 
     @SubscribeEvent public void afterScreen(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Post event) {
-        java.util.List<String> sources = SCREEN_CAPTURE.finish(event.getGui());
-        renderingScreen = null;
-        if (sources != null) {
-            screenSources = new java.util.HashSet<String>(sources);
-            TRANSLATOR.retranslateScreen(sources, currentTarget(), config);
+        HookGuard.enterSticky("event.afterScreen");
+        try {
+            java.util.List<String> sources = SCREEN_CAPTURE.finish(event.getGui());
+            renderingScreen = null;
+            if (sources != null) {
+                screenSources = new java.util.HashSet<String>(sources);
+                TRANSLATOR.retranslateScreen(sources, currentTarget(), config);
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.afterScreen", guardError);
         }
     }
 
     /** Called by the loader-specific FontRenderer hook before wrapping/drawing. */
     public static String translateScreenString(String source) {
-        Minecraft mc = Minecraft.getInstance();
-        if (instance == null || source == null || mc == null || renderingScreen == null
-                || renderingScreen != mc.currentScreen || !instance.config.enabled) return source;
-        if (SCREEN_CAPTURE.active(renderingScreen)) {
-            SCREEN_CAPTURE.record(renderingScreen, source);
+        if (!HookGuard.enter("hook.translateScreenString")) return source;
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (instance == null || source == null || mc == null || renderingScreen == null
+                    || renderingScreen != mc.currentScreen || !instance.config.enabled) return source;
+            if (SCREEN_CAPTURE.active(renderingScreen)) {
+                SCREEN_CAPTURE.record(renderingScreen, source);
+                return source;
+            }
+            if (translatedScreen != renderingScreen || !screenSources.contains(source)) return source;
+            String translated = TRANSLATOR.cached(source, currentTarget(), instance.config.aiEnabled, instance.config);
+            return translated == null ? source : translated;
+        } catch (Throwable guardError) {
+            HookGuard.fail("hook.translateScreenString", guardError);
             return source;
         }
-        if (translatedScreen != renderingScreen || !screenSources.contains(source)) return source;
-        String translated = TRANSLATOR.cached(source, currentTarget(), instance.config.aiEnabled, instance.config);
-        return translated == null ? source : translated;
     }
 
     static void translationFile(boolean importing) {
@@ -127,11 +144,21 @@ public final class NyanslateForge {
     }
 
     @SubscribeEvent public void screenKey(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre event) {
-        if (!scanKeyDown && screenScanKey.matchesKey(event.getKeyCode(), event.getScanCode())
-                && beginScreenScan(event.getGui())) { scanKeyDown=true; event.setCanceled(true); }
+        if (!HookGuard.enter("event.screenKey")) return;
+        try {
+            if (!scanKeyDown && screenScanKey.matchesKey(event.getKeyCode(), event.getScanCode())
+                    && beginScreenScan(event.getGui())) { scanKeyDown=true; event.setCanceled(true); }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.screenKey", guardError);
+        }
     }
     @SubscribeEvent public void screenKeyReleased(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyReleasedEvent.Pre event) {
-        if (screenScanKey.matchesKey(event.getKeyCode(), event.getScanCode())) scanKeyDown=false;
+        if (!HookGuard.enter("event.screenKeyReleased")) return;
+        try {
+            if (screenScanKey.matchesKey(event.getKeyCode(), event.getScanCode())) scanKeyDown=false;
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.screenKeyReleased", guardError);
+        }
     }
 
     private static final class PendingChat {
@@ -165,6 +192,7 @@ public final class NyanslateForge {
     }
 
     public NyanslateForge() {
+        NyanslateHooks.register(null, null);
         instance = this;
         Path configDir = configFile.getAbsoluteFile().getParentFile().toPath();
         LegacyDataMigration.migrate(configDir, null);
@@ -183,46 +211,51 @@ public final class NyanslateForge {
     }
 
     @SubscribeEvent public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        Minecraft minecraft = Minecraft.getInstance();
-        maybeMigrateKeybinds(minecraft);
-        SCREEN_CAPTURE.cancelUnless(minecraft.currentScreen);
-        if (translatedScreen != minecraft.currentScreen) {
-            translatedScreen = null;
-            screenSources = java.util.Collections.emptySet();
-            scanKeyDown = false;
-        }
-        if (!tooltipRenderedThisTick) clearPointedTooltip();
-        tooltipRenderedThisTick = false;
-        syncChatSession(minecraft);
-        boolean toggled = false;
-        while (toggleKey.isPressed()) {
-            if (minecraft != null && ForgeTextInput.focused(minecraft.currentScreen)) continue;
-            config.enabled = !config.enabled;
-            toggled = true;
-        }
-        if (toggled) saveConfig();
-        syncChatRequestProfile(minecraft);
-        if (minecraft == null || minecraft.ingameGUI == null) {
-            clearPendingChatState();
-            TRANSLATOR.cancelPending();
-            clearItemWarmState();
-        } else if (config != null && config.enabled) {
-            TRANSLATOR.flushBatch();
-            flushPendingChats(minecraft);
-            warmVisibleItemNames(minecraft);
-        } else {
-            TRANSLATOR.cancelPending();
-            flushPendingChatOriginals(minecraft);
-            clearItemWarmState();
-        }
-        while (minecraft != null && settingsKey.isPressed()) {
-            if (ForgeTextInput.focused(minecraft.currentScreen)) continue;
-            minecraft.displayGuiScreen(new ForgeSettingsScreen(minecraft.currentScreen));
-        }
-        while (minecraft != null && itemRetranslateKey.isPressed()) {
-            if (ForgeTextInput.focused(minecraft.currentScreen)) continue;
-            handleRetranslateItemKey(minecraft);
+        if (!HookGuard.enter("event.onClientTick")) return;
+        try {
+            if (event.phase != TickEvent.Phase.END) return;
+            Minecraft minecraft = Minecraft.getInstance();
+            maybeMigrateKeybinds(minecraft);
+            SCREEN_CAPTURE.cancelUnless(minecraft.currentScreen);
+            if (translatedScreen != minecraft.currentScreen) {
+                translatedScreen = null;
+                screenSources = java.util.Collections.emptySet();
+                scanKeyDown = false;
+            }
+            if (!tooltipRenderedThisTick) clearPointedTooltip();
+            tooltipRenderedThisTick = false;
+            syncChatSession(minecraft);
+            boolean toggled = false;
+            while (toggleKey.isPressed()) {
+                if (minecraft != null && ForgeTextInput.focused(minecraft.currentScreen)) continue;
+                config.enabled = !config.enabled;
+                toggled = true;
+            }
+            if (toggled) saveConfig();
+            syncChatRequestProfile(minecraft);
+            if (minecraft == null || minecraft.ingameGUI == null) {
+                clearPendingChatState();
+                TRANSLATOR.cancelPending();
+                clearItemWarmState();
+            } else if (config != null && config.enabled) {
+                TRANSLATOR.flushBatch();
+                flushPendingChats(minecraft);
+                warmVisibleItemNames(minecraft);
+            } else {
+                TRANSLATOR.cancelPending();
+                flushPendingChatOriginals(minecraft);
+                clearItemWarmState();
+            }
+            while (minecraft != null && settingsKey.isPressed()) {
+                if (ForgeTextInput.focused(minecraft.currentScreen)) continue;
+                minecraft.displayGuiScreen(new ForgeSettingsScreen(minecraft.currentScreen));
+            }
+            while (minecraft != null && itemRetranslateKey.isPressed()) {
+                if (ForgeTextInput.focused(minecraft.currentScreen)) continue;
+                handleRetranslateItemKey(minecraft);
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onClientTick", guardError);
         }
     }
 
@@ -262,38 +295,43 @@ public final class NyanslateForge {
     }
 
     @SubscribeEvent public void onChat(ClientChatReceivedEvent event) {
-        if (event.getMessage() == null || event.getType() == ChatType.GAME_INFO) return;
-        if (event.getType() != ChatType.CHAT && event.getType() != ChatType.SYSTEM) return;
-        final Minecraft minecraft = Minecraft.getInstance();
-        syncChatSession(minecraft);
-        syncChatRequestProfile(minecraft);
-        if (config == null || minecraft == null || minecraft.ingameGUI == null) {
-            clearPendingChatState();
-            TRANSLATOR.cancelPending();
-            return;
-        }
-        if (!config.enabled) {
-            TRANSLATOR.cancelPending();
-            flushPendingChatOriginals(minecraft);
-            return;
-        }
-        final String text = event.getMessage().getString();
-        final boolean shouldTranslate = hasLetters(text);
-        if (!shouldTranslate) {
-            if (pendingChats.isEmpty()) return;
-            event.setCanceled(true);
-            PendingChat passThrough = queueChat(minecraft, event.getType(), event.getMessage(), text);
-            pendingChats.markReady(passThrough);
-            flushReadyChats(minecraft);
-            return;
-        }
-        event.setCanceled(true);
-        final PendingChat pending = queueChat(minecraft, event.getType(), event.getMessage(), text);
+        if (!HookGuard.enter("event.onChat")) return;
         try {
-            TRANSLATOR.translate(text, currentTarget(), config.aiEnabled, false, config,
-                    translated -> completeChat(pending, translated));
-        } catch (RuntimeException failure) {
-            completeChat(pending, null);
+            if (event.getMessage() == null || event.getType() == ChatType.GAME_INFO) return;
+            if (event.getType() != ChatType.CHAT && event.getType() != ChatType.SYSTEM) return;
+            final Minecraft minecraft = Minecraft.getInstance();
+            syncChatSession(minecraft);
+            syncChatRequestProfile(minecraft);
+            if (config == null || minecraft == null || minecraft.ingameGUI == null) {
+                clearPendingChatState();
+                TRANSLATOR.cancelPending();
+                return;
+            }
+            if (!config.enabled) {
+                TRANSLATOR.cancelPending();
+                flushPendingChatOriginals(minecraft);
+                return;
+            }
+            final String text = event.getMessage().getString();
+            final boolean shouldTranslate = hasLetters(text);
+            if (!shouldTranslate) {
+                if (pendingChats.isEmpty()) return;
+                event.setCanceled(true);
+                PendingChat passThrough = queueChat(minecraft, event.getType(), event.getMessage(), text);
+                pendingChats.markReady(passThrough);
+                flushReadyChats(minecraft);
+                return;
+            }
+            event.setCanceled(true);
+            final PendingChat pending = queueChat(minecraft, event.getType(), event.getMessage(), text);
+            try {
+                TRANSLATOR.translate(text, currentTarget(), config.aiEnabled, false, config,
+                        translated -> completeChat(pending, translated));
+            } catch (RuntimeException failure) {
+                completeChat(pending, null);
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onChat", guardError);
         }
     }
 
@@ -469,36 +507,41 @@ public final class NyanslateForge {
      * regardless of engine.
      */
     @SubscribeEvent public void onTooltipRender(RenderTooltipEvent.Pre event) {
-        if (!config.enabled || event.getStack() == null || event.getStack().isEmpty() || event.getLines().isEmpty()) return;
-        tooltipRenderedThisTick = true;
-        if (SCREEN_CAPTURE.active(renderingScreen)) {
-            for (String source : event.getLines()) SCREEN_CAPTURE.record(renderingScreen, source);
-            return;
-        }
-        String target = currentTarget();
-        boolean ai = config.aiEnabled;
-        List<String> lines = event.getLines();
-        java.util.List<String> sources = new java.util.ArrayList<String>();
-        boolean missing = false;
-        for (int i = 0; i < lines.size(); i++) {
-            String source = lines.get(i);
-            if (!hasLetters(source)) continue;
-            sources.add(source);
-            String translated = TRANSLATOR.cached(source, target, ai, config);
-            if (translated == null) {
-                missing = true;
-                if (ai) TRANSLATOR.prefetch(source, target, true, true, config);
-            } else if (!translated.equals(source)) {
-                lines.set(i, translated);
+        if (!HookGuard.enter("event.onTooltipRender")) return;
+        try {
+            if (!config.enabled || event.getStack() == null || event.getStack().isEmpty() || event.getLines().isEmpty()) return;
+            tooltipRenderedThisTick = true;
+            if (SCREEN_CAPTURE.active(renderingScreen)) {
+                for (String source : event.getLines()) SCREEN_CAPTURE.record(renderingScreen, source);
+                return;
             }
-        }
-        updatePointedTooltip(sources, target);
-        if (ai) return;
-        if (pointedTooltipTranslating) {
-            lines.add("§7" + I18n.format("screen.nyanslate.tooltip.translating"));
-        } else if (missing) {
-            lines.add("§7" + I18n.format("screen.nyanslate.tooltip.hint",
-                    keyDisplayName(itemRetranslateKey)));
+            String target = currentTarget();
+            boolean ai = config.aiEnabled;
+            List<String> lines = event.getLines();
+            java.util.List<String> sources = new java.util.ArrayList<String>();
+            boolean missing = false;
+            for (int i = 0; i < lines.size(); i++) {
+                String source = lines.get(i);
+                if (!hasLetters(source)) continue;
+                sources.add(source);
+                String translated = TRANSLATOR.cached(source, target, ai, config);
+                if (translated == null) {
+                    missing = true;
+                    if (ai) TRANSLATOR.prefetch(source, target, true, true, config);
+                } else if (!translated.equals(source)) {
+                    lines.set(i, translated);
+                }
+            }
+            updatePointedTooltip(sources, target);
+            if (ai) return;
+            if (pointedTooltipTranslating) {
+                lines.add("§7" + I18n.format("screen.nyanslate.tooltip.translating"));
+            } else if (missing) {
+                lines.add("§7" + I18n.format("screen.nyanslate.tooltip.hint",
+                        keyDisplayName(itemRetranslateKey)));
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onTooltipRender", guardError);
         }
     }
     /**
@@ -506,43 +549,63 @@ public final class NyanslateForge {
      * Machine engine: cache-only (round 3, unchanged).
      */
     @SubscribeEvent public void onOverlayText(RenderGameOverlayEvent.Text event) {
-        if (!config.enabled) return;
-        translateVisibleLines(event.getLeft(), false);
-        translateVisibleLines(event.getRight(), false);
+        if (!HookGuard.enter("event.onOverlayText")) return;
+        try {
+            if (!config.enabled) return;
+            translateVisibleLines(event.getLeft(), false);
+            translateVisibleLines(event.getRight(), false);
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onOverlayText", guardError);
+        }
     }
 
     @SubscribeEvent public void onNameTagPre(RenderLivingEvent.Specials.Pre event) {
-        EntityLivingBase entity = event.getEntity();
-        if (entity == null || entity instanceof EntityPlayer || !config.enabled) return;
-        ITextComponent originalName = entity.getCustomName();
-        String source = originalName == null ? "" : originalName.getString();
-        if (!hasLetters(source) || nameTagMatchesListedPlayer(source)) return;
-        String translated = TRANSLATOR.cached(source, currentTarget(), config.aiEnabled, config);
-        if (translated == null) TRANSLATOR.prefetch(source, currentTarget(), config.aiEnabled, false, config);
-        else if (!translated.equals(source)) {
-            renderedNames.put(entity.getEntityId(), originalName);
-            entity.setCustomName(new TextComponentString(translated));
+        HookGuard.enterSticky("event.onNameTagPre");
+        try {
+            EntityLivingBase entity = event.getEntity();
+            if (entity == null || entity instanceof EntityPlayer || !config.enabled) return;
+            ITextComponent originalName = entity.getCustomName();
+            String source = originalName == null ? "" : originalName.getString();
+            if (!hasLetters(source) || nameTagMatchesListedPlayer(source)) return;
+            String translated = TRANSLATOR.cached(source, currentTarget(), config.aiEnabled, config);
+            if (translated == null) TRANSLATOR.prefetch(source, currentTarget(), config.aiEnabled, false, config);
+            else if (!translated.equals(source)) {
+                renderedNames.put(entity.getEntityId(), originalName);
+                entity.setCustomName(new TextComponentString(translated));
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onNameTagPre", guardError);
         }
     }
     @SubscribeEvent public void onNameTagPost(RenderLivingEvent.Specials.Post event) {
-        EntityLivingBase entity = event.getEntity();
-        if (entity == null) return;
-        ITextComponent original = renderedNames.remove(entity.getEntityId());
-        if (original != null) entity.setCustomName(original);
+        HookGuard.enterSticky("event.onNameTagPost");
+        try {
+            EntityLivingBase entity = event.getEntity();
+            if (entity == null) return;
+            ITextComponent original = renderedNames.remove(entity.getEntityId());
+            if (original != null) entity.setCustomName(original);
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onNameTagPost", guardError);
+        }
     }
 
     @SubscribeEvent public void onOverlayPost(RenderGameOverlayEvent.Post event) {
-        if (!config.debugTranslationOverlay || event.getType() != RenderGameOverlayEvent.ElementType.ALL) return;
-        Minecraft minecraft = Minecraft.getInstance();
-        int y = 6;
-        minecraft.fontRenderer.drawStringWithShadow(tokenUsageLine(), 6, y, 0x80D8FF);
-        y += 11;
-        List<LegacyTranslator.DebugEntry> entries = TRANSLATOR.debugSnapshot();
-        for (int i = Math.max(0, entries.size() - 8); i < entries.size(); i++) {
-            LegacyTranslator.DebugEntry entry = entries.get(i);
-            int color = entry.status.contains("failed (429 rate limit)") ? 0xFFFF40FF : entry.status.contains("failed (") ? 0xFFFF8080 : 0x80FF80;
-            minecraft.fontRenderer.drawStringWithShadow("[" + entry.engine + " " + entry.status + "] " + entry.source, 6, y, color);
-            y += 10;
+        if (!HookGuard.enter("event.onOverlayPost")) return;
+        try {
+            if (!config.debugTranslationOverlay || event.getType() != RenderGameOverlayEvent.ElementType.ALL) return;
+            Minecraft minecraft = Minecraft.getInstance();
+            int y = 6;
+            minecraft.fontRenderer.drawStringWithShadow(tokenUsageLine(), 6, y, 0x80D8FF);
+            y += 11;
+            List<LegacyTranslator.DebugEntry> entries = TRANSLATOR.debugSnapshot();
+            for (int i = Math.max(0, entries.size() - 8); i < entries.size(); i++) {
+                LegacyTranslator.DebugEntry entry = entries.get(i);
+                int color = entry.status.contains("failed (429 rate limit)") ? 0xFFFF40FF : entry.status.contains("failed (") ? 0xFFFF8080 : 0x80FF80;
+                minecraft.fontRenderer.drawStringWithShadow("[" + entry.engine + " " + entry.status + "] " + entry.source, 6, y, color);
+                y += 10;
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onOverlayPost", guardError);
         }
     }
 

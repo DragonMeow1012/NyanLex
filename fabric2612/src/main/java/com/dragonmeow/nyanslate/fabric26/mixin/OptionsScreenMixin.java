@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric26.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric26.Fabric26ConfigScreen;
 import com.dragonmeow.nyanslate.fabric26.NyanslateFabric26;
 import net.minecraft.client.gui.components.Button;
@@ -19,12 +20,17 @@ public abstract class OptionsScreenMixin extends Screen {
 
    @Inject(method = "init", at = @At("TAIL"), require = 0)
    private void nyanslate$addButton(CallbackInfo ci) {
-      if (NyanslateFabric26.service() != null) {
-         this.addRenderableWidget(
-            Button.builder(Component.translatable("screen.nyanslate.options"), b -> this.minecraft.setScreenAndShow(new Fabric26ConfigScreen((OptionsScreen)(Object)this)))
-               .bounds(6, 6, 110, 20)
-               .build()
-         );
-      }
-   }
+        if (!HookGuard.enter("OptionsScreen.addButton")) return;
+        try {
+          if (NyanslateFabric26.service() != null) {
+             this.addRenderableWidget(
+                Button.builder(Component.translatable("screen.nyanslate.options"), b -> this.minecraft.setScreenAndShow(new Fabric26ConfigScreen((OptionsScreen)(Object)this)))
+                   .bounds(6, 6, 110, 20)
+                   .build()
+             );
+          }
+        } catch (Throwable guardError) {
+            HookGuard.fail("OptionsScreen.addButton", guardError);
+        }
+    }
 }

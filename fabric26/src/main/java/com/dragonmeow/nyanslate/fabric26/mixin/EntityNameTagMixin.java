@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric26.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric26.NyanslateFabric26;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -44,7 +45,12 @@ public abstract class EntityNameTagMixin {
                                             SubmitNodeCollector collector,
                                             CameraRenderState camera, int offset,
                                             CallbackInfo ci) {
-        nyanslate$currentState = state;
+        if (!HookGuard.enter("EntityNameTag.captureState")) return;
+        try {
+            nyanslate$currentState = state;
+        } catch (Throwable guardError) {
+            HookGuard.fail("EntityNameTag.captureState", guardError);
+        }
     }
 
     @ModifyArg(
@@ -58,6 +64,12 @@ public abstract class EntityNameTagMixin {
                             + "Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V"),
             index = 3, require = 0)
     private Component nyanslate$name(Component component) {
-        return NyanslateFabric26.nameTag(nyanslate$currentState, component);
+        if (!HookGuard.enter("EntityNameTag.name")) return component;
+        try {
+            return NyanslateFabric26.nameTag(nyanslate$currentState, component);
+        } catch (Throwable guardError) {
+            HookGuard.fail("EntityNameTag.name", guardError);
+            return component;
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.legacy;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -99,6 +100,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     }
 
     @Override public void onInitializeClient() {
+        NyanslateHooks.register(null, null);
         instance = this;
         configPath = FabricLoader.getInstance().getConfigDir().resolve("nyanslate-legacy.json");
         Path configDir = configPath.getParent();
@@ -121,7 +123,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
                 "key.nyanslate.retranslate", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R,
                 "category.nyanslate"));
         TRANSLATOR.loadSharedTranslations(configDir, currentTarget(Minecraft.getInstance()), config);
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+        ClientTickEvents.END_CLIENT_TICK.register(client -> HookGuard.run("event.clientTick", () -> {
             instance.maybeMigrateKeybinds(client);
             syncLanguage(client);
             SCREEN_CAPTURE.cancelUnless(client.screen);
@@ -138,8 +140,9 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
             while (itemRetranslateKey.consumeClick()) {
                 if (!LegacyTextInput.focused(client.screen)) instance.handleRetranslateItemKey(client);
             }
-        });
-        ItemTooltipCallback.EVENT.register((stack, context, lines) -> translateTooltip(stack, lines));
+        }));
+        ItemTooltipCallback.EVENT.register((stack, context, lines) ->
+                HookGuard.run("event.itemTooltip", () -> translateTooltip(stack, lines)));
     }
 
     /** Once per launch, the first time the title screen appears: carry any saved
@@ -530,7 +533,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return "TOKENS total " + tokens.totalTokens()
                 + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
                 + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
-                + " | req " + tokens.requests();
+                + " | req " + tokens.requests() + " | " + com.dragonmeow.nyanslate.translate.HookHealth.shortSummary();
     }
     static void testAi(final java.util.function.Consumer<String> callback) {
         final Minecraft client = Minecraft.getInstance();

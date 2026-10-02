@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.neoforge.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.neoforge.NyanslateNeoForge;
 
 import net.minecraft.network.chat.Component;
@@ -27,6 +28,12 @@ public abstract class TextFieldMixin {
             method = "setText(Lnet/minecraft/network/chat/Component;)Ldev/ftb/mods/ftblibrary/ui/TextField;",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private Component nyanslate$translateWhole(Component component) {
-        return NyanslateNeoForge.ftbText(this, component);
+        if (!HookGuard.enter("TextField.translateWhole")) return component;
+        try {
+            return NyanslateNeoForge.ftbText(this, component);
+        } catch (Throwable guardError) {
+            HookGuard.fail("TextField.translateWhole", guardError);
+            return component;
+        }
     }
 }

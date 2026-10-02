@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.translate.InternalRenderGuard;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.GuiMessage;
@@ -21,7 +22,12 @@ public abstract class ChatComponentMixin implements com.dragonmeow.nyanslate.fab
     private void nyanslate$enterChatRender(GuiGraphics graphics, int tickCount,
                                                int mouseX, int mouseY, boolean focused,
                                                CallbackInfo ci) {
-        InternalRenderGuard.enter();
+        HookGuard.enterSticky("ChatComponent.enterChatRender");
+        try {
+            InternalRenderGuard.enter();
+        } catch (Throwable guardError) {
+            HookGuard.fail("ChatComponent.enterChatRender", guardError);
+        }
     }
 
     @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIIZ)V",
@@ -29,6 +35,11 @@ public abstract class ChatComponentMixin implements com.dragonmeow.nyanslate.fab
     private void nyanslate$exitChatRender(GuiGraphics graphics, int tickCount,
                                               int mouseX, int mouseY, boolean focused,
                                               CallbackInfo ci) {
-        InternalRenderGuard.exit();
+        HookGuard.enterSticky("ChatComponent.exitChatRender");
+        try {
+            InternalRenderGuard.exit();
+        } catch (Throwable guardError) {
+            HookGuard.fail("ChatComponent.exitChatRender", guardError);
+        }
     }
 }

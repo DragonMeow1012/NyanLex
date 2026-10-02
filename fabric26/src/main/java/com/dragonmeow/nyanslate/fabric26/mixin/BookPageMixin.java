@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric26.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.config.DisplayMode;
 import com.dragonmeow.nyanslate.fabric26.Fabric26TextStyle;
 import com.dragonmeow.nyanslate.fabric26.NyanslateFabric26;
@@ -41,9 +42,14 @@ public abstract class BookPageMixin {
 
     @Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V", at = @At("HEAD"))
     private void nyanslate$forceResplit(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial, CallbackInfo ci) {
-        TranslationService service = NyanslateFabric26.service();
-        if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) {
-            this.cachedPage = -1; // re-split each frame so a late translation appears in place
+        if (!HookGuard.enter("BookPage.forceResplit")) return;
+        try {
+            TranslationService service = NyanslateFabric26.service();
+            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) {
+                this.cachedPage = -1; // re-split each frame so a late translation appears in place
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("BookPage.forceResplit", guardError);
         }
     }
 
@@ -54,20 +60,26 @@ public abstract class BookPageMixin {
                             + "(Lnet/minecraft/network/chat/FormattedText;I)Ljava/util/List;"),
             require = 1)
     private List<FormattedCharSequence> nyanslate$translateBookPage(Font font, FormattedText text, int width) {
-        TranslationService service = NyanslateFabric26.service();
-        if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY && text != null) {
-            Component src = preserveStyles(text);
-            service.warmBookBatch(Fabric26TextStyle.paragraphRequests(src));
-            Component translated = Fabric26TextStyle.renderTranslatedParagraphPage(
-                    src, service::translateBook, font);
-            if (translated != null) {
-                Component shown = service.bookMode() == DisplayMode.BOTH
-                        ? src.copy().append(Component.literal("\n")).append(translated)
-                        : translated;
-                return font.split(shown, width);
+        if (!HookGuard.enter("BookPage.translateBookPage")) return font.split(text, width);
+        try {
+            TranslationService service = NyanslateFabric26.service();
+            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY && text != null) {
+                Component src = preserveStyles(text);
+                service.warmBookBatch(Fabric26TextStyle.paragraphRequests(src));
+                Component translated = Fabric26TextStyle.renderTranslatedParagraphPage(
+                        src, service::translateBook, font);
+                if (translated != null) {
+                    Component shown = service.bookMode() == DisplayMode.BOTH
+                            ? src.copy().append(Component.literal("\n")).append(translated)
+                            : translated;
+                    return font.split(shown, width);
+                }
             }
+            return font.split(text, width);
+        } catch (Throwable guardError) {
+            HookGuard.fail("BookPage.translateBookPage", guardError);
+            return font.split(text, width);
         }
-        return font.split(text, width);
     }
 
     private static Component preserveStyles(FormattedText text) {
