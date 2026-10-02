@@ -2,7 +2,7 @@
 
 > 讀者：專案維護者 DragonMeow，以及之後新開對話的 AI 助手。
 > 目標：不必重新研究，照著做就能**製作、更新、驗證、發佈、下架**倉庫資料。
-> 基準：分支 `release/nyanlex-1.0.0` @ `64cec54`，2026-10-02 驗證。倉庫當時有 17 個 mod 來源（合計 9,160 列）加 1 個伺服器來源（55,734 列）。之後依「只收簡單授權」規則移除了 9 個來源（見 §4.1），現在是 8 個 mod 來源（合計 561 列）加同一個伺服器來源。
+> 基準：分支 `release/nyanlex-1.0.0` @ `64cec54`，2026-10-02 驗證。倉庫當時有 17 個 mod 來源（合計 9,160 列）加 1 個伺服器來源（55,734 列）。之後依「只收簡單授權」規則移除了 9 個來源，後來規則放寬為「簡單授權加 LGPL」，其中 7 個放回（見 §4.1），現在是 15 個 mod 來源（合計 7,973 列）加同一個伺服器來源。
 > 本文件自己也遵守鐵則：範例一律用 `<modId>`、`<slug>`、`<host>` 這類代號，不寫真實模組名稱。
 
 ## 目錄
@@ -113,7 +113,7 @@ https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/translation-hub
 ```
 translation-hub/
   index.json                       每個來源、每個語言一筆：rows / bytes / sha256 / updatedAt
-  LICENSE                          資料授權（CC BY-NC-SA 4.0），只管這個資料夾
+  LICENSE                          資料授權（預設 CC BY-NC-SA 4.0；標了 license 欄位的檔案依其標示），只管這個資料夾
   README.md                        中英對照的倉庫說明與下架方式
   servers/<host>/<lang>.json       伺服器（<host> 是「可註冊網域」，如 example.net；mc.example.co.uk 會被收斂成 example.co.uk）
   modpacks/<slug>/<lang>.json      模組包（<slug> 由 HubSlug 產生：小寫、只留 a-z 0-9 與 -，最長 64）
@@ -137,6 +137,7 @@ translation-hub/
 - **只存 `sha256(正規化 key)` → 譯文**，沒有原文欄位，也沒有玩家名或範例句。看檔案還原不出原文。
 - 列依雜湊排序、每列一行（`HubFile.write`），所以 git diff 一列一列看得懂。
 - 譯文裡的 `⟦MT0⟧`、`⟦CS0⟧`、`⟦PB0⟧` 等是程式內部的保護標記（數字、色段、段落換行），**不要手改**。
+- **`license`（選用）**：只有來源專案的授權要求譯文沿用（目前就是 LGPL）時才寫，位置在 `language` 與 `rows` 之間，值是 SPDX 運算式，例如 `"license":"LGPL-3.0-only"`。同一檔併了多個來源時，用 `AND` 連接各不同的授權（例如 `LGPL-3.0-only AND LGPL-3.0-or-later`；某個來源本身是 `A OR B` 時加括號）。簡單授權的檔案**不寫這個欄位**，位元組與加入此規則之前完全相同（刻意的選擇：預設授權已涵蓋它們，既有檔案也不必重產）。玩家端的 `HubFile.read` 只把它當資訊讀進來（缺少、空白、超過 256 字元或不是字串都視為沒有），不影響任何一列，也不據此做任何判斷。
 - schema 1（含原文）的舊檔，現行客戶端一律拒收（`Unsupported hub file schema: 1`）。
 - 單檔上限 100,000 列／32 MiB（`HubPaths.MAX_FILE_ROWS`、`MAX_FILE_BYTES`）；單列譯文最長 16,384 字元、不得含網址（`HubFile.plausibleValue`）。
 
@@ -147,6 +148,7 @@ translation-hub/
 ```
 
 - 單行、緊湊 JSON，各區塊依鍵排序（`HubIndex.write`）。`generatedAt` 目前是空字串，沒用到。
+- 帶 `license` 的檔案，它的 index 條目也有同樣的 `license`（寫在 `updatedAt` 之後）；沒有的條目沒有這個欄位。`HubIndex` 讀寫都會保留它（缺少、空白、過長或不是字串都視為沒有，其他不認得的欄位直接忽略），所以 `--merge-index` 重寫 index 時不會洗掉其他條目的 `license`。
 - `bytes`、`sha256` 是**git blob（LF 位元組）**的大小與雜湊。玩家端靠它判斷「已是最新」。
 
 ### 1.4 key 是怎麼來的（為什麼不准自己重寫正規化）
@@ -175,9 +177,9 @@ hub key = `SHA-256( UTF-8( masked.text() ) )`。`masked.text()` 是畫面上實�
 
 ### 1.5 授權與下架
 
-- 倉庫資料（譯文）採 **CC BY-NC-SA 4.0**（`translation-hub/LICENSE`；程式碼仍是 repo 根目錄的 MIT）。署名方式：「Nyanlex Translation Hub contributors」加 repo 連結。
+- 倉庫資料（譯文）**預設**採 **CC BY-NC-SA 4.0**（`translation-hub/LICENSE`；程式碼仍是 repo 根目錄的 MIT）。**例外**：檔案標了 `license` 欄位的（來源專案是 LGPL 的模組，譯文沿用原授權），依該檔標示的授權；`translation-hub/README.md` 與 `LICENSE` 都有同樣的說明。署名方式：「Nyanlex Translation Hub contributors」加 repo 連結。
 - 原文的著作權屬原權利人（遊戲、伺服器、模組作者）；倉庫不收原文、不散布原文。
-- **來源專案的授權**：倉庫只收簡單授權的專案（MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、Zlib、CC0-1.0、Unlicense、CC-BY-3.0、CC-BY-4.0），外加使用者核准的一個例外 Polyform Shield。GPL、LGPL、AGPL、MPL，以及所有帶 SA、NC 或 ND 的 CC 授權一律不收（細節見 §4.1）。
+- **來源專案的授權**：倉庫只收簡單授權的專案（MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、Zlib、CC0-1.0、Unlicense、CC-BY-3.0、CC-BY-4.0）、使用者核准的例外 Polyform Shield，以及 LGPL（LGPL-2.1-only、LGPL-2.1-or-later、LGPL-3.0-only、LGPL-3.0-or-later；其譯文檔要沿用該授權，寫進 `license` 欄位）。GPL、AGPL、MPL，以及所有帶 SA、NC 或 ND 的 CC 授權一律不收（細節見 §4.1）。
 - **下架管道**：權利人在 GitHub repo 開 Issue，標題 `[Takedown] <伺服器網域或模組 id> <語言>`（範本在 `.github/ISSUE_TEMPLATE/hub-takedown.md`）。處理方式見 §6.2。
 
 ### 1.6 玩家端怎麼偵測、下載、查詢
@@ -213,7 +215,7 @@ hub key = `SHA-256( UTF-8( masked.text() ) )`。`masked.text()` 是畫面上實�
 |---|---|---|
 | 1 | **不存原文**。倉庫只有 `sha256(key)` → 譯文 | `hub_check.py`（欄位白名單、key 皆 64 位小寫十六進位）；`--originals` 做洩漏檢查 |
 | 2 | **伺服器資料不收聊天**。`hubExport` 預設就排除聊天；`-PincludeChat` 只在使用者明確要求公開聊天時才用（見 §3.2） | 匯出輸出的 `droppedChat` 不是 0；`hub_subset.py` 對照上一版 |
-| 3 | **授權只收簡單授權**（`LangPackBuilder.licenseAccepted`：解析 SPDX 運算式後，逐項**精確**比對）：MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、Zlib、CC0-1.0、Unlicense、CC-BY-3.0、CC-BY-4.0，外加使用者核准的例外 Polyform-Shield（含 Modrinth 的寫法 `LicenseRef-Polyform-Shield-1.0.0`）。**一律不收**：GPL、LGPL、AGPL、MPL（任何版本）、所有帶 SA、NC 或 ND 的 CC 授權、All Rights Reserved、自訂授權、查不到授權，以及其餘所有 `LicenseRef-*`。不在清單的就是不收，沒有人工裁定的通道 | `langPackBuild` 輸出的 `LICENSE ACCEPT/REFUSE` 行；`hub_modrinth.py info`（見 §4.1） |
+| 3 | **授權只收白名單**（`LangPackBuilder.licenseAccepted`：解析 SPDX 運算式後，逐項**精確**比對）：MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、Zlib、CC0-1.0、Unlicense、CC-BY-3.0、CC-BY-4.0，外加使用者核准的例外 Polyform-Shield（含 Modrinth 的寫法 `LicenseRef-Polyform-Shield-1.0.0`），以及 LGPL-2.1-only、LGPL-2.1-or-later、LGPL-3.0-only、LGPL-3.0-or-later。**LGPL 來源的譯文檔要沿用原授權**（檔案與 index 條目的 `license` 欄位）。**一律不收**：GPL、AGPL、MPL（任何版本）、其他版本的 LGPL、所有帶 SA、NC 或 ND 的 CC 授權、All Rights Reserved、自訂授權、查不到授權，以及其餘所有 `LicenseRef-*`。不在清單的就是不收，沒有人工裁定的通道 | `langPackBuild` 輸出的 `LICENSE ACCEPT/REFUSE` 行（LGPL 的檔案在統計行尾端有 `license=…`）；`hub_check.py` 檢查 `license` 欄位與 index 一致；`hub_modrinth.py info`（見 §4.1） |
 | 4 | **jar、zip、英文原文、使用者快取副本都不得進 repo**；快取副本用完立刻刪除 | `git status`、`git diff --cached --stat`；`hub_check.py` 會對 `translation-hub/` 內任何非資料檔報 FAIL |
 | 5 | **不讀含 API 金鑰的設定檔**（玩家 config 資料夾的 `nyanlex.json` 就有） | 匯出只複製**單一檔案** `nyanlex-ai-cache-<lang>.json` 到暫存資料夾再處理（§3.1） |
 | 6 | **key 一律用執行時同一套程式產生**，不准自己重寫正規化 | 只用 `langPackBuild`／`hubExport`；要查某個 key 的雜湊只能 `printf %s "<key>" \| sha256sum`（連結尾空白都要一樣） |
@@ -334,7 +336,7 @@ python <tools>/hub_hashname.py \
 4. 跑測試：
 
 ```bash
-# 【已實測】hub 套件全部測試（17 個類別、184 項，0 失敗）
+# 【已實測】hub 套件全部測試（19 個類別、201 項，0 失敗）
 $GRADLE -p <wt> test --tests "com.dragonmeow.nyanlex.hub.*" --offline
 ```
 
@@ -401,7 +403,7 @@ git -C <wt> show HEAD:translation-hub/servers/<host>/zh-tw.json | wc -c
 
 ### 4.1 選項目、用 Modrinth API 查授權
 
-選項目的原則：常用的客戶端模組與光影包、授權在下面的「簡單授權」清單內、確實有可翻的介面字串。
+選項目的原則：常用的客戶端模組與光影包、授權在下面的「收」清單內（簡單授權或 LGPL）、確實有可翻的介面字串。
 
 ```bash
 # 【已實測】附錄 A.6：查專案授權與各 MC／loader 的最新版本（只送 GET，每秒不超過 2 個請求）
@@ -415,19 +417,29 @@ python <tools>/hub_modrinth.py info <slug> [<slug> ...] [--mc 1.21.1] [--loader 
   version=… type=release mc=['1.21', '1.21.1'] loaders=['fabric', 'quilt'] file=….jar (… bytes)
 ```
 
-**以 `license.id` 為準判斷**（`LangPackBuilder.licenseAccepted`，輸入檔的 `license` 欄位會直接走這個閘門）。倉庫**只收簡單授權**：
+**以 `license.id` 為準判斷**（`LangPackBuilder.licenseAccepted`，輸入檔的 `license` 欄位會直接走這個閘門）。倉庫只收**簡單授權與 LGPL**：
 
 | 結果 | `license.id` 的樣子 |
 |---|---|
-| **收** | `MIT`、`Apache-2.0`、`BSD-2-Clause`、`BSD-3-Clause`、`ISC`、`Zlib`、`CC0-1.0`、`Unlicense`、`CC-BY-3.0`、`CC-BY-4.0`；另有使用者明確核准的一個例外：`Polyform-Shield`（Modrinth 的寫法 `LicenseRef-Polyform-Shield-1.0.0` 視為同一個授權，是唯一被放行的 `LicenseRef`） |
-| **不收** | GPL、LGPL、AGPL、MPL（任何版本，含 `-only`、`-or-later`）；所有帶 SA、NC 或 ND 的 CC 授權（`CC-BY-SA-*`、`CC-BY-NC-*`、`CC-BY-NC-SA-*`、`CC-BY-ND-*`、`CC-BY-NC-ND-*`）；`LicenseRef-All-Rights-Reserved`、`All Rights Reserved`、`ARR`；其餘所有 `LicenseRef-*`；空白或 `LicenseRef-`（查不到授權）；不是合法 SPDX 運算式的字串（例如 `Some Mod License (LicenseRef-Some-Mod-License)`）；以及任何不在上面「收」那一列的授權 |
+| **收（簡單授權）** | `MIT`、`Apache-2.0`、`BSD-2-Clause`、`BSD-3-Clause`、`ISC`、`Zlib`、`CC0-1.0`、`Unlicense`、`CC-BY-3.0`、`CC-BY-4.0`；另有使用者明確核准的一個例外：`Polyform-Shield`（Modrinth 的寫法 `LicenseRef-Polyform-Shield-1.0.0` 視為同一個授權，是唯一被放行的 `LicenseRef`）。這類檔案**沒有** `license` 欄位，適用倉庫預設授權 |
+| **收（LGPL，譯文沿用）** | `LGPL-2.1-only`、`LGPL-2.1-or-later`、`LGPL-3.0-only`、`LGPL-3.0-or-later`。SPDX 已棄用的舊拼法 `LGPL-2.1`、`LGPL-3.0` 與它們的 `+` 形式視為對應的 `-only`／`-or-later`，寫出的 `license` 一律是正式拼法。這類檔案的 `license` 欄位寫來源的授權 |
+| **不收** | GPL、AGPL、MPL（任何版本，含 `-only`、`-or-later`）；LGPL-2.0 等上面沒列的 LGPL 版本；所有帶 SA、NC 或 ND 的 CC 授權（`CC-BY-SA-*`、`CC-BY-NC-*`、`CC-BY-NC-SA-*`、`CC-BY-ND-*`、`CC-BY-NC-ND-*`）；`LicenseRef-All-Rights-Reserved`、`All Rights Reserved`、`ARR`；其餘所有 `LicenseRef-*`；空白或 `LicenseRef-`（查不到授權）；不是合法 SPDX 運算式的字串（例如 `Some Mod License (LicenseRef-Some-Mod-License)`）；以及任何不在上面「收」那一列的授權 |
 
 沒有「要人判斷」這一類：不在清單的一律不收，閘門不讀授權文字，也不接受人工改寫 `license` 欄位來放行。要改清單，必須改程式並經使用者同意。
+
+**LGPL 來源的檔案要沿用原授權（`license` 欄位的規則）**，由 `LangPackBuilder` 自動處理，不用手動寫：
+
+- 一個輸入檔的授權「靠 LGPL 才被收」（拿掉 LGPL 就不在白名單內）時，它的授權運算式（正式拼法、`AND`／`OR` 大寫）會成為目標檔 `license` 的一部分。授權由簡單授權單獨就足以涵蓋的輸入檔（`MIT`，或作者另給選擇的 `MIT OR LGPL-3.0-only`）不產生欄位。
+- 同一個目標檔併了多個來源（例如 mod 本體加光影包），欄位是所有靠 LGPL 的來源授權去重、排序後用 ` AND ` 連接，例如 `LGPL-3.0-only AND LGPL-3.0-or-later`；某個運算式本身含 `OR` 時加括號。同檔併進來的簡單授權來源不另外列出（簡單授權允許隨該檔一起以 LGPL 散布）。被 REFUSE 的輸入對欄位毫無影響，因為它們根本沒被轉換。
+- 欄位同時寫在倉庫檔（`language` 與 `rows` 之間）和 `index.json` 的對應條目；兩邊必須一致，`hub_check.py` 會檢查，也檢查值只由白名單內的 id 組成並至少含一個 LGPL id。
+- **選擇：簡單授權的檔案不加欄位**（而不是全部都加），所以它們的位元組與加入這個規則之前完全相同，預設授權（CC BY-NC-SA 4.0）仍涵蓋它們。
+- 玩家端不用這個欄位做任何判斷（`HubFile`、`HubIndex` 只是把它當資訊保留，格式不對就當沒有）；已用單元測試走完整的下載、合併、查詢流程確認（`HubLicenseFieldTest`、`LangPackBuilderLicenseFieldTest`）。
 
 閘門的注意事項（讀 `LangPackBuilder.licenseAccepted`）：
 
 - 它**解析 SPDX 運算式**：支援 `AND`、`OR`、括號與 `WITH <例外>`；`AND`／`OR`／`WITH` **大小寫都認**（`and`、`And` 都行），`AND` 優先於 `OR`。`A AND B` 兩邊都要在清單內，`A OR B` 任一邊在清單內即可（作者本來就提供寬鬆的那一邊）。
-- 每個授權 id **逐項與清單精確比對**（不分大小寫），不是子字串、也不是前綴：`AGPL-3.0` 不會因含 `gpl` 被收，`limited`、`permit` 也不會因含 `mit` 被收；沒有版本號的簡寫（`BSD`、`CC-BY`、`CC0`）不是 SPDX id，不收；`BSD-3-Clause-Clear`、`CC-BY-3.0-IGO`、`CC-BY-2.0` 這類不在清單上的變體也不收。
+- 每個授權 id **逐項與清單精確比對**（不分大小寫），不是子字串、也不是前綴：`AGPL-3.0` 不會因含 `gpl` 被收（`LGPL-3.0-only` 被收是因為它整個 id 在清單上，不是因為含 `gpl`），`limited`、`permit` 也不會因含 `mit` 被收；沒有版本號的簡寫（`BSD`、`CC-BY`、`CC0`、`LGPL`）不是 SPDX id，不收；`BSD-3-Clause-Clear`、`CC-BY-3.0-IGO`、`CC-BY-2.0`、`LGPL-2.0-only` 這類不在清單上的變體也不收。
+- `LGPL-2.1 AND CC-BY-NC-SA-4.0` 這種「兩個授權都要遵守」的運算式，只要有一邊不在清單就整個不收（`AND` 兩邊都要收）；`LGPL-3.0-only AND LGPL-3.0-or-later` 兩邊都在清單，收。
 - 不是合法運算式的字串（括號不成對、懸空的 `AND`、自由文字的授權名稱）一律不收。
 - `LICENSE ACCEPT` 行一律要人眼對照 Modrinth 的 `license.id` 複核；與預期不同就停下來回報，不要自己改 `license` 欄位。
 
@@ -596,7 +608,7 @@ python <tools>/hub_vanilla_glossary.py --mc 1.21.1 --out <scratch>/vanilla.json 
   "version": "<版本號>",
   "mcVersion": "1.21.1",
   "loader": "fabric",
-  "license": "<Modrinth 的 license.id，原樣照抄>",
+  "license": "<Modrinth 的 license.id，原樣照抄；LGPL 來源的這個值會被寫進倉庫檔的 license 欄位（§4.1）>",
   "existingZhTw": "none | partial | full",
   "entries": [
     { "ns": "<lang 的 namespace>", "key": "<lang key>", "en": "<英文原文，含 %s>", "zh_tw": "<譯文，含 %s>" }
@@ -654,7 +666,7 @@ $GRADLE -p <wt> langPackBuild --offline -q \
 - 只寫出「有輸入且授權通過」的 mod 檔；沒出現在輸入裡的 mod 與 `servers/` 完全不動。
 - **授權閘門**：每個輸入檔印一行 `LICENSE ACCEPT|REFUSE <kind> <modId> [<license>] <檔名>`；REFUSE 的整檔不轉換。判斷邏輯與例外見 §4.1。
 - 逐條轉換：把英文代入範例數字（`%d`→12、34、56…，各位置不同）、經 `FabricTextStyle` 管線算出 key；譯文用同一管線算請求字串；段落換行數與英文不同時，多的壓平、少的依英文行長度比例在標點處補回（`alignBreaks`）；最後以 `HubImportValidator.acceptsOnHit`（與玩家端命中時完全相同的檢查）驗證。
-- 輸出 `mods/<modId>/zh-tw.json`（schema 2，列依雜湊排序）與 `index.json` 的 mods 區塊。
+- 輸出 `mods/<modId>/zh-tw.json`（schema 2，列依雜湊排序）與 `index.json` 的 mods 區塊。來源授權要求沿用（LGPL）的 mod 檔多一個 `license` 欄位（檔案與 index 條目都有，規則見 §4.1），統計輸出裡該 mod 那一行的尾端會多 ` license=<值>`。
 
 實測輸出（假資料：2 個 mod 檔＋1 個光影檔，其中一個 mod 是 All Rights Reserved）：
 
@@ -704,7 +716,7 @@ RESULT PASS
 - **key 格式**：全部 64 位小寫十六進位；schema／format／hash／language／rows 欄位正確；沒有多餘欄位。
 - **值不含原文**：`--originals` 把輸入檔裡長度 ≥16 的英文原文拿去找「是否原樣出現在某個譯文裡」。`SEVERE`（值就是原文，或含 6 個詞以上的原文句子）會失敗；`REVIEW` 的幾乎都是產品名、活動名留在中文句子裡，逐筆看一眼即可。`no-CJK-values` 不為 0 的列也要抽看（專有名詞、純符號是正常的）。
 - **index 一致**：每個檔案的 rows／bytes／sha256 與 **git blob** 相符，index 與實際檔案一一對應，倉庫內沒有別的檔案。
-- 單元測試（【已實測】184 項全綠）：`$GRADLE -p <wt> test --tests "com.dragonmeow.nyanlex.hub.*" --offline`。其中 `LangPackBuilderTest` 驗證 key 與 live `TranslationService` 的 hub 查詢一致、輸出檔能被 `HubFile` 讀回並由 `HubLocalCache` 命中。
+- 單元測試（【已實測】201 項全綠）：`$GRADLE -p <wt> test --tests "com.dragonmeow.nyanlex.hub.*" --offline`。其中 `LangPackBuilderTest` 驗證 key 與 live `TranslationService` 的 hub 查詢一致、輸出檔能被 `HubFile` 讀回並由 `HubLocalCache` 命中。
 - 再抽 20 筆譯文肉眼看（用語、有沒有簡體、有沒有明顯翻錯）。
 
 ### 4.9 遊戲內驗證
@@ -784,7 +796,7 @@ $GRADLE -p <wt> runClient --offline
 6. **執行時才組合的字串**（`COMPOSED_AT_RUNTIME`）、**不是 lang 的資料**（模組中繼資料描述）、**純符號或帶符號前綴的字串**、**註解抽取抓不到的下拉選項**：不在倉庫涵蓋範圍。
 7. **一個來源一個語言一個檔**，上限 100,000 列／32 MiB；目前只有 `zh-tw`。
 8. **命中時驗證不過的列會被丟棄**，且從本機快取刪掉：若 key 的形狀（數字、色碼段、段落換行的個數）與資料不合，該列永遠不會顯示。
-9. **授權閘門只看輸入檔的 `license` 欄位字串**（§4.1）：它解析 SPDX 運算式並逐項精確比對簡單授權清單，但不讀授權文字；不在清單的一律不收，沒有人工裁定的通道。
+9. **授權閘門只看輸入檔的 `license` 欄位字串**（§4.1）：它解析 SPDX 運算式並逐項精確比對白名單（簡單授權加 LGPL），但不讀授權文字；不在清單的一律不收，沒有人工裁定的通道。
 10. **`core.autocrlf=true`** 讓工作目錄的資料檔變 CRLF。建議（**未實施，需改 repo 並先問使用者**）在 `.gitattributes` 加一行 `translation-hub/** -text`，讓資料檔永遠不被換行轉換，工作目錄與 blob 位元組相同。
 
 ---
@@ -809,7 +821,7 @@ python <tools>/hub_apply.py --repo <wt> --hub <wt>/translation-hub --scratch <sc
 python <tools>/hub_apply.py --repo <wt> --hub <wt>/translation-hub --scratch <scratch>/hub-out --write
 ```
 
-- **【已實測】** 以真實輸入（所有輸入檔，含授權被拒絕的項目，一併放進 `-Pin`）重產到空的暫存資料夾：`TOTAL rows=561 files=8`；8 個保留的檔與 git blob 逐檔 `cmp` **全部位元組相同**，其餘 9 個來源在 `LICENSE REFUSE` 行被閘門擋掉、沒有產出。伺服器那份檔案根本沒被碰（`langPackBuild` 不寫 `servers/`）。（採用簡單授權規則之前的紀錄：17 個檔、9,160 列，同樣全部相同。）
+- **【已實測】** 以真實輸入（`g1`～`g5` 每個資料夾各自列在 `-Pin`，含授權被拒絕的項目，`-PshaderTarget` 指定載入光影的那個 mod）重產到暫存資料夾：`TOTAL rows=7973 files=15`（29 個輸入檔，17 個收、12 個在 `LICENSE REFUSE` 行被擋掉）。原本的 8 個檔與 git blob 逐檔比對**全部位元組相同**；放回的 7 個檔與移除前的版本（`git show 7dee2cd^:…`）**逐列相同**（列數、順序、標頭欄位都一樣），整檔拿掉 `license` 欄位後位元組也相同，只多了 `license`。伺服器那份檔案沒被碰（`langPackBuild` 不寫 `servers/`）。（歷史：簡單授權規則之前 17 個檔、9,160 列；只收簡單授權時 8 個檔、561 列。）
 - 「byte-identical」只適用於**資料檔**。`index.json` 的 `updatedAt` 每次重產都會變（已實測：資料檔相同、index 只有被重產來源的 `updatedAt` 不同），這就是用 `hub_apply.py` 的原因：它只改真正有變的來源的 index 條目，其餘位元組不動（已實測：新增一個來源後，其他條目與原本位元組相同）。
 - 比對的是 **git blob**（LF）；`--compare-dir` 讀暫存檔時會先把 CRLF 換成 LF。
 - 變動的檔案要能解釋：新增的 mod、用語修正（例如把「生物群系」改成「生態域」）、授權變更。解釋不了的差異先別提交。
@@ -875,7 +887,8 @@ git -C <wt> commit -F - <<'EOF'
 hub: add zh-TW translation files for <N> mods
 
 Rows are sha256(key) -> translation; no source text. Only mods and shader
-packs under simple permissive licenses are included.
+packs under a simple permissive license or an LGPL license are included; a
+file derived from an LGPL source carries that license in its "license" field.
 
 Co-Authored-By: Claude <model> <noreply@anthropic.com>
 EOF
@@ -887,7 +900,7 @@ EOF
 2. `$GRADLE -p <wt> test --tests "com.dragonmeow.nyanlex.hub.*" --offline` 全綠。
 3. `git -C <wt> grep -i -E 'bor[w]en'` 0 命中；`git -C <wt> diff --cached` 沒有 jar／zip／英文原文／`skips.tsv`／快取副本。
 4. `git -C <wt> diff --cached --stat` 的檔案清單與你預期的完全一致（伺服器那份檔案沒出現，除非本來就要動它）。
-5. 新增的來源，授權都在簡單授權清單內（或是 Polyform Shield 這個例外）；授權寫在報告裡（commit 內文不寫模組名）。
+5. 新增的來源，授權都在白名單內（簡單授權、Polyform Shield 例外，或 LGPL；LGPL 來源的檔案與 index 條目要有 `license` 欄位，`hub_check.py` 會檢查）；授權寫在報告裡（commit 內文不寫模組名）。
 
 **落點**：目前資料 commit 都在 `release/nyanlex-1.0.0`（由整合中的主 worktree 持有）。不要在別人持有的分支上直接 commit；在自己的 worktree 開分支提交，再交給使用者或整合者合併。
 
@@ -950,8 +963,9 @@ hub_vanilla_glossary.py、hub_selfcheck.py
 1. 查授權並下載（只放 <scratch>/jars/<slug>/，jar、zip 絕不進 repo）：
    python <tools>/hub_modrinth.py info <slug>      # 看 license.id、可用版本
    授權不在白名單就停手，寫進報告，不要翻譯（白名單：MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、Zlib、CC0-1.0、
-   Unlicense、CC-BY-3.0、CC-BY-4.0，外加使用者核准的例外 Polyform Shield；其餘一律不收：GPL／LGPL／AGPL／MPL、
-   所有帶 SA／NC／ND 的 CC 授權、All Rights Reserved、自訂授權、查不到授權、所有其他 LicenseRef-*；不要自己裁定，回報即可）
+   Unlicense、CC-BY-3.0、CC-BY-4.0，外加使用者核准的例外 Polyform Shield，以及 LGPL-2.1-only、LGPL-2.1-or-later、
+   LGPL-3.0-only、LGPL-3.0-or-later；其餘一律不收：GPL／AGPL／MPL、其他版本的 LGPL、所有帶 SA／NC／ND 的 CC 授權、
+   All Rights Reserved、自訂授權、查不到授權、所有其他 LicenseRef-*；不要自己裁定，回報即可）
    python <tools>/hub_modrinth.py get <slug> --dest <scratch>/jars --mc 1.21.1 --loader fabric
    （光影包用 --loader none。沒有 1.21.1 fabric 版：改選 neoforge 版；兩者都沒有就選最新正式版，並把實際的
    mcVersion 與 loader 寫進輸出檔。找不到可用版本就跳過並寫進報告。）
@@ -993,7 +1007,7 @@ hub_vanilla_glossary.py、hub_selfcheck.py
 - 不殺任何不是你啟動的行程。
 - jar、zip、英文原文、使用者快取副本都不得進 repo。
 - 程式、註解、文件、commit 不得出現其他模組名稱（你的輸出檔與報告可以有，它們只在 <scratch>）；不得出現使用者 email 前綴的個人識別字串（檢查：git grep -i -E 'bor[w]en' 必須 0 命中）。
-- 授權只收簡單授權白名單（§4.1）；GPL／LGPL／MPL、帶 SA／NC／ND 的 CC、ARR、自訂授權、查不到授權的不翻。
+- 授權只收白名單（簡單授權加 LGPL，§4.1）；GPL／AGPL／MPL、帶 SA／NC／ND 的 CC、ARR、自訂授權、查不到授權的不翻。
 ```
 
 ### 8.2 範本 2：轉換與驗證組
@@ -1015,8 +1029,8 @@ hub_vanilla_glossary.py、hub_selfcheck.py
    $GRADLE -p <wt> langPackBuild --offline -q "-Pin=<輸入資料夾 1>;<輸入資料夾 2>…" "-Pout=<scratch>/hub-out" \
      -PshaderTarget=<modId> -PmergeIndex "-Preport=<scratch>/report.txt" "-Pskips=<scratch>/skips.tsv"
    - 每個目標 mod 的所有輸入檔（本體、圖鑑、光影包…）都要帶齊；-PshaderTarget 沒給，光影輸入會被整個忽略。
-   - 逐行看 "LICENSE ACCEPT|REFUSE"：授權閘門解析 SPDX 運算式後精確比對簡單授權白名單（只有 Polyform Shield 這個例外；GPL／LGPL／AGPL／MPL、帶 SA／NC／ND 的 CC、所有其他 LicenseRef-* 一律 REFUSE），ACCEPT 的仍要對照 Modrinth 的 license.id 複核；
-     與預期不同就停下來回報，不要自己改 license 欄位。
+   - 逐行看 "LICENSE ACCEPT|REFUSE"：授權閘門解析 SPDX 運算式後精確比對白名單（簡單授權、Polyform Shield 例外、LGPL；GPL／AGPL／MPL、帶 SA／NC／ND 的 CC、所有其他 LicenseRef-* 一律 REFUSE），ACCEPT 的仍要對照 Modrinth 的 license.id 複核；
+     與預期不同就停下來回報，不要自己改 license 欄位。LGPL 的 mod 在統計行尾端會有 license=…，寫入的檔案與 index 條目都會帶這個欄位。
    - skips.tsv 含英文原文，只能留在 <scratch>，用完刪除。
 3. 比對與驗證：
    python <tools>/hub_check.py --repo <wt> --compare-dir <scratch>/hub-out --originals <輸入資料夾>
@@ -1041,7 +1055,7 @@ hub_vanilla_glossary.py、hub_selfcheck.py
 - 不殺任何不是你啟動的行程。
 - jar、zip、英文原文、skips.tsv、使用者快取副本都不得進 repo。
 - 程式、註解、文件、commit 不得出現其他模組名稱（資料檔與資料夾名稱除外）；不得出現使用者 email 前綴的個人識別字串（檢查：git grep -i -E 'bor[w]en' 必須 0 命中）。
-- 授權只收簡單授權白名單（§4.1）；GPL／LGPL／MPL、帶 SA／NC／ND 的 CC、ARR、自訂授權、查不到授權的不轉換。
+- 授權只收白名單（簡單授權加 LGPL，§4.1）；GPL／AGPL／MPL、帶 SA／NC／ND 的 CC、ARR、自訂授權、查不到授權的不轉換。
 ```
 
 ---
@@ -1151,6 +1165,13 @@ except Exception:
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 CJK = re.compile(r"[一-鿿]")
 ALLOWED_TOP = {"index.json", "LICENSE", "README.md"}
+TOP_FIELDS = {"schema", "format", "hash", "language", "license", "rows", "entries"}
+# A file's optional "license" is an SPDX expression of the LGPL ids the gate accepts (canonical spelling),
+# joined with AND / OR and parentheses.  Files under a simple license carry no such field.
+LGPL_IDS = {"LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later"}
+SIMPLE_IDS = {"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "CC0-1.0", "Unlicense",
+              "CC-BY-3.0", "CC-BY-4.0", "Polyform-Shield"}
+LICENSE_OPERATORS = {"AND", "OR"}
 fails = []
 
 
@@ -1209,8 +1230,16 @@ def main():
         empty = [k for k, v in entries.items() if not isinstance(v, str) or not v or len(v) > 16384]
         if empty:
             fail(f"{r}: {len(empty)} empty / non-string / over-long values")
-        if set(d) - {"schema", "format", "hash", "language", "rows", "entries"}:
-            fail(f"{r}: unexpected top-level fields {sorted(set(d) - {'schema','format','hash','language','rows','entries'})}")
+        if set(d) - TOP_FIELDS:
+            fail(f"{r}: unexpected top-level fields {sorted(set(d) - TOP_FIELDS)}")
+        lic = d.get("license")
+        if "license" in d:
+            words = re.findall(r"[^\s()]+", lic) if isinstance(lic, str) else []
+            ids = [w for w in words if w not in LICENSE_OPERATORS]
+            if not isinstance(lic, str) or not lic.strip() or len(lic) > 256:
+                fail(f"{r}: license field is not a short non-empty string")
+            elif not ids or any(i not in LGPL_IDS | SIMPLE_IDS for i in ids) or not any(i in LGPL_IDS for i in ids):
+                fail(f"{r}: license {lic!r} is not an expression of the accepted LGPL ids (canonical spelling)")
         section = {"servers": "servers", "modpacks": "modpacks", "mods": "mods"}[kind]
         st = index.get(section, {}).get(ident, {}).get(lang)
         seen.add((section, ident, lang))
@@ -1223,8 +1252,11 @@ def main():
                 fail(f"{r}: index bytes {st['bytes']} != blob {len(blob)}")
             if st["sha256"] != hashlib.sha256(blob).hexdigest():
                 fail(f"{r}: index sha256 != sha256(blob)")
+            if st.get("license") != lic:
+                fail(f"{r}: index license {st.get('license')!r} != file license {lic!r}")
         no_cjk = sum(1 for v in entries.values() if not CJK.search(v))
-        print(f"{r}: rows={len(entries)} bytes={len(blob)} no-CJK-values={no_cjk}")
+        print(f"{r}: rows={len(entries)} bytes={len(blob)} no-CJK-values={no_cjk}"
+              + (f" license={lic}" if lic else ""))
         values.extend(entries.values())
 
     # 3. index lists nothing that has no file
@@ -2204,9 +2236,9 @@ print(f"{len(rows)} rows -> {target}")
 | `hubExport` 缺來源／`-Pserver=localhost` | 已實測 | exit 2，訊息如 §9.5 |
 | `gradle langPackBuild …`（`-Pin;` 多路徑、`-Pout -PshaderTarget -PmergeIndex -Preport -Pskips`） | 已實測 | 假資料：ARR 被 REFUSE、光影併入 `-PshaderTarget`、`X: ` 列、`%s` 被略過、`UNCHANGED` |
 | `langPackBuild -Plang` | 依程式碼 | 預設 `zh-TW` 即實測用的值；沒有另外實測其他語言 |
-| 真實輸入完整重產 | 已實測 | 簡單授權規則下 `TOTAL rows=561 files=8`；8 個檔與 git blob **全部位元組相同**，其餘 9 個來源被 REFUSE。（規則改前：`TOTAL rows=9160 files=17`、17 個檔相同，兩次：`b01ebac`、`64cec54`） |
+| 真實輸入完整重產 | 已實測 | 簡單授權加 LGPL 規則下 `TOTAL rows=7973 files=15`；原本 8 個檔與 git blob **全部位元組相同**，放回的 7 個與 `7dee2cd^` 的版本逐列相同、只多 `license` 欄位，其餘 12 個輸入檔被 REFUSE。（只收簡單授權時：`rows=561 files=8`；更早：`rows=9160 files=17`，兩次：`b01ebac`、`64cec54`） |
 | 重產冪等性 | 已實測 | 連跑兩次，資料檔相同，index 只有 `updatedAt` 不同 |
-| `gradle test --tests "com.dragonmeow.nyanlex.hub.*"` | 已實測 | 17 個類別、184 項、0 失敗 |
+| `gradle test --tests "com.dragonmeow.nyanlex.hub.*"` | 已實測 | 19 個類別、201 項、0 失敗 |
 | 附錄 A.1 `hub_check.py`（含 `--compare-dir`、`--originals`、`--raw`） | 已實測 | 對倉庫與線上 `origin/main` 皆 `RESULT PASS` |
 | 附錄 A.2 `hub_subset.py` | 已實測 | 對 git 歷史兩版比對（見 §3.4） |
 | 附錄 A.3 `hub_apply.py` | 已實測 | 新增一個來源／全部 SAME 兩種情境；index 寫回後其他條目位元組不變 |

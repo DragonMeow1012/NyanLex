@@ -345,20 +345,28 @@ class LangPackBuilderTest {
     }
 
     @Test
-    void onlyTheSimpleLicenseListAndPolyformShieldAreAcceptedByExactComparison() {
+    void onlyTheSimpleLicenseListLgplAndPolyformShieldAreAcceptedByExactComparison() {
         for (String ok : new String[] {"MIT", "mit", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "zlib",
                 "CC0-1.0", "Unlicense", "CC-BY-3.0", "CC-BY-4.0", "cc-by-4.0", "  MIT  ",
                 "Polyform-Shield", "Polyform-Shield-1.0.0", "LicenseRef-Polyform-Shield-1.0.0",
-                "licenseref-polyform-shield-1.0.0"}) {
+                "licenseref-polyform-shield-1.0.0",
+                // the four LGPL ids, in any letter case
+                "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+                "lgpl-3.0-only", "Lgpl-2.1-Or-Later", "  LGPL-3.0-or-later  ",
+                // the deprecated SPDX spellings of the same four licenses
+                "LGPL-2.1", "LGPL-2.1+", "LGPL-3.0", "LGPL-3.0+"}) {
             assertTrue(LangPackBuilder.licenseAccepted(ok), ok);
         }
         for (String refused : new String[] {null, "", "  ", "All Rights Reserved", "ARR", "LicenseRef-All-Rights-Reserved",
                 "LicenseRef-Custom (Modrinth: Custom)", "LicenseRef-", "LicenseRef-tr7zw-Protective-License",
                 "Some Mod License (LicenseRef-Some-Mod-License)", "Create Mod License (LicenseRef-Create-Mod-License)",
-                // copyleft families, every version
-                "GPL", "GPL-2.0-only", "GPL-2.0+", "GPL-3.0", "GPL-3.0-or-later", "LGPL-2.1", "LGPL-2.1-only",
-                "LGPL-2.1+", "LGPL-3.0", "LGPL-3.0-only", "LGPL-3.0-or-later", "AGPL-3.0", "AGPL-3.0-only",
-                "AGPL-3.0-or-later", "LicenseRef-AGPL-3.0", "MPL-2.0", "MPL-1.1",
+                // GPL, AGPL and MPL, every version
+                "GPL", "GPL-2.0-only", "GPL-2.0+", "GPL-3.0", "GPL-3.0-only", "GPL-3.0-or-later", "AGPL-3.0",
+                "AGPL-3.0-only", "AGPL-3.0-or-later", "LicenseRef-AGPL-3.0", "MPL-2.0", "MPL-1.1",
+                // LGPL near misses: other versions, a bare family name, a suffix, a LicenseRef, free text
+                "LGPL", "LGPL-2.0", "LGPL-2.0-only", "LGPL-2.0-or-later", "LGPL-2.0+", "LGPL-4.0-only",
+                "LGPL-3.0-only+", "LGPL-3.0-or-later+", "LGPL-2.1-only-evil", "LGPL-3", "LGPLv3", "lgpl3",
+                "LicenseRef-LGPL-3.0", "LicenseRef-LGPL-3.0-only", "GNU LGPL v3", "GNU Lesser General Public License",
                 // Creative Commons with any ShareAlike, NonCommercial or NoDerivatives term, or not on the list
                 "CC-BY-SA-4.0", "CC-BY-SA-3.0", "CC-BY-NC-4.0", "CC-BY-NC-SA-4.0", "CC-BY-NC-SA-3.0-IGO",
                 "CC-BY-ND-4.0", "CC-BY-NC-ND-4.0", "CC-BY-ND-3.0", "CC-BY-NC-ND-3.0-IGO", "cc-by-nd-4.0",
@@ -378,12 +386,17 @@ class LangPackBuilderTest {
                 "MIT OR LicenseRef-Custom", "mit or licenseref-custom", "LicenseRef-Custom Or MIT",
                 "(MIT OR Apache-2.0) AND BSD-3-Clause", "MIT AND (Apache-2.0 OR LicenseRef-Custom)",
                 "((MIT))", "Apache-2.0 WITH LLVM-exception", "LicenseRef-Custom OR LicenseRef-Other OR MIT",
-                "MIT AND MIT AND MIT", "CC0-1.0 OR GPL-3.0-only", "ISC AND LicenseRef-Polyform-Shield-1.0.0"}) {
+                "MIT AND MIT AND MIT", "CC0-1.0 OR GPL-3.0-only", "ISC AND LicenseRef-Polyform-Shield-1.0.0",
+                "MIT AND LGPL-2.1", "mit and lgpl-2.1-only", "LGPL-3.0-only AND LGPL-3.0-or-later",
+                "LGPL-2.1 OR GPL-3.0-only", "GPL-3.0-only OR (LGPL-3.0-only AND MIT)", "LGPL-2.1 OR MIT"}) {
             assertTrue(LangPackBuilder.licenseAccepted(ok), ok);
         }
-        for (String refused : new String[] {"MIT AND LGPL-2.1", "mit and lgpl-2.1", "LGPL-2.1 AND CC-BY-NC-SA-4.0",
+        for (String refused : new String[] {"LGPL-2.1 AND CC-BY-NC-SA-4.0",
                 "lgpl-2.1 and cc-by-nc-sa-4.0", "MIT AND CC-BY-SA-4.0", "MIT AND CC-BY-ND-4.0", "MIT AND MPL-2.0",
-                "LGPL-2.1 OR GPL-3.0-only", "CC-BY-ND-4.0 OR CC-BY-NC-ND-4.0",
+                // an LGPL side does not carry a GPL, AGPL, MPL or NC/SA/ND side joined with AND
+                "LGPL-3.0-only AND GPL-3.0-only", "LGPL-3.0-only AND AGPL-3.0", "LGPL-3.0-only AND MPL-2.0",
+                "LGPL-3.0-or-later AND CC-BY-NC-SA-4.0", "LGPL-2.1 AND LicenseRef-Custom", "GPL-3.0-only OR AGPL-3.0",
+                "CC-BY-ND-4.0 OR CC-BY-NC-ND-4.0",
                 "GPL-2.0-only WITH Classpath-exception-2.0",
                 "MIT AND LicenseRef-All-Rights-Reserved", "mit and licenseref-all-rights-reserved",
                 "MIT AND AGPL-3.0", "mit and agpl-3.0-only",
@@ -399,37 +412,43 @@ class LangPackBuilderTest {
         // precedence the other way round: (A AND B) OR C
         assertTrue(LangPackBuilder.licenseAccepted("MIT AND AGPL-3.0 OR Apache-2.0"));
         assertTrue(LangPackBuilder.licenseAccepted("AGPL-3.0 OR MIT AND Apache-2.0"));
-        // OR is the author's own choice of the permissive side; AND needs every side
+        // OR is the author's own choice of the acceptable side; AND needs every side
         assertTrue(LangPackBuilder.licenseAccepted("LGPL-2.1 OR MIT"));
-        assertFalse(LangPackBuilder.licenseAccepted("LGPL-2.1 AND MIT"));
+        assertTrue(LangPackBuilder.licenseAccepted("LGPL-2.1 AND MIT"));
+        assertFalse(LangPackBuilder.licenseAccepted("LGPL-2.1 AND GPL-2.0-only"));
+        // a twice-licensed project whose second licence is NonCommercial/ShareAlike is refused as a whole
+        assertFalse(LangPackBuilder.licenseAccepted("LGPL-2.1 AND CC-BY-NC-SA-4.0"));
     }
 
     @Test
-    void copyleftShareAlikeAndNoDerivativesInputsProduceNoFileEvenWhenTheyAreTheShaderTarget(@TempDir Path dir)
+    void gplAgplMplShareAlikeAndNoDerivativesInputsProduceNoFileEvenWhenTheyAreTheShaderTarget(@TempDir Path dir)
             throws IOException {
         Path simple = dir.resolve("simple.json");
-        Path lgpl = dir.resolve("lgpl.json");
+        Path gpl = dir.resolve("gpl.json");
+        Path agpl = dir.resolve("agpl.json");
         Path sa = dir.resolve("sa.json");
         Path nd = dir.resolve("nd.json");
         Path mpl = dir.resolve("mpl.json");
+        Path twice = dir.resolve("twice.json");
         Path shader = dir.resolve("shader.json");
         writeLicensed(simple, "mod", "simplemod", "BSD-3-Clause", null, "Render distance for terrain", "地形的渲染距離");
-        writeLicensed(lgpl, "mod", "lgplmod", "LGPL-3.0-only", null, "Open the menu", "開啟選單");
+        writeLicensed(gpl, "mod", "gplmod", "GPL-3.0-only", null, "Open the menu", "開啟選單");
+        writeLicensed(agpl, "mod", "agplmod", "AGPL-3.0-or-later", null, "Open the page", "開啟頁面");
         writeLicensed(sa, "mod", "samod", "CC-BY-NC-SA-4.0", null, "Close the menu", "關閉選單");
         writeLicensed(nd, "mod", "ndmod", "CC-BY-ND-4.0", null, "Open the list", "開啟清單");
         writeLicensed(mpl, "mod", "mplmod", "MPL-2.0", null, "Close the list", "關閉清單");
-        writeLicensed(shader, "shaderpack", null, "LGPL-3.0-or-later", null, "Sun brightness", "太陽亮度");
+        writeLicensed(twice, "mod", "twicemod", "LGPL-2.1 AND CC-BY-NC-SA-4.0", null, "Close the page", "關閉頁面");
+        writeLicensed(shader, "shaderpack", null, "GPL-3.0-or-later", null, "Sun brightness", "太陽亮度");
         Path out = dir.resolve("hub");
 
-        LangPackBuilder.Result result = LangPackBuilder.build(List.of(simple, lgpl, sa, nd, mpl, shader), out, "zh-TW",
-                "lgplmod", true);
+        LangPackBuilder.Result result = LangPackBuilder.build(
+                List.of(simple, gpl, agpl, sa, nd, mpl, twice, shader), out, "zh-TW", "gplmod", true);
 
         assertEquals(List.of("simplemod"), new ArrayList<>(result.written().keySet()));
-        assertFalse(Files.exists(out.resolve("mods/lgplmod")));
-        assertFalse(Files.exists(out.resolve("mods/samod")));
-        assertFalse(Files.exists(out.resolve("mods/ndmod")));
-        assertFalse(Files.exists(out.resolve("mods/mplmod")));
-        assertEquals(6, result.licensing().size());
+        for (String refused : new String[] {"gplmod", "agplmod", "samod", "ndmod", "mplmod", "twicemod"}) {
+            assertFalse(Files.exists(out.resolve("mods/" + refused)), refused);
+        }
+        assertEquals(8, result.licensing().size());
         assertEquals(1, result.licensing().stream().filter(LangPackBuilder.Licensing::accepted).count());
     }
 

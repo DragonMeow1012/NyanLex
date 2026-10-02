@@ -762,6 +762,12 @@ public final class HubExportTool {
 
     static void mergeIndex(Path out, HubSource source, String language, int rows, long bytes,
             String sha256) throws IOException {
+        mergeIndex(out, source, language, rows, bytes, sha256, null);
+    }
+
+    /** @param license the file's own license (an SPDX expression) when it is not under the repository default, else null */
+    static void mergeIndex(Path out, HubSource source, String language, int rows, long bytes,
+            String sha256, String license) throws IOException {
         Path indexFile = out.resolve(HubPaths.indexPath());
         HubIndex index = HubIndex.empty();
         if (Files.isRegularFile(indexFile)) {
@@ -770,7 +776,7 @@ public final class HubExportTool {
             }
         }
         HubIndex.LanguageStats stats =
-                new HubIndex.LanguageStats(rows, bytes, sha256, Instant.now().toString());
+                new HubIndex.LanguageStats(rows, bytes, sha256, Instant.now().toString(), license);
         HubIndex updated;
         switch (source.kind()) {
             case SERVER: updated = index.withServerEntry(source.identifier(), language, stats); break;
