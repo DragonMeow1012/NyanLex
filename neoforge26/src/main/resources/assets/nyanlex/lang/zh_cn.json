@@ -74,6 +74,8 @@
   "message.nyanlex.show_translation": "正在显示译文",
   "message.nyanlex.screen_scan": "正在翻译屏幕文字... %s 项",
   "message.nyanlex.retranslate": "正在翻译：%s",
+  "message.nyanlex.gt_gate.closed": "Google 翻译暂时限制了请求，约 %s 分钟后自动重试。",
+  "message.nyanlex.gt_gate.blocked": "Google 翻译暂时限制中，约 %s 分钟后恢复。",
 "message.nyanlex.tooltip_hint": "按 [%s] 翻译",
 "message.nyanlex.tooltip_hint_pending": "翻译中…",
   "message.nyanlex.not_initialized": "尚未初始化",

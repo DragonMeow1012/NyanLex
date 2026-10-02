@@ -89,6 +89,11 @@ public final class DispatchingTranslator implements Translator {
         return usePrimary.getAsBoolean() ? primary.nextRequestDelayMs() : fallback.nextRequestDelayMs();
     }
 
+    @Override
+    public boolean sendBlocked() {
+        return usePrimary.getAsBoolean() ? primary.sendBlocked() : fallback.sendBlocked();
+    }
+
     /** Tag a fallback-produced result so the cache stores it as PROVISIONAL (GT standing in
      *  for the AI engine) and re-asks the AI once its 429 gate reopens. */
     private static TranslationResult markFallback(TranslationResult r) {

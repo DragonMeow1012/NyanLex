@@ -1391,6 +1391,7 @@ public final class NyanLexFabric implements ClientModInitializer {
                         : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
                         && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
+        com.dragonmeow.nyanlex.translate.MachineGateGuard.install(com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared(), GATE_FEEDBACK);
         // 2026-10-02: manual (cache-only, translate-key-driven) item/screen-text mode is
         // no longer a global startup flag -- TranslationService now judges it live, per
         // surface, from that surface's CURRENTLY CONFIGURED engine (config.aiTooltip /
@@ -2299,6 +2300,7 @@ public final class NyanLexFabric implements ClientModInitializer {
                 || screen instanceof net.minecraft.client.gui.screens.ChatScreen
                 || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
                 || !screenTranslationAllowed(screen)) return;
+        if (gateBlocksManual(service.isManualScreenTranslation())) return;
         // 線上翻譯 off: ask on the spot; the scan then runs once for this very screen.
         ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.SCREEN, () -> {
             if (Minecraft.getInstance().screen == screen) scanAndTranslateScreenNow(screen);
@@ -2524,8 +2526,34 @@ public final class NyanLexFabric implements ClientModInitializer {
         if (target != null && !target.isEmpty()) retranslateItem(target);
     }
 
+    /** Google 429 gate messages: action bar in a world, one system notification in a menu. */
+    private static final com.dragonmeow.nyanlex.translate.MachineGateGuard.Feedback GATE_FEEDBACK =
+            new com.dragonmeow.nyanlex.translate.MachineGateGuard.Feedback() {
+        @Override public void gateClosed(int minutes) {
+            gateMessage("message.nyanlex.gt_gate.closed", minutes);
+        }
+
+        @Override public void manualBlocked(int minutes) {
+            gateMessage("message.nyanlex.gt_gate.blocked", minutes);
+        }
+    };
+
+    /** Whether a manual R/P action must be dropped because the Google gate is closed. */
+    private boolean gateBlocksManual(boolean machineEngine) {
+        return com.dragonmeow.nyanlex.translate.MachineGateGuard.blocksManualAction(
+                config != null && config.translationRequestsEnabled, machineEngine,
+                com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared(), GATE_FEEDBACK);
+    }
+
+    private static void gateMessage(String key, int minutes) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        mc.execute(() -> feedback(Component.translatable(key, Integer.toString(minutes))));
+    }
+
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
+        if (gateBlocksManual(service.isManualItemTranslation())) return;
         // 線上翻譯 off: ask on the spot; the request then goes out once for this very item.
         ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.ITEM, () -> retranslateItemNow(stack));
     }

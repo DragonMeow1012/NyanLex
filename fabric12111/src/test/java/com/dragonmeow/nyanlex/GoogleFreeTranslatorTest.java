@@ -54,12 +54,12 @@ class GoogleFreeTranslatorTest {
     @Test
     void wrapsIoExceptionAsTranslationException() {
         HttpTransport failing = url -> {
-            throw new IOException("HTTP 429");
+            throw new IOException("HTTP 503");
         };
         GoogleFreeTranslator t = new GoogleFreeTranslator(failing, "auto");
         TranslationException ex = assertThrows(TranslationException.class,
                 () -> t.translate("anything", "zh-TW"));
-        assertTrue(ex.getMessage().contains("429"));
+        assertTrue(ex.getMessage().contains("503"));
     }
 
     @Test
@@ -257,7 +257,7 @@ class GoogleFreeTranslatorTest {
     @Test
     void httpFailureOnTokenLineStaysATransportFailure() {
         HttpTransport failing = url -> {
-            throw new IOException("HTTP 429");
+            throw new IOException("HTTP 503");
         };
         GoogleFreeTranslator t = new GoogleFreeTranslator(failing, "auto");
 

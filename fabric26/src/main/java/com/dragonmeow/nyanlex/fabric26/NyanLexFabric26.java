@@ -1098,6 +1098,7 @@ public final class NyanLexFabric26 implements ClientModInitializer {
                         : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
                         && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
+        com.dragonmeow.nyanlex.translate.MachineGateGuard.install(com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared(), GATE_FEEDBACK);
         // 2026-10-02: manual (cache-only, translate-key-driven) item/screen-text mode is
         // no longer a global startup flag -- TranslationService now judges it live, per
         // surface, from that surface's CURRENTLY CONFIGURED engine (config.aiTooltip /
@@ -2005,6 +2006,7 @@ public final class NyanLexFabric26 implements ClientModInitializer {
                 || screen instanceof net.minecraft.client.gui.screens.ChatScreen
                 || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
                 || !screenTranslationAllowed(screen)) return;
+        if (gateBlocksManual(service.isManualScreenTranslation())) return;
         SCREEN_CAPTURE.begin(screen);
         TOOLTIP_CAPTURE.begin(screen);
         captureScreenText(screen.getTitle(), true);
@@ -2232,8 +2234,43 @@ public final class NyanLexFabric26 implements ClientModInitializer {
      * of those slots on every supported screen, including when no GUI is open.
      * Names are deduplicated for the session; full lore still warms only on hover.
      */
+    /** Google 429 gate messages: action bar in a world, one system notification in a menu. */
+    private static final com.dragonmeow.nyanlex.translate.MachineGateGuard.Feedback GATE_FEEDBACK =
+            new com.dragonmeow.nyanlex.translate.MachineGateGuard.Feedback() {
+        @Override public void gateClosed(int minutes) {
+            gateMessage("message.nyanlex.gt_gate.closed", minutes);
+        }
+
+        @Override public void manualBlocked(int minutes) {
+            gateMessage("message.nyanlex.gt_gate.blocked", minutes);
+        }
+    };
+
+    /** Whether a manual R/P action must be dropped because the Google gate is closed. */
+    private boolean gateBlocksManual(boolean machineEngine) {
+        return com.dragonmeow.nyanlex.translate.MachineGateGuard.blocksManualAction(
+                config != null && config.translationRequestsEnabled, machineEngine,
+                com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared(), GATE_FEEDBACK);
+    }
+
+    private static void gateMessage(String key, int minutes) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        mc.execute(() -> {
+            net.minecraft.network.chat.Component message = net.minecraft.network.chat.Component.translatable(key, Integer.toString(minutes));
+            if (mc.level != null && mc.gui != null && mc.gui.hud != null) {
+                mc.gui.hud.setOverlayMessage(message, false);
+            } else {
+                net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),
+                        net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
+                        net.minecraft.network.chat.Component.literal("NyanLex Translator"), message);
+            }
+        });
+    }
+
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
+        if (gateBlocksManual(service.isManualItemTranslation())) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
         List<String> sources = lastTooltipStack == stack ? lastTooltipParagraphSources : null;

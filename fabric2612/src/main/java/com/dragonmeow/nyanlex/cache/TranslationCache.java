@@ -1220,6 +1220,9 @@ public final class TranslationCache {
             discardQueuedWork();
             return;
         }
+        // A closed rate-limit gate (Google 429) holds everything: the queue and the retry
+        // ledger stay as they are and resume by themselves once the gate reopens.
+        if (engineSendBlocked()) return;
         // Durable failures are passive. They retry only when their text is observed
         // again through a live surface; loading a world must not resurrect vanished
         // tooltips from the failure ledger as background requests.
@@ -1411,6 +1414,14 @@ public final class TranslationCache {
             if (item.highPriority) return true;
         }
         return false;
+    }
+
+    private boolean engineSendBlocked() {
+        try {
+            return translator.sendBlocked();
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     /** Whether this engine's own pacing would let a request go out right now. */

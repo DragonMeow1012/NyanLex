@@ -17,7 +17,11 @@ public final class SwitchingMachineTranslator implements Translator {
                                       RequestPacer pacer) {
         Supplier<String> source = sourceLanguage == null ? () -> "auto" : sourceLanguage;
         this.google = new GoogleFreeTranslator(transport, safe(source.get()),
-                pacer == null ? RequestPacer.disabled() : pacer);
+                pacer == null ? RequestPacer.disabled() : pacer, MachineTranslationGate.shared());
+    }
+
+    @Override public boolean sendBlocked() {
+        return google.sendBlocked();
     }
 
     @Override public TranslationResult translate(String text, String targetLang)

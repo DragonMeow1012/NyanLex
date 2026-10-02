@@ -34,6 +34,7 @@ public final class GoogleFreeTranslator implements Translator {
     private final HttpTransport transport;
     private final String sourceLang;
     private final RequestPacer pacer;
+    private final MachineTranslationGate gate;
 
     public GoogleFreeTranslator(HttpTransport transport, String sourceLang) {
         this(transport, sourceLang, RequestPacer.disabled());
@@ -43,6 +44,13 @@ public final class GoogleFreeTranslator implements Translator {
      *  (whole-line, per-segment and batch calls alike — they all funnel through
      *  {@link #requestOnce}). */
     public GoogleFreeTranslator(HttpTransport transport, String sourceLang, RequestPacer pacer) {
+        this(transport, sourceLang, pacer, new MachineTranslationGate());
+    }
+
+    /** Gate-injecting constructor: production passes {@link MachineTranslationGate#shared()}. */
+    public GoogleFreeTranslator(HttpTransport transport, String sourceLang, RequestPacer pacer,
+                                MachineTranslationGate gate) {
+        this.gate = gate == null ? new MachineTranslationGate() : gate;
         this.transport = transport;
         this.sourceLang = (sourceLang == null || sourceLang.isBlank()) ? "auto" : sourceLang;
         this.pacer = pacer == null ? RequestPacer.disabled() : pacer;
@@ -72,13 +80,46 @@ public final class GoogleFreeTranslator implements Translator {
 
     /** One raw endpoint round-trip, no token handling (the mode-independent primitive). */
     private TranslationResult requestOnce(String text, String targetLang) throws TranslationException {
+        boolean probe = gate.acquire(); // closed gate: RequestsPausedException, nothing is sent
+        boolean settled = false;
         try {
             pacer.acquire(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
-            String body = transport.get(buildUrl(text, targetLang));
-            return GoogleResponseParser.parse(body);
-        } catch (IOException e) {
-            throw new TranslationException("http error: " + e.getMessage(), e);
+            gate.recheck(probe);
+            String body;
+            try {
+                body = transport.get(buildUrl(text, targetLang));
+            } catch (IOException e) {
+                if (MachineTranslationGate.isRateLimitMessage(e.getMessage())) {
+                    settled = true;
+                    rateLimited(e.getMessage());
+                }
+                throw new TranslationException("http error: " + e.getMessage(), e);
+            }
+            if (MachineTranslationGate.isBlockPage(body)) {
+                settled = true;
+                rateLimited("unusual traffic page");
+            }
+            TranslationResult result = GoogleResponseParser.parse(body);
+            gate.onSuccess();
+            settled = true;
+            return result;
+        } finally {
+            if (!settled) gate.onAbort(probe);
         }
+    }
+
+    /** Close the gate and abandon the request as "unsent, not failed". */
+    private void rateLimited(String detail) {
+        int minutes = gate.onRateLimited();
+        DebugErrorLog.report(DebugErrorLog.HTTP_ERROR, "Google translate rate limited (429)",
+                "backoffMinutes", Integer.toString(minutes),
+                "detail", detail == null ? "" : detail.substring(0, Math.min(detail.length(), 200)));
+        throw new RequestsPausedException();
+    }
+
+    @Override
+    public boolean sendBlocked() {
+        return gate.blocksRequests();
     }
 
     /** First numeric sentinel value. Five plain digits: Google keeps such numbers verbatim

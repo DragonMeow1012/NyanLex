@@ -110,6 +110,8 @@
   "message.nyanlex.show_translation": "顯示翻譯",
   "message.nyanlex.screen_scan": "擷取介面文字翻譯中... %s 項",
   "message.nyanlex.retranslate": "翻譯：%s",
+  "message.nyanlex.gt_gate.closed": "Google 翻譯暫時限制了請求，約 %s 分鐘後自動重試。",
+  "message.nyanlex.gt_gate.blocked": "Google 翻譯暫時限制中，約 %s 分鐘後恢復。",
 "message.nyanlex.tooltip_hint": "按 [%s] 翻譯",
 "message.nyanlex.tooltip_hint_pending": "翻譯中…",
   "message.nyanlex.not_initialized": "尚未初始化",

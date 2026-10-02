@@ -66,6 +66,15 @@ public interface Translator {
         return 0L;
     }
 
+    /**
+     * Whether this backend currently refuses to send anything (a global rate-limit gate is
+     * closed). Read-only. The cache then leaves its queue untouched instead of draining it into
+     * requests that would be abandoned.
+     */
+    default boolean sendBlocked() {
+        return false;
+    }
+
     /** The context every one of {@code count} items shares, or {@code null} when absent or mixed. */
     static List<String> sharedContext(List<List<String>> itemContexts, int count) {
         if (itemContexts == null || itemContexts.isEmpty() || itemContexts.size() != count) return null;
