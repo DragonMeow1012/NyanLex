@@ -1,0 +1,105 @@
+package com.dragonmeow.nyanlex.fabric;
+
+import com.dragonmeow.nyanlex.config.DialogContent;
+import com.dragonmeow.nyanlex.config.DialogPanel;
+
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.narration.NarratedElementType;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+
+import org.lwjgl.glfw.GLFW;
+
+import java.util.List;
+
+/**
+ * A yes/no question on the shared card: [取消] at the left, the action at the right, nothing focused
+ * when it opens, Tab and Shift+Tab move the frame, Enter or Space press the framed button, Escape cancels.
+ */
+public final class ConfirmDialogScreen extends Screen {
+    private static final int CANCEL = 1;
+    private static final int CONFIRM = 2;
+
+    private final Screen parent;
+    private final String message;
+    private final String confirmLabel;
+    private final Runnable onConfirm;
+    private final DialogPanel panel;
+
+    public ConfirmDialogScreen(Screen parent, Component title, Component message, Component confirmLabel,
+                               Runnable onConfirm) {
+        super(title);
+        this.parent = parent;
+        this.message = message.getString();
+        this.confirmLabel = confirmLabel.getString();
+        this.onConfirm = onConfirm;
+        this.panel = new DialogPanel(text -> this.font == null ? text.length() * 6 : this.font.width(text));
+    }
+
+    @Override
+    protected void init() {
+        panel.setNarration(DialogContent.narration((key, args) -> Component.translatable(key, args).getString()));
+        panel.set(new DialogPanel.Content(this.title.getString(),
+                List.of(new DialogPanel.Text(message, 0)),
+                DialogPanel.Footer.of(new DialogPanel.Btn(CANCEL, Component.translatable("gui.cancel").getString()),
+                        new DialogPanel.Btn(CONFIRM, confirmLabel, true)),
+                CANCEL));
+        panel.resize(this.width, this.height);
+    }
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        return false;
+    }
+
+    private void handle(int id) {
+        if (id == CONFIRM) {
+            onConfirm.run();
+            close();
+        } else if (id == CANCEL) {
+            close();
+        }
+    }
+
+    private void close() {
+        if (this.minecraft != null) this.minecraft.setScreen(parent);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        handle(panel.mouseClicked((int) event.x(), (int) event.y(), event.button()));
+        return true;
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        handle(panel.keyPressed(event.key(), (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0));
+        if (panel.consumeNarrationRequest()) this.triggerImmediateNarration(true);
+        return true;
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        return true;
+    }
+
+    @Override
+    protected void updateNarratedWidget(NarrationElementOutput output) {
+        output.add(NarratedElementType.TITLE, Component.literal(panel.narration()));
+    }
+
+    @Override
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        super.render(g, mouseX, mouseY, partialTick);
+        panel.render(new GuiCanvas(g, this.font), mouseX, mouseY);
+    }
+
+    @Override
+    public void onClose() {
+        close();
+    }
+}

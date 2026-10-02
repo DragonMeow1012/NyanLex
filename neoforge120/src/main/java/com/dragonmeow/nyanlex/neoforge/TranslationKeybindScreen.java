@@ -24,10 +24,11 @@ public final class TranslationKeybindScreen extends Screen {
         bindingRows.clear();
         buttonWidth = Math.max(80, Math.min(W, width - 20));
         int x = width / 2 - buttonWidth / 2;
-        int y = 46;
+        int y = 40;
         y = rebind("screen.nyanlex.keybind.retranslate", NyanLexNeoForge.retranslateKeyMapping(), x, y);
         y = rebind("screen.nyanlex.keybind.screenscan", NyanLexNeoForge.screenScanKeyMapping(), x, y);
         y = rebind("screen.nyanlex.keybind.toggle", NyanLexNeoForge.toggleKeyMapping(), x, y);
+        y = rebind("screen.nyanlex.keybind.mode", NyanLexNeoForge.modeKeyMapping(), x, y);
         addRenderableWidget(Button.builder(Component.translatable("screen.nyanlex.keybind.reset"), b -> resetBindings())
                 .bounds(width / 2 - buttonWidth / 2, y + 8, buttonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
@@ -70,7 +71,8 @@ public final class TranslationKeybindScreen extends Screen {
     }
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         super.render(graphics, mouseX, mouseY, delta);
-        graphics.drawCenteredString(font, title, width / 2, 16, 0xFFFFFF);
+        graphics.drawCenteredString(font, title, width / 2, 10, 0xFFFFFFFF);
+        graphics.drawCenteredString(font, Component.translatable("screen.nyanlex.keybind.hint"), width / 2, 22, 0xFFA4A9B8);
     }
     @Override public void onClose() { minecraft.setScreen(parent); }
 }

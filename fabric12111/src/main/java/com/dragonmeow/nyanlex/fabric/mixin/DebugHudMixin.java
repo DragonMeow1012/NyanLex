@@ -38,14 +38,17 @@ public abstract class DebugHudMixin {
         int width = Math.min(520, Math.max(260, graphics.guiWidth() / 2));
         int x = 6, y = 6, line = 10;
         graphics.fill(x - 3, y - 3, x + width + 3, y + 25 + entries.size() * line, 0xB0101010);
-        graphics.drawString(font, Component.literal("MT DEBUG · " + entries.size() + " requests"), x, y, 0xFFFFD060, false);
+        long batches = entries.stream().map(TranslationDebugLog.Entry::requestId).distinct().count();
+        graphics.drawString(font, Component.literal(
+                "MT DEBUG · HTTP " + batches + " 批 / " + entries.size() + " 項"),
+                x, y, 0xFFFFD060, false);
 
-        var tokens = NyanLexFabric.tokenUsageSnapshot();
-        String tokenLine = "TOKENS total " + tokens.totalTokens()
-                + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
-                + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
-                + " | req " + tokens.requests() + " | " + com.dragonmeow.nyanlex.translate.HookHealth.shortSummary();
-        graphics.drawString(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);
+                var tokens = NyanLexFabric.tokenUsageSnapshot();
+                String tokenLine = "TOKENS total " + tokens.totalTokens()
+                        + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
+                        + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
+                        + " | req " + tokens.requests() + " | " + com.dragonmeow.nyanlex.translate.HookHealth.shortSummary();
+                graphics.drawString(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);
 
         int row = y + 22;
         for (TranslationDebugLog.Entry entry : entries) {

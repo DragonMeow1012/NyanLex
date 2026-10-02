@@ -26,10 +26,23 @@ public final class TranslationLanguageScreen extends OptionsSubScreen {
             .append(Component.translatable("options.languageWarning")).append(")").withStyle(ChatFormatting.GRAY);
     private LanguageSelectionList languageList;
     private EditBox search;
+    /** When set, the answer is handed back instead of being applied (the questionnaire applies it on 完成). */
+    private final java.util.function.BiConsumer<Boolean, String> answer;
+    private final boolean stagedFollow;
+    private final String stagedTag;
 
     public TranslationLanguageScreen(Screen parent) {
+        this(parent, true, null, null);
+    }
+
+    /** Picker for the questionnaire: starts on {@code followGame}/{@code tag} and reports the choice to {@code answer}. */
+    public TranslationLanguageScreen(Screen parent, boolean followGame, String tag,
+                                     java.util.function.BiConsumer<Boolean, String> answer) {
         super(parent, Minecraft.getInstance().options,
                 Component.translatable("screen.nyanlex.language.target_title"));
+        this.answer = answer;
+        this.stagedFollow = followGame;
+        this.stagedTag = tag;
     }
 
     @Override protected void init() {
@@ -54,6 +67,12 @@ public final class TranslationLanguageScreen extends OptionsSubScreen {
     }
 
     private void choose(String minecraftCode) {
+        if (answer != null) {
+            answer.accept(minecraftCode == null,
+                    minecraftCode == null ? null : TranslationLanguages.fromMinecraftCode(minecraftCode));
+            this.minecraft.setScreen(this.lastScreen);
+            return;
+        }
         TranslatorConfig cfg = NyanLexNeoForge.config();
         cfg.followGameLanguage = minecraftCode == null;
         String selected = minecraftCode == null ? minecraft.getLanguageManager().getSelected() : minecraftCode;
@@ -105,10 +124,12 @@ public final class TranslationLanguageScreen extends OptionsSubScreen {
 
         private void selectCurrent() {
             TranslatorConfig cfg = NyanLexNeoForge.config();
+            boolean follow = answer != null ? stagedFollow : cfg.followGameLanguage;
+            String target = answer != null ? stagedTag : cfg.targetLang;
             for (Entry entry : this.children()) {
-                if ((cfg.followGameLanguage && entry.code == null)
-                        || (!cfg.followGameLanguage && entry.code != null
-                        && TranslationLanguages.fromMinecraftCode(entry.code).equalsIgnoreCase(cfg.targetLang))) {
+                if ((follow && entry.code == null)
+                        || (!follow && entry.code != null && target != null
+                        && TranslationLanguages.fromMinecraftCode(entry.code).equalsIgnoreCase(target))) {
                     this.setSelected(entry);
                     this.centerScrollOn(entry);
                     return;
