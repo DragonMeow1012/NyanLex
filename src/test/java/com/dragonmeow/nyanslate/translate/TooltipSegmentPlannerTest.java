@@ -414,4 +414,40 @@ class TooltipSegmentPlannerTest {
         TooltipSegmentPlanner.Segment ability = plan.segments().get(0);
         assertTrue(!text.substring(ability.start(), ability.end()).contains("MYTHIC"));
     }
+
+    private static final String CS_ABILITY = "⟦CS0⟧Ability: Flame Breath⟦/CS0⟧";
+    private static final String CS_COOLDOWN = "⟦CS1⟧Cooldown: 30s⟦/CS1⟧";
+
+    @Test
+    void csPrefixedCooldownRowEndsTheAbilityBlockSoPassiveAndRarityStaySeparate() {
+        String text = ParagraphModel.join(List.of(
+                CS_ABILITY, "Deals damage.", CS_COOLDOWN,
+                "⟦CS2⟧Passive: Warm⟦/CS2⟧", "Stays warm.",
+                "MYTHIC DUNGEON BOW", "Seller: Bob_7", "Buy it now: 1,000 coins"));
+        TooltipSegmentPlanner.Plan plan = TooltipSegmentPlanner.plan(text, true);
+        assertTrue(plan != null);
+        TooltipSegmentPlanner.Segment ability = plan.segments().get(0);
+        assertEquals(TooltipSegmentPlanner.Kind.ABILITY, ability.kind());
+        String first = text.substring(ability.start(), ability.end());
+        assertTrue(first.endsWith("Cooldown: 30s⟦/CS1⟧"), first);
+        assertTrue(!first.contains("Passive") && !first.contains("MYTHIC"), first);
+        List<TooltipSegmentPlanner.Kind> kinds = new java.util.ArrayList<>();
+        for (TooltipSegmentPlanner.Segment seg : plan.segments()) kinds.add(seg.kind());
+        assertTrue(kinds.contains(TooltipSegmentPlanner.Kind.RARITY), kinds.toString());
+        assertTrue(kinds.contains(TooltipSegmentPlanner.Kind.TRADE), kinds.toString());
+    }
+
+    @Test
+    void sameCsAbilityBlockOnTwoItemsWithDifferentTailsSharesOneSegmentText() {
+        String ta = ParagraphModel.join(List.of(
+                CS_ABILITY, "Deals damage.", CS_COOLDOWN, "MYTHIC DUNGEON BOW"));
+        String tb = ParagraphModel.join(List.of(
+                CS_ABILITY, "Deals damage.", CS_COOLDOWN, "Passive: Warm", "Stays warm.",
+                "LEGENDARY BOW"));
+        TooltipSegmentPlanner.Plan a = TooltipSegmentPlanner.plan(ta, true);
+        TooltipSegmentPlanner.Plan b = TooltipSegmentPlanner.plan(tb, true);
+        assertTrue(a != null && b != null);
+        assertEquals(ta.substring(a.segments().get(0).start(), a.segments().get(0).end()),
+                tb.substring(b.segments().get(0).start(), b.segments().get(0).end()));
+    }
 }

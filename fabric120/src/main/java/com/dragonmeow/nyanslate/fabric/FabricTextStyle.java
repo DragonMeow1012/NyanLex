@@ -1006,11 +1006,55 @@ public final class FabricTextStyle {
         return Component.empty().append(takePrefix(source, plan.contentStart())).append(core);
     }
 
+    /**
+     * Marker-less colouring of a translation whose ORIGINAL is one whole-line per-character
+     * gradient/rainbow (the same detection {@link #markChatContent} uses): the original
+     * per-character colour sequence is redistributed across the translated characters
+     * ({@link #appendGradient}: endpoint-anchored proportional interpolation — a shorter
+     * Chinese text samples the sequence sparsely, a longer one repeats neighbouring colours,
+     * so every translated character gets one colour and first/last colour are preserved),
+     * instead of flattening the line to one dominant colour. Returns {@code null} unless
+     * the original is exactly one such gradient (plus optional blank runs); every other
+     * multi-colour line keeps its structure-preserving behaviour and is never proportionally
+     * coloured. Reached when a cached marker-free (style-fallback) translation is reused for
+     * a gradient render, e.g. the tooltip path of a rainbow "MYTHIC DUNGEON BOW".
+     */
+    private static MutableComponent gradientWholeLine(Component original, int fromChar, String translated) {
+        List<Seg> segs = coalesceGradientRuns(mergeSegments(segmentsFrom(original, fromChar)));
+        Seg grad = null;
+        for (Seg seg : segs) {
+            if (seg.text().isBlank()) continue;
+            if (grad != null || !seg.isGradient()) return null;
+            grad = seg;
+        }
+        if (grad == null) return null;
+        String gt = grad.text();
+        int gs = 0;
+        int ge = gt.length();
+        while (gs < ge && Character.isWhitespace(gt.charAt(gs))) gs++;
+        while (ge > gs && Character.isWhitespace(gt.charAt(ge - 1))) ge--;
+        List<Style> sequence = grad.charStyles().subList(gs, ge);
+        int lead = 0;
+        while (lead < translated.length() && Character.isWhitespace(translated.charAt(lead))) lead++;
+        int trail = translated.length();
+        while (trail > lead && Character.isWhitespace(translated.charAt(trail - 1))) trail--;
+        if (lead >= trail || sequence.isEmpty()) return null;
+        MutableComponent out = Component.empty();
+        if (lead > 0) out.append(Component.literal(translated.substring(0, lead)).setStyle(grad.style()));
+        appendGradient(out, translated.substring(lead, trail), sequence);
+        if (trail < translated.length()) {
+            out.append(Component.literal(translated.substring(trail)).setStyle(grad.style()));
+        }
+        return out;
+    }
+
     /** Markerless fallback: one dominant semantic style for the whole translated core.
      * Never split target text by source/target character proportions. */
     public static MutableComponent styledChatContent(Component original, int contentStart, String translated) {
         ColorProfile profile = extractFrom(original, contentStart);
         if (translated == null || translated.isEmpty()) return Component.empty();
+        MutableComponent gradientLine = gradientWholeLine(original, contentStart, translated);
+        if (gradientLine != null) return gradientLine;
         List<Seg> segs = mergeSegments(segmentsFrom(original, contentStart));
         if (segs.size() <= 1 || profile.distinctColorCount() > Math.max(3, segs.size())) {
             return styled(translated, profile);
@@ -1060,6 +1104,8 @@ public final class FabricTextStyle {
     public static MutableComponent styledAnchored(Component original, int fromChar, String translated) {
         ColorProfile profile = extractFrom(original, fromChar);
         if (translated == null || translated.isEmpty()) return Component.empty();
+        MutableComponent gradientLine = gradientWholeLine(original, fromChar, translated);
+        if (gradientLine != null) return gradientLine;
         List<Seg> segs = mergeSegments(segmentsFrom(original, fromChar));
         if (segs.size() <= 1) return styled(translated, profile);
 
@@ -1368,7 +1414,39 @@ public final class FabricTextStyle {
             distinct.add(seg.style());
         }
         if (!crossedWhitespace || nonWsChars < GRADIENT_MIN_NON_WS_CHARS) return false;
-        return distinct.size() >= nonWsSegCount - 1;
+        if (distinct.size() < nonWsSegCount - 1) return false;
+        return switchesColourInsideWords(segs, start, end);
+    }
+
+    /** A genuine per-CHARACTER gradient changes colour INSIDE words. A line coloured one
+     *  WORD at a time ("Go on up to it now": each 1-2 letter word its own colour) never does,
+     *  so it is not a gradient. Every maximal non-whitespace word of 2+ characters is checked
+     *  for being split across 2+ runs; at least one word must be split, and unsplit multi-
+     *  character words may be at most half as many as split ones (tolerates a slow gradient
+     *  whose neighbouring letters briefly share a colour). Single-letter words are neutral. */
+    private static boolean switchesColourInsideWords(List<Seg> segs, int start, int end) {
+        int split = 0;
+        int unsplit = 0;
+        int wordLen = 0;
+        int firstSeg = -1;
+        boolean multiSeg = false;
+        for (int i = start; i <= end; i++) {
+            String t = i < end ? segs.get(i).text() : " ";
+            for (int c = 0; c < t.length(); c++) {
+                if (!Character.isWhitespace(t.charAt(c))) {
+                    if (wordLen == 0) firstSeg = i;
+                    else if (i != firstSeg) multiSeg = true;
+                    wordLen++;
+                } else {
+                    if (wordLen >= 2) {
+                        if (multiSeg) split++; else unsplit++;
+                    }
+                    wordLen = 0;
+                    multiSeg = false;
+                }
+            }
+        }
+        return split >= 1 && unsplit * 2 <= split;
     }
 
     /** Merge a qualifying gradient zone into one run, retaining every member's style as a

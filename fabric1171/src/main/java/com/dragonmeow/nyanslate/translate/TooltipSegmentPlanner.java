@@ -71,7 +71,8 @@ public final class TooltipSegmentPlanner {
      *  same row); ends the block, inclusive. A block with no such row simply runs to the end
      *  of the paragraph (the conservative, always-safe fallback — never splits anything that
      *  should have stayed inside the block). */
-    private static final Pattern ABILITY_END = Pattern.compile("(?i)^\\s*Cooldown\\s*:");
+    private static final Pattern ABILITY_END = Pattern.compile(
+            "(?i)^\\s*(?:\\u27E6\\s*/?\\s*CS\\s*\\d+\\s*\\u27E7\\s*)*Cooldown\\s*:");
 
     public enum Kind { RARITY, ENCHANT, TRADE, STATS, SCROLL, PROSE, ABILITY, INERT }
 
