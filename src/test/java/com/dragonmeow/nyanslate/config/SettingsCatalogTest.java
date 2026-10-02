@@ -50,7 +50,7 @@ class SettingsCatalogTest {
         assertEquals(18, SettingsCatalog.entries(SettingsPage.DISPLAY).size());
         assertEquals(9, SettingsCatalog.rows(SettingsPage.DISPLAY).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.AI).size());
-        assertEquals(5, SettingsCatalog.entries(SettingsPage.REQUESTS).size());
+        assertEquals(6, SettingsCatalog.entries(SettingsPage.REQUESTS).size());
         assertEquals(5, SettingsCatalog.entries(SettingsPage.HUB).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
     }

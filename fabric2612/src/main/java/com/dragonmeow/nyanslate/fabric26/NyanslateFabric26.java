@@ -554,6 +554,42 @@ public final class NyanslateFabric26 implements ClientModInitializer {
         return new com.dragonmeow.nyanslate.warmup.ItemWarmupTarget(itemId, namespace, plan.sources());
     }
 
+    private static com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.State warmupPrevState =
+            com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.State.IDLE;
+    private static com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.PauseReason warmupPrevReason =
+            com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.PauseReason.NONE;
+    private static volatile long warmupDoneAtMs = -1L;
+
+    /** Milliseconds since the warm-up last finished, or -1 when it has not finished this launch. */
+    public static long warmupMsSinceDone() {
+        long at = warmupDoneAtMs;
+        return at < 0 ? -1L : System.currentTimeMillis() - at;
+    }
+
+    /** Mod version for the settings "About" card. */
+    public static String modVersion() {
+        return FabricLoader.getInstance().getModContainer(MOD_ID)
+                .map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("");
+    }
+
+    /** Remembers state changes for the HUD ("done" timer) and tells the player when a paused run continues. */
+    private static void trackWarmupTransitions(com.dragonmeow.nyanslate.warmup.ItemWarmupDriver driver) {
+        var progress = driver.progress();
+        var state = progress.state();
+        if (state == com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.State.DONE
+                && warmupPrevState != com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.State.DONE) {
+            warmupDoneAtMs = System.currentTimeMillis();
+        }
+        if (state == com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.State.RUNNING
+                && warmupPrevState == com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.State.PAUSED
+                && warmupPrevReason == com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.PauseReason.NO_WORLD) {
+            status(Component.translatable(com.dragonmeow.nyanslate.config.SettingsModel.KEY_WARMUP_RESUMED,
+                    progress.scanned(), progress.totalItems()).getString());
+        }
+        warmupPrevState = state;
+        warmupPrevReason = progress.pauseReason();
+    }
+
     /** Per client tick: drive the warm-up, and resume it once per launch if the player opted in. */
     private static void tickItemWarmup(Minecraft mc) {
         if (config == null || service == null) return;
@@ -568,6 +604,7 @@ public final class NyanslateFabric26 implements ClientModInitializer {
             warmupWorldTicks = 0;
         }
         driver.tick();
+        trackWarmupTransitions(driver);
     }
 
     /** Spawns background hub work (identify/plan/download) as a daemon thread; also
@@ -1330,6 +1367,9 @@ public final class NyanslateFabric26 implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(
                 tickClient -> HookGuard.run("event.clientTick", () -> onClientTick(tickClient)));
+        net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry.addLast(
+                Identifier.tryParse(MOD_ID + ":warmup_hud"),
+                (graphics, tickCounter) -> HookGuard.run("event.warmupHud", () -> WarmupHudOverlay.render(graphics)));
 
         
         

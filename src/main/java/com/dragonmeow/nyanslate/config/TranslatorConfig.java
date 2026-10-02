@@ -170,6 +170,9 @@ public final class TranslatorConfig {
     /** The player has seen and accepted the cost/429 warning of the item warm-up. */
     public boolean itemWarmupWarningAcknowledged = false;
 
+    /** Show the small warm-up progress readout in the HUD corner while a run is active. */
+    public boolean itemWarmupHud = true;
+
     /** Minimum pause between two warm-up chunks, in milliseconds. */
     public int itemWarmupChunkDelayMs = 3000;
 

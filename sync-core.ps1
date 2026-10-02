@@ -142,7 +142,7 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     if ($f.Name -eq 'FabricTextStyleIntegrationTest.java') { continue }
     # SettingsCatalogTest reads the nyanslate.settings.* lang keys, which only the root and
     # fabric2612 trees ship (they are the only ones with the tabbed settings screen).
-    if ($f.Name -eq 'SettingsCatalogTest.java') { continue }
+    if ($f.Name -in 'SettingsCatalogTest.java', 'SettingsModelTest.java', 'SettingsPanelTest.java') { continue }
     $relative = $f.FullName.Substring($testSrcDir.Length + 1)
     # hub.tool is an author-only sub-package (HubExportTool/ChatLineClassifier/
     # UnmaskedNameConverter) this script deliberately never mirrors into any tree's

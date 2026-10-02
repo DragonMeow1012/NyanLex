@@ -30,6 +30,10 @@ public final class Fabric26TextInput {
             if (screen instanceof Fabric26KeybindScreen keybindScreen && keybindScreen.isListening()) {
                 return true;
             }
+            // The settings screen's own search box (not an EditBox widget).
+            if (screen instanceof Fabric26ConfigScreen settings && settings.isTyping()) {
+                return true;
+            }
             // Vanilla text-entry screens, whichever widget holds focus (chat incl. the bed chat,
             // signs incl. hanging signs, books, command blocks).
             if (screen instanceof ChatScreen || screen instanceof AbstractSignEditScreen

@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Declarative description of the six settings pages (一般／顯示／AI／請求／倉庫／進階).
@@ -131,7 +132,7 @@ public final class SettingsCatalog {
         Map<SettingsPage, List<SettingsRow>> map = new EnumMap<>(SettingsPage.class);
 
         map.put(SettingsPage.GENERAL, pairs(List.of(
-                toggle(SettingsPage.GENERAL, "master",
+                toggle(SettingsPage.GENERAL, "master", c -> c.translationRequestsEnabled,
                         c -> onOff(c.translationRequestsEnabled),
                         c -> c.translationRequestsEnabled = !c.translationRequestsEnabled,
                         SettingEntry.SideEffect.CLEAR_PENDING),
@@ -167,11 +168,11 @@ public final class SettingsCatalog {
                         c -> StateText.of("screen.nyanslate.provider."
                                 + MachineTranslationProvider.fromId(c.machineTranslationProvider).id())),
                 // Stored inverted (disableGoogleFallbackForAi); shown as "on = fallback allowed".
-                toggle(SettingsPage.AI, "ai_fallback",
+                toggle(SettingsPage.AI, "ai_fallback", c -> !c.disableGoogleFallbackForAi,
                         c -> onOff(!c.disableGoogleFallbackForAi),
                         c -> c.disableGoogleFallbackForAi = !c.disableGoogleFallbackForAi,
                         SettingEntry.SideEffect.NONE),
-                toggle(SettingsPage.AI, "screen_scan",
+                toggle(SettingsPage.AI, "screen_scan", c -> c.aiScreenScan,
                         c -> engineState(c.aiScreenScan),
                         c -> c.aiScreenScan = !c.aiScreenScan,
                         SettingEntry.SideEffect.NONE))));
@@ -179,24 +180,35 @@ public final class SettingsCatalog {
         map.put(SettingsPage.REQUESTS, pairs(List.of(
                 cycle(SettingsPage.REQUESTS, "cooldown",
                         c -> millisState(c.requestCooldownMs),
-                        c -> c.requestCooldownMs = nextStep(COOLDOWN_STEPS, c.requestCooldownMs)),
+                        c -> c.requestCooldownMs = nextStep(COOLDOWN_STEPS, c.requestCooldownMs))
+                        .withSlider(new SettingEntry.Slider(COOLDOWN_STEPS,
+                                c -> c.requestCooldownMs, (c, v) -> c.requestCooldownMs = v))
+                        .withKeywords("cooldown", "429", "rate limit", "delay"),
                 cycle(SettingsPage.REQUESTS, "batch",
                         c -> millisState(c.batchWindowMs),
-                        c -> c.batchWindowMs = nextStep(BATCH_WINDOW_STEPS, c.batchWindowMs)),
-                toggle(SettingsPage.REQUESTS, "chat_delivery",
+                        c -> c.batchWindowMs = nextStep(BATCH_WINDOW_STEPS, c.batchWindowMs))
+                        .withSlider(new SettingEntry.Slider(BATCH_WINDOW_STEPS,
+                                c -> c.batchWindowMs, (c, v) -> c.batchWindowMs = v))
+                        .withKeywords("batch", "window"),
+                toggle(SettingsPage.REQUESTS, "chat_delivery", c -> c.deliverChatTranslationsInOrder,
                         c -> StateText.of(c.deliverChatTranslationsInOrder ? STATE_ORDERED : STATE_READY_FIRST),
                         c -> c.deliverChatTranslationsInOrder = !c.deliverChatTranslationsInOrder,
                         SettingEntry.SideEffect.NONE),
                 sub(SettingsPage.REQUESTS, "dnt", SettingAction.OPEN_DO_NOT_TRANSLATE, null),
-                action(SettingsPage.REQUESTS, "warmup", SettingAction.OPEN_ITEM_WARMUP))));
+                action(SettingsPage.REQUESTS, "warmup", SettingAction.OPEN_ITEM_WARMUP)
+                        .withKeywords("warm", "warmup", "preload", "item"),
+                toggle(SettingsPage.REQUESTS, "warmup_hud", c -> c.itemWarmupHud,
+                        c -> onOff(c.itemWarmupHud),
+                        c -> c.itemWarmupHud = !c.itemWarmupHud,
+                        SettingEntry.SideEffect.NONE))));
 
         map.put(SettingsPage.HUB, pairs(List.of(
-                toggle(SettingsPage.HUB, "share",
+                toggle(SettingsPage.HUB, "share", c -> c.hubShareConsent,
                         c -> onOff(c.hubShareConsent),
                         c -> c.hubShareConsent = !c.hubShareConsent,
                         SettingEntry.SideEffect.NONE),
                 // Stored inverted (hubStartupPromptDisabled); shown as "on = check at startup".
-                toggle(SettingsPage.HUB, "startup",
+                toggle(SettingsPage.HUB, "startup", c -> !c.hubStartupPromptDisabled,
                         c -> onOff(!c.hubStartupPromptDisabled),
                         c -> c.hubStartupPromptDisabled = !c.hubStartupPromptDisabled,
                         SettingEntry.SideEffect.NONE),
@@ -208,7 +220,7 @@ public final class SettingsCatalog {
                 action(SettingsPage.ADVANCED, "export", SettingAction.EXPORT_TRANSLATIONS),
                 action(SettingsPage.ADVANCED, "import", SettingAction.IMPORT_TRANSLATIONS),
                 action(SettingsPage.ADVANCED, "clear_cache", SettingAction.CLEAR_CACHE),
-                toggle(SettingsPage.ADVANCED, "debug",
+                toggle(SettingsPage.ADVANCED, "debug", c -> c.debugTranslationOverlay,
                         c -> onOff(c.debugTranslationOverlay),
                         c -> c.debugTranslationOverlay = !c.debugTranslationOverlay,
                         SettingEntry.SideEffect.CLEAR_DEBUG_LOG_WHEN_OFF))));
@@ -232,15 +244,25 @@ public final class SettingsCatalog {
         return List.copyOf(rows);
     }
 
+    /** Drop-down order of the display modes: 譯文, 雙語, 原文. */
+    private static final DisplayMode[] MODE_ORDER =
+            {DisplayMode.TRANSLATION, DisplayMode.BOTH, DisplayMode.ORIGINAL_ONLY};
+
+    private static int modeOrder(DisplayMode mode) {
+        for (int i = 0; i < MODE_ORDER.length; i++) if (MODE_ORDER[i] == mode) return i;
+        return 0;
+    }
+
     private static String label(String id) { return "nyanslate.settings." + id; }
     private static String tip(String id) { return "nyanslate.settings." + id + ".tip"; }
 
     private static SettingEntry toggle(SettingsPage page, String id,
+                                       Predicate<TranslatorConfig> on,
                                        Function<TranslatorConfig, StateText> state,
                                        Consumer<TranslatorConfig> press,
                                        SettingEntry.SideEffect effect) {
         return new SettingEntry(id, page, SettingEntry.Type.TOGGLE, label(id), tip(id),
-                state, press, null, effect, false);
+                state, press, null, effect, false).withOn(on);
     }
 
     private static SettingEntry cycle(SettingsPage page, String id,
@@ -274,12 +296,17 @@ public final class SettingsCatalog {
         SettingEntry mode = new SettingEntry(id, SettingsPage.DISPLAY, SettingEntry.Type.CYCLE,
                 label(id), tip(id), c -> modeState(getMode.apply(c)),
                 c -> setMode.accept(c, getMode.apply(c).next()),
-                null, SettingEntry.SideEffect.NONE, false);
+                null, SettingEntry.SideEffect.NONE, false)
+                .withOptions(new SettingEntry.Options(
+                        List.of(modeState(DisplayMode.TRANSLATION), modeState(DisplayMode.BOTH),
+                                modeState(DisplayMode.ORIGINAL_ONLY)),
+                        c -> modeOrder(getMode.apply(c)),
+                        (c, i) -> setMode.accept(c, MODE_ORDER[Math.max(0, Math.min(2, i))])));
         SettingEntry engine = new SettingEntry(id + ".engine", SettingsPage.DISPLAY,
                 SettingEntry.Type.TOGGLE, label(id + ".engine"), tip("engine"),
                 c -> engineState(getAi.test(c)),
                 c -> setAi.accept(c, !getAi.test(c)),
-                null, SettingEntry.SideEffect.NONE, true);
+                null, SettingEntry.SideEffect.NONE, true).withOn(getAi::test);
         return new SettingsRow(mode, engine);
     }
 }
