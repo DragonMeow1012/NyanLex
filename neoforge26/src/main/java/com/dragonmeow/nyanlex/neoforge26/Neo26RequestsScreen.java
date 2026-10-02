@@ -95,7 +95,7 @@ public final class Neo26RequestsScreen extends Screen {
         if (terms.equals(cfg.doNotTranslateTerms)) return;
         cfg.doNotTranslateTerms = terms; // a fresh list: never mutate one a worker may be reading
         NyanLexNeoForge26.saveConfig();
-        NyanLexNeoForge26.clearFtbPending();
+        NyanLexNeoForge26.clearQuestWidgetPending();
     }
 
     @Override

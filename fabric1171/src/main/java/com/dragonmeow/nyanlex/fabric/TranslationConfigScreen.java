@@ -133,7 +133,7 @@ public final class TranslationConfigScreen extends Screen {
         this.addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(requestsToggleLabel(cfg), b -> {
             cfg.translationRequestsEnabled = !cfg.translationRequestsEnabled;
             NyanLexFabric.saveConfig();
-            NyanLexFabric.clearFtbPending();
+            NyanLexFabric.clearQuestWidgetPending();
             b.setMessage(requestsToggleLabel(cfg));
         }).bounds(left, y, rowWidth, 20).build());
         this.addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(

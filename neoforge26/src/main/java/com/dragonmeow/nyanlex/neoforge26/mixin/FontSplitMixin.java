@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 /**
  * Translates a WHOLE block of GUI text at the moment it is wrapped into lines via
  * {@code Font.split(FormattedText, width)} — so descriptions / multi-line tooltips
- * (e.g. FTB Quests) are translated as one coherent unit and Minecraft re-wraps the
+ * (e.g. quest descriptions) are translated as one coherent unit and Minecraft re-wraps the
  * translation, instead of each already-wrapped line being translated separately
  * (which reads choppy / disjointed).
  *

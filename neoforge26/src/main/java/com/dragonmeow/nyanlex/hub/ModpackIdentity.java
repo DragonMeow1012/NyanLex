@@ -8,6 +8,6 @@ package com.dragonmeow.nyanlex.hub;
 public record ModpackIdentity(String slug, String displayName, String gameVersion, Source source) {
 
     public enum Source {
-        CURSEFORGE, MODRINTH, PRISM_MULTIMC, PACKWIZ, FTB, MOD_LIST_FALLBACK
+        INSTANCE_MANIFEST, PACK_INDEX, INSTANCE_CFG, PACK_TOML, INSTANCE_JSON, MOD_LIST_FALLBACK
     }
 }

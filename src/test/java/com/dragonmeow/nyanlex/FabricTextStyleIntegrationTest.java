@@ -199,7 +199,7 @@ class FabricTextStyleIntegrationTest {
     }
 
     @Test
-    void singleRunFtbFieldKeepsItsExactStyleAndInteractivePayload() {
+    void singleRunQuestFieldKeepsItsExactStyleAndInteractivePayload() {
         Style sourceStyle = Style.EMPTY.withColor(TextColor.fromRgb(0x45D6C8))
                 .withItalic(true).withUnderlined(true).withInsertion("open-quest-link");
         Component source = Component.literal("Open linked quest").setStyle(sourceStyle);

@@ -124,8 +124,9 @@ public final class NyanLexNeoForge26 {
     private static KeyMapping toggleKey;
     private long actionBarSequence;
 
-    private static final java.util.Map<Object, String> FTB_PENDING =
+    private static final java.util.Map<Object, String> QUEST_WIDGET_PENDING =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    private static final String QUEST_UI_PACKAGE = "dev.ftb.";
     private static final ThreadLocal<Integer> tooltipProbeDepth =
             ThreadLocal.withInitial(() -> 0);
     /** True only while NeoForge is rendering the current screen. */
@@ -689,19 +690,19 @@ public final class NyanLexNeoForge26 {
         return t != null ? t : c;
     }
 
-    /** Translate an optional FTB Library TextField before FTB measures and wraps it. */
-    public static Component ftbText(Object widget, Component source) {
+    /** Translate an optional quest-book text widget before it measures and wraps. */
+    public static Component questWidgetText(Object widget, Component source) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return source;
         TranslationService s = service;
         if (widget == null || source == null || s == null) return source;
         Minecraft mc = Minecraft.getInstance();
-        if (!renderingCurrentScreen(mc) && !ftbWidgetOnCurrentScreen(widget, mc)) return source;
+        if (!renderingCurrentScreen(mc) && !questWidgetOnCurrentScreen(widget, mc)) return source;
         if (captureScreenText(source, true)) return source;
         if (s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return source;
         Component resolved = Neo26TextStyle.resolveLegacyCodes(source);
-        Component rendered = Neo26TextStyle.renderTranslated("ftb", resolved, s::translateScreenText);
+        Component rendered = Neo26TextStyle.renderTranslated("questText", resolved, s::translateScreenText);
         if (rendered != null) {
-            FTB_PENDING.remove(widget);
+            QUEST_WIDGET_PENDING.remove(widget);
             return rendered;
         }
         List<String> requests = Neo26TextStyle.requestLines(resolved).stream()
@@ -709,25 +710,25 @@ public final class NyanLexNeoForge26 {
         if (requests.isEmpty()) return source;
         String request = String.join("\u0000", requests);
         boolean submit;
-        synchronized (FTB_PENDING) {
-            submit = !request.equals(FTB_PENDING.get(widget));
-            if (submit) FTB_PENDING.put(widget, request);
+        synchronized (QUEST_WIDGET_PENDING) {
+            submit = !request.equals(QUEST_WIDGET_PENDING.get(widget));
+            if (submit) QUEST_WIDGET_PENDING.put(widget, request);
         }
         if (submit) for (String lineRequest : requests) {
             s.requestLiveScreenTextAsync(lineRequest, translated -> {
-                synchronized (FTB_PENDING) {
-                    if (!request.equals(FTB_PENDING.get(widget))) return;
+                synchronized (QUEST_WIDGET_PENDING) {
+                    if (!request.equals(QUEST_WIDGET_PENDING.get(widget))) return;
                 }
                 Component ready = Neo26TextStyle.renderTranslated(
-                        "ftb", resolved, s::translateScreenText);
+                        "questText", resolved, s::translateScreenText);
                 Minecraft client = Minecraft.getInstance();
                 if (client != null) {
                     Component display = ready != null ? ready : resolved;
                     client.execute(() -> {
-                            synchronized (FTB_PENDING) {
-                                if (!request.equals(FTB_PENDING.get(widget))) return;
+                            synchronized (QUEST_WIDGET_PENDING) {
+                                if (!request.equals(QUEST_WIDGET_PENDING.get(widget))) return;
                             }
-                            if (ftbWidgetOnCurrentScreen(widget, client)) applyFtbText(widget, display);
+                            if (questWidgetOnCurrentScreen(widget, client)) applyQuestWidgetText(widget, display);
                         });
                 }
             });
@@ -735,11 +736,11 @@ public final class NyanLexNeoForge26 {
         return source;
     }
 
-    /** FTB populates TextField content while the new screen is being initialized,
+    /** The quest widget populates its content while the new screen is being initialized,
      * before the first Render.Pre event. Accept that call only when the widget's own
-     * GUI is the BaseScreen wrapped by Minecraft's current ScreenWrapper;
+     * GUI is the screen wrapped by Minecraft's current screen;
      * unrelated/background widgets remain outside the translation scope. */
-    private static boolean ftbWidgetOnCurrentScreen(Object widget, Minecraft mc) {
+    private static boolean questWidgetOnCurrentScreen(Object widget, Minecraft mc) {
         if (widget == null || mc == null || mc.gui.screen() == null) return false;
         try {
             java.lang.reflect.Method getter = widget.getClass().getMethod("getGui");
@@ -752,10 +753,10 @@ public final class NyanLexNeoForge26 {
         }
     }
 
-    private static void applyFtbText(Object widget, Component translated) {
+    private static void applyQuestWidgetText(Object widget, Component translated) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.gui.screen() == null
-                || !mc.gui.screen().getClass().getName().startsWith("dev.ftb.")) return;
+                || !mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return;
         try {
             Class<?> type = widget.getClass();
             java.lang.reflect.Method setter = null;
@@ -775,7 +776,7 @@ public final class NyanLexNeoForge26 {
                 if (gui != null) gui.getClass().getMethod("refreshWidgets").invoke(gui);
             }
         } catch (ReflectiveOperationException | RuntimeException error) {
-            LOGGER.debug("Unable to reflow translated FTB text field", error);
+            LOGGER.debug("Unable to reflow translated quest text widget", error);
         }
     }
 
@@ -807,14 +808,14 @@ public final class NyanLexNeoForge26 {
     public static net.minecraft.util.FormattedCharSequence screenText(net.minecraft.util.FormattedCharSequence fcs) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return fcs;
         if (fcs != null && Minecraft.getInstance().gui.screen() != null
-                && Minecraft.getInstance().gui.screen().getClass().getName().startsWith("dev.ftb.")) return fcs;
+                && Minecraft.getInstance().gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;
         if (fcs != null && captureScreenText(Neo26TextStyle.toComponent(fcs))) return fcs;
         TranslationService s = service;
         if (s == null || fcs == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return fcs;
         Minecraft mc = Minecraft.getInstance();
         if (!renderingCurrentScreen(mc)
                 || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;
-        if (mc.gui.screen().getClass().getName().startsWith("dev.ftb.")) return fcs;
+        if (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;
         Component source = Neo26TextStyle.toComponent(fcs);
         Component styled = Neo26TextStyle.renderTranslated("screenTextFcs", source, s::translateScreenText);
         if (styled == null) return fcs;
@@ -841,7 +842,7 @@ public final class NyanLexNeoForge26 {
         Minecraft mc = Minecraft.getInstance();
         if (!renderingCurrentScreen(mc)
                 || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return text;
-        if (mc.gui.screen().getClass().getName().startsWith("dev.ftb.")) return text;
+        if (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return text;
         if (mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;
         Component source = Neo26TextStyle.toComponent(text);
         Component translated = Neo26TextStyle.renderTranslated("screenTextBlock", source, s::translateScreenText);
@@ -873,10 +874,10 @@ public final class NyanLexNeoForge26 {
         Neo26TextStyle.clearRenderMemo();
     }
 
-    /** Forget pending FTB field requests so live quest text is requested again after the
+    /** Forget pending quest widget requests so live quest text is requested again after the
      *  request switch or the do-not-translate terms change. */
-    public static void clearFtbPending() {
-        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+    public static void clearQuestWidgetPending() {
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
     }
 
     public NyanLexNeoForge26(IEventBus modBus, ModContainer container) {
@@ -1058,11 +1059,11 @@ public final class NyanLexNeoForge26 {
         lastTooltipParagraphSources = null;
         lastTooltipScreen = null;
         lastTooltipAtMs = 0L;
-        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
-        refreshCurrentFtbScreen();
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
+        refreshCurrentQuestScreen();
     }
 
-    private static void refreshCurrentFtbScreen() {
+    private static void refreshCurrentQuestScreen() {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.gui.screen() == null) return;
         try {
@@ -2033,10 +2034,10 @@ public final class NyanLexNeoForge26 {
         SCREEN_CAPTURE.begin(screen);
         TOOLTIP_CAPTURE.begin(screen);
         captureScreenText(screen.getTitle(), true);
-        // FTB caches laid-out paragraphs. Rebuild them while capturing their original input.
-        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+        // Quest widgets cache laid-out paragraphs. Rebuild them while capturing their original input.
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
         Neo26TextStyle.clearRenderMemo();
-        refreshCurrentFtbScreen();
+        refreshCurrentQuestScreen();
     }
 
     private static boolean captureScreenText(Component source) {
@@ -2063,7 +2064,7 @@ public final class NyanLexNeoForge26 {
         service.retranslateScreen(sources);
         if (tooltips != null && !tooltips.isEmpty()) service.retranslate(tooltips);
         Neo26TextStyle.clearRenderMemo();
-        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
         screenRefreshRequested = screen;
         status(Component.translatable("message.nyanlex.screen_scan", sources.size()).getString());
     }
@@ -2076,7 +2077,7 @@ public final class NyanLexNeoForge26 {
         if (screenRefreshRequested == null) return;
         boolean current = screenRefreshRequested == mc.gui.screen();
         screenRefreshRequested = null;
-        if (current) refreshCurrentFtbScreen();
+        if (current) refreshCurrentQuestScreen();
     }
 
     private void warmOpenContainerItems(Minecraft mc) {
@@ -2356,7 +2357,7 @@ public final class NyanLexNeoForge26 {
                     Minecraft client = Minecraft.getInstance();
                     if (client != null) client.execute(() -> {
                         status(message);
-                        refreshCurrentFtbScreen();
+                        refreshCurrentQuestScreen();
                     });
                 });
     }

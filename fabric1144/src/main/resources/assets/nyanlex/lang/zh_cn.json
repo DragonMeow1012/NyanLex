@@ -69,7 +69,7 @@
   "screen.nyanlex.requests.toggle": "关闭发送新的翻译：%s",
   "screen.nyanlex.requests.toggle.hint": "开启时：仍会显示已缓存的翻译，但不会发送任何新的翻译请求。",
   "screen.nyanlex.requests.terms": "不翻译词汇（以逗号分隔）",
-  "screen.nyanlex.requests.terms.hint": "例：SkyBlock, Hypixel（保留原文；不区分大小写、整词匹配）",
+  "screen.nyanlex.requests.terms.hint": "例：MyServer, Steve（保留原文；不区分大小写、整词匹配）",
   "screen.nyanlex.options": "翻译设置...",
   "message.nyanlex.show_original": "正在显示原文（翻译已暂停）",
   "message.nyanlex.show_translation": "正在显示译文",

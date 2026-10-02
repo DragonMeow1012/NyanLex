@@ -31,7 +31,7 @@ class ScreenTranslationPolicyTest {
 
     @Test
     void unknownAndModdedScreensDefaultToAllowed() {
-        assertTrue(ScreenTranslationPolicy.allowsTranslation("iris.options.title"));
+        assertTrue(ScreenTranslationPolicy.allowsTranslation("shaderpack.options.title"));
         assertTrue(ScreenTranslationPolicy.allowsTranslation("menu.custom_options.title"));
         assertTrue(ScreenTranslationPolicy.allowsTranslation(null));
         assertTrue(ScreenTranslationPolicy.allowsTranslation(""));

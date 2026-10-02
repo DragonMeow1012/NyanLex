@@ -17,7 +17,7 @@ import java.util.function.Supplier;
 
 /**
  * {@link Translator} backed by an OpenAI-compatible chat-completions endpoint
- * (OpenAI, DeepSeek, OpenRouter, local servers, …) for higher-quality "精翻".
+ * (OpenAI, DeepSeek, local servers, …) for higher-quality "精翻".
  *
  * <p>Key behaviours:</p>
  * <ul>

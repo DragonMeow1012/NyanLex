@@ -3,7 +3,7 @@
 ## Changes
 
 - `P` captures one frame of original visible text, invalidates those translation
-  rows, and requests new translations. Navigation cancels capture. FTB paragraphs
+  rows, and requests new translations. Navigation cancels capture. quest-book paragraphs
   are captured before wrapping, and hovered item paragraphs keep tooltip routing.
   Capture is limited to 512 distinct strings, each at most 16,384 characters.
 - Translation Settings can export/import translation-only JSON. Existing final

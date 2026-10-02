@@ -120,10 +120,11 @@ public final class NyanLexFabric implements ClientModInitializer {
     /** Invalidates late action-bar callbacks when the server has already sent a newer row. */
     private long actionBarSequence;
 
-    /** One pending rich-text request per live optional FTB Library field. Weak keys ensure
+    /** One pending rich-text request per live quest-book text widget. Weak keys ensure
      *  closing a quest screen can never retain its widget tree. */
-    private static final java.util.Map<Object, String> FTB_PENDING =
+    private static final java.util.Map<Object, String> QUEST_WIDGET_PENDING =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    private static final String QUEST_UI_PACKAGE = "dev.ftb.";
     private static final ThreadLocal<Integer> tooltipProbeDepth =
             ThreadLocal.withInitial(() -> 0);
     private static final ThreadLocal<java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen>>
@@ -840,10 +841,10 @@ public final class NyanLexFabric implements ClientModInitializer {
         FabricTextStyle.clearRenderMemo();
     }
 
-    /** Forget pending FTB field requests so live quest text is requested again after the
+    /** Forget pending quest widget requests so live quest text is requested again after the
      *  request switch or the do-not-translate terms change. */
-    public static void clearFtbPending() {
-        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+    public static void clearQuestWidgetPending() {
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
     }
 
 
@@ -862,24 +863,24 @@ public final class NyanLexFabric implements ClientModInitializer {
     }
 
     /**
-     * Optional FTB Library integration.  TextField receives the whole Component before
-     * FTB measures and wraps it, which is the only point where translated paragraphs can
+     * Optional quest-book widget integration.  TextField receives the whole Component before
+     * it measures and wraps it, which is the only point where translated paragraphs can
      * retain their formatting and still be laid out to the real quest-panel width.
      */
-    public static Component ftbText(Object widget, Component source) {
+    public static Component questWidgetText(Object widget, Component source) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return source;
         TranslationService s = service;
         if (widget == null || source == null || s == null) return source;
         Minecraft mc = Minecraft.getInstance();
-        if (!renderingCurrentScreen(mc) && !ftbWidgetOnCurrentScreen(widget, mc)) return source;
+        if (!renderingCurrentScreen(mc) && !questWidgetOnCurrentScreen(widget, mc)) return source;
 
         if (captureScreenText(source, true)) return source;
         if (s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return source;
         Component resolved = FabricTextStyle.resolveLegacyCodes(source);
         Component rendered = FabricTextStyle.renderTranslated(
-                "ftb", resolved, s::translateScreenText);
+                "questText", resolved, s::translateScreenText);
         if (rendered != null) {
-            FTB_PENDING.remove(widget);
+            QUEST_WIDGET_PENDING.remove(widget);
             return rendered;
         }
 
@@ -889,26 +890,26 @@ public final class NyanLexFabric implements ClientModInitializer {
         String request = String.join("\u0000", requests);
 
         boolean submit;
-        synchronized (FTB_PENDING) {
-            submit = !request.equals(FTB_PENDING.get(widget));
-            if (submit) FTB_PENDING.put(widget, request);
+        synchronized (QUEST_WIDGET_PENDING) {
+            submit = !request.equals(QUEST_WIDGET_PENDING.get(widget));
+            if (submit) QUEST_WIDGET_PENDING.put(widget, request);
         }
         if (submit) {
             for (String lineRequest : requests) {
                 s.requestLiveScreenTextAsync(lineRequest, translated -> {
-                    synchronized (FTB_PENDING) {
-                        if (!request.equals(FTB_PENDING.get(widget))) return;
+                    synchronized (QUEST_WIDGET_PENDING) {
+                        if (!request.equals(QUEST_WIDGET_PENDING.get(widget))) return;
                     }
                     Component ready = FabricTextStyle.renderTranslated(
-                            "ftb", resolved, s::translateScreenText);
+                            "questText", resolved, s::translateScreenText);
                     Minecraft client = Minecraft.getInstance();
                     if (client != null) {
                         Component display = ready != null ? ready : resolved;
                         client.execute(() -> {
-                            synchronized (FTB_PENDING) {
-                                if (!request.equals(FTB_PENDING.get(widget))) return;
+                            synchronized (QUEST_WIDGET_PENDING) {
+                                if (!request.equals(QUEST_WIDGET_PENDING.get(widget))) return;
                             }
-                            if (ftbWidgetOnCurrentScreen(widget, client)) applyFtbText(widget, display);
+                            if (questWidgetOnCurrentScreen(widget, client)) applyQuestWidgetText(widget, display);
                         });
                     }
                 });
@@ -917,11 +918,11 @@ public final class NyanLexFabric implements ClientModInitializer {
         return source;
     }
 
-    /** FTB populates TextField content while the new screen is being initialized,
+    /** The quest widget populates its content while the new screen is being initialized,
      * before the first Render.Pre event. Accept that call only when the widget's own
-     * GUI is the BaseScreen wrapped by Minecraft's current ScreenWrapper;
+     * GUI is the screen wrapped by Minecraft's current screen;
      * unrelated/background widgets remain outside the translation scope. */
-    private static boolean ftbWidgetOnCurrentScreen(Object widget, Minecraft mc) {
+    private static boolean questWidgetOnCurrentScreen(Object widget, Minecraft mc) {
         if (widget == null || mc == null || mc.screen == null) return false;
         try {
             java.lang.reflect.Method getter = widget.getClass().getMethod("getGui");
@@ -934,10 +935,10 @@ public final class NyanLexFabric implements ClientModInitializer {
         }
     }
 
-    private static void applyFtbText(Object widget, Component translated) {
+    private static void applyQuestWidgetText(Object widget, Component translated) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.screen == null
-                || !mc.screen.getClass().getName().startsWith("dev.ftb.")) return;
+                || !mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return;
         try {
             Class<?> type = widget.getClass();
             java.lang.reflect.Method setter = null;
@@ -960,7 +961,7 @@ public final class NyanLexFabric implements ClientModInitializer {
                 if (gui != null) gui.getClass().getMethod("refreshWidgets").invoke(gui);
             }
         } catch (ReflectiveOperationException | RuntimeException error) {
-            LOGGER.debug("Unable to reflow translated FTB text field", error);
+            LOGGER.debug("Unable to reflow translated quest text widget", error);
         }
     }
 
@@ -985,14 +986,14 @@ public final class NyanLexFabric implements ClientModInitializer {
     public static net.minecraft.util.FormattedCharSequence screenText(net.minecraft.util.FormattedCharSequence fcs) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return fcs;
         if (fcs != null && Minecraft.getInstance().screen != null
-                && Minecraft.getInstance().screen.getClass().getName().startsWith("dev.ftb.")) return fcs;
+                && Minecraft.getInstance().screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;
         if (fcs != null && captureScreenText(FabricTextStyle.toComponent(fcs))) return fcs;
         TranslationService s = service;
         if (s == null || fcs == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return fcs;
         Minecraft mc = Minecraft.getInstance();
         if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;
-        if (mc.screen.getClass().getName().startsWith("dev.ftb.")) return fcs;
+        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;
         Component source = FabricTextStyle.toComponent(fcs);
         Component styled = FabricTextStyle.renderTranslated(
                 "screenTextFcs", source, s::translateScreenText);
@@ -1014,7 +1015,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         Minecraft mc = Minecraft.getInstance();
         if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return text;
-        if (mc.screen.getClass().getName().startsWith("dev.ftb.")) return text;
+        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return text;
         if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;
         Component source = FabricTextStyle.toComponent(text);
         Component translated = FabricTextStyle.renderTranslated(
@@ -1402,11 +1403,11 @@ public final class NyanLexFabric implements ClientModInitializer {
         lastTooltipParagraphSources = null;
         lastTooltipScreen = null;
         lastTooltipAtMs = 0L;
-        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
-        refreshCurrentFtbScreen();
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
+        refreshCurrentQuestScreen();
     }
 
-    private static void refreshCurrentFtbScreen() {
+    private static void refreshCurrentQuestScreen() {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.screen == null) return;
         try {
@@ -1536,7 +1537,7 @@ public final class NyanLexFabric implements ClientModInitializer {
             if (chatDelivery.isQueueEmpty()) return false;
             Component reinjected = renderedMessage;
             if (FabricTextStyle.isSeparatorText(full)) {
-                // Compact-chat mods (e.g. Lunar's message stacking) merge identical frame
+                // Compact-chat mods merge identical frame
                 // lines into one "[xN]" entry and delete the earlier ones. Cycle 0-3
                 // invisible trailing spaces so nearby frames never compare equal.
                 separatorSalt = (separatorSalt + 1) & 3;
@@ -2228,10 +2229,10 @@ public final class NyanLexFabric implements ClientModInitializer {
         SCREEN_CAPTURE.begin(screen);
         TOOLTIP_CAPTURE.begin(screen);
         captureScreenText(screen.getTitle(), true);
-        // FTB caches laid-out paragraphs. Rebuild them while capturing their original input.
-        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+        // Quest widgets cache laid-out paragraphs. Rebuild them while capturing their original input.
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
         FabricTextStyle.clearRenderMemo();
-        refreshCurrentFtbScreen();
+        refreshCurrentQuestScreen();
     }
 
     private static boolean captureScreenText(Component source) {
@@ -2258,7 +2259,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         service.retranslateScreen(sources);
         if (tooltips != null && !tooltips.isEmpty()) service.retranslate(tooltips);
         FabricTextStyle.clearRenderMemo();
-        synchronized (FTB_PENDING) { FTB_PENDING.clear(); }
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
         screenRefreshRequested = screen;
         status(Component.translatable("message.nyanlex.screen_scan", sources.size()).getString());
     }
@@ -2271,7 +2272,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         if (screenRefreshRequested == null) return;
         boolean current = screenRefreshRequested == mc.screen;
         screenRefreshRequested = null;
-        if (current) refreshCurrentFtbScreen();
+        if (current) refreshCurrentQuestScreen();
     }
 
     private void warmOpenContainerItems(Minecraft mc) {
@@ -2541,7 +2542,7 @@ public final class NyanLexFabric implements ClientModInitializer {
                     Minecraft client = Minecraft.getInstance();
                     if (client != null) client.execute(() -> {
                         status(message);
-                        refreshCurrentFtbScreen();
+                        refreshCurrentQuestScreen();
                     });
                 });
     }

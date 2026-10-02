@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ModpackDetectorTest {
 
     @Test
-    void detectsCurseForgePack(@TempDir Path root) throws IOException {
+    void detectsInstanceManifestPack(@TempDir Path root) throws IOException {
         Files.writeString(root.resolve("minecraftinstance.json"),
                 "{\"name\":\"Example Pack\",\"baseModLoader\":{\"minecraftVersion\":\"1.20.1\"}}",
                 StandardCharsets.UTF_8);
@@ -27,11 +27,11 @@ class ModpackDetectorTest {
         assertEquals("example-pack", result.get().slug());
         assertEquals("Example Pack", result.get().displayName());
         assertEquals("1.20.1", result.get().gameVersion());
-        assertEquals(ModpackIdentity.Source.CURSEFORGE, result.get().source());
+        assertEquals(ModpackIdentity.Source.INSTANCE_MANIFEST, result.get().source());
     }
 
     @Test
-    void detectsModrinthPack(@TempDir Path root) throws IOException {
+    void detectsPackIndexPack(@TempDir Path root) throws IOException {
         Files.writeString(root.resolve("modrinth.index.json"),
                 "{\"name\":\"Example Pack\",\"dependencies\":{\"minecraft\":\"1.21.1\"}}",
                 StandardCharsets.UTF_8);
@@ -41,11 +41,11 @@ class ModpackDetectorTest {
         assertTrue(result.isPresent());
         assertEquals("example-pack", result.get().slug());
         assertEquals("1.21.1", result.get().gameVersion());
-        assertEquals(ModpackIdentity.Source.MODRINTH, result.get().source());
+        assertEquals(ModpackIdentity.Source.PACK_INDEX, result.get().source());
     }
 
     @Test
-    void detectsPrismOrMultiMcPack(@TempDir Path root) throws IOException {
+    void detectsInstanceCfgPack(@TempDir Path root) throws IOException {
         Files.writeString(root.resolve("instance.cfg"),
                 "[General]\nname=Example Pack\nlastLaunchTime=0\n", StandardCharsets.UTF_8);
         Files.writeString(root.resolve("mmc-pack.json"),
@@ -58,12 +58,12 @@ class ModpackDetectorTest {
         assertTrue(result.isPresent());
         assertEquals("example-pack", result.get().slug());
         assertEquals("1.19.2", result.get().gameVersion());
-        assertEquals(ModpackIdentity.Source.PRISM_MULTIMC, result.get().source());
+        assertEquals(ModpackIdentity.Source.INSTANCE_CFG, result.get().source());
     }
 
     @Test
-    void prismDetectionRequiresBothFiles(@TempDir Path root) throws IOException {
-        // instance.cfg alone (no mmc-pack.json) must not be mistaken for a Prism/MultiMC
+    void instanceCfgDetectionRequiresBothFiles(@TempDir Path root) throws IOException {
+        // instance.cfg alone (no mmc-pack.json) must not be mistaken for a launcher
         // instance -- some other launcher's file could coincidentally share the name.
         Files.writeString(root.resolve("instance.cfg"), "name=Example Pack\n", StandardCharsets.UTF_8);
 
@@ -73,7 +73,7 @@ class ModpackDetectorTest {
     }
 
     @Test
-    void detectsPackwizPack(@TempDir Path root) throws IOException {
+    void detectsPackTomlPack(@TempDir Path root) throws IOException {
         Files.writeString(root.resolve("pack.toml"),
                 "name = \"Example Pack\"\n\n[versions]\nminecraft = \"1.20.1\"\n",
                 StandardCharsets.UTF_8);
@@ -83,11 +83,11 @@ class ModpackDetectorTest {
         assertTrue(result.isPresent());
         assertEquals("Example Pack", result.get().displayName());
         assertEquals("1.20.1", result.get().gameVersion());
-        assertEquals(ModpackIdentity.Source.PACKWIZ, result.get().source());
+        assertEquals(ModpackIdentity.Source.PACK_TOML, result.get().source());
     }
 
     @Test
-    void detectsFtbInstance(@TempDir Path root) throws IOException {
+    void detectsInstanceJson(@TempDir Path root) throws IOException {
         Files.writeString(root.resolve("instance.json"), "{\"name\":\"Example Pack\"}",
                 StandardCharsets.UTF_8);
 
@@ -95,7 +95,7 @@ class ModpackDetectorTest {
 
         assertTrue(result.isPresent());
         assertEquals("Example Pack", result.get().displayName());
-        assertEquals(ModpackIdentity.Source.FTB, result.get().source());
+        assertEquals(ModpackIdentity.Source.INSTANCE_JSON, result.get().source());
     }
 
     @Test

@@ -1,9 +1,6 @@
 # NyanLex Translator 1.0.0 packaging
 
-This is the first release under the new name **NyanLex Translator** (formerly Minecraft Translator).
-The package root, mod id, archive base name, and GitHub translation-hub URL all moved from
-`mctranslator` to `nyanlex`; jar names moved from `mctranslator-<version>-...` to
-`nyanlex-<version>-...`. See the project README for the full list of user-facing changes.
+This is the first release of **NyanLex Translator**; jar names use `nyanlex-<version>-...`.
 
 The release contains 18 JARs. Each JAR is tied to one Minecraft version and loader.
 
@@ -83,7 +80,7 @@ Before publishing:
 - Confirm exactly 18 packaged JARs, 4 ZIPs, and `SHA256SUMS.txt`.
 - Compare each packaged JAR SHA-256 with its matching `build/libs` output.
 - Confirm loader metadata contains version 1.0.0 and the exact Minecraft range.
-- Confirm loader metadata mod id/entrypoint classes are `nyanlex` / `com.dragonmeow.nyanlex.*` (not the old `mctranslator` / `com.dragonmeow.mctranslator.*`).
+- Confirm loader metadata mod id/entrypoint classes are `nyanlex` / `com.dragonmeow.nyanlex.*`.
 - Run `git diff --check` and core unit tests.
 - Upload individual JARs plus the four ZIP files to tag `v1.0.0`.
 

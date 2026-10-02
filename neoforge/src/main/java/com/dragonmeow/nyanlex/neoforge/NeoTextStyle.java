@@ -94,7 +94,7 @@ public final class NeoTextStyle {
 
     /** Surfaces whose 原文＋翻譯 can render as two stacked lines (they wrap, or our mixin splits '\n'). */
     private static final java.util.Set<String> STACKABLE = java.util.Set.of(
-            "book", "nameTag", "bossBar", "actionBar", "ftb");
+            "book", "nameTag", "bossBar", "actionBar", "questText");
 
     /** Vertical gap (px, in the surface's text space) between stacked 原文 / 譯文 lines — a touch
      *  wider than the ~9px font so the two lines have clear breathing room and don't touch. */
@@ -124,7 +124,7 @@ public final class NeoTextStyle {
         //    return TRANSLATION-ONLY (otherwise the block's translation line wrongly shows both).
         //  - STACKABLE surfaces ("book" wraps via Font.split; "nameTag" & "bossBar" are drawn by our
         //    own mixin which splits on '\n') → newline genuinely stacks 原文 line / 譯文 line.
-        //  - everything else (GUI single-label text e.g. Iris settings, title / action bar / held /
+        //  - everything else (GUI single-label text e.g. settings screens, title / action bar / held /
         //    scoreboard) is on a FIXED single row that can't gain a line, so INLINE as 原文　譯文.
         if (rendered.mode() == DisplayMode.BOTH && !"tooltip".equals(surfaceId)) {
             return STACKABLE.contains(surfaceId)
@@ -1649,7 +1649,7 @@ public final class NeoTextStyle {
     }
 
     /** Colour/format profile of a laid-out {@link FormattedCharSequence} line, so a translated
-     *  GUI line (e.g. FTB quest description) keeps its colours instead of dropping to white. */
+     *  GUI line (e.g. a quest description) keeps its colours instead of dropping to white. */
     public static ColorProfile extract(FormattedCharSequence fcs) {
         if (fcs == null) return ColorProfile.empty();
         List<Integer> colors = new ArrayList<>();
@@ -1689,7 +1689,7 @@ public final class NeoTextStyle {
         return found[0];
     }
 
-    /** Flatten a laid-out {@link FormattedCharSequence} (a wrapped GUI line, e.g. an FTB quest
+    /** Flatten a laid-out {@link FormattedCharSequence} (a wrapped GUI line, e.g. a quest
      *  description line) back to plain text so it can be translated. */
     public static String plainText(FormattedCharSequence fcs) {
         if (fcs == null) return "";

@@ -1890,7 +1890,7 @@ public final class InlineCoreRegression {
         }
 
         /** Design §4 "all surfaces": every service entry point that sends text (20 senders,
-         *  including the ones no glue uses and the FTB live-screen path, plus the item-name
+         *  including the ones no glue uses and the quest live-screen path, plus the item-name
          *  re-ask) sends only masked text and never the raw term, not even as AI surface
          *  context; render lookups then hit the same masked keys. The remaining masking entry
          *  points are covered by D1 (chat), D6 (tooltip ready), D11 and S8 (invalidation). */
@@ -1917,7 +1917,7 @@ public final class InlineCoreRegression {
             service.translateChatSegmentsAsync(List.of("Welcome to SkyBlock", "SKYBLOCK"), segments::add);
             service.requestChatAsync("Play SkyBlock now", chat::add);
             service.requestScreenTextAsync("Open the SkyBlock menu", scan::add);
-            service.requestLiveScreenTextAsync("Visit the SkyBlock hub", live::add); // FTB widgets
+            service.requestLiveScreenTextAsync("Visit the SkyBlock hub", live::add); // quest widgets
             service.requestActionBarAsync("You found SkyBlock coins", bar::add);
             service.warmTooltipBatch(List.of("SkyBlock Menu", "Click to open the SkyBlock menu"));
             service.warmNamesBatch(List.of("SkyBlock Sword"));
@@ -1996,7 +1996,7 @@ public final class InlineCoreRegression {
                     "the item-name re-ask did not carry its masked tooltip context: " + reasked);
             check(!String.join("|", reasked).toLowerCase(java.util.Locale.ROOT).contains("skyblock"),
                     "the item-name re-ask leaked the raw term as AI context: " + reasked);
-            passed("D12", "21 sending entry points use masked text only (incl. FTB, AI context, item re-ask)");
+            passed("D12", "21 sending entry points use masked text only (incl. quest widgets, AI context, item re-ask)");
         }
     }
 

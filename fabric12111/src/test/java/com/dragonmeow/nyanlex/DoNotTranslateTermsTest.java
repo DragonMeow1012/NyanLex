@@ -444,7 +444,7 @@ class DoNotTranslateTermsTest {
     }
 
     @Test
-    void ftbLiveScreenTextUsesTheSameMaskedKeyAsItsRenderLookup() {
+    void questWidgetLiveScreenTextUsesTheSameMaskedKeyAsItsRenderLookup() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.screenTextMode = DisplayMode.TRANSLATION;
@@ -457,7 +457,7 @@ class DoNotTranslateTermsTest {
         s.requestLiveScreenTextAsync("Welcome to SkyBlock", got::add);
         pump(s);
 
-        assertEquals(List.of("Welcome to ⟦0⟧"), sent, "the FTB widget path is masked too");
+        assertEquals(List.of("Welcome to ⟦0⟧"), sent, "the quest widget path is masked too");
         assertEquals(List.of("歡迎來到 SkyBlock"), got);
         assertEquals("歡迎來到 SkyBlock", s.translateScreenText("Welcome to SkyBlock").translated());
         assertEquals(1, sent.size(), "the render lookup hits the very same key");

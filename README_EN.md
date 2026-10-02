@@ -2,7 +2,7 @@
 
 [繁體中文](README.md)
 
-NyanLex Translator (formerly Minecraft Translator) is a client-side real-time translation mod. It translates text that needs translation on screen without changing server data or sending chat messages for the player.
+NyanLex Translator is a client-side real-time translation mod. It translates text that needs translation on screen without changing server data or sending chat messages for the player.
 
 ## Features
 

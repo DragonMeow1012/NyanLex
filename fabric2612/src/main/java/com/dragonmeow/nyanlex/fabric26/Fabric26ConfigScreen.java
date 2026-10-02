@@ -108,7 +108,7 @@ public final class Fabric26ConfigScreen extends Screen {
         @Override
         public void sideEffect(SettingEntry.SideEffect effect) {
             switch (effect) {
-                case CLEAR_PENDING -> NyanLexFabric26.clearFtbPending();
+                case CLEAR_PENDING -> NyanLexFabric26.clearQuestWidgetPending();
                 case CLEAR_DEBUG_LOG_WHEN_OFF -> {
                     if (!NyanLexFabric26.config().debugTranslationOverlay) NyanLexFabric26.clearDebugLog();
                 }

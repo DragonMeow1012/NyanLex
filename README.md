@@ -2,7 +2,7 @@
 
 [English](README_EN.md)
 
-NyanLex Translator（前身 Minecraft Translator）是純客戶端即時翻譯模組。它只翻譯畫面上需要翻譯的文字，不修改伺服器資料，也不會代替玩家送出聊天訊息。
+NyanLex Translator是純客戶端即時翻譯模組。它只翻譯畫面上需要翻譯的文字，不修改伺服器資料，也不會代替玩家送出聊天訊息。
 
 ## 主要功能
 

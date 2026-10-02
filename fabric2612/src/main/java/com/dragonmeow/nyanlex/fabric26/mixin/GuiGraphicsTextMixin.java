@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
  * Translates arbitrary GUI text drawn through 26.2's {@link GuiGraphicsExtractor} — the general
- * hook that reaches custom mod screens (e.g. Iris shader-pack settings) that render labels directly
+ * hook that reaches custom mod screens (e.g. shader-pack settings) that render labels directly
  * instead of via vanilla widgets. Gated by {@code screenTextMode} (default OFF) and only active
  * while a screen is open (see {@link NyanLexFabric26#screenText}).
  *

@@ -82,7 +82,7 @@
   "screen.nyanlex.requests.toggle": "關閉送出新的翻譯：%s",
   "screen.nyanlex.requests.toggle.hint": "開啟時：仍會顯示已快取的翻譯，但不會送出任何新的翻譯請求。",
   "screen.nyanlex.requests.terms": "不翻譯詞彙（以逗號分隔）",
-  "screen.nyanlex.requests.terms.hint": "例：SkyBlock, Hypixel（保留原文；不分大小寫、整詞比對）",
+  "screen.nyanlex.requests.terms.hint": "例：MyServer, Steve（保留原文；不分大小寫、整詞比對）",
   "config.nyanlex.progress.done": "已翻譯：%s",
   "config.nyanlex.progress.pending": "進行中：%s",
   "screen.nyanlex.language.follow": "跟隨 Minecraft 目前語言",

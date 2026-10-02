@@ -22,10 +22,10 @@ import java.util.regex.Pattern;
 
 /**
  * Best-effort modpack identification from launcher instance files, tried in a fixed
- * order against every candidate root (the game directory and its parents): CurseForge
- * ({@code minecraftinstance.json}), Modrinth ({@code modrinth.index.json}), Prism/
- * MultiMC ({@code instance.cfg} + {@code mmc-pack.json}), packwiz ({@code pack.toml})
- * and FTB App ({@code instance.json}). When none of those files are found, falls back
+ * order against every candidate root (the game directory and its parents): {@code minecraftinstance.json},
+ * {@code modrinth.index.json}, {@code instance.cfg} + {@code mmc-pack.json},
+ * {@code pack.toml}
+ * and a launcher manifest ({@code instance.json}). When none of those files are found, falls back
  * to hashing the loaded mod-id set into a stable {@code modset-<12 hex>} slug, so even
  * an unrecognised launcher still groups identical mod sets together.
  */
@@ -33,8 +33,8 @@ public final class ModpackDetector {
     private static final Set<String> DEFAULT_EXCLUDED_MOD_IDS = Set.of(
             "minecraft", "java", "fabricloader", "fabric-api", "forge", "neoforge", "nyanlex");
     private static final int MIN_MODSET_SIZE = 3;
-    private static final Pattern PACKWIZ_NAME = Pattern.compile("(?m)^\\s*name\\s*=\\s*\"([^\"]*)\"");
-    private static final Pattern PACKWIZ_VERSION =
+    private static final Pattern PACK_TOML_NAME = Pattern.compile("(?m)^\\s*name\\s*=\\s*\"([^\"]*)\"");
+    private static final Pattern PACK_TOML_VERSION =
             Pattern.compile("(?m)^\\s*minecraft\\s*=\\s*\"([^\"]*)\"");
 
     private ModpackDetector() {
@@ -45,18 +45,18 @@ public final class ModpackDetector {
         if (candidateRoots != null) {
             for (Path root : candidateRoots) {
                 if (root == null) continue;
-                ModpackIdentity found = tryCurseForge(root);
-                if (found == null) found = tryModrinth(root);
-                if (found == null) found = tryPrismMultiMc(root);
-                if (found == null) found = tryPackwiz(root);
-                if (found == null) found = tryFtb(root);
+                ModpackIdentity found = tryInstanceManifest(root);
+                if (found == null) found = tryPackIndex(root);
+                if (found == null) found = tryInstanceCfg(root);
+                if (found == null) found = tryPackToml(root);
+                if (found == null) found = tryInstanceJson(root);
                 if (found != null) return Optional.of(found);
             }
         }
         return modListFallback(loadedModIds, gameVersion);
     }
 
-    private static ModpackIdentity tryCurseForge(Path root) {
+    private static ModpackIdentity tryInstanceManifest(Path root) {
         Path file = root.resolve("minecraftinstance.json");
         if (!Files.isRegularFile(file)) return null;
         try {
@@ -67,13 +67,13 @@ public final class ModpackDetector {
             if (json.has("baseModLoader") && json.get("baseModLoader").isJsonObject()) {
                 version = stringField(json.getAsJsonObject("baseModLoader"), "minecraftVersion");
             }
-            return new ModpackIdentity(HubSlug.of(name), name, version, ModpackIdentity.Source.CURSEFORGE);
+            return new ModpackIdentity(HubSlug.of(name), name, version, ModpackIdentity.Source.INSTANCE_MANIFEST);
         } catch (IOException | RuntimeException ignored) {
             return null;
         }
     }
 
-    private static ModpackIdentity tryModrinth(Path root) {
+    private static ModpackIdentity tryPackIndex(Path root) {
         Path file = root.resolve("modrinth.index.json");
         if (!Files.isRegularFile(file)) return null;
         try {
@@ -84,13 +84,13 @@ public final class ModpackDetector {
             if (json.has("dependencies") && json.get("dependencies").isJsonObject()) {
                 version = stringField(json.getAsJsonObject("dependencies"), "minecraft");
             }
-            return new ModpackIdentity(HubSlug.of(name), name, version, ModpackIdentity.Source.MODRINTH);
+            return new ModpackIdentity(HubSlug.of(name), name, version, ModpackIdentity.Source.PACK_INDEX);
         } catch (IOException | RuntimeException ignored) {
             return null;
         }
     }
 
-    private static ModpackIdentity tryPrismMultiMc(Path root) {
+    private static ModpackIdentity tryInstanceCfg(Path root) {
         Path cfg = root.resolve("instance.cfg");
         Path pack = root.resolve("mmc-pack.json");
         if (!Files.isRegularFile(cfg) || !Files.isRegularFile(pack)) return null;
@@ -115,32 +115,32 @@ public final class ModpackDetector {
                     }
                 }
             }
-            return new ModpackIdentity(HubSlug.of(name), name, version, ModpackIdentity.Source.PRISM_MULTIMC);
+            return new ModpackIdentity(HubSlug.of(name), name, version, ModpackIdentity.Source.INSTANCE_CFG);
         } catch (IOException | RuntimeException ignored) {
             return null;
         }
     }
 
-    private static ModpackIdentity tryPackwiz(Path root) {
+    private static ModpackIdentity tryPackToml(Path root) {
         Path file = root.resolve("pack.toml");
         if (!Files.isRegularFile(file)) return null;
         try {
             String content = readAll(file);
-            Matcher nameMatcher = PACKWIZ_NAME.matcher(content);
+            Matcher nameMatcher = PACK_TOML_NAME.matcher(content);
             String name = nameMatcher.find() ? nameMatcher.group(1) : null;
             String folderName = folderDisplayName(root);
             String displayName = !isBlank(name) ? name : folderName;
             if (isBlank(displayName)) return null;
-            Matcher versionMatcher = PACKWIZ_VERSION.matcher(content);
+            Matcher versionMatcher = PACK_TOML_VERSION.matcher(content);
             String version = versionMatcher.find() ? versionMatcher.group(1) : null;
             String slug = HubSlug.of(!isBlank(folderName) ? folderName : displayName);
-            return new ModpackIdentity(slug, displayName, version, ModpackIdentity.Source.PACKWIZ);
+            return new ModpackIdentity(slug, displayName, version, ModpackIdentity.Source.PACK_TOML);
         } catch (IOException | RuntimeException ignored) {
             return null;
         }
     }
 
-    private static ModpackIdentity tryFtb(Path root) {
+    private static ModpackIdentity tryInstanceJson(Path root) {
         Path file = root.resolve("instance.json");
         if (!Files.isRegularFile(file)) return null;
         try {
@@ -150,7 +150,7 @@ public final class ModpackDetector {
             String displayName = !isBlank(name) ? name : folderName;
             if (isBlank(displayName)) return null;
             String slug = HubSlug.of(!isBlank(folderName) ? folderName : displayName);
-            return new ModpackIdentity(slug, displayName, null, ModpackIdentity.Source.FTB);
+            return new ModpackIdentity(slug, displayName, null, ModpackIdentity.Source.INSTANCE_JSON);
         } catch (IOException | RuntimeException ignored) {
             return null;
         }

@@ -131,7 +131,7 @@ public final class Fabric26ConfigScreen extends Screen {
         this.addRenderableWidget(Button.builder(requestsToggleLabel(cfg), b -> {
             cfg.translationRequestsEnabled = !cfg.translationRequestsEnabled;
             NyanLexFabric26.saveConfig();
-            NyanLexFabric26.clearFtbPending();
+            NyanLexFabric26.clearQuestWidgetPending();
             b.setMessage(requestsToggleLabel(cfg));
         }).bounds(left, y, rowWidth, 20)
                 .tooltip(Tooltip.create(Component.translatable("screen.nyanlex.requests.toggle.hint")))

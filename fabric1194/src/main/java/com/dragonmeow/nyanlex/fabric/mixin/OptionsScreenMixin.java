@@ -15,8 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Adds a "翻譯設定..." button to the vanilla Options screen that opens the per-surface
- * {@link TranslationConfigScreen}. NeoForge has no Options-screen event, so a Mixin is
- * used (mirrors the Fabric {@code OptionsScreenMixin}).
+ * {@link TranslationConfigScreen}. A Mixin adds the button.
  */
 @Mixin(OptionsScreen.class)
 public abstract class OptionsScreenMixin extends Screen {

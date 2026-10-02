@@ -131,7 +131,7 @@ public final class Neo26ConfigScreen extends Screen {
         this.addRenderableWidget(Button.builder(requestsToggleLabel(cfg), b -> {
             cfg.translationRequestsEnabled = !cfg.translationRequestsEnabled;
             NyanLexNeoForge26.saveConfig();
-            NyanLexNeoForge26.clearFtbPending();
+            NyanLexNeoForge26.clearQuestWidgetPending();
             b.setMessage(requestsToggleLabel(cfg));
         }).bounds(left, y, rowWidth, 20)
                 .tooltip(Tooltip.create(Component.translatable("screen.nyanlex.requests.toggle.hint")))

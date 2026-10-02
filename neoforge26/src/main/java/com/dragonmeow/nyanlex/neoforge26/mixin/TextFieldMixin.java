@@ -10,27 +10,29 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
- * FTB Library / FTB Quests support (optional — {@link Pseudo} so it is a safe no-op when FTB
- * is absent). FTB's {@code TextField} (used by the quest-description panel) takes the WHOLE
- * description {@link Component} in {@code setText}, then splits it itself
- * ({@code Theme.listFormattedStringToWidth}) and draws each wrapped piece separately — so our
- * render-level hooks only ever see fragments (choppy, and inline styled runs get dropped).
+ * Optional quest-book text widget support ({@link Pseudo}, so it is a safe no-op when the
+ * target class is absent). The widget takes the WHOLE description {@link Component} in
+ * {@code setText}, then wraps it itself and draws each wrapped piece separately, so render-level
+ * hooks only see fragments (choppy, and inline styled runs get dropped).
  *
- * <p>Here we translate the whole Component at {@code setText} <em>before</em> FTB wraps it, so
- * the description is one coherent translation that FTB then wraps normally (styling intact).
- * Gated by {@code screenTextMode} via {@link NyanLexNeoForge26#screenText(Component)}.</p>
+ * <p>The whole Component is translated at {@code setText} <em>before</em> it is wrapped, so the
+ * description is one coherent translation that the widget then wraps normally (styling intact).
+ * Gated by {@code screenTextMode} via {@link NyanLexFabric#screenText(Component)}.</p>
  */
 @Pseudo
-@Mixin(targets = "dev.ftb.mods.ftblibrary.ui.TextField")
+@Mixin(targets = TextFieldMixin.TARGET)
 public abstract class TextFieldMixin {
+    static final String TARGET = "dev.ftb.mods.ftblibrary.ui.TextField";
+    static final String SET_TEXT =
+            "setText(Lnet/minecraft/network/chat/Component;)Ldev/ftb/mods/ftblibrary/ui/TextField;";
 
     @ModifyVariable(
-            method = "setText(Lnet/minecraft/network/chat/Component;)Ldev/ftb/mods/ftblibrary/ui/TextField;",
+            method = SET_TEXT,
             at = @At("HEAD"), argsOnly = true, require = 0)
     private Component nyanlex$translateWhole(Component component) {
         if (!HookGuard.enter("TextField.translateWhole")) return component;
         try {
-            return NyanLexNeoForge26.ftbText(this, component);
+            return NyanLexNeoForge26.questWidgetText(this, component);
         } catch (Throwable guardError) {
             HookGuard.fail("TextField.translateWhole", guardError);
             return component;

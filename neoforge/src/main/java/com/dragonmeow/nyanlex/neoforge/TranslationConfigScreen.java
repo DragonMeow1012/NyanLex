@@ -130,7 +130,7 @@ public final class TranslationConfigScreen extends Screen {
         this.addRenderableWidget(Button.builder(requestsToggleLabel(cfg), b -> {
             cfg.translationRequestsEnabled = !cfg.translationRequestsEnabled;
             NyanLexNeoForge.saveConfig();
-            NyanLexNeoForge.clearFtbPending();
+            NyanLexNeoForge.clearQuestWidgetPending();
             b.setMessage(requestsToggleLabel(cfg));
         }).bounds(left, y, rowWidth, 20)
                 .tooltip(Tooltip.create(Component.translatable("screen.nyanlex.requests.toggle.hint")))

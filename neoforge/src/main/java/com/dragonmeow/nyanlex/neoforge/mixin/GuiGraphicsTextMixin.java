@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * Translates arbitrary GUI text drawn through {@link GuiGraphics} — the only general hook
- * that reaches custom mod screens (e.g. Iris/Oculus shader-pack settings) that render their
+ * that reaches custom mod screens (e.g. shader-pack settings) that render their
  * labels directly via {@code drawString}/{@code drawCenteredString} instead of using vanilla
  * widgets. Gated by {@code screenTextMode} (default OFF) and only active while a screen is
  * open (see {@link NyanLexNeoForge#screenText}).
@@ -94,7 +94,7 @@ public abstract class GuiGraphicsTextMixin {
     }
 
     /**
-     * Pre-laid-out ordered text (FormattedCharSequence) — the path FTB Quests and other
+     * Pre-laid-out ordered text (FormattedCharSequence) — the path quest books and other
      * mod GUIs use for multi-line descriptions. Component-originated text reaches here
      * already translated (Chinese) and is skipped by the text filter.
      */

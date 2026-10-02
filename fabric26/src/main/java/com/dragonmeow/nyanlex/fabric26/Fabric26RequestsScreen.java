@@ -95,7 +95,7 @@ public final class Fabric26RequestsScreen extends Screen {
         if (terms.equals(cfg.doNotTranslateTerms)) return;
         cfg.doNotTranslateTerms = terms; // a fresh list: never mutate one a worker may be reading
         NyanLexFabric26.saveConfig();
-        NyanLexFabric26.clearFtbPending();
+        NyanLexFabric26.clearQuestWidgetPending();
     }
 
     @Override

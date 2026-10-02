@@ -106,7 +106,7 @@
   "screen.nyanlex.requests.toggle": "關閉送出新的翻譯：%s",
   "screen.nyanlex.requests.toggle.hint": "開啟時：仍會顯示已快取的翻譯，但不會送出任何新的翻譯請求。",
   "screen.nyanlex.requests.terms": "不翻譯詞彙（以逗號分隔）",
-  "screen.nyanlex.requests.terms.hint": "例：SkyBlock, Hypixel（保留原文；不分大小寫、整詞比對）",
+  "screen.nyanlex.requests.terms.hint": "例：MyServer, Steve（保留原文；不分大小寫、整詞比對）",
   "screen.nyanlex.options": "翻譯設定...",
   "message.nyanlex.show_original": "顯示原文（翻譯已暫停）",
   "message.nyanlex.show_translation": "顯示翻譯",

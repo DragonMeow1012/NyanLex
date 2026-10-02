@@ -95,7 +95,7 @@ public final class TranslationRequestsScreen extends Screen {
         if (terms.equals(cfg.doNotTranslateTerms)) return;
         cfg.doNotTranslateTerms = terms; // a fresh list: never mutate one a worker may be reading
         NyanLexNeoForge.saveConfig();
-        NyanLexNeoForge.clearFtbPending();
+        NyanLexNeoForge.clearQuestWidgetPending();
     }
 
     @Override

@@ -105,7 +105,7 @@ public final class TranslationConfigScreen extends Screen {
         @Override
         public void sideEffect(SettingEntry.SideEffect effect) {
             switch (effect) {
-                case CLEAR_PENDING -> NyanLexFabric.clearFtbPending();
+                case CLEAR_PENDING -> NyanLexFabric.clearQuestWidgetPending();
                 case CLEAR_DEBUG_LOG_WHEN_OFF -> {
                     if (!NyanLexFabric.config().debugTranslationOverlay) NyanLexFabric.clearDebugLog();
                 }

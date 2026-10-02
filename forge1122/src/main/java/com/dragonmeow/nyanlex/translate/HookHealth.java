@@ -72,7 +72,7 @@ public final class HookHealth {
         for (String id : ids) register(id, true);
     }
 
-    /** Registers hooks that only fire in some situations (books, bossbars, FTB UI, tooltips...). */
+    /** Registers hooks that only fire in some situations (books, bossbars, quest UI, tooltips...). */
     public static void expect(String... ids) {
         for (String id : ids) register(id, false);
     }

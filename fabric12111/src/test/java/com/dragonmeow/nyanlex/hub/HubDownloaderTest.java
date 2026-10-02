@@ -252,7 +252,7 @@ class HubDownloaderTest {
                 recordingTransport(responses, new ArrayList<>()), BASE));
         HubDownloadState state = new HubDownloadState(tempDir().resolve("state.json"));
         ModpackIdentity modpack = new ModpackIdentity("my-pack", "My Pack", "1.21.1",
-                ModpackIdentity.Source.CURSEFORGE);
+                ModpackIdentity.Source.INSTANCE_MANIFEST);
 
         HubPlan plan = downloader.planStartupMods(false, modpack, List.of(), "zh-TW", state);
 

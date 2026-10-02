@@ -40,7 +40,7 @@ public final class HubDownloader {
     /**
      * Startup-only plan: mods, plus a modpack when one was detected from local instance
      * files (title-screen startup has no server yet, but CAN already read
-     * CurseForge/Modrinth/Prism instance metadata — see
+     * launcher instance metadata — see
      * {@code design-hub-download.md} "啟動提示" 2026-10-01, "模組包在啟動時也可識別").
      * Returns an empty plan WITHOUT any network call when {@code disabled} is
      * {@code true} (the player's own opt-out, {@code TranslatorConfig#hubStartupPromptDisabled}).
