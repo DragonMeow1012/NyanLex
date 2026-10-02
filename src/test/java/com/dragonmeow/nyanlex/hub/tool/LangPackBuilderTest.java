@@ -76,7 +76,7 @@ class LangPackBuilderTest {
     void edgeWhitespaceIsPartOfTheKeyExactlyAsDisplayed() {
         LangPackBuilder.Row row = single("Distance: ", "距離：");
         assertEquals("Distance: ", row.key());
-        assertEquals(List.of("Distance: "), runtimeKeys("Distance: "));
+        assertEquals("Distance: ", runtimeKeys("Distance: ").get(0), "the exact text is asked first, its trimmed form second");
     }
 
     @Test
@@ -394,5 +394,30 @@ class LangPackBuilderTest {
         LangPackBuilder.Target host = result.targets().get("hostmod");
         assertEquals("波浪植物", host.rows.get(HubKeyHash.of("Waving plants")));
         assertEquals("波浪植物： ", host.rows.get(HubKeyHash.of("Waving plants: ")));
+    }
+
+    @Test
+    void builtNumberRowAnswersTheLiveLookupWithTheNumbersOnScreen(@TempDir Path dir) throws IOException {
+        Path in = dir.resolve("a.json");
+        writeInput(in, "mod", "examplemod", "Render distance: %d chunks", "渲染距離：%d 區塊",
+                S + "fUse fog occlusion", S + "f使用霧氣遮蔽");
+        Path out = dir.resolve("hub");
+        LangPackBuilder.build(List.of(in), out, "zh-TW", null, false);
+        HubLocalCache cache = new HubLocalCache(dir.resolve("cache"), "zh-TW");
+        cache.mergeFromFile(HubFile.read(Files.readString(out.resolve("mods/examplemod/zh-tw.json"),
+                StandardCharsets.UTF_8)), HubSource.mod("examplemod"));
+        Executor direct = Runnable::run;
+        Translator inert = (text, target) -> new TranslationResult(text, "en");
+        TranslatorConfig config = TestConfigs.translating();
+        config.translationRequestsEnabled = false;
+        config.aiScreenText = true;
+        TranslationService service = new TranslationService(config,
+                new TranslationCache(inert, config.targetLang, direct, 64),
+                new TranslationCache(inert, config.targetLang, direct, 64));
+        service.setHubLookup(cache::get);
+        assertEquals("渲染距離：21區塊", service.translateScreenText("Render distance: 21 chunks").translated());
+        assertEquals("渲染距離：4區塊", service.translateScreenText("Render distance: 4 chunks").translated());
+        assertEquals(S + "f使用霧氣遮蔽", service.translateScreenString(S + "fUse fog occlusion").translated());
+        assertEquals("使用霧氣遮蔽", service.translateScreenText("Use fog occlusion").translated());
     }
 }

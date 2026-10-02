@@ -214,7 +214,9 @@ public final class TranslationService {
         java.util.function.Function<String, String> lookup = hubLookup;
         if (lookup == null) return null;
         try {
-            return lookup.apply(maskedKey);
+            // Same template machinery as the cache's own lookup: a repository row stored under the
+            // number-normalized key (⟦MT#⟧) also answers the line with today's numbers filled in.
+            return ai.lookupExternal(maskedKey, lookup);
         } catch (RuntimeException ignored) {
             // A loader-side hub cache failure must never break the ordinary render path.
             return null;
@@ -2143,6 +2145,27 @@ public final class TranslationService {
         return lookup(text, config.screenTextMode, screenEngine(text), true, false, true,
                 config.aiScreenText);
     }
+    /** {@code §x} codes around one plain run: the shape a widget draws a coloured label in. */
+    private static final java.util.regex.Pattern LEGACY_WRAPPED =
+            java.util.regex.Pattern.compile("^((?:§.)+)([^§]+)((?:§.)*)$", java.util.regex.Pattern.DOTALL);
+
+    /**
+     * Screen text that arrives as a plain {@link String} (a widget calling {@code drawString}).
+     * A single run wrapped in legacy colour codes ({@code §fName}) is looked up by its plain text,
+     * exactly the key the component path produces for a one-colour line, and the same codes are put
+     * back around the translation, so the colour is kept and a row stored under the plain key hits.
+     * Any other string goes through {@link #translateScreenText} unchanged.
+     */
+    public TranslationDecision translateScreenString(String text) {
+        if (text == null) return translateScreenText(text);
+        java.util.regex.Matcher wrapped = LEGACY_WRAPPED.matcher(text);
+        if (!wrapped.matches() || text.indexOf('\n') >= 0) return translateScreenText(text);
+        TranslationDecision inner = translateScreenText(wrapped.group(2));
+        if (!inner.changed()) return TranslationDecision.unchanged(text);
+        return TranslationDecision.of(inner.mode(), text,
+                wrapped.group(1) + inner.translated() + wrapped.group(3));
+    }
+
     public TranslationDecision translateScreenScanText(String text) {
         return lookup(text, config.screenTextMode, config.aiScreenText, true);
     }

@@ -860,7 +860,7 @@ public final class NyanLexNeoForge {
                     "screenText", Component.literal(normalized), s::translateScreenText);
             return translated != null ? translated.getString() : str;
         }
-        TranslationDecision d = s.translateScreenText(str);
+        TranslationDecision d = s.translateScreenString(str);
         return d.changed() ? d.translated() : str;
     }
 

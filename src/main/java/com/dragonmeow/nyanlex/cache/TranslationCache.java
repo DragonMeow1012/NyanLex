@@ -605,6 +605,29 @@ public final class TranslationCache {
         return hit;
     }
 
+    /**
+     * Read-through into rows that are keyed like this cache's own rows (the shared repository):
+     * the very same {@link TranslationTemplate} snapshot the own lookup uses is prepared, then the
+     * exact text, its trimmed form and finally the number/gap-normalized key are asked of
+     * {@code rows}; a normalized hit is restored with THIS snapshot's own values, so the numbers
+     * shown are the ones on screen. Returns null on a miss or an unusable restored value.
+     */
+    public String lookupExternal(String source, java.util.function.Function<String, String> rows) {
+        if (source == null || rows == null) return null;
+        String hit = rows.apply(source);
+        if (hit != null) return hit;
+        TranslationTemplate.Snapshot snapshot = templates.prepare(source);
+        if (!snapshot.normalized().equals(source)) {
+            hit = rows.apply(snapshot.normalized());
+            if (hit != null) return hit;
+        }
+        if (!snapshot.changed()) return null;
+        String stored = rows.apply(snapshot.key());
+        if (stored == null) return null;
+        String restored = snapshot.restore(stored);
+        return usable(restored) ? restored : null;
+    }
+
     /** Lookup only the immutable forms captured by this request snapshot. */
     private String lookupSnapshot(TranslationTemplate.Snapshot snapshot, TranslationCache owner) {
         // Once a stable template exists, it is the canonical identity. Legacy builds

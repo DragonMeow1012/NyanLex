@@ -191,11 +191,16 @@ public final class LangPackBuilder {
                 skipped.add(Skip.NOT_LOOKED_UP);
                 return;
             }
-            if (keys.size() != 1) {
-                skipped.add(Skip.COMPOSED_AT_RUNTIME);
-                return;
-            }
             String key = keys.get(0);
+            // One whole-line lookup asks for the text itself, then (same cache machinery) its trimmed
+            // and number-normalized forms. Any other key means the line is composed from several units.
+            TranslationTemplate.Snapshot lookedUp = templates.prepare(key);
+            for (String extra : keys.subList(1, keys.size())) {
+                if (!extra.equals(key) && !extra.equals(lookedUp.normalized()) && !extra.equals(lookedUp.key())) {
+                    skipped.add(Skip.COMPOSED_AT_RUNTIME);
+                    return;
+                }
+            }
             String value = alignBreaks(key, NameMasker.mask(targetRequest, List.of(), terms).text());
             if (value == null) {
                 skipped.add(Skip.PARAGRAPH_MISMATCH);
