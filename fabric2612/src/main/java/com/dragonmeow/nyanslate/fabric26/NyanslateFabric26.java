@@ -1107,6 +1107,11 @@ public final class NyanslateFabric26 implements ClientModInitializer {
         service.setTooltipTraceWriter(new com.dragonmeow.nyanslate.translate.TooltipTraceWriter(
                 configPath.getParent().resolve("nyanslate-debug"),
                 () -> config != null && config.debugTranslationOverlay, 20));
+        // 2026-10-02: measurement-only lang-template probe (zero cost while the debug
+        // overlay is off); writes config/nyanslate-debug/lang-probe.json. Never alters text.
+        LangProbeGlue.install(new com.dragonmeow.nyanslate.translate.LangProbe(
+                configPath.getParent().resolve("nyanslate-debug").resolve("lang-probe.json"),
+                () -> config != null && config.debugTranslationOverlay, 60_000L));
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
         service.setItemSourceLanguage(() -> {
@@ -1269,6 +1274,7 @@ public final class NyanslateFabric26 implements ClientModInitializer {
     private boolean translateAndInject(Component message, net.minecraft.network.chat.ChatType.Bound params) {
         if (service == null || message == null) return false;
         observeChatDeliveryContext(Minecraft.getInstance());
+        LangProbeGlue.observe("chat", message);
         // ALLOW_CHAT may expose the undecorated payload while rank/name colours live
         // in ChatType.Bound. Analyse the exact component vanilla would draw, then
         // inject it without applying the decoration a second time.
