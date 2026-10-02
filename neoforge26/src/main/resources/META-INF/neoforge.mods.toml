@@ -6,7 +6,7 @@ license = "MIT"
 config = "nyanlex.neoforge26.mixins.json"
 
 [[mods]]
-logoFile="icon.png"
+iconFile="icon.png"
 modId = "nyanlex"
 version = "${version}"
 displayName = "NyanLex Translator"

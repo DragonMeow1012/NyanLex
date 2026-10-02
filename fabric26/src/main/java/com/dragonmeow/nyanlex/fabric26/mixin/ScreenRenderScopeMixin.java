@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Thread-local scope around the only 26.2 path that extracts a visible screen and its tooltip. */
+/** Thread-local scope around the 26.1.2 path that extracts a visible screen and tooltip. */
 @Mixin(Screen.class)
 public abstract class ScreenRenderScopeMixin {
     @Inject(method = "extractRenderStateWithTooltipAndSubtitles", at = @At("HEAD"), require = 1)

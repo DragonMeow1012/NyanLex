@@ -1,281 +1,336 @@
 package com.dragonmeow.nyanlex.neoforge26;
 
-import com.dragonmeow.nyanlex.config.DisplayMode;
-import com.dragonmeow.nyanlex.config.MachineTranslationProvider;
+import com.dragonmeow.nyanlex.config.FileLocations;
+import com.dragonmeow.nyanlex.config.FileOpener;
+import com.dragonmeow.nyanlex.config.ProjectLinks;
+import com.dragonmeow.nyanlex.config.SettingAction;
+import com.dragonmeow.nyanlex.config.SettingEntry;
+import com.dragonmeow.nyanlex.config.SettingsCatalog;
+import com.dragonmeow.nyanlex.config.SettingsModel;
+import com.dragonmeow.nyanlex.config.SettingsPanel;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
+import com.dragonmeow.nyanlex.config.UiCanvas;
+import com.dragonmeow.nyanlex.config.UiHost;
+import com.dragonmeow.nyanlex.config.WarmupCommand;
+import com.dragonmeow.nyanlex.config.WarmupStatus;
+import com.dragonmeow.nyanlex.hub.HubDownloadJob;
 
-import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.gui.narration.NarratedElementType;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
 
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
- * 翻譯設定 — per-surface translation settings (MC 26.2). Each row has a mode button
- * (原文／原文＋翻譯／只有翻譯) and an engine toggle (機翻 Google / AI 精翻); saved immediately.
- * Includes the complete Minecraft language picker, permanent per-language cache controls,
- * and the screen-scan-hotkey engine.
- * Hotkeys themselves are rebindable in vanilla 控制 (registered under the 雜項 category).
+ * 翻譯設定 — card-style settings screen (category sidebar, search box, scrolling cards).
+ * All layout, painting and input logic lives in core's {@link SettingsPanel}; this class
+ * only supplies the canvas, the text/config/action host and forwards input events.
  */
 public final class Neo26ConfigScreen extends Screen {
 
-    private static final int W = 280;
-    private static final int AI_W = 70;
+    private static final long STATUS_MS = 4_000L;
 
     private final Screen parent;
-    private int rowWidth = W;
-    private boolean confirmClear;
+    private final SettingsPanel panel;
+    private final Host host = new Host();
+    private final Canvas canvas = new Canvas();
+    private String status;
+    private long statusUntilMs;
 
     public Neo26ConfigScreen(Screen parent) {
-        super(Component.translatable("screen.nyanlex.config.title"));
+        super(Component.translatable(SettingsCatalog.KEY_TITLE));
         this.parent = parent;
+        this.panel = new SettingsPanel(host);
+    }
+
+    /** True while the search box has focus; the mod hotkeys must not fire then. */
+    public boolean isTyping() {
+        return panel.isTyping();
     }
 
     @Override
     protected void init() {
-        TranslatorConfig cfg = NyanLexNeoForge26.config();
-        rowWidth = Math.min(W, Math.max(120, (this.width - 12) / 2));
-        int gap = 6;
-        int left = this.width / 2 - rowWidth - gap / 2;
-        int right = this.width / 2 + gap / 2;
-        int y = 24;
-        int step = 20;
-
-        // Prominent (but non-blocking) entry point to the help screen, top-left corner.
-        this.addRenderableWidget(Button.builder(
-                        Component.translatable("config.nyanlex.help.open")
-                                .withStyle(ChatFormatting.YELLOW),
-                        b -> this.minecraft.setScreenAndShow(new Neo26HelpScreen(this)))
-                .bounds(6, 4, 70, 14).build());
-
-        row("config.nyanlex.surface.chat", left, y, step, () -> cfg.chatMode, m -> cfg.chatMode = m, () -> cfg.aiChat, v -> cfg.aiChat = v);
-        row("config.nyanlex.surface.tooltip", right, y, step, () -> cfg.tooltipMode, m -> cfg.tooltipMode = m, () -> cfg.aiTooltip, v -> cfg.aiTooltip = v);
-        y += step;
-        row("config.nyanlex.surface.scoreboard", left, y, step, () -> cfg.scoreboardMode, m -> cfg.scoreboardMode = m, () -> cfg.aiScoreboard, v -> cfg.aiScoreboard = v);
-        row("config.nyanlex.surface.name", right, y, step, () -> cfg.nameMode, m -> cfg.nameMode = m, () -> cfg.aiName, v -> cfg.aiName = v);
-        y += step;
-        row("config.nyanlex.surface.bossbar", left, y, step, () -> cfg.bossBarMode, m -> cfg.bossBarMode = m, () -> cfg.aiBossBar, v -> cfg.aiBossBar = v);
-        row("config.nyanlex.surface.title", right, y, step, () -> cfg.titleMode, m -> cfg.titleMode = m, () -> cfg.aiTitle, v -> cfg.aiTitle = v);
-        y += step;
-        row("config.nyanlex.surface.actionbar", left, y, step, () -> cfg.actionBarMode, m -> cfg.actionBarMode = m, () -> cfg.aiActionBar, v -> cfg.aiActionBar = v);
-        row("config.nyanlex.surface.book", right, y, step, () -> cfg.bookMode, m -> cfg.bookMode = m, () -> cfg.aiBook, v -> cfg.aiBook = v);
-        y += step;
-        row("config.nyanlex.surface.screen", left, y, step, () -> cfg.screenTextMode, m -> cfg.screenTextMode = m, () -> cfg.aiScreenText, v -> cfg.aiScreenText = v);
-        this.addRenderableWidget(Button.builder(chatDeliveryLabel(cfg), b -> {
-            cfg.deliverChatTranslationsInOrder = !cfg.deliverChatTranslationsInOrder;
-            NyanLexNeoForge26.saveConfig();
-            b.setMessage(chatDeliveryLabel(cfg));
-        }).bounds(right, y, rowWidth, 18).build());
-
-        y += step;
-        this.addRenderableWidget(Button.builder(langLabel(cfg),
-                        b -> this.minecraft.setScreenAndShow(new Neo26LanguageScreen(this)))
-                .bounds(left, y, rowWidth, 18).build());
-        var providerButton = Button.builder(providerLabel(cfg), b -> { })
-                .bounds(right, y, rowWidth, 18).build();
-        providerButton.active = false; // Google is the only machine source
-        this.addRenderableWidget(providerButton);
-        y += step;
-        // Row 1: debug overlay | request cooldown + batch window sub-screen.
-        this.addRenderableWidget(Button.builder(debugLabel(cfg), b -> {
-            cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
-            if (!cfg.debugTranslationOverlay) NyanLexNeoForge26.clearDebugLog();
-            NyanLexNeoForge26.saveConfig();
-            b.setMessage(debugLabel(cfg));
-        }).bounds(left, y, rowWidth, 18).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.request_cooldown.open"),
-                        b -> this.minecraft.setScreenAndShow(new Neo26CooldownScreen(this)))
-                .bounds(right, y, rowWidth, 18).build());
-        y += step;
-        // Row 2: AI-failure machine-translation fallback.
-        this.addRenderableWidget(Button.builder(aiFallbackLabel(cfg), b -> {
-            cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
-            NyanLexNeoForge26.saveConfig();
-            b.setMessage(aiFallbackLabel(cfg));
-        }).bounds(left, y, right + rowWidth - left, 18).build());
-        y += step;
-        // Row 3: AI settings | keybind settings.
-        this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.ai.open"),
-                        b -> this.minecraft.setScreenAndShow(new Neo26AiScreen(this)))
-                .bounds(left, y, rowWidth, 18).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.keybind.open"),
-                        b -> this.minecraft.setScreenAndShow(new Neo26KeybindScreen(this)))
-                .bounds(right, y, rowWidth, 18).build());
-        y += step;
-        // Row 4: clear cache | do-not-translate filter — each now gets a full cell.
-        this.addRenderableWidget(Button.builder(clearLabel(), this::clearCurrentLanguage)
-                .bounds(left, y, rowWidth, 18).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.requests.open"),
-                        b -> this.minecraft.setScreenAndShow(new Neo26RequestsScreen(this)))
-                .bounds(right, y, rowWidth, 18).build());
-        y += 20;
-        int fileWidth = (rowWidth * 2 + gap - 8) / 3;
-        this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.translations.export"), b -> NyanLexNeoForge26.translationFile(false))
-                .bounds(left + 0 * (fileWidth + 4), y, fileWidth, 18).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.translations.import"), b -> NyanLexNeoForge26.translationFile(true))
-                .bounds(left + 1 * (fileWidth + 4), y, fileWidth, 18).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
-                .bounds(left + 2 * (fileWidth + 4), y, fileWidth, 18).build());
-        y += 20;
-        // Global master switch (left half): stops sending NEW translation requests (cached
-        // ones keep showing). Right half opens the community translation hub screen.
-        this.addRenderableWidget(Button.builder(requestsToggleLabel(cfg), b -> {
-            cfg.translationRequestsEnabled = !cfg.translationRequestsEnabled;
-            NyanLexNeoForge26.saveConfig();
-            NyanLexNeoForge26.clearQuestWidgetPending();
-            b.setMessage(requestsToggleLabel(cfg));
-        }).bounds(left, y, rowWidth, 20)
-                .tooltip(Tooltip.create(Component.translatable("screen.nyanlex.requests.toggle.hint")))
-                .build());
-        this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.hub.open"),
-                        b -> this.minecraft.setScreenAndShow(new Neo26HubScreen(this)))
-                .bounds(right, y, rowWidth, 20).build());
+        panel.resize(this.width, this.height);
     }
 
-    private Component clearLabel() {
-        return Component.translatable(confirmClear ? "config.nyanlex.cache.confirm" : "config.nyanlex.cache.clear");
-    }
+    // ------------------------------------------------------------------ canvas / host
 
-    private void clearCurrentLanguage(Button button) {
-        if (!confirmClear) {
-            confirmClear = true;
-            button.setMessage(clearLabel());
-            return;
+    private final class Canvas implements UiCanvas {
+        GuiGraphicsExtractor g;
+
+        @Override
+        public void fill(int x, int y, int w, int h, int argb) {
+            g.fill(x, y, x + w, y + h, argb);
         }
-        confirmClear = false;
-        if (NyanLexNeoForge26.service() != null) NyanLexNeoForge26.service().clearTranslations();
-        Neo26TextStyle.clearRenderMemo();
-        button.setMessage(Component.translatable("config.nyanlex.cache.cleared"));
-    }
 
-    private static Component requestsToggleLabel(TranslatorConfig cfg) {
-        return Component.translatable("screen.nyanlex.requests.toggle",
-                Component.translatable(cfg.translationRequestsEnabled ? "options.off" : "options.on"));
-    }
-
-    private static Component langLabel(TranslatorConfig cfg) {
-        Component target = cfg.followGameLanguage
-                ? Component.translatable("config.nyanlex.language.follow", cfg.targetLang)
-                : Component.literal(cfg.targetLang);
-        return Component.translatable("config.nyanlex.language", target);
-    }
-
-    private static Component providerLabel(TranslatorConfig cfg) {
-        return Component.translatable("config.nyanlex.machine_provider",
-                Component.translatable("screen.nyanlex.provider.google"));
-    }
-
-    private static Component chatDeliveryLabel(TranslatorConfig cfg) {
-        Component mode = Component.translatable(cfg.deliverChatTranslationsInOrder
-                ? "config.nyanlex.chat_delivery.ordered"
-                : "config.nyanlex.chat_delivery.ready_first");
-        return Component.translatable("config.nyanlex.chat_delivery", mode);
-    }
-
-    private static Component debugLabel(TranslatorConfig cfg) {
-        return Component.translatable("config.nyanlex.debug", Component.translatable(cfg.debugTranslationOverlay ? "options.on" : "options.off"));
-    }
-    /** disableGoogleFallbackForAi is stored as "disable"; the button shows it inverted,
-     *  i.e. 開 means the machine-translation fallback is still allowed on AI failure. */
-    private static Component aiFallbackLabel(TranslatorConfig cfg) {
-        return Component.translatable("config.nyanlex.ai.machine_fallback",
-                Component.translatable(cfg.disableGoogleFallbackForAi ? "options.off" : "options.on"));
-    }
-
-    /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value).
-     *  Package-visible: shared with {@link Neo26CooldownScreen}. */
-    static final int[] COOLDOWN_STEPS = {0, 1000, 2000, 4000, 6000, 8000, 10000};
-
-    /** Next step above the current value; wraps to 0 (關閉) past the top. Off-list values snap up. */
-    static int nextCooldown(int current) {
-        for (int v : COOLDOWN_STEPS) {
-            if (v > current) return v;
+        @Override
+        public void text(String text, int x, int y, int argb) {
+            g.text(font, text, x, y, argb, false);
         }
-        return 0;
+
+        @Override
+        public void pushClip(int x, int y, int w, int h) {
+            g.enableScissor(x, y, x + w, y + h);
+        }
+
+        @Override
+        public void popClip() {
+            g.disableScissor();
+        }
     }
 
-    static Component cooldownLabel(TranslatorConfig cfg) {
-        Component state = cfg.requestCooldownMs <= 0
-                ? Component.translatable("config.nyanlex.request_cooldown.off")
-                : Component.literal(cfg.requestCooldownMs + " ms");
-        return Component.translatable("config.nyanlex.request_cooldown", state);
-    }
-    static final int[] BATCH_WINDOW_STEPS = {0, 1000, 2000, 3000, 5000, 8000, 10000};
-    static int nextBatchWindow(int current) {
-        for (int value : BATCH_WINDOW_STEPS) if (value > current) return value;
-        return 0;
-    }
-    static Component batchWindowLabel(TranslatorConfig cfg) {
-        Component state = cfg.batchWindowMs <= 0
-                ? Component.translatable("config.nyanlex.batch_window.off")
-                : Component.literal(cfg.batchWindowMs / 1000F + " s");
-        return Component.translatable("config.nyanlex.batch_window", state);
+    private final class Host implements UiHost {
+        @Override public TranslatorConfig config() { return NyanLexNeoForge26.config(); }
+
+        @Override public void saveConfig() { NyanLexNeoForge26.saveConfig(); }
+
+        @Override
+        public String text(String key, Object... args) {
+            return Component.translatable(key, args).getString();
+        }
+
+        @Override public int textWidth(String text) { return font.width(text); }
+
+        @Override
+        public void runAction(SettingAction action) { run(action); }
+
+        @Override
+        public void sideEffect(SettingEntry.SideEffect effect) {
+            switch (effect) {
+                case CLEAR_PENDING -> NyanLexNeoForge26.clearQuestWidgetPending();
+                case CLEAR_DEBUG_LOG_WHEN_OFF -> {
+                    if (!NyanLexNeoForge26.config().debugTranslationOverlay) NyanLexNeoForge26.clearDebugLog();
+                }
+                default -> { }
+            }
+        }
+
+        @Override
+        public String buttonLabel(SettingEntry entry) {
+            if (entry.action() != SettingAction.HUB_DOWNLOAD) return null;
+            HubDownloadJob job = NyanLexNeoForge26.hubDownloadJob();
+            if (job == null || !job.isRunning()) return null;
+            long total = job.totalBytes();
+            long done = job.downloadedBytes();
+            int percent = total > 0 ? (int) Math.min(100L, done * 100L / total)
+                    : (job.totalFiles() > 0 ? job.completedFiles() * 100 / job.totalFiles() : 0);
+            return Component.translatable("config.nyanlex.hub.identify.downloading", percent + "%").getString();
+        }
+
+        @Override
+        public boolean enabled(SettingEntry entry) {
+            return entry.action() != SettingAction.HUB_DOWNLOAD || !NyanLexNeoForge26.hubPlanning();
+        }
+
+        @Override
+        public WarmupStatus warmupStatus() {
+            var service = NyanLexNeoForge26.service();
+            boolean available = service != null && service.isItemWarmupEngine();
+            return WarmupStatus.of(available, NyanLexNeoForge26.itemWarmupDriver().progress());
+        }
+
+        @Override
+        public void warmupCommand(WarmupCommand command) {
+            var driver = NyanLexNeoForge26.itemWarmupDriver();
+            switch (command) {
+                case START, OPEN_PROGRESS -> NyanLexNeoForge26.openItemWarmupScreen(Neo26ConfigScreen.this);
+                case PAUSE -> driver.pause();
+                case RESUME -> driver.resume();
+                case STOP -> {
+                    driver.stop();
+                    NyanLexNeoForge26.config().itemWarmupEnabled = false;
+                    NyanLexNeoForge26.saveConfig();
+                }
+            }
+        }
+
+        @Override
+        public java.util.List<FileLocations.Entry> fileLocations() {
+            return FileLocations.entries(NyanLexNeoForge26.configDirectory(), NyanLexNeoForge26.config().targetLang);
+        }
+
+        @Override
+        public void openFileLocation(FileLocations.Entry entry) {
+            if (FileOpener.reveal(entry.path())) return;
+            // Fall back to the game's own opener on the closest existing folder.
+            java.nio.file.Path folder = entry.path().toAbsolutePath().getParent();
+            if (folder != null && java.nio.file.Files.isDirectory(folder)) {
+                com.dragonmeow.nyanlex.platform.BrowserLinks.open(folder.toUri().toString());
+            }
+        }
+
+        @Override
+        public String languageName(String tag) {
+            if (tag == null || minecraft == null) return null;
+            for (java.util.Map.Entry<String, net.minecraft.client.resources.language.LanguageInfo> entry
+                    : minecraft.getLanguageManager().getLanguages().entrySet()) {
+                if (com.dragonmeow.nyanlex.config.TranslationLanguages.fromMinecraftCode(entry.getKey())
+                        .equalsIgnoreCase(tag)) {
+                    return entry.getValue().toComponent().getString();
+                }
+            }
+            return null;
+        }
+
+        @Override public String modVersion() { return NyanLexNeoForge26.modVersion(); }
+
+        @Override
+        public String statusText() {
+            return status != null && System.currentTimeMillis() < statusUntilMs ? status : null;
+        }
+
+        @Override
+        public int translatedCount() {
+            return NyanLexNeoForge26.service() == null ? 0 : NyanLexNeoForge26.service().translatedCount();
+        }
+
+        @Override
+        public int pendingCount() {
+            return NyanLexNeoForge26.service() == null ? 0 : NyanLexNeoForge26.service().pendingCount();
+        }
+
+        @Override
+        public String clipboard() {
+            return minecraft == null ? "" : minecraft.keyboardHandler.getClipboard();
+        }
+
+        @Override
+        public void playClick() {
+            if (minecraft != null) {
+                minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            }
+        }
+
+        @Override public void close() { onClose(); }
     }
 
-    private int row(String label, int x, int y, int step,
-                    Supplier<DisplayMode> getMode, Consumer<DisplayMode> setMode,
-                    BooleanSupplier getAi, Consumer<Boolean> setAi) {
-        int engineW = Math.min(AI_W, Math.max(52, rowWidth / 3));
-        int modeW = rowWidth - engineW - 4;
-        this.addRenderableWidget(Button.builder(modeText(label, getMode.get()), b -> {
-            DisplayMode next = getMode.get().next();
-            setMode.accept(next);
-            NyanLexNeoForge26.saveConfig();
-            b.setMessage(modeText(label, next));
-        }).bounds(x, y, modeW, 18).build());
-        this.addRenderableWidget(Button.builder(aiText(getAi.getAsBoolean()), b -> {
-            boolean next = !getAi.getAsBoolean();
-            setAi.accept(next);
-            NyanLexNeoForge26.saveConfig();
-            b.setMessage(aiText(next));
-        }).bounds(x + modeW + 4, y, engineW, 18).build());
-        return y + step;
+    // ------------------------------------------------------------------ actions
+
+    private void open(Screen next) {
+        if (this.minecraft != null && next != null) this.minecraft.setScreenAndShow(next);
     }
 
-    private static Component modeText(String label, DisplayMode mode) {
-        return Component.translatable(label, modeName(mode));
+    private void run(SettingAction action) {
+        switch (action) {
+            case OPEN_QUICK_SETUP -> open(new QuickSetupScreen(this));
+            case OPEN_LANGUAGE -> open(new Neo26LanguageScreen(this));
+            case OPEN_KEYBINDS -> open(new Neo26KeybindScreen(this));
+            case OPEN_MANUAL -> open(new Neo26ManualScreen(this));
+            case OPEN_GITHUB -> openGithub();
+            case OPEN_PRIVACY -> open(new Neo26ManualScreen(this, SettingsModel.MANUAL_PRIVACY_SECTION - 1));
+            case OPEN_AI -> open(new Neo26AiScreen(this));
+            case OPEN_DO_NOT_TRANSLATE -> open(new Neo26RequestsScreen(this));
+            case OPEN_ITEM_WARMUP -> NyanLexNeoForge26.openItemWarmupScreen(this);
+            case HUB_DOWNLOAD -> NyanLexNeoForge26.startHubIdentifyAndPlan(this);
+            case EXPORT_TRANSLATIONS -> NyanLexNeoForge26.translationFile(false);
+            case IMPORT_TRANSLATIONS -> NyanLexNeoForge26.translationFile(true);
+            case CLEAR_CACHE -> confirmClearCache();
+        }
     }
 
-    private static Component modeName(DisplayMode mode) {
-        return Component.translatable(switch (mode) {
-            case ORIGINAL_ONLY -> "config.nyanlex.mode.original";
-            case BOTH -> "config.nyanlex.mode.both";
-            case TRANSLATION -> "config.nyanlex.mode.translation";
-        });
+    /** The game's own "open this link?" question first, then the system browser. */
+    private void openGithub() {
+        if (this.minecraft == null) return;
+        this.minecraft.setScreenAndShow(new net.minecraft.client.gui.screens.ConfirmLinkScreen(confirmed -> {
+            if (confirmed) com.dragonmeow.nyanlex.platform.BrowserLinks.open(ProjectLinks.GITHUB_URL);
+            if (this.minecraft != null) this.minecraft.setScreenAndShow(this);
+        }, Component.translatable("chat.link.confirmTrusted"),
+                java.net.URI.create(ProjectLinks.GITHUB_URL), true));
     }
 
-    private static Component aiText(boolean ai) {
-        return Component.translatable(ai ? "config.nyanlex.engine.ai" : "config.nyanlex.engine.machine");
+    private void confirm(Component title, Component message, Runnable onYes) {
+        if (this.minecraft == null) return;
+        this.minecraft.setScreenAndShow(new ConfirmDialogScreen(this, title, message,
+                Component.translatable(SettingsCatalog.KEY_CONFIRM_YES), onYes));
+    }
+
+    private void confirmClearCache() {
+        int count = NyanLexNeoForge26.service() == null ? 0 : NyanLexNeoForge26.service().translatedCount();
+        confirm(Component.translatable(SettingsCatalog.KEY_CLEAR_CACHE_CONFIRM_TITLE),
+                Component.translatable(SettingsCatalog.KEY_CLEAR_CACHE_CONFIRM_MESSAGE, count), () -> {
+                    if (NyanLexNeoForge26.service() != null) NyanLexNeoForge26.service().clearTranslations();
+                    Neo26TextStyle.clearRenderMemo();
+                    setStatus(Component.translatable("config.nyanlex.cache.cleared"));
+                });
+    }
+
+    private void setStatus(Component message) {
+        status = message.getString();
+        statusUntilMs = System.currentTimeMillis() + STATUS_MS;
+    }
+
+    // ------------------------------------------------------------------ input
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (panel.mouseClicked((int) event.x(), (int) event.y(), event.button())) return true;
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
-        super.extractRenderState(graphics, mouseX, mouseY, a);
-        graphics.centeredText(this.font, this.title, this.width / 2, 10, 0xFFFFFFFF);
+    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (panel.mouseDragged((int) event.x(), (int) event.y())) return true;
+        return super.mouseDragged(event, dx, dy);
+    }
 
-        // Top-right progress: already-translated (cached) + in-flight (queued/fetching) counts.
-        // NB: 26.2 skips draws whose colour has alpha 0, so colours are fully opaque (0xFF…).
-        if (NyanLexNeoForge26.service() != null) {
-            int done = NyanLexNeoForge26.service().translatedCount();
-            int pending = NyanLexNeoForge26.service().pendingCount();
-            Component line1 = Component.translatable("config.nyanlex.progress.done", done);
-            Component line2 = Component.translatable("config.nyanlex.progress.pending", pending);
-            graphics.text(this.font, line1, this.width - this.font.width(line1) - 6, 6, 0xFF80FF80, false);
-            graphics.text(this.font, line2, this.width - this.font.width(line2) - 6, 17,
-                    pending > 0 ? 0xFFFFD080 : 0xFF808080, false);
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        panel.mouseReleased((int) event.x(), (int) event.y(), event.button());
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (panel.mouseScrolled((int) mouseX, (int) mouseY, scrollY)) return true;
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        boolean ctrl = event.hasControlDown();
+        boolean shift = event.hasShiftDown();
+        if (panel.keyPressed(event.key(), ctrl, shift)) {
+            if (panel.consumeNarrationRequest()) this.triggerImmediateNarration(true);
+            return true;
         }
+        return super.keyPressed(event);
+    }
+
+    @Override
+    protected void updateNarratedWidget(NarrationElementOutput output) {
+        output.add(NarratedElementType.TITLE, Component.literal(panel.narration()));
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        boolean used = false;
+        if (Character.isBmpCodePoint(event.codepoint())) used = panel.charTyped((char) event.codepoint());
+        else if (panel.isTyping()) used = true; // astral symbols are not supported in the search box
+        if (used) return true;
+        return super.charTyped(event);
+    }
+
+    // ------------------------------------------------------------------ render
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(g, mouseX, mouseY, partialTick); // dims the world behind the panel
+        canvas.g = g;
+        panel.render(canvas, mouseX, mouseY);
     }
 
     @Override
     public void onClose() {
         NyanLexNeoForge26.saveConfig();
         if (this.minecraft != null) {
-            this.minecraft.setScreenAndShow(this.parent);
+            this.minecraft.setScreenAndShow(parent);
         }
     }
 }
