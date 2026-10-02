@@ -2,6 +2,8 @@ package com.dragonmeow.nyanlex.legacy.mixin;
 
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,8 +20,8 @@ public abstract class EntityNameTagMixin {
     @Unique private boolean nyanlex$previousGuard;
 
     @Inject(method = "renderNameTag", at = @At("HEAD"), require = 0)
-    private void nyanlex$begin(Entity entity, String name, double x, double y, double z,
-                                    int maxDistance, CallbackInfo ci) {
+    private void nyanlex$begin(Entity entity, String name, PoseStack pose,
+                                    MultiBufferSource buffers, int light, CallbackInfo ci) {
         HookGuard.enterSticky("EntityNameTag.begin");
         try {
             nyanlex$currentEntity = entity;
@@ -41,8 +43,8 @@ public abstract class EntityNameTagMixin {
     }
 
     @Inject(method = "renderNameTag", at = @At("RETURN"), require = 0)
-    private void nyanlex$end(Entity entity, String name, double x, double y, double z,
-                                  int maxDistance, CallbackInfo ci) {
+    private void nyanlex$end(Entity entity, String name, PoseStack pose,
+                                  MultiBufferSource buffers, int light, CallbackInfo ci) {
         HookGuard.enterSticky("EntityNameTag.end");
         try {
             LegacyTranslatorMod.endInternalRender(nyanlex$previousGuard);
