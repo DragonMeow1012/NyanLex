@@ -78,11 +78,11 @@ public final class HubDownloadConfirmScreen extends Screen {
         prevButton = this.addRenderableWidget(Button.builder(
                 Component.translatable("screen.nyanlex.hub.confirm.prev"),
                 b -> { page = Math.max(0, page - 1); updatePageButtons(); })
-                .bounds(centerX - 180, bottomY - 24, 70, 20).build());
+                .bounds(Math.max(4, centerX - 180), bottomY - 24, 70, 20).build());
         nextButton = this.addRenderableWidget(Button.builder(
                 Component.translatable("screen.nyanlex.hub.confirm.next"),
                 b -> { page = Math.min(totalPages() - 1, page + 1); updatePageButtons(); })
-                .bounds(centerX + 110, bottomY - 24, 70, 20).build());
+                .bounds(Math.min(this.width - 74, centerX + 110), bottomY - 24, 70, 20).build());
 
         boolean hasDownload = !plan.downloadable().isEmpty();
         Button downloadButton = this.addRenderableWidget(Button.builder(

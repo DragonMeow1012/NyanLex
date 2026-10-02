@@ -24,7 +24,7 @@ public interface UiHost {
     /** Extra work after a toggle press (clear pending requests, clear the debug log...). */
     void sideEffect(SettingEntry.SideEffect effect);
 
-    /** Called before a toggle changes; return false when the glue handled it itself (e.g. a consent dialog). */
+    /** Called before a toggle changes; return false when the glue handled it itself (e.g. a confirmation dialog). */
     default boolean beforeToggle(SettingEntry entry) { return true; }
 
     /** Replacement button text for an action entry (e.g. download progress), or null. */
