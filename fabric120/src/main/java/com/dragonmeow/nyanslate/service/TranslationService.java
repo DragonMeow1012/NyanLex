@@ -2232,6 +2232,22 @@ public final class TranslationService {
     }
 
     /**
+     * Background (low-priority) twin of {@link #warmTooltipBatch} for the all-item
+     * warm-up: same "whole item sent, segments stored" path, but queued behind every
+     * foreground request. Only meaningful under the AI engine ({@code config.aiTooltip});
+     * under machine translation it is a no-op, like {@link #warmTooltipBatch}.
+     */
+    public void warmTooltipBatchBackground(List<String> sources) {
+        if (!config.aiTooltip) return;
+        warmMasked(sources, true, config.tooltipMode, config.aiTooltip, false, true);
+    }
+
+    /** Whether the item warm-up can run at all: the AI engine owns item text. */
+    public boolean isItemWarmupEngine() {
+        return config.aiTooltip && config.tooltipMode != DisplayMode.ORIGINAL_ONLY;
+    }
+
+    /**
      * Explicit manual entry point for the item-translation hotkey: sends exactly the
      * lines that are not already cached (dedup happens inside {@link #warmMasked}/
      * {@link TranslationCache#warmBatchAsync}, same as the pre-1.0.8 automatic hover
