@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.service;
 
 import com.dragonmeow.nyanlex.cache.TranslationCache;
 import com.dragonmeow.nyanlex.config.DisplayMode;
+import com.dragonmeow.nyanlex.TestConfigs;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.translate.AiSettings;
 import com.dragonmeow.nyanlex.translate.HttpTransport;
@@ -147,7 +148,7 @@ class MosquitoShortbowLiveReproTest {
     }
 
     private static TranslationService newService(OpenAiTranslator translator, TranslationDebugLog log) {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.targetLang = TARGET_LANG;
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = true;

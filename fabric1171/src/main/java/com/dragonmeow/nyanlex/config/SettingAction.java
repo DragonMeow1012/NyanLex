@@ -7,7 +7,6 @@ package com.dragonmeow.nyanlex.config;
 public enum SettingAction {
     OPEN_LANGUAGE,
     OPEN_KEYBINDS,
-    OPEN_HELP,
     OPEN_AI,
     OPEN_PROVIDER,
     OPEN_DO_NOT_TRANSLATE,

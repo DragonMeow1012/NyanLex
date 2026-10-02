@@ -462,7 +462,7 @@ class TranslationCacheWindowedBatchTest {
         RecordingEngine ai = new RecordingEngine();
         TranslationCache gtCache = new TranslationCache(google, "zh-TW", DIRECT, 100, 10_000L, () -> now[0]);
         TranslationCache aiCache = new TranslationCache(ai, "zh-TW", DIRECT, 100, 10_000L, () -> now[0]);
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = false;
         TranslationService service = new TranslationService(cfg, gtCache, aiCache);

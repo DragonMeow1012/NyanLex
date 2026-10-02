@@ -531,33 +531,56 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         }
     }
 
-    /** Build one item's tooltip translation units exactly as the hover path would. */
+    private static Item.TooltipContext offlineTooltipContext;
+
+    /**
+     * Tooltip context for the warm-up: the live level's when a world is open, otherwise one
+     * over the built-in registries so that the title screen can probe items too.
+     */
+    private static Item.TooltipContext warmupTooltipContext(Minecraft mc) {
+        if (mc.level != null) return Item.TooltipContext.of(mc.level);
+        if (offlineTooltipContext == null) {
+            Item.TooltipContext ctx;
+            try {
+                ctx = Item.TooltipContext.of(net.minecraft.data.registries.VanillaRegistries.createLookup());
+            } catch (RuntimeException | LinkageError e) {
+                ctx = Item.TooltipContext.EMPTY;
+            }
+            offlineTooltipContext = ctx;
+        }
+        return offlineTooltipContext;
+    }
+
+    /**
+     * Build one item's tooltip translation units exactly as the hover path would. Works without
+     * a world (player may be null); an item whose tooltip cannot be built (some mods need world
+     * data) comes back {@code failed} so the run can skip and count it.
+     */
     static com.dragonmeow.nyanlex.warmup.ItemWarmupTarget itemWarmupTarget(Item item, Minecraft mc) {
         Identifier id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
         String itemId = id == null ? "" : id.toString();
         String namespace = id == null ? "" : id.getNamespace();
-        ItemStack stack = item.getDefaultInstance();
-        if (stack.isEmpty()) {
-            return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
-        }
-        List<Component> lines;
         int depth = tooltipProbeDepth.get();
         tooltipProbeDepth.set(depth + 1);
         try {
-            lines = stack.getTooltipLines(Item.TooltipContext.of(mc.level), mc.player,
+            ItemStack stack = item.getDefaultInstance();
+            if (stack.isEmpty()) {
+                return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+            }
+            List<Component> lines = stack.getTooltipLines(warmupTooltipContext(mc), mc.player,
                     TooltipFlag.Default.NORMAL);
+            if (lines == null || lines.isEmpty()) {
+                return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+            }
+            TooltipParagraphPlan plan = tooltipParagraphPlan(
+                    stack, lines, Fabric26TextStyle::paragraphRequestText);
+            return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, plan.sources());
         } catch (RuntimeException | LinkageError e) {
-            return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+            return com.dragonmeow.nyanlex.warmup.ItemWarmupTarget.failed(itemId, namespace);
         } finally {
             if (depth == 0) tooltipProbeDepth.remove();
             else tooltipProbeDepth.set(depth);
         }
-        if (lines == null || lines.isEmpty()) {
-            return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
-        }
-        TooltipParagraphPlan plan = tooltipParagraphPlan(
-                stack, lines, Fabric26TextStyle::paragraphRequestText);
-        return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, plan.sources());
     }
 
     private static com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State warmupPrevState =
@@ -1978,7 +2001,10 @@ public final class NyanLexFabric26 implements ClientModInitializer {
      *  tooltip has a line nothing has requested yet, and which key sends that request --
      *  or that a prior key press is still in flight. */
     private Component translationHintLine(List<String> requests) {
-        if (!service.isManualItemTranslation() || config == null || !config.translationRequestsEnabled) return null;
+        if (config == null) return null;
+        // Master switch off: nothing can be requested by any key, so say what to do instead of "按 [R] 翻譯".
+        boolean requestsOff = !config.translationRequestsEnabled;
+        if (!requestsOff && !service.isManualItemTranslation()) return null;
         boolean pending = false;
         boolean missing = false;
         for (String request : requests) {
@@ -1987,7 +2013,9 @@ public final class NyanLexFabric26 implements ClientModInitializer {
             else if (!service.isTooltipTranslationReady(request)) missing = true;
         }
         if (!pending && !missing) return null;
-        Component message = pending
+        Component message = requestsOff
+                ? Component.literal(requestsOffReminder())
+                : pending
                 ? Component.translatable("message.nyanlex.tooltip_hint_pending")
                 : Component.translatable("message.nyanlex.tooltip_hint",
                         retranslateKey == null ? "R" : retranslateKey.getTranslatedKeyMessage().getString());
@@ -2162,6 +2190,7 @@ public final class NyanLexFabric26 implements ClientModInitializer {
                 || screen instanceof net.minecraft.client.gui.screens.ChatScreen
                 || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
                 || !screenTranslationAllowed(screen)) return;
+        if (blockedByMasterSwitch()) return;
         SCREEN_CAPTURE.begin(screen);
         TOOLTIP_CAPTURE.begin(screen);
         captureScreenText(screen.getTitle(), true);
@@ -2389,8 +2418,22 @@ public final class NyanLexFabric26 implements ClientModInitializer {
      * of those slots on every supported screen, including when no GUI is open.
      * Names are deduplicated for the session; full lore still warms only on hover.
      */
+    /** "請先至 設定 → 一般 開啟「送出翻譯請求」" built from the live lang values. */
+    public static String requestsOffReminder() {
+        return com.dragonmeow.nyanlex.config.SettingsModel.requestsOffReminder(
+                key -> Component.translatable(key).getString());
+    }
+
+    /** True (after telling the player how to fix it) when the master switch blocks a manual request. */
+    private static boolean blockedByMasterSwitch() {
+        if (config == null || config.translationRequestsEnabled) return false;
+        status(requestsOffReminder());
+        return true;
+    }
+
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
+        if (blockedByMasterSwitch()) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
         List<String> sources = lastTooltipStack == stack ? lastTooltipParagraphSources : null;

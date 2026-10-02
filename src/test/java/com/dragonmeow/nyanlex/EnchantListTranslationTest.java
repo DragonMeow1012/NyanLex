@@ -41,7 +41,7 @@ class EnchantListTranslationTest {
     }
 
     private static TranslatorConfig zhTwConfig() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.targetLang = "zh-TW";
         return cfg;
@@ -436,7 +436,7 @@ class EnchantListTranslationTest {
 
     @Test
     void appliesToNonChineseTargetLanguagesToo() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.targetLang = "fr-FR";
         DictionaryTranslator translator = new DictionaryTranslator();

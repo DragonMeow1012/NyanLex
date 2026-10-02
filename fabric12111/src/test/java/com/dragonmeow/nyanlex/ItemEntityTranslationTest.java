@@ -98,7 +98,7 @@ class ItemEntityTranslationTest {
     }
 
     private static TranslatorConfig zhTw() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.targetLang = "zh-TW";
         cfg.tooltipMode = DisplayMode.TRANSLATION;

@@ -32,6 +32,11 @@ public final class ItemWarmupConfirmScreen extends Screen {
         this.parent = parent;
     }
 
+    private static boolean requestsOn() {
+        TranslatorConfig cfg = NyanLexFabric26.config();
+        return cfg != null && cfg.translationRequestsEnabled;
+    }
+
     private static boolean eligibleEngine() {
         TranslationService s = NyanLexFabric26.service();
         return s != null && s.isItemWarmupEngine();
@@ -52,7 +57,7 @@ public final class ItemWarmupConfirmScreen extends Screen {
         this.addRenderableWidget(Button.builder(
                 Component.translatable("screen.nyanlex.warmup.back"), b -> onClose())
                 .bounds(centerX + 5, y, 120, 20).build());
-        if (eligibleEngine() && inWorld() && scanner == null) {
+        if (eligibleEngine() && scanner == null) {
             scanner = new ItemWarmupScanner(new Fabric26ItemWarmupSource(),
                     new Fabric26ItemWarmupSource.Backend(() -> false));
         }
@@ -67,7 +72,7 @@ public final class ItemWarmupConfirmScreen extends Screen {
                         NyanLexFabric26.tokenUsageSnapshot());
             }
         }
-        startButton.active = plan != null && !plan.nothingToDo() && eligibleEngine() && inWorld();
+        startButton.active = plan != null && !plan.nothingToDo() && eligibleEngine() && requestsOn();
     }
 
     private void onStart() {
@@ -93,10 +98,9 @@ public final class ItemWarmupConfirmScreen extends Screen {
                     left, y, wrap, 0xFFFFD700);
             return;
         }
-        if (!inWorld()) {
-            paragraph(g, Component.translatable("screen.nyanlex.warmup.unavailable.world"),
-                    left, y, wrap, 0xFFFFD700);
-            return;
+        if (!requestsOn()) {
+            y = paragraph(g, Component.literal(NyanLexFabric26.requestsOffReminder()), left, y, wrap, 0xFFFFD700);
+            y += 6;
         }
         if (plan == null) {
             g.centeredText(this.font,
@@ -110,6 +114,12 @@ public final class ItemWarmupConfirmScreen extends Screen {
                         plan.totalItems(), plan.cachedItems(), plan.missingItems()),
                 centerX, y, 0xFFE0E0E0);
         y += 14;
+        if (scanner != null && scanner.failed() > 0) {
+            g.centeredText(this.font,
+                    Component.translatable(inWorld() ? "screen.nyanlex.warmup.skipped.world"
+                            : "screen.nyanlex.warmup.skipped", scanner.failed()), centerX, y, 0xFFC0C0C0);
+            y += 12;
+        }
         if (plan.nothingToDo()) {
             g.centeredText(this.font,
                     Component.translatable("screen.nyanlex.warmup.nothing"), centerX, y, 0xFF80FF80);

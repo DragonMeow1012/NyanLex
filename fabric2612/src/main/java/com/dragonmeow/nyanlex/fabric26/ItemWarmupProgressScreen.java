@@ -81,6 +81,12 @@ public final class ItemWarmupProgressScreen extends Screen {
                 Component.translatable("screen.nyanlex.warmup.progress.detail",
                         p.submittedItems(), p.skippedCached(), p.sessionLimit()),
                 centerX, barY + 32, 0xFFA0A0A0);
+        if (p.skippedFailed() > 0) {
+            boolean inWorld = this.minecraft != null && this.minecraft.level != null;
+            g.centeredText(this.font, Component.translatable(inWorld
+                            ? "screen.nyanlex.warmup.skipped.world" : "screen.nyanlex.warmup.skipped",
+                            p.skippedFailed()), centerX, barY + 62, 0xFFC0C0C0);
+        }
 
         Component state = Component.translatable("screen.nyanlex.warmup.state."
                 + p.state().name().toLowerCase(java.util.Locale.ROOT));

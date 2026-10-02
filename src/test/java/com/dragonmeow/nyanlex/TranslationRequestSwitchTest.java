@@ -89,7 +89,7 @@ class TranslationRequestSwitchTest {
 
     @Test
     void switchedOffStillShowsCachedRowsOfBothEngines() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
@@ -117,7 +117,7 @@ class TranslationRequestSwitchTest {
 
     @Test
     void switchedOffMissShowsOriginalAndRecordsNothingEvenAfterTimePasses() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.tooltipMode = DisplayMode.TRANSLATION;
@@ -192,7 +192,7 @@ class TranslationRequestSwitchTest {
     @Test
     void switchedOffChatCallbackCompletesImmediatelyWithTheOriginal() {
         for (boolean aiChat : new boolean[] {false, true}) {
-            TranslatorConfig cfg = new TranslatorConfig();
+            TranslatorConfig cfg = TestConfigs.translating();
             cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
             cfg.aiChat = aiChat;
             cfg.translationRequestsEnabled = false;
@@ -223,7 +223,7 @@ class TranslationRequestSwitchTest {
     @Test
     void switchedOffColourChatStillShowsACachedSemanticRow() {
         for (boolean aiChat : new boolean[] {false, true}) {
-            TranslatorConfig cfg = new TranslatorConfig();
+            TranslatorConfig cfg = TestConfigs.translating();
             cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
             cfg.aiChat = aiChat;
             cfg.disableGoogleFallbackForAi = false; // this part exercises the GT-fallback path
@@ -251,7 +251,7 @@ class TranslationRequestSwitchTest {
         }
 
         // Strict AI mode never shows GT wording, not even as a colour fallback.
-        TranslatorConfig strict = new TranslatorConfig();
+        TranslatorConfig strict = TestConfigs.translating();
         strict.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         strict.aiChat = true;
         strict.disableGoogleFallbackForAi = true;
@@ -270,7 +270,7 @@ class TranslationRequestSwitchTest {
 
     @Test
     void itemNameCorrectionKeepsTheGtRowWhileSwitchedOff() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = true;
         AtomicInteger calls = new AtomicInteger();
@@ -453,7 +453,7 @@ class TranslationRequestSwitchTest {
 
     @Test
     void switchingBackOnRequestsThePreviousMissNormally() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.chatMode = DisplayMode.TRANSLATION;
@@ -608,7 +608,7 @@ class TranslationRequestSwitchTest {
 
     @Test
     void retranslateHotkeysAndItemNameCorrectionNeverDeleteRowsWhileSwitchedOff() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.screenTextMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = true;
@@ -648,7 +648,7 @@ class TranslationRequestSwitchTest {
 
     @Test
     void aiSurfaceReadsCachedGtRowsWhileSwitchedOffUnlessStrictAiMode() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -683,7 +683,7 @@ class TranslationRequestSwitchTest {
 
     @Test
     void chatRequestProfileTracksTheSwitchAndFlushesTheBacklog() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         ChatRequestProfile on = ChatRequestProfile.capture(cfg, cfg.targetLang);
         cfg.translationRequestsEnabled = false;

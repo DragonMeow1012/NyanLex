@@ -94,7 +94,7 @@ class ManualItemTranslationTest {
     @Test
     void hoveringAnUncachedTooltipSendsNoRequests() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationService s = manualService(new TranslatorConfig(), counting(calls));
+        TranslationService s = manualService(TestConfigs.translating(), counting(calls));
 
         // Several render frames of the same hover, mirroring visibleTooltip()'s
         // warmTooltipBatch() + per-line translateItemLine() calls.
@@ -112,7 +112,7 @@ class ManualItemTranslationTest {
     @Test
     void heldItemNameSendsNoRequest() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationService s = manualService(new TranslatorConfig(), counting(calls));
+        TranslationService s = manualService(TestConfigs.translating(), counting(calls));
 
         TranslationDecision held = s.translateHeld("Netherite Pickaxe");
 
@@ -125,7 +125,7 @@ class ManualItemTranslationTest {
     @Test
     void containerSlotNamePrewarmSendsNoRequests() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationService s = manualService(new TranslatorConfig(), counting(calls));
+        TranslationService s = manualService(TestConfigs.translating(), counting(calls));
 
         // warmOpenContainerItems() scans every visible slot through this entry point.
         s.warmNamesBatch(List.of("Ender Pearl", "Enchanted Book"));
@@ -136,7 +136,7 @@ class ManualItemTranslationTest {
     @Test
     void hudHotbarNamePrewarmSendsNoRequests() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationService s = manualService(new TranslatorConfig(), counting(calls));
+        TranslationService s = manualService(TestConfigs.translating(), counting(calls));
 
         // warmVisibleHudItems() scans the 9 hotbar slots plus the off-hand through the
         // very same entry point.
@@ -150,7 +150,7 @@ class ManualItemTranslationTest {
     @Test
     void screenTextSendsNoRequests() {
         AtomicInteger calls = new AtomicInteger();
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.screenTextMode = DisplayMode.TRANSLATION;
         TranslationService s = manualService(cfg, counting(calls));
 
@@ -165,7 +165,7 @@ class ManualItemTranslationTest {
     @Test
     void cachedItemLineStillDisplaysWithoutResendingInManualMode() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationService s = manualService(new TranslatorConfig(), counting(calls));
+        TranslationService s = manualService(TestConfigs.translating(), counting(calls));
 
         // requestItemLines (the key-triggered "send now" action) populates the cache
         // even while this surface is in manual (cache-only) mode.
@@ -184,7 +184,7 @@ class ManualItemTranslationTest {
     @Test
     void cachedScreenTextStillDisplaysWithoutResendingInManualMode() {
         AtomicInteger calls = new AtomicInteger();
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.screenTextMode = DisplayMode.TRANSLATION;
         TranslationService s = manualService(cfg, counting(calls));
 
@@ -211,7 +211,7 @@ class ManualItemTranslationTest {
             requested.add(text);
             return new TranslationResult("T:" + text, "en");
         };
-        TranslationService s = manualService(new TranslatorConfig(), translator);
+        TranslationService s = manualService(TestConfigs.translating(), translator);
 
         // One line already cached (e.g. the item's own name, cached from an earlier R).
         s.requestItemLines(List.of("Diamond Sword"));
@@ -228,7 +228,7 @@ class ManualItemTranslationTest {
     @Test
     void retranslateForcesAFreshRequestEvenWhenEverythingIsAlreadyCached() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationService s = manualService(new TranslatorConfig(), counting(calls));
+        TranslationService s = manualService(TestConfigs.translating(), counting(calls));
 
         s.requestItemLines(List.of("Diamond Sword"));
         assertEquals(1, calls.get());
@@ -247,7 +247,7 @@ class ManualItemTranslationTest {
     @Test
     void enchantListComponentsAreOnlyRequestedThroughRequestItemLines() {
         String row = "Soul Eater V, Chance IV";
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.targetLang = "zh-TW";
         List<String> requested = new ArrayList<>();
         Translator translator = (text, target) -> {
@@ -271,7 +271,7 @@ class ManualItemTranslationTest {
     @Test
     void isTooltipTranslationPendingReflectsRequestItemLinesInFlight() {
         Deque<Runnable> workers = new ArrayDeque<>();
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         TranslationCache gt = new TranslationCache((text, target) -> new TranslationResult("T:" + text, "en"),
                 cfg.targetLang, workers::add, 1000);
         TranslationCache ai = new TranslationCache((text, target) -> new TranslationResult("T:" + text, "en"),
@@ -298,7 +298,7 @@ class ManualItemTranslationTest {
     @Test
     void chatStillSendsAutomaticallyInManualMode() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationService s = manualService(new TranslatorConfig(), counting(calls));
+        TranslationService s = manualService(TestConfigs.translating(), counting(calls));
 
         assertFalse(s.translateChat("Hello there").changed());
         pump(s);
@@ -311,7 +311,7 @@ class ManualItemTranslationTest {
     @Test
     void bossBarStillSendsAutomaticallyInManualMode() {
         AtomicInteger calls = new AtomicInteger();
-        TranslationService s = manualService(new TranslatorConfig(), counting(calls));
+        TranslationService s = manualService(TestConfigs.translating(), counting(calls));
 
         assertFalse(s.translateBossBar("Kuudra, the Mad").changed());
         pump(s);
@@ -325,7 +325,7 @@ class ManualItemTranslationTest {
 
     @Test
     void manualModeMissesRecordNoFailureOrBackoffOrChurnState() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         Translator neverCalled = (text, target) -> {
             throw new AssertionError("must never be called in manual mode");
         };

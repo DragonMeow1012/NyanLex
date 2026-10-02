@@ -33,7 +33,6 @@ public final class SettingsCatalog {
     public static final String KEY_TITLE = "nyanlex.settings.frame_title";
     public static final String KEY_HELP_BUTTON = "nyanlex.settings.help_button";
     public static final String KEY_HELP_BUTTON_TIP = "nyanlex.settings.help_button.tip";
-    public static final String KEY_INTRO = "nyanlex.settings.intro";
     public static final String KEY_DEFAULT_TIP = "nyanlex.settings.default_tip";
     public static final String KEY_TIP_PREFIX = "nyanlex.settings.tip_prefix";
     public static final String KEY_NEEDS_AI = "nyanlex.settings.needs_ai";
@@ -112,7 +111,7 @@ public final class SettingsCatalog {
     /** Every lang key the catalog and the screen frame rely on (for the lang-file test). */
     public static List<String> allLangKeys() {
         List<String> keys = new ArrayList<>(List.of(
-                KEY_TITLE, KEY_HELP_BUTTON, KEY_HELP_BUTTON_TIP, KEY_INTRO, KEY_DEFAULT_TIP,
+                KEY_TITLE, KEY_HELP_BUTTON, KEY_HELP_BUTTON_TIP, KEY_DEFAULT_TIP,
                 KEY_TIP_PREFIX, KEY_NEEDS_AI, KEY_CONFIRM_YES,
                 KEY_CLEAR_CACHE_CONFIRM_TITLE, KEY_CLEAR_CACHE_CONFIRM_MESSAGE,
                 KEY_CLEAR_HUB_CONFIRM_TITLE, KEY_CLEAR_HUB_CONFIRM_MESSAGE,
@@ -135,11 +134,11 @@ public final class SettingsCatalog {
                 toggle(SettingsPage.GENERAL, "master", c -> c.translationRequestsEnabled,
                         c -> onOff(c.translationRequestsEnabled),
                         c -> c.translationRequestsEnabled = !c.translationRequestsEnabled,
-                        SettingEntry.SideEffect.CLEAR_PENDING),
+                        SettingEntry.SideEffect.CLEAR_PENDING)
+                        .withKeywords("master", "master switch", "總開關", "总开关", "privacy", "隱私", "隐私"),
                 sub(SettingsPage.GENERAL, "language", SettingAction.OPEN_LANGUAGE,
                         SettingsCatalog::languageState),
-                sub(SettingsPage.GENERAL, "keybind", SettingAction.OPEN_KEYBINDS, null),
-                sub(SettingsPage.GENERAL, "help", SettingAction.OPEN_HELP, null))));
+                sub(SettingsPage.GENERAL, "keybind", SettingAction.OPEN_KEYBINDS, null))));
 
         List<SettingsRow> display = new ArrayList<>();
         display.add(surface("chat", c -> c.chatMode, (c, m) -> c.chatMode = m,
@@ -171,10 +170,6 @@ public final class SettingsCatalog {
                 toggle(SettingsPage.AI, "ai_fallback", c -> !c.disableGoogleFallbackForAi,
                         c -> onOff(!c.disableGoogleFallbackForAi),
                         c -> c.disableGoogleFallbackForAi = !c.disableGoogleFallbackForAi,
-                        SettingEntry.SideEffect.NONE),
-                toggle(SettingsPage.AI, "screen_scan", c -> c.aiScreenScan,
-                        c -> engineState(c.aiScreenScan),
-                        c -> c.aiScreenScan = !c.aiScreenScan,
                         SettingEntry.SideEffect.NONE))));
 
         map.put(SettingsPage.REQUESTS, pairs(List.of(
@@ -249,6 +244,48 @@ public final class SettingsCatalog {
         return 0;
     }
 
+    /** Button cycle of the settings screen: 原文 → 雙語 → 譯文 → 原文. */
+    static DisplayMode nextUiMode(DisplayMode mode) {
+        return switch (mode) {
+            case ORIGINAL_ONLY -> DisplayMode.BOTH;
+            case BOTH -> DisplayMode.TRANSLATION;
+            case TRANSLATION -> DisplayMode.ORIGINAL_ONLY;
+        };
+    }
+
+    /** Engine (機翻／AI) of every display surface, in display order. */
+    public static boolean allEnginesAre(TranslatorConfig c, boolean ai) {
+        for (SettingsRow row : ROWS.get(SettingsPage.DISPLAY)) {
+            if (row.secondary().isOn(c) != ai) return false;
+        }
+        return true;
+    }
+
+    /** Sets the engine of every display surface at once. */
+    public static void setAllEngines(TranslatorConfig c, boolean ai) {
+        for (SettingsRow row : ROWS.get(SettingsPage.DISPLAY)) {
+            SettingEntry engine = row.secondary();
+            if (engine.isOn(c) != ai) engine.press(c);
+        }
+    }
+
+    /** Whether every display surface shows {@code mode}. */
+    public static boolean allModesAre(TranslatorConfig c, DisplayMode mode) {
+        int index = modeOrder(mode);
+        for (SettingsRow row : ROWS.get(SettingsPage.DISPLAY)) {
+            if (row.primary().options().index().applyAsInt(c) != index) return false;
+        }
+        return true;
+    }
+
+    /** Sets the display mode of every surface at once. */
+    public static void setAllModes(TranslatorConfig c, DisplayMode mode) {
+        int index = modeOrder(mode);
+        for (SettingsRow row : ROWS.get(SettingsPage.DISPLAY)) {
+            row.primary().options().select().accept(c, index);
+        }
+    }
+
     private static String label(String id) { return "nyanlex.settings." + id; }
     private static String tip(String id) { return "nyanlex.settings." + id + ".tip"; }
 
@@ -291,7 +328,7 @@ public final class SettingsCatalog {
                                        java.util.function.BiConsumer<TranslatorConfig, Boolean> setAi) {
         SettingEntry mode = new SettingEntry(id, SettingsPage.DISPLAY, SettingEntry.Type.CYCLE,
                 label(id), tip(id), c -> modeState(getMode.apply(c)),
-                c -> setMode.accept(c, getMode.apply(c).next()),
+                c -> setMode.accept(c, nextUiMode(getMode.apply(c))),
                 null, SettingEntry.SideEffect.NONE, false)
                 .withOptions(new SettingEntry.Options(
                         List.of(modeState(DisplayMode.TRANSLATION), modeState(DisplayMode.BOTH),

@@ -29,9 +29,9 @@ public final class TranslatorConfig {
     public static final int MAX_PERSISTENT_CACHE_ENTRIES = 250_000;
     private static final int LEGACY_REQUEST_COOLDOWN_MS = 6000;
 
-    // Per-surface display mode. Each surface can independently be 原文 (off) /
-    // 原文＋翻譯 (both) / 只有翻譯 (translation only). Configured via the in-game
-    // 翻譯設定 screen.
+    // Per-surface display mode. Each surface can independently be 不翻譯 (ORIGINAL_ONLY: not
+    // translated and nothing sent for it) / 雙語 (BOTH) / 譯文 (TRANSLATION). Configured via the
+    // in-game 翻譯設定 screen.
     public DisplayMode chatMode = DisplayMode.BOTH;              // 聊天：原文+翻譯 stacked (3-way)
     /** Preserve received chat order; false displays each translation as soon as it is ready. */
     public boolean deliverChatTranslationsInOrder = true;
@@ -54,9 +54,7 @@ public final class TranslatorConfig {
     public boolean aiTitle = false;
     public boolean aiActionBar = false;
     public boolean aiBook = false;
-    /** Engine for the "translate current screen" hotkey (機翻 / AI 精翻). */
-    public boolean aiScreenScan = false;
-    /** Engine for the always-on custom-GUI text surface ({@link #screenTextMode}). */
+    /** Engine for the custom-GUI text surface ({@link #screenTextMode}) and the "translate this screen" hotkey. */
     public boolean aiScreenText = false;
 
     /** Keep AI-selected surfaces on AI after temporary failures instead of using GT. */
@@ -117,12 +115,14 @@ public final class TranslatorConfig {
     public boolean protectPlayerNames = true;
 
     /**
-     * Master switch for NEW translation requests (總開關). {@code false} keeps showing
+     * Master switch for NEW translation requests (送出翻譯請求). {@code false} keeps showing
      * every cached translation but sends nothing new; uncached text stays original and
      * nothing is recorded as a failure, so switching back on simply resumes requests.
-     * Field type is part of the persisted format and must never change.
+     * A fresh install starts with it OFF: no text leaves the game until the player turns it
+     * on. A config file written by an earlier build that does not have the key keeps sending
+     * (see {@link #fromReader}). Field type is part of the persisted format and must never change.
      */
-    public boolean translationRequestsEnabled = true;
+    public boolean translationRequestsEnabled = false;
 
     /**
      * Do-not-translate terms (不翻譯詞彙): case-insensitive whole words/phrases that are
@@ -144,8 +144,9 @@ public final class TranslatorConfig {
     public boolean hubAutoImport = false;
 
     /**
-     * Whether the settings screen's first-open hint ("第一次使用？按右上 ? 看說明") has already
-     * been shown once. Field type is part of the persisted format and must never change.
+     * Legacy: read only by the older tabbed settings screens of the other loader trees; the
+     * card-style screen no longer shows a first-open hint. Field type is part of the persisted
+     * format and must never change.
      */
     public boolean settingsIntroSeen = false;
 
@@ -242,6 +243,10 @@ public final class TranslatorConfig {
         if (cfg != null && json != null && json.isJsonObject()
                 && !json.getAsJsonObject().has("pacingDefaultsVersion")) {
             cfg.pacingDefaultsVersion = 0;
+        }
+        if (cfg != null && json != null && json.isJsonObject()
+                && !json.getAsJsonObject().has("translationRequestsEnabled")) {
+            cfg.translationRequestsEnabled = true; // an existing config from before the switch: keep its behaviour
         }
         return (cfg == null ? new TranslatorConfig() : cfg).normalized();
     }

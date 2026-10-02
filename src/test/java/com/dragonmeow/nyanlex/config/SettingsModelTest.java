@@ -51,9 +51,13 @@ class SettingsModelTest {
     void everyCatalogEntryBecomesExactlyOneCard() {
         List<String> cardIds = ids(SettingsModel.allCards());
         assertEquals(cardIds.size(), new HashSet<>(cardIds).size(), "card ids are unique");
-        // every entry once, plus the text-only info card under 關於 and one FILE card per mod file
-        assertEquals(SettingsCatalog.allEntries().size() + 1 + FileLocations.IDS.size(), cardIds.size());
+        // every entry once (a display surface's engine entry rides on its surface card), plus the two
+        // bulk rows, the privacy notice, the info card and the guide sections under 關於, and one FILE card per mod file
+        int surfaces = SettingsCatalog.rows(SettingsPage.DISPLAY).size();
+        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 2 + 1 + 1 + SettingsModel.ABOUT_SECTIONS
+                + FileLocations.IDS.size(), cardIds.size());
         for (SettingEntry entry : SettingsCatalog.allEntries()) {
+            if (entry.id().endsWith(".engine")) continue;
             assertNotNull(SettingsModel.byId(entry.id()), entry.id());
         }
     }
@@ -61,46 +65,71 @@ class SettingsModelTest {
     @Test
     void cardKindsFollowTheEntries() {
         assertEquals(SettingCard.Kind.TOGGLE, SettingsModel.byId("master").kind());
-        assertEquals(SettingCard.Kind.DROPDOWN, SettingsModel.byId("chat").kind());
-        assertEquals(SettingCard.Kind.TOGGLE, SettingsModel.byId("chat.engine").kind());
+        assertEquals(SettingCard.Kind.SURFACE, SettingsModel.byId("chat").kind());
+        assertEquals("chat.engine", SettingsModel.byId("chat").engineEntry().id());
+        assertEquals(SettingCard.Kind.NOTICE, SettingsModel.byId(SettingsModel.PRIVACY_ID).kind());
+        assertEquals(SettingsModel.PRIVACY_ID, SettingsModel.nodes(SettingsCategory.GENERAL).get(0).card().id(),
+                "the privacy card is the first thing on the first page");
+        assertEquals(SettingCard.Kind.BULK, SettingsModel.byId("bulk_engine").kind());
+        assertEquals(SettingCard.Kind.BULK, SettingsModel.byId("bulk_mode").kind());
         assertEquals(SettingCard.Kind.SLIDER, SettingsModel.byId("cooldown").kind());
         assertEquals(SettingCard.Kind.SLIDER, SettingsModel.byId("batch").kind());
         assertEquals(SettingCard.Kind.WARMUP, SettingsModel.byId("warmup").kind());
         assertEquals(SettingCard.Kind.BUTTON, SettingsModel.byId("language").kind());
         assertEquals(SettingCard.Kind.BUTTON, SettingsModel.byId("clear_cache").kind());
         assertEquals(SettingCard.Kind.INFO, SettingsModel.byId("about_info").kind());
-        assertEquals(SettingsCategory.ABOUT, SettingsModel.byId("help").category());
-        assertTrue(ids(SettingsModel.cards(SettingsCategory.GENERAL)).stream().noneMatch("help"::equals));
+        assertNull(SettingsModel.byId("help"), "no help card anywhere: the guide is part of 關於");
+        assertNull(SettingsModel.byId("screen_scan"));
+        assertEquals(SettingsCategory.ABOUT, SettingsModel.byId("about_s1").category());
+        assertEquals(SettingCard.Kind.INFO, SettingsModel.byId("about_s" + SettingsModel.ABOUT_SECTIONS).kind());
     }
 
     @Test
-    void displayCategoryIsNineGroupsOfModeAndEngine() {
+    void displayCategoryIsTwoBulkRowsThenOneSurfaceRowEach() {
         List<SettingsModel.Node> nodes = SettingsModel.nodes(SettingsCategory.DISPLAY);
-        assertEquals(9, nodes.size());
-        for (SettingsModel.Node node : nodes) {
-            assertTrue(node.isGroup());
-            assertEquals(2, node.group().cards().size());
-            assertEquals(SettingCard.Kind.DROPDOWN, node.group().cards().get(0).kind());
-            assertEquals(SettingCard.Kind.TOGGLE, node.group().cards().get(1).kind());
-            assertEquals(node.group().id(), node.group().cards().get(0).groupId());
+        assertEquals(2 + 9, nodes.size());
+        for (SettingsModel.Node node : nodes) assertFalse(node.isGroup(), "no folding groups on the display page");
+        assertEquals("bulk_engine", nodes.get(0).card().id());
+        assertEquals(2, nodes.get(0).card().buttons().size());
+        assertEquals("bulk_mode", nodes.get(1).card().id());
+        assertEquals(3, nodes.get(1).card().buttons().size());
+        for (int i = 2; i < nodes.size(); i++) {
+            SettingCard card = nodes.get(i).card();
+            assertEquals(SettingCard.Kind.SURFACE, card.kind());
+            assertEquals(SettingEntry.Type.CYCLE, card.entry().type());
+            assertEquals(SettingEntry.Type.TOGGLE, card.engineEntry().type());
         }
-        assertEquals("chat", nodes.get(0).group().id());
-        assertEquals("screen", nodes.get(8).group().id());
+        assertEquals("chat", nodes.get(2).card().id());
+        assertEquals("screen", nodes.get(10).card().id());
     }
 
     @Test
     void titlesDropTheStatePartAndEllipsis() throws Exception {
         Function<String, String> lang = zhTw();
-        assertEquals("翻譯總開關", SettingsModel.title(SettingsModel.byId("master"), lang));
+        assertEquals("送出翻譯請求", SettingsModel.title(SettingsModel.byId("master"), lang));
         assertEquals("全物品預熱", SettingsModel.title(SettingsModel.byId("warmup"), lang));
         assertEquals("清除快取", SettingsModel.title(SettingsModel.byId("clear_cache"), lang));
-        assertEquals("引擎", SettingsModel.title(SettingsModel.byId("chat.engine"), lang));
-        assertEquals("顯示方式", SettingsModel.title(SettingsModel.byId("chat"), lang));
-        assertEquals("聊天", SettingsModel.groupTitle(SettingsModel.groupById("chat"), lang));
+        assertEquals("聊天", SettingsModel.title(SettingsModel.byId("chat"), lang));
+        assertEquals("全部引擎", SettingsModel.title(SettingsModel.byId("bulk_engine"), lang));
+        assertEquals("偵測伺服器／模組並下載翻譯包", SettingsModel.title(SettingsModel.byId("download"), lang));
+        assertEquals("檔案位置", SettingsModel.groupTitle(SettingsModel.groupById(SettingsModel.FILES_GROUP_ID), lang));
         for (SettingCard card : SettingsModel.allCards()) {
             String title = SettingsModel.title(card, lang);
             assertFalse(title.isBlank(), card.id());
             assertFalse(title.contains("%"), card.id());
+        }
+    }
+
+    @Test
+    void requestsOffReminderIsBuiltFromTheLangValuesInEveryLanguage() throws Exception {
+        String[][] expect = {
+                {"zh_tw", "請先至 設定 → 一般 開啟「送出翻譯請求」"},
+                {"zh_hk", "請先至 設定 → 一般 開啟「送出翻譯請求」"},
+                {"zh_cn", "请先至 设置 → 常规 开启“发送翻译请求”"},
+                {"en_us", "Turn on \"Send translation requests\" in Settings → General first"}};
+        for (String[] e : expect) {
+            JsonObject l = lang(e[0]);
+            assertEquals(e[1], SettingsModel.requestsOffReminder(k -> l.has(k) ? l.get(k).getAsString() : k), e[0]);
         }
     }
 
@@ -120,12 +149,12 @@ class SettingsModelTest {
         assertTrue(ids(SettingsModel.search("COOLDOWN", lang)).contains("cooldown"));
         // description text ("避免被服務限流")
         assertTrue(ids(SettingsModel.search("限流", lang)).contains("cooldown"));
-        // group title brings both cards of the group
-        assertEquals(List.of("chat", "chat.engine"), ids(SettingsModel.search("聊天", lang)).stream()
-                .filter(id -> id.equals("chat") || id.equals("chat.engine")).collect(Collectors.toList()));
-        // every word must match
-        assertEquals(List.of("chat.engine"), ids(SettingsModel.search("聊天 引擎", lang)).stream()
-                .filter(id -> id.equals("chat") || id.equals("chat.engine")).collect(Collectors.toList()));
+        // a surface row is found by its name and, with "引擎", by its engine button too
+        assertTrue(ids(SettingsModel.search("聊天", lang)).contains("chat"));
+        assertTrue(ids(SettingsModel.search("聊天 引擎", lang)).contains("chat"));
+        assertFalse(ids(SettingsModel.search("聊天 引擎", lang)).contains("tooltip"));
+        // the guide on 關於 is read, never listed as a search hit
+        assertTrue(ids(SettingsModel.search("冷卻", lang)).stream().noneMatch(id -> id.startsWith("about_")));
         // category name
         assertTrue(ids(SettingsModel.search("倉庫", lang)).containsAll(List.of("startup", "download")));
         assertTrue(SettingsModel.search("   ", lang).isEmpty());
@@ -210,8 +239,9 @@ class SettingsModelTest {
     }
 
     private static int count(String s) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("%([0-9]+[$])?s").matcher(s);
         int n = 0;
-        for (int i = s.indexOf("%s"); i >= 0; i = s.indexOf("%s", i + 2)) n++;
+        while (m.find()) n++;
         return n;
     }
 

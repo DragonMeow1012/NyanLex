@@ -37,9 +37,6 @@ public interface UiHost {
 
     default void warmupCommand(WarmupCommand command) { }
 
-    /** Whether the first-open hint is still to be shown. */
-    default boolean showIntro() { return false; }
-
     /** Short transient message (e.g. "cache cleared") drawn at the bottom of the list, or null. */
     default String statusText() { return null; }
 

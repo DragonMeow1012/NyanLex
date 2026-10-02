@@ -55,7 +55,6 @@ class SettingsPanelTest {
         final List<WarmupCommand> commands = new ArrayList<>();
         boolean closed;
         boolean allowToggle = true;
-        boolean intro;
         WarmupStatus warm = new WarmupStatus(true, ItemWarmupDriver.State.IDLE,
                 ItemWarmupDriver.PauseReason.NONE, 0, 0, 0, false);
         String clipboard = "";
@@ -70,7 +69,6 @@ class SettingsPanelTest {
         @Override public boolean beforeToggle(SettingEntry entry) { return allowToggle; }
         @Override public WarmupStatus warmupStatus() { return warm; }
         @Override public void warmupCommand(WarmupCommand c) { commands.add(c); }
-        @Override public boolean showIntro() { return intro; }
         final List<FileLocations.Entry> opened = new ArrayList<>();
         @Override public List<FileLocations.Entry> fileLocations() {
             return FileLocations.entries(java.nio.file.Path.of(
@@ -144,7 +142,6 @@ class SettingsPanelTest {
                 for (String query : new String[] {"", "a", "聊天"}) {
                     FakeHost host = new FakeHost();
                     host.lang = code;
-                    host.intro = true;
                     SettingsPanel.State st = new SettingsPanel.State();
                     for (SettingGroup g : groups()) st.expanded.add(g.id());
                     SettingsPanel p = new SettingsPanel(host, st);
@@ -160,7 +157,6 @@ class SettingsPanelTest {
 
     private static List<SettingGroup> groups() {
         List<SettingGroup> out = new ArrayList<>();
-        for (SettingsModel.Node n : SettingsModel.nodes(SettingsCategory.DISPLAY)) out.add(n.group());
         for (SettingsModel.Node n : SettingsModel.nodes(SettingsCategory.ADVANCED)) if (n.isGroup()) out.add(n.group());
         return out;
     }
@@ -307,24 +303,97 @@ class SettingsPanelTest {
     }
 
     @Test
-    void aboutCategoryHasInfoAndHelpButton() {
+    void aboutCategoryShowsVersionAndTheWholeUsageGuide() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 427, 240);
         p.setCategory(SettingsCategory.ABOUT);
-        click(p, p.controlBounds("help"));
-        assertEquals(List.of(SettingAction.OPEN_HELP), host.actions);
         Rec c = new Rec();
         p.render(c, -1, -1);
         assertTrue(c.texts.stream().anyMatch(t -> t.s().contains("1.0.0")));
+        // every section is its own scrollable card
+        assertTrue(p.contentHeight() > p.listRect()[3], "the guide scrolls");
+        for (int i = 1; i <= SettingsModel.ABOUT_SECTIONS; i++) assertNotNull(SettingsModel.byId("about_s" + i));
+        assertTrue(host.actions.isEmpty(), "no help screen anywhere: the guide lives in the list");
     }
 
     @Test
-    void helpButtonNextToSearchOpensHelp() {
+    void privacyNoticeIsReadableAtTheTopOfGeneralInEveryLanguage() {
+        String[][] expect = {{"zh_tw", "隱私", "Google"}, {"zh_hk", "隱私", "Google"},
+                {"zh_cn", "隐私", "Google"}, {"en_us", "Privacy", "Google"}};
+        for (String[] e : expect) {
+            FakeHost host = new FakeHost();
+            host.lang = e[0];
+            SettingsPanel p = panel(host, 320, 240);
+            assertEquals(SettingsCategory.GENERAL, p.category());
+            int[] card = p.cardBounds(SettingsModel.PRIVACY_ID);
+            assertNotNull(card, e[0]);
+            assertEquals(p.listRect()[1], card[1], e[0] + ": first card, no click needed");
+            Rec c = new Rec();
+            p.render(c, -1, -1);
+            assertTrue(c.texts.stream().anyMatch(t -> t.s().equals(e[1])), e[0] + " title");
+            String body = c.texts.stream().map(Text::s).reduce("", String::concat);
+            assertTrue(body.contains(e[2]), e[0] + " body names the default machine service");
+            // clicking it does nothing
+            int saves = host.saves;
+            click(p, card);
+            assertEquals(saves, host.saves);
+            assertTrue(host.actions.isEmpty());
+        }
+    }
+
+    @Test
+    void privacyCardCarriesTheSameMasterSwitchAsTheGeneralCard() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 427, 240);
+        assertFalse(host.cfg.translationRequestsEnabled, "fresh install: nothing is sent");
+        Rec off = new Rec();
+        p.render(off, -1, -1);
+        assertTrue(off.texts.stream().anyMatch(t -> t.s().equals("送出翻譯請求：關")), "switch caption on the card");
+        click(p, p.controlBounds(SettingsModel.PRIVACY_ID));
+        assertTrue(host.cfg.translationRequestsEnabled);
+        assertEquals(List.of(SettingEntry.SideEffect.CLEAR_PENDING), host.effects);
+        Rec on = new Rec();
+        p.render(on, -1, -1);
+        assertTrue(on.texts.stream().anyMatch(t -> t.s().equals("送出翻譯請求：開")));
+        // the general card below shows the same state, and flipping it flips the privacy card back
+        click(p, p.cardBounds("master"));
+        assertFalse(host.cfg.translationRequestsEnabled);
+    }
+
+    @Test
+    void aboutGuideCoversWhatEachSurfaceSendsAndTheLocalApiKey() {
+        for (String code : new String[] {"zh_tw", "zh_hk", "zh_cn", "en_us"}) {
+            String send = lookup(code, SettingsModel.aboutBodyKey(10));
+            String local = lookup(code, SettingsModel.aboutBodyKey(11));
+            assertTrue(send.contains("Google"), code);
+            assertTrue(local.contains("API"), code);
+            assertFalse(send.equals(SettingsModel.aboutBodyKey(10)), code + " key must exist");
+        }
+    }
+
+    @Test
+    void helpButtonNextToSearchJumpsToTheAboutCategory() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 427, 240);
+        assertEquals(SettingsCategory.GENERAL, p.category());
         int[] s = p.searchRect();
         p.mouseClicked(s[0] + s[2] + 4 + 6, s[1] + 5, 0);
-        assertEquals(List.of(SettingAction.OPEN_HELP), host.actions);
+        assertEquals(SettingsCategory.ABOUT, p.category());
+        assertTrue(host.actions.isEmpty(), "no other screen is opened");
+    }
+
+    @Test
+    void subscreenButtonsUseSettingsAndEditWording() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 480, 270);
+        Rec general = new Rec();
+        p.render(general, -1, -1);
+        assertTrue(general.texts.stream().anyMatch(t -> t.s().equals("設定")), "keybind card button says 設定");
+        assertFalse(general.texts.stream().anyMatch(t -> t.s().equals("開啟")));
+        p.setCategory(SettingsCategory.REQUESTS);
+        Rec requests = new Rec();
+        p.render(requests, -1, -1);
+        assertTrue(requests.texts.stream().anyMatch(t -> t.s().equals("編輯")), "do-not-translate card button says 編輯");
     }
 
     @Test
@@ -347,62 +416,95 @@ class SettingsPanelTest {
     }
 
     @Test
-    void dropdownOpensListsAndSelects() {
+    void surfaceRowCyclesTheModeAndTogglesTheEngineWithoutGroupsOrDropdowns() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 480, 270);
         p.setCategory(SettingsCategory.DISPLAY);
-        assertTrue(p.isExpanded("chat"));
-        int[] ctl = p.controlBounds("chat");
-        click(p, ctl);
-        assertTrue(p.dropdownOpen());
-        // third option = 原文
-        int popupTop = ctl[1] + ctl[3] + 1;
-        p.mouseClicked(ctl[0] + 8, popupTop + 1 + 2 * 14 + 7, 0);
+        assertNotNull(p.cardBounds("chat"));
+        assertNotNull(p.cardBounds("screen"));
+        assertEquals(null, p.headerBounds("chat"), "no accordion groups on the display page");
+        host.cfg.chatMode = DisplayMode.ORIGINAL_ONLY;
+        click(p, p.buttonBounds("chat", 0));
+        assertEquals(DisplayMode.BOTH, host.cfg.chatMode);
+        click(p, p.buttonBounds("chat", 0));
+        assertEquals(DisplayMode.TRANSLATION, host.cfg.chatMode);
+        click(p, p.buttonBounds("chat", 0));
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.chatMode, "原文 → 雙語 → 譯文 → 原文");
+        assertEquals(3, host.saves);
         assertFalse(p.dropdownOpen());
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.chatMode);
-        assertEquals(1, host.saves);
-        // outside click just closes
-        click(p, p.controlBounds("chat"));
-        assertTrue(p.dropdownOpen());
-        p.mouseClicked(p.panelRect()[0] + 2, p.panelRect()[1] + 2, 0);
-        assertFalse(p.dropdownOpen());
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.chatMode);
-        // Escape closes it too
-        click(p, p.controlBounds("chat"));
-        assertTrue(p.escape());
-        assertFalse(p.dropdownOpen());
-    }
-
-    @Test
-    void engineToggleInsideAGroupWritesItsSurface() {
-        FakeHost host = new FakeHost();
-        SettingsPanel p = panel(host, 480, 270);
-        p.setCategory(SettingsCategory.DISPLAY);
         boolean before = host.cfg.aiChat;
-        click(p, p.cardBounds("chat.engine"));
+        click(p, p.buttonBounds("chat", 1));
         assertEquals(!before, host.cfg.aiChat);
+        assertEquals(4, host.saves);
+        // the other surfaces are untouched
+        assertFalse(host.cfg.aiTooltip);
+        assertEquals(DisplayMode.TRANSLATION, host.cfg.tooltipMode);
     }
 
     @Test
-    void groupHeaderCollapsesAndExpandsAndSessionStateIsKept() {
+    void surfaceButtonsShowTheCurrentModeAndEngine() {
+        FakeHost host = new FakeHost();
+        host.cfg.chatMode = DisplayMode.BOTH;
+        host.cfg.aiChat = true;
+        host.cfg.tooltipMode = DisplayMode.ORIGINAL_ONLY;
+        SettingsPanel p = panel(host, 480, 270);
+        p.setCategory(SettingsCategory.DISPLAY);
+        Rec c = new Rec();
+        p.render(c, -1, -1);
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("雙語")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("不翻譯")), "an untouched surface reads 不翻譯");
+        assertFalse(c.texts.stream().anyMatch(t -> t.s().equals("原文")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("AI")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("機翻")));
+    }
+
+    @Test
+    void bulkRowsSetEveryEngineAndEveryDisplayMode() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 480, 270);
+        p.setCategory(SettingsCategory.DISPLAY);
+        click(p, p.buttonBounds("bulk_engine", 0)); // 全設 AI
+        assertTrue(host.cfg.aiChat && host.cfg.aiTooltip && host.cfg.aiScoreboard && host.cfg.aiName
+                && host.cfg.aiBossBar && host.cfg.aiTitle && host.cfg.aiActionBar && host.cfg.aiBook
+                && host.cfg.aiScreenText);
+        click(p, p.buttonBounds("bulk_engine", 1)); // 全設機翻
+        assertFalse(host.cfg.aiChat || host.cfg.aiTooltip || host.cfg.aiScoreboard || host.cfg.aiName
+                || host.cfg.aiBossBar || host.cfg.aiTitle || host.cfg.aiActionBar || host.cfg.aiBook
+                || host.cfg.aiScreenText);
+        click(p, p.buttonBounds("bulk_mode", 2)); // 全部不翻譯
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.chatMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.tooltipMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.scoreboardMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.nameMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.bossBarMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.titleMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.actionBarMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.bookMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.screenTextMode);
+        click(p, p.buttonBounds("bulk_mode", 1)); // 全設雙語
+        assertEquals(DisplayMode.BOTH, host.cfg.chatMode);
+        assertEquals(DisplayMode.BOTH, host.cfg.screenTextMode);
+        click(p, p.buttonBounds("bulk_mode", 0)); // 全設譯文
+        assertEquals(DisplayMode.TRANSLATION, host.cfg.bookMode);
+        assertEquals(5, host.saves);
+    }
+
+    @Test
+    void filesGroupHeaderCollapsesAndExpandsAndSessionStateIsKept() {
         FakeHost host = new FakeHost();
         SettingsPanel.State st = new SettingsPanel.State();
         SettingsPanel p = new SettingsPanel(host, st);
         p.resize(480, 270);
-        p.setCategory(SettingsCategory.DISPLAY);
-        int rows = p.rowCount();
-        assertEquals(9 + 2, rows); // chat expanded by default
-        click(p, p.headerBounds("chat"));
-        assertEquals(9, p.rowCount());
-        assertFalse(p.isExpanded("chat"));
-        click(p, p.headerBounds("tooltip"));
-        assertEquals(11, p.rowCount());
-        // a new panel on the same state remembers it
+        p.setCategory(SettingsCategory.ADVANCED);
+        int collapsed = p.rowCount();
+        assertFalse(p.isExpanded(SettingsModel.FILES_GROUP_ID));
+        click(p, p.headerBounds(SettingsModel.FILES_GROUP_ID));
+        assertTrue(p.isExpanded(SettingsModel.FILES_GROUP_ID));
+        assertEquals(collapsed + FileLocations.IDS.size(), p.rowCount());
         SettingsPanel again = new SettingsPanel(host, st);
         again.resize(480, 270);
-        assertEquals(SettingsCategory.DISPLAY, again.category());
-        assertTrue(again.isExpanded("tooltip"));
-        assertFalse(again.isExpanded("chat"));
+        assertEquals(SettingsCategory.ADVANCED, again.category());
+        assertTrue(again.isExpanded(SettingsModel.FILES_GROUP_ID));
     }
 
     // ------------------------------------------------------------------ search
@@ -446,7 +548,7 @@ class SettingsPanelTest {
         p.setQuery("引擎");
         Rec c = new Rec();
         p.render(c, -1, -1);
-        assertTrue(c.texts.stream().anyMatch(t -> t.s().contains("顯示 > ")), "breadcrumb");
+        assertTrue(c.texts.stream().anyMatch(t -> t.clip() != null && t.s().equals("顯示")), "breadcrumb");
         p.setQuery("zzzzqqq");
         Rec c2 = new Rec();
         p.render(c2, -1, -1);
@@ -499,35 +601,18 @@ class SettingsPanelTest {
     }
 
     @Test
-    void introHintShowsUntilClicked() {
-        FakeHost host = new FakeHost();
-        host.intro = true;
-        SettingsPanel.State st = new SettingsPanel.State();
-        SettingsPanel p = new SettingsPanel(host, st);
-        p.resize(427, 240);
-        int listTopWith = p.listRect()[1];
-        Rec c = new Rec();
-        p.render(c, -1, -1);
-        assertTrue(c.texts.stream().anyMatch(t -> t.s().contains("按右上角 ?")));
-        int[] s = p.searchRect();
-        p.mouseClicked(s[0] + 20, s[1] + s[3] + 5, 0);
-        assertTrue(p.listRect()[1] < listTopWith);
-    }
-
-    @Test
-    void longIntroHintWrapsToTwoLinesInsteadOfBeingCut() {
-        FakeHost host = new FakeHost();
-        host.intro = true;
-        host.lang = "en_us";
-        SettingsPanel p = new SettingsPanel(host, new SettingsPanel.State());
-        p.resize(320, 240);
-        Rec c = new Rec();
-        p.render(c, -1, -1);
-        List<String> hint = c.texts.stream().filter(t -> t.clip() == null && t.x() >= p.searchRect()[0]
-                        && t.y() < p.listRect()[1] && t.y() > p.searchRect()[1] + SettingsPanel.SEARCH_H)
-                .map(Text::s).collect(java.util.stream.Collectors.toList());
-        assertEquals(2, hint.size());
-        assertEquals("New here? Press ? at the top right for help", String.join(" ", hint));
+    void noFirstUseHintIsEverShown() {
+        for (String code : new String[] {"zh_tw", "zh_cn", "zh_hk", "en_us"}) {
+            FakeHost host = new FakeHost();
+            host.lang = code;
+            SettingsPanel p = panel(host, 427, 240);
+            Rec c = new Rec();
+            p.render(c, -1, -1);
+            assertTrue(c.texts.stream().noneMatch(t -> t.s().contains("第一次")
+                    || t.s().contains("New here")), code);
+            int[] s = p.searchRect();
+            assertEquals(s[1] + s[3] + 4, p.listRect()[1], "the list starts right under the search box");
+        }
     }
 
     // ------------------------------------------------------------------ scrolling
@@ -537,7 +622,6 @@ class SettingsPanelTest {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 320, 240);
         p.setCategory(SettingsCategory.DISPLAY);
-        for (SettingGroup g : groups()) p.toggleGroup(g.id());
         assertTrue(p.contentHeight() > p.listRect()[3]);
         assertEquals(0, p.scroll());
         p.mouseScrolled(100, 100, -1);
@@ -564,7 +648,6 @@ class SettingsPanelTest {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 320, 240);
         p.setCategory(SettingsCategory.DISPLAY);
-        for (SettingGroup g : groups()) p.toggleGroup(g.id());
         p.keyPressed(SettingsPanel.KEY_END, false, false);
         int saved = p.scroll();
         p.setCategory(SettingsCategory.GENERAL);

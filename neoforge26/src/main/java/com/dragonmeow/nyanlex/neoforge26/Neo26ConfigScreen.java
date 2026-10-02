@@ -91,17 +91,12 @@ public final class Neo26ConfigScreen extends Screen {
                         b -> this.minecraft.setScreenAndShow(new Neo26CooldownScreen(this)))
                 .bounds(right, y, rowWidth, 18).build());
         y += step;
-        // Row 2: AI-failure machine-translation fallback | screen-scan engine.
+        // Row 2: AI-failure machine-translation fallback.
         this.addRenderableWidget(Button.builder(aiFallbackLabel(cfg), b -> {
             cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
             NyanLexNeoForge26.saveConfig();
             b.setMessage(aiFallbackLabel(cfg));
-        }).bounds(left, y, rowWidth, 18).build());
-        this.addRenderableWidget(Button.builder(screenScanEngineLabel(cfg), b -> {
-            cfg.aiScreenScan = !cfg.aiScreenScan;
-            NyanLexNeoForge26.saveConfig();
-            b.setMessage(screenScanEngineLabel(cfg));
-        }).bounds(right, y, rowWidth, 18).build());
+        }).bounds(left, y, right + rowWidth - left, 18).build());
         y += step;
         // Row 3: AI settings | keybind settings.
         this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.ai.open"),
@@ -174,10 +169,6 @@ public final class Neo26ConfigScreen extends Screen {
                 cfg.machineTranslationProvider);
         return Component.translatable("config.nyanlex.machine_provider",
                 Component.translatable("screen.nyanlex.provider." + provider.id()));
-    }
-
-    private static Component screenScanEngineLabel(TranslatorConfig cfg) {
-        return Component.translatable("config.nyanlex.screen_scan_engine", aiText(cfg.aiScreenScan));
     }
 
     private static Component chatDeliveryLabel(TranslatorConfig cfg) {

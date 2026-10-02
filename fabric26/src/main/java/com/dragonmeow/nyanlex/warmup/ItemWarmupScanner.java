@@ -12,6 +12,7 @@ public final class ItemWarmupScanner {
     private final ItemWarmupSource source;
     private final ItemWarmupEstimator estimator;
     private int scanned;
+    private int failed;
     private boolean started;
 
     public ItemWarmupScanner(ItemWarmupSource source, ItemWarmupBackend backend) {
@@ -28,8 +29,12 @@ public final class ItemWarmupScanner {
         if (source.isExhausted()) return true;
         if (!source.isAvailable()) return false;
         for (ItemWarmupTarget target : source.probeNext(Math.max(1, budget))) {
-            estimator.add(target);
             scanned++;
+            if (target.failed()) {
+                failed++;
+                continue;
+            }
+            estimator.add(target);
         }
         return source.isExhausted();
     }
@@ -40,6 +45,11 @@ public final class ItemWarmupScanner {
 
     public int scanned() {
         return scanned;
+    }
+
+    /** Items whose tooltip could not be built (skipped). */
+    public int failed() {
+        return failed;
     }
 
     public int total() {

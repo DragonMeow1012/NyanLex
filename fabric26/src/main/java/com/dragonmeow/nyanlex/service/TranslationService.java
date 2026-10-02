@@ -81,7 +81,6 @@ public final class TranslationService {
      * #reconcileItemNameWithTooltip}) that read {@code config.aiTooltip}/{@code
      * config.aiScreenText} directly instead of a cached field.
      */
-    private volatile Set<String> manualScreenSources = Set.of();
     private volatile Supplier<? extends Collection<String>> protectedNames = List::of;
     /** Compiled form of {@code config.doNotTranslateTerms}, rebuilt when the list changes. */
     private volatile DoNotTranslateMatcher doNotTranslate = DoNotTranslateMatcher.EMPTY;
@@ -473,16 +472,15 @@ public final class TranslationService {
                         LayoutPreserver.matchOuterWhitespace(source, restored)));
             }
         };
-        requestByEngine(config.aiScreenScan, masked.text(), false, ready, false, true);
+        requestByEngine(config.aiScreenText, masked.text(), false, ready, false, true);
     }
 
     /**
      * Asynchronously completes text from the always-on custom GUI surface.
      *
      * <p>This is deliberately separate from {@link #requestScreenTextAsync(String, Consumer)}:
-     * that method belongs to the manual "scan this screen" action and therefore uses
-     * {@code aiScreenScan}. Live screen widgets normally use {@code aiScreenText};
-     * explicitly rescanned sources use the scan engine until the next scan. The callback lets an
+     * that method belongs to the manual "scan this screen" action. Both use the engine of the
+     * 介面 surface ({@code aiScreenText}). The callback lets an
      * optional UI integration reflow itself as soon as the cached translation arrives.</p>
      */
     public void requestLiveScreenTextAsync(String source, Consumer<String> onResult) {
@@ -2032,7 +2030,6 @@ public final class TranslationService {
     /** Explicit rescan: discard stale/failed rows, then queue the original screen inputs. */
     public void retranslateScreen(List<String> sources) {
         if (!requestsEnabled()) return; // see retranslate(): never invalidate without resending
-        manualScreenSources = Set.copyOf(sources);
         invalidateSources(sources);
         // Same three memos retranslate() clears, for the same reason: translateScreenText()
         // passes enchantList=true (see the warm call below), so an enchant/scroll-list-shaped
@@ -2053,11 +2050,11 @@ public final class TranslationService {
         // enchant-list paragraph exactly like the per-frame translateScreenText() lookup
         // does, instead of ever buying the whole near-combinatorially-unique paragraph as
         // one throwaway request.
-        warmMasked(sources, true, config.screenTextMode, config.aiScreenScan, false, false, true);
+        warmMasked(sources, true, config.screenTextMode, config.aiScreenText, false, false, true);
     }
 
     private boolean screenEngine(String source) {
-        return manualScreenSources.contains(source) ? config.aiScreenScan : config.aiScreenText;
+        return config.aiScreenText;
     }
 
     private void invalidateSources(List<String> sources) {
@@ -2209,13 +2206,13 @@ public final class TranslationService {
         // allowRequest == config.aiScreenText: screen-text surfaces are manual (cache-only)
         // under the machine-translation engine, independent of the item-surface decision
         // above -- see isManualScreenTranslation(). Note this is NOT screenEngine(text)
-        // (the per-source aiScreenScan/aiScreenText CACHE selection a few lines up): a
-        // manually-scanned source still only auto-sends when aiScreenText itself is AI.
+        // (the CACHE selection a few lines up): a manually-scanned source still only
+        // auto-sends when aiScreenText itself is AI.
         return lookup(text, config.screenTextMode, screenEngine(text), true, false, true,
                 config.aiScreenText);
     }
     public TranslationDecision translateScreenScanText(String text) {
-        return lookup(text, config.screenTextMode, config.aiScreenScan, true);
+        return lookup(text, config.screenTextMode, config.aiScreenText, true);
     }
 
     private TranslationDecision lookup(String original, DisplayMode mode, boolean useAi) {

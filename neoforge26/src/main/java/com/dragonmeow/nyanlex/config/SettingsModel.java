@@ -19,12 +19,33 @@ public final class SettingsModel {
         public boolean isGroup() { return group != null; }
     }
 
+    public static final String KEY_PRIVACY_TITLE = "nyanlex.ui.privacy.title";
+    public static final String KEY_PRIVACY_BODY = "nyanlex.ui.privacy.body";
+    public static final String PRIVACY_ID = "privacy";
+    public static final String KEY_REQUESTS_OFF = "message.nyanlex.requests_off";
+    public static final String KEY_ENGINE_LABEL = "nyanlex.settings.engine";
     public static final String KEY_MODE = "nyanlex.ui.mode";
     public static final String KEY_MODE_TIP = "nyanlex.ui.mode.tip";
     public static final String KEY_SEARCH_HINT = "nyanlex.ui.search.hint";
     public static final String KEY_SEARCH_EMPTY = "nyanlex.ui.search.empty";
     public static final String KEY_BTN_OPEN = "nyanlex.ui.btn.open";
     public static final String KEY_BTN_RUN = "nyanlex.ui.btn.run";
+    public static final String KEY_BTN_SETTINGS = "nyanlex.ui.btn.settings";
+    public static final String KEY_BTN_EDIT = "nyanlex.ui.btn.edit";
+    public static final String KEY_BTN_DETECT = "nyanlex.ui.btn.detect";
+    public static final String KEY_BTN_EXPORT = "nyanlex.ui.btn.export";
+    public static final String KEY_BTN_IMPORT = "nyanlex.ui.btn.import";
+    public static final String KEY_BULK_ENGINE = "nyanlex.ui.bulk.engine";
+    public static final String KEY_BULK_ENGINE_DESC = "nyanlex.ui.bulk.engine.desc";
+    public static final String KEY_BULK_AI = "nyanlex.ui.bulk.ai";
+    public static final String KEY_BULK_MACHINE = "nyanlex.ui.bulk.machine";
+    public static final String KEY_BULK_MODE = "nyanlex.ui.bulk.mode";
+    public static final String KEY_BULK_MODE_DESC = "nyanlex.ui.bulk.mode.desc";
+    public static final String KEY_BULK_TRANSLATION = "nyanlex.ui.bulk.translation";
+    public static final String KEY_BULK_BOTH = "nyanlex.ui.bulk.both";
+    public static final String KEY_BULK_ORIGINAL = "nyanlex.ui.bulk.original";
+    /** Number of help sections on the 關於 page ({@code nyanlex.ui.about.s1.title} ... {@code .body}). */
+    public static final int ABOUT_SECTIONS = 11;
     public static final String KEY_BTN_CLEAR = "nyanlex.ui.btn.clear";
     public static final String KEY_DONE_SHORT = "nyanlex.ui.done.short";
     public static final String KEY_ABOUT_TITLE = "nyanlex.ui.about.title";
@@ -108,6 +129,8 @@ public final class SettingsModel {
         String[] words = tokens(query);
         if (words.length == 0) return out;
         for (SettingCard card : allCards()) {
+            // the guide and the privacy notice are read, not searched
+            if (card.kind() == SettingCard.Kind.INFO || card.kind() == SettingCard.Kind.NOTICE) continue;
             String hay = haystack(card, lang);
             boolean all = true;
             for (String w : words) {
@@ -136,6 +159,10 @@ public final class SettingsModel {
             sb.append(SettingCard.stripState(lang.apply(card.groupTitleKey()))).append('\n');
         }
         if (card.entry() != null) for (String k : card.entry().keywords()) sb.append(k).append('\n');
+        if (card.engineEntry() != null) {
+            sb.append(SettingCard.stripState(lang.apply(KEY_ENGINE_LABEL))).append('\n')
+                    .append(lang.apply(card.engineEntry().tipKey())).append('\n');
+        }
         return sb.toString().toLowerCase(Locale.ROOT);
     }
 
@@ -145,10 +172,18 @@ public final class SettingsModel {
     public static List<String> allLangKeys() {
         List<String> keys = new ArrayList<>(List.of(KEY_MODE, KEY_MODE_TIP, KEY_SEARCH_HINT,
                 KEY_SEARCH_EMPTY, KEY_BTN_OPEN, KEY_BTN_RUN, KEY_BTN_CLEAR, KEY_DONE_SHORT,
+                KEY_BTN_SETTINGS, KEY_BTN_EDIT, KEY_BTN_DETECT, KEY_BTN_EXPORT, KEY_BTN_IMPORT,
+                KEY_BULK_ENGINE, KEY_BULK_ENGINE_DESC, KEY_BULK_AI, KEY_BULK_MACHINE, KEY_BULK_MODE,
+                KEY_BULK_MODE_DESC, KEY_BULK_TRANSLATION, KEY_BULK_BOTH, KEY_BULK_ORIGINAL,
+                KEY_PRIVACY_TITLE, KEY_PRIVACY_BODY, KEY_REQUESTS_OFF,
                 KEY_ABOUT_TITLE, KEY_ABOUT_DESC, KEY_ABOUT_VERSION, KEY_WARMUP_START,
                 KEY_WARMUP_DETAILS, KEY_WARMUP_IDLE, KEY_WARMUP_HUD_RUNNING, KEY_WARMUP_HUD_PAUSED,
                 KEY_WARMUP_HUD_DONE, KEY_WARMUP_RESUMED, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING,
                 KEY_FILES_GROUP, KEY_FILES_GROUP_DESC));
+        for (int i = 1; i <= ABOUT_SECTIONS; i++) {
+            keys.add(aboutTitleKey(i));
+            keys.add(aboutBodyKey(i));
+        }
         for (String id : FileLocations.IDS) {
             keys.add(FileLocations.titleKey(id));
             keys.add(FileLocations.descKey(id));
@@ -160,23 +195,48 @@ public final class SettingsModel {
         return keys;
     }
 
+    /**
+     * "請先至 設定 → 一般 開啟「送出翻譯請求」": the reminder shown when R, P, the warm-up or a
+     * tooltip hint needs requests while the master switch is off. The three names come from
+     * the lang file, so a renamed setting follows automatically.
+     */
+    public static String requestsOffReminder(Function<String, String> lang) {
+        String master = SettingCard.stripState(lang.apply(SettingsCatalog.byId("master").labelKey()));
+        return String.format(lang.apply(KEY_REQUESTS_OFF), lang.apply(KEY_BTN_SETTINGS),
+                lang.apply(SettingsCategory.GENERAL.nameKey()), master);
+    }
+
+    public static String aboutTitleKey(int section) { return "nyanlex.ui.about.s" + section + ".title"; }
+
+    public static String aboutBodyKey(int section) { return "nyanlex.ui.about.s" + section + ".body"; }
+
     // ------------------------------------------------------------------ construction
 
     private static Map<SettingsCategory, List<Node>> build() {
         Map<SettingsCategory, List<Node>> map = new EnumMap<>(SettingsCategory.class);
         for (SettingsCategory category : SettingsCategory.values()) {
             List<Node> nodes = new ArrayList<>();
+            if (category == SettingsCategory.GENERAL) {
+                // First thing on the first page, readable without opening anything.
+                // It carries the master switch (the very same setting as the 一般 card below).
+                nodes.add(new Node(new SettingCard(PRIVACY_ID, SettingCard.Kind.NOTICE, category,
+                        SettingsCatalog.byId("master"), KEY_PRIVACY_TITLE, KEY_PRIVACY_BODY, null, null), null));
+            }
             if (category == SettingsCategory.DISPLAY) {
+                nodes.add(new Node(bulkEngineCard(), null));
+                nodes.add(new Node(bulkModeCard(), null));
                 for (SettingsRow row : SettingsCatalog.rows(SettingsPage.DISPLAY)) {
-                    nodes.add(new Node(null, surfaceGroup(row)));
+                    nodes.add(new Node(surfaceCard(row), null));
                 }
             } else if (category == SettingsCategory.ABOUT) {
                 nodes.add(new Node(new SettingCard("about_info", SettingCard.Kind.INFO, category, null,
                         KEY_ABOUT_TITLE, KEY_ABOUT_DESC, null, null), null));
-                nodes.add(new Node(card(SettingsCatalog.byId("help"), category), null));
+                for (int i = 1; i <= ABOUT_SECTIONS; i++) {
+                    nodes.add(new Node(new SettingCard("about_s" + i, SettingCard.Kind.INFO, category, null,
+                            aboutTitleKey(i), aboutBodyKey(i), null, null), null));
+                }
             } else {
                 for (SettingEntry entry : SettingsCatalog.entries(category.page())) {
-                    if (entry.id().equals("help")) continue; // lives under 關於
                     nodes.add(new Node(card(entry, category), null));
                 }
             }
@@ -197,24 +257,40 @@ public final class SettingsModel {
                 KEY_FILES_GROUP_DESC, List.copyOf(cards));
     }
 
-    private static SettingGroup surfaceGroup(SettingsRow row) {
+    /** 顯示 > one surface: name, one-line description, mode button and engine button on the right. */
+    private static SettingCard surfaceCard(SettingsRow row) {
         SettingEntry mode = row.primary();
-        SettingEntry engine = row.secondary();
-        SettingsCategory cat = SettingsCategory.DISPLAY;
-        SettingCard modeCard = new SettingCard(mode.id(), SettingCard.Kind.DROPDOWN, cat, mode,
-                KEY_MODE, KEY_MODE_TIP, mode.id(), mode.labelKey());
-        // The per-surface engine label would repeat the group name; under a group the card is just "引擎".
-        SettingCard engineCard = new SettingCard(engine.id(), SettingCard.Kind.TOGGLE, cat, engine,
-                "nyanlex.settings.engine", engine.tipKey(), mode.id(), mode.labelKey());
-        return new SettingGroup(mode.id(), cat, mode.labelKey(), mode.tipKey(),
-                List.of(modeCard, engineCard));
+        return new SettingCard(mode.id(), SettingCard.Kind.SURFACE, SettingsCategory.DISPLAY, mode,
+                mode.labelKey(), mode.tipKey(), null, null, row.secondary(), List.of());
+    }
+
+    private static SettingCard bulkEngineCard() {
+        return new SettingCard("bulk_engine", SettingCard.Kind.BULK, SettingsCategory.DISPLAY, null,
+                KEY_BULK_ENGINE, KEY_BULK_ENGINE_DESC, null, null, null, List.of(
+                new SettingCard.BulkButton(KEY_BULK_AI, c -> SettingsCatalog.setAllEngines(c, true),
+                        c -> SettingsCatalog.allEnginesAre(c, true)),
+                new SettingCard.BulkButton(KEY_BULK_MACHINE, c -> SettingsCatalog.setAllEngines(c, false),
+                        c -> SettingsCatalog.allEnginesAre(c, false))));
+    }
+
+    private static SettingCard bulkModeCard() {
+        return new SettingCard("bulk_mode", SettingCard.Kind.BULK, SettingsCategory.DISPLAY, null,
+                KEY_BULK_MODE, KEY_BULK_MODE_DESC, null, null, null, List.of(
+                new SettingCard.BulkButton(KEY_BULK_TRANSLATION,
+                        c -> SettingsCatalog.setAllModes(c, DisplayMode.TRANSLATION),
+                        c -> SettingsCatalog.allModesAre(c, DisplayMode.TRANSLATION)),
+                new SettingCard.BulkButton(KEY_BULK_BOTH,
+                        c -> SettingsCatalog.setAllModes(c, DisplayMode.BOTH),
+                        c -> SettingsCatalog.allModesAre(c, DisplayMode.BOTH)),
+                new SettingCard.BulkButton(KEY_BULK_ORIGINAL,
+                        c -> SettingsCatalog.setAllModes(c, DisplayMode.ORIGINAL_ONLY),
+                        c -> SettingsCatalog.allModesAre(c, DisplayMode.ORIGINAL_ONLY))));
     }
 
     private static SettingCard card(SettingEntry entry, SettingsCategory category) {
         SettingCard.Kind kind;
         if (entry.action() == SettingAction.OPEN_ITEM_WARMUP) kind = SettingCard.Kind.WARMUP;
         else if (entry.slider() != null) kind = SettingCard.Kind.SLIDER;
-        else if (entry.options() != null) kind = SettingCard.Kind.DROPDOWN;
         else if (entry.type() == SettingEntry.Type.TOGGLE) kind = SettingCard.Kind.TOGGLE;
         else kind = SettingCard.Kind.BUTTON;
         return new SettingCard(entry.id(), kind, category, entry, entry.labelKey(), entry.tipKey(), null, null);

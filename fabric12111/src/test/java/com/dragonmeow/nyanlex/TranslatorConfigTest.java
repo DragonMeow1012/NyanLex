@@ -29,6 +29,8 @@ class TranslatorConfigTest {
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
         assertTrue(cfg.deliverChatTranslationsInOrder);
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
+        assertEquals(DisplayMode.ORIGINAL_ONLY, cfg.screenTextMode, "介面文字預設不翻譯");
+        assertFalse(cfg.translationRequestsEnabled, "a fresh install sends nothing until the player turns it on");
         assertFalse(cfg.debugTranslationOverlay);
         assertTrue(cfg.churnGuard, "特效字防護預設開啟");
         assertEquals(4, cfg.churnVariantThreshold);
@@ -205,10 +207,22 @@ class TranslatorConfigTest {
     }
 
     @Test
-    void requestSwitchDefaultsOnSurvivesMissingFieldsAndRoundTrips() {
-        assertTrue(new TranslatorConfig().translationRequestsEnabled, "總開關預設開啟");
-        assertTrue(TranslatorConfig.fromReader(new StringReader("{}")).translationRequestsEnabled,
-                "an old config without the field keeps sending requests");
+    void requestSwitchIsOffOnAFreshInstallButAnExistingConfigKeepsItsBehaviour() {
+        assertFalse(new TranslatorConfig().translationRequestsEnabled, "fresh install: 送出翻譯請求 預設關閉");
+        assertTrue(TranslatorConfig.fromReader(new StringReader("{ \"targetLang\": \"zh-TW\" }"))
+                        .translationRequestsEnabled,
+                "an old config file without the key was already translating: it keeps sending requests");
+        assertFalse(TranslatorConfig.fromReader(new StringReader("{ \"translationRequestsEnabled\": false }"))
+                .translationRequestsEnabled, "a stored false stays false");
+        assertTrue(TranslatorConfig.fromReader(new StringReader("{ \"translationRequestsEnabled\": true }"))
+                .translationRequestsEnabled, "a stored true stays true");
+        // an existing config keeps its stored display modes too
+        TranslatorConfig stored = TranslatorConfig.fromReader(new StringReader(
+                "{ \"chatMode\": \"TRANSLATION\", \"tooltipMode\": \"ORIGINAL_ONLY\","
+                        + " \"screenTextMode\": \"BOTH\", \"translationRequestsEnabled\": false }"));
+        assertEquals(DisplayMode.TRANSLATION, stored.chatMode);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, stored.tooltipMode);
+        assertEquals(DisplayMode.BOTH, stored.screenTextMode);
 
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.translationRequestsEnabled = false;

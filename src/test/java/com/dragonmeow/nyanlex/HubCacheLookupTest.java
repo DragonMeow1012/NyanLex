@@ -47,7 +47,7 @@ class HubCacheLookupTest {
     @Test
     void manualItemModeHubHitDisplaysWithZeroRequests() {
         AtomicInteger calls = new AtomicInteger();
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // the hub only read-throughs the AI engine's cache miss
         TranslationCache gt = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
         TranslationCache ai = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
@@ -65,7 +65,7 @@ class HubCacheLookupTest {
     @Test
     void automaticModeHubHitDisplaysWithoutSendingARequestEither() {
         AtomicInteger calls = new AtomicInteger();
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true;
         TranslationCache gt = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
         TranslationCache ai = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
@@ -83,7 +83,7 @@ class HubCacheLookupTest {
     @Test
     void hubLookupIsNotConsultedForTheGoogleTranslateEngine() {
         AtomicInteger calls = new AtomicInteger();
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = false; // tooltip surface routed to the GT engine, not AI (also manual mode)
         TranslationCache gt = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
         TranslationCache ai = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
@@ -100,7 +100,7 @@ class HubCacheLookupTest {
     @Test
     void hubMissFallsThroughToTheOrdinaryCacheMissBehavior() {
         AtomicInteger calls = new AtomicInteger();
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true;
         TranslationCache gt = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
         TranslationCache ai = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);

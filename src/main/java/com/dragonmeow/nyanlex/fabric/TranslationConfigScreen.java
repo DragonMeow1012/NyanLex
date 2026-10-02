@@ -34,7 +34,6 @@ public final class TranslationConfigScreen extends Screen {
     private static final long STATUS_MS = 4_000L;
 
     private final Screen parent;
-    private final boolean showIntro;
     private final SettingsPanel panel;
     private final Host host = new Host();
     private final Canvas canvas = new Canvas();
@@ -44,12 +43,6 @@ public final class TranslationConfigScreen extends Screen {
     public TranslationConfigScreen(Screen parent) {
         super(Component.translatable(SettingsCatalog.KEY_TITLE));
         this.parent = parent;
-        TranslatorConfig cfg = NyanLexFabric.config();
-        this.showIntro = !cfg.settingsIntroSeen;
-        if (showIntro) {
-            cfg.settingsIntroSeen = true;
-            NyanLexFabric.saveConfig();
-        }
         this.panel = new SettingsPanel(host);
     }
 
@@ -169,8 +162,6 @@ public final class TranslationConfigScreen extends Screen {
             }
         }
 
-        @Override public boolean showIntro() { return showIntro; }
-
         @Override public String modVersion() { return NyanLexFabric.modVersion(); }
 
         @Override
@@ -213,7 +204,6 @@ public final class TranslationConfigScreen extends Screen {
         switch (action) {
             case OPEN_LANGUAGE -> open(new TranslationLanguageScreen(this));
             case OPEN_KEYBINDS -> open(new TranslationKeybindScreen(this));
-            case OPEN_HELP -> open(new TranslationHelpScreen(this));
             case OPEN_AI -> open(new AiConfigScreen(this));
             case OPEN_PROVIDER -> open(new TranslationMachineProviderScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new TranslationRequestsScreen(this));

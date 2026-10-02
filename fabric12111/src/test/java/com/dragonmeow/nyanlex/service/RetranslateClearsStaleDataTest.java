@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.service;
 
 import com.dragonmeow.nyanlex.cache.TranslationCache;
 import com.dragonmeow.nyanlex.config.DisplayMode;
+import com.dragonmeow.nyanlex.TestConfigs;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.translate.DoNotTranslateMatcher;
 import com.dragonmeow.nyanlex.translate.NameMasker;
@@ -124,7 +125,7 @@ class RetranslateClearsStaleDataTest {
     }
 
     private static TranslatorConfig aiTooltipConfig() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.targetLang = "zh-TW";
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = true;
@@ -282,7 +283,7 @@ class RetranslateClearsStaleDataTest {
 
     @Test
     void retranslateDisplaysTheFreshAiAnswerInsteadOfTheStaleHubRow() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.targetLang = "zh-TW";
         cfg.aiTooltip = true;
         Map<String, String> hub = new HashMap<>(Map.of("Diamond Sword", "舊的鑑石劍"));
@@ -334,11 +335,10 @@ class RetranslateClearsStaleDataTest {
                 "Chance", "機會", "Cubism", "立方", "Power", "力量",
                 "Snipe", "狙擊"));
         DictionaryTranslator translator = new DictionaryTranslator(dictionary);
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.targetLang = "zh-TW";
         cfg.screenTextMode = DisplayMode.TRANSLATION;
         cfg.aiScreenText = true;
-        cfg.aiScreenScan = true;
         TranslationCache google = new TranslationCache(translator, "zh-TW", DIRECT, 1000);
         TranslationCache ai = new TranslationCache(translator, "zh-TW", DIRECT, 1000);
         TranslationService s = new TranslationService(cfg, google, ai);

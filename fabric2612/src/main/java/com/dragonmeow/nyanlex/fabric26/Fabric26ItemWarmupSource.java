@@ -45,8 +45,9 @@ final class Fabric26ItemWarmupSource implements ItemWarmupSource {
 
     @Override
     public boolean isAvailable() {
+        // The item registry is ready from the title screen on; no world is needed.
         Minecraft mc = Minecraft.getInstance();
-        return mc != null && mc.level != null && mc.player != null && mc.isSameThread();
+        return mc != null && mc.isSameThread();
     }
 
     @Override
@@ -59,7 +60,7 @@ final class Fabric26ItemWarmupSource implements ItemWarmupSource {
         Minecraft mc = Minecraft.getInstance();
         List<Item> all = items();
         List<ItemWarmupTarget> out = new ArrayList<>();
-        if (mc == null || mc.level == null || mc.player == null) return out;
+        if (mc == null) return out;
         int end = Math.min(all.size(), cursor + Math.max(1, maxItems));
         while (cursor < end) {
             out.add(NyanLexFabric26.itemWarmupTarget(all.get(cursor), mc));

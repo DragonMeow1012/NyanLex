@@ -91,18 +91,12 @@ public final class TranslationConfigScreen extends Screen {
                         b -> this.minecraft.setScreen(new TranslationCooldownScreen(this)))
                 .bounds(right, y, rowWidth, 18).build());
         y += 20;
-        // Row 2: AI-failure machine-translation fallback | screen-scan engine.
+        // Row 2: AI-failure machine-translation fallback.
         this.addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(aiFallbackLabel(cfg), b -> {
             cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
             NyanLexFabric.saveConfig();
             b.setMessage(aiFallbackLabel(cfg));
-        }).bounds(left, y, rowWidth, 18).build());
-        // Engine for the "translate current screen" (P) hotkey: 機翻 (Google) or AI 精翻.
-        this.addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(screenScanEngineLabel(cfg), b -> {
-            cfg.aiScreenScan = !cfg.aiScreenScan;
-            NyanLexFabric.saveConfig();
-            b.setMessage(screenScanEngineLabel(cfg));
-        }).bounds(right, y, rowWidth, 18).build());
+        }).bounds(left, y, right + rowWidth - left, 18).build());
         y += 20;
         // Row 3: AI settings | keybind settings.
         this.addRenderableWidget(com.dragonmeow.nyanlex.fabric.LegacyButton.builder(new net.minecraft.network.chat.TranslatableComponent("config.nyanlex.ai.open"),
@@ -176,10 +170,6 @@ public final class TranslationConfigScreen extends Screen {
         return new net.minecraft.network.chat.TranslatableComponent(
                 "config.nyanlex.machine_provider",
                 TranslationMachineProviderScreen.providerLabel(provider));
-    }
-
-    private static Component screenScanEngineLabel(TranslatorConfig cfg) {
-        return new net.minecraft.network.chat.TranslatableComponent("config.nyanlex.screen_scan_engine", aiText(cfg.aiScreenScan));
     }
 
     private static Component chatDeliveryLabel(TranslatorConfig cfg) {

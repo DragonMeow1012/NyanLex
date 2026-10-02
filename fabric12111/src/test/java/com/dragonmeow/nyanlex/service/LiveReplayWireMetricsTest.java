@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.service;
 
 import com.dragonmeow.nyanlex.cache.TranslationCache;
 import com.dragonmeow.nyanlex.config.DisplayMode;
+import com.dragonmeow.nyanlex.TestConfigs;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.fabric.FabricTextStyle;
 import com.dragonmeow.nyanlex.translate.AiSettings;
@@ -81,7 +82,7 @@ class LiveReplayWireMetricsTest {
         Recorder recorder = new Recorder();
         OpenAiTranslator translator = new OpenAiTranslator(recorder,
                 () -> new AiSettings("https://api.openai.com/v1", "gpt-4o-mini", List.of("key-1")));
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.targetLang = "zh-TW";
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = true;

@@ -35,7 +35,7 @@ public final class ItemWarmupDriver {
 
     public record Progress(State state, PauseReason pauseReason, int scanned, int totalItems,
                            int skippedCached, int submittedItems, int sessionLimit,
-                           boolean limitReached) {
+                           boolean limitReached, int skippedFailed) {
     }
 
     private final ItemWarmupSource source;
@@ -51,6 +51,7 @@ public final class ItemWarmupDriver {
     private List<String> inflight = List.of();
     private int scanned;
     private int skippedCached;
+    private int skippedFailed;
     private int submitted;
     private int submittedThisSession;
     private boolean limitReached;
@@ -92,6 +93,7 @@ public final class ItemWarmupDriver {
         stagedItems = 0;
         scanned = 0;
         skippedCached = 0;
+        skippedFailed = 0;
         submitted = 0;
         limitReached = false;
         notifyChanged();
@@ -128,7 +130,7 @@ public final class ItemWarmupDriver {
         TranslatorConfig cfg = config.get();
         int limit = cfg == null ? 0 : cfg.itemWarmupMaxItemsPerSession;
         return new Progress(state, pauseReason, scanned, source.totalItemCount(), skippedCached,
-                submitted, limit, limitReached);
+                submitted, limit, limitReached, skippedFailed);
     }
 
     /** One client tick. Cheap when nothing is due. */
@@ -195,6 +197,10 @@ public final class ItemWarmupDriver {
             probedThisTick += batch.size();
             for (ItemWarmupTarget target : batch) {
                 scanned++;
+                if (target.failed()) {
+                    skippedFailed++;
+                    continue;
+                }
                 boolean missing = false;
                 for (String unit : target.sources()) {
                     if (unit != null && !unit.isBlank() && !backend.isReady(unit)) {

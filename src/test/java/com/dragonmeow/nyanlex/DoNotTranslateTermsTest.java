@@ -64,7 +64,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void termIsMaskedBeforeSendingAndShownInTheOriginalSpelling() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("skyblock");
@@ -91,7 +91,7 @@ class DoNotTranslateTermsTest {
         assertEquals("SKYBLOCK 勝過 Skyblock 和 SKYBLOCK",
                 NameMasker.unmask("⟦0⟧ 勝過 ⟦1⟧ 和 ⟦0⟧", m.names()));
 
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
@@ -157,7 +157,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void lineMadeOnlyOfTermsIsNeverSentOnAnySurface() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.chatMode = DisplayMode.TRANSLATION;
@@ -200,7 +200,7 @@ class DoNotTranslateTermsTest {
         assertFalse(com.dragonmeow.nyanlex.translate.TextFilter.shouldTranslate(
                 "⟦0⟧ n6400", "zh-TW"), "a real short machine code stays untranslated");
 
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
@@ -228,7 +228,7 @@ class DoNotTranslateTermsTest {
     void unmaskedListedPlayerIdStillGuardsTheDisplay() {
         // "Steve說…" keeps Steve inside one Unicode word, so only Alex is masked; the
         // pre-1.0.7 R17 scan must still refuse a translation that rewrote Steve.
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         List<String> sent = new ArrayList<>();
@@ -259,7 +259,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void entriesThatAreNotUsedByGlueAreMaskedToo() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
@@ -284,7 +284,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void possessiveAfterAProtectedTermOrPlayerNameStillDisplays() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
@@ -310,7 +310,7 @@ class DoNotTranslateTermsTest {
         assertEquals("歡迎來到 SkyBlock！",
                 NameMasker.unmask("歡迎來到 ⟦ 0 ⟧！", List.of("SkyBlock")));
 
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("skyblock");
@@ -324,7 +324,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void translationThatLostATermNeverDisplaysAndSelfHealsOnlyOnce() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
@@ -353,7 +353,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void addingOrRemovingATermNeedsNoCacheClear() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         List<String> sent = new ArrayList<>();
@@ -395,7 +395,7 @@ class DoNotTranslateTermsTest {
         assertEquals("⟦0⟧", same.text());
         assertEquals(List.of("SkyBlock"), same.names(), "one span, one placeholder");
 
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("skyblock");
@@ -410,7 +410,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void termsApplyEvenWhenPlayerNameProtectionIsOff() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.protectPlayerNames = false;
@@ -427,7 +427,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void termInsideAColourRunIsMaskedAndChatKeepsItsColours() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
@@ -445,7 +445,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void questWidgetLiveScreenTextUsesTheSameMaskedKeyAsItsRenderLookup() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.screenTextMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("skyblock");
@@ -483,7 +483,7 @@ class DoNotTranslateTermsTest {
                 return out;
             }
         };
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.doNotTranslateTerms.add("SkyBlock");
@@ -498,7 +498,7 @@ class DoNotTranslateTermsTest {
 
     @Test
     void itemNameCorrectionRequestsItsSuffixMasked() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = true;
         cfg.doNotTranslateTerms.add("SkyBlock");
@@ -525,7 +525,7 @@ class DoNotTranslateTermsTest {
     @Test
     void chatRequestProfileTracksTheTermList() {
         for (boolean aiChat : new boolean[] {false, true}) {
-            TranslatorConfig cfg = new TranslatorConfig();
+            TranslatorConfig cfg = TestConfigs.translating();
             cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
             cfg.aiChat = aiChat;
             ChatRequestProfile none = ChatRequestProfile.capture(cfg, cfg.targetLang);

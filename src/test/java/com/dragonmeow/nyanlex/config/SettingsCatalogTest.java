@@ -46,10 +46,10 @@ class SettingsCatalogTest {
 
     @Test
     void entryCountsPerPage() {
-        assertEquals(4, SettingsCatalog.entries(SettingsPage.GENERAL).size());
+        assertEquals(3, SettingsCatalog.entries(SettingsPage.GENERAL).size());
         assertEquals(18, SettingsCatalog.entries(SettingsPage.DISPLAY).size());
         assertEquals(9, SettingsCatalog.rows(SettingsPage.DISPLAY).size());
-        assertEquals(4, SettingsCatalog.entries(SettingsPage.AI).size());
+        assertEquals(3, SettingsCatalog.entries(SettingsPage.AI).size());
         assertEquals(6, SettingsCatalog.entries(SettingsPage.REQUESTS).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.HUB).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
@@ -97,14 +97,14 @@ class SettingsCatalogTest {
     void masterSwitchOnMeansRequestsAllowed() {
         TranslatorConfig cfg = new TranslatorConfig();
         SettingEntry master = SettingsCatalog.byId("master");
-        assertTrue(cfg.translationRequestsEnabled);
-        assertEquals(SettingsCatalog.STATE_ON, master.state(cfg).key());
+        assertFalse(cfg.translationRequestsEnabled, "fresh install: off");
+        assertEquals(SettingsCatalog.STATE_OFF, master.state(cfg).key());
         assertEquals(SettingEntry.SideEffect.CLEAR_PENDING, master.sideEffect());
         master.press(cfg);
-        assertFalse(cfg.translationRequestsEnabled);
-        assertEquals(SettingsCatalog.STATE_OFF, master.state(cfg).key());
-        master.press(cfg);
         assertTrue(cfg.translationRequestsEnabled);
+        assertEquals(SettingsCatalog.STATE_ON, master.state(cfg).key());
+        master.press(cfg);
+        assertFalse(cfg.translationRequestsEnabled);
     }
 
     @Test
@@ -126,17 +126,17 @@ class SettingsCatalogTest {
     }
 
     @Test
-    void displayModeCyclesLikeDisplayModeNext() {
+    void displayModeButtonCyclesOriginalBothTranslation() {
         TranslatorConfig cfg = new TranslatorConfig();
         SettingEntry chat = SettingsCatalog.byId("chat");
-        cfg.chatMode = DisplayMode.TRANSLATION;
+        cfg.chatMode = DisplayMode.ORIGINAL_ONLY;
         chat.press(cfg);
         assertEquals(DisplayMode.BOTH, cfg.chatMode);
         assertEquals(SettingsCatalog.STATE_BOTH, chat.state(cfg).key());
         chat.press(cfg);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, cfg.chatMode);
-        chat.press(cfg);
         assertEquals(DisplayMode.TRANSLATION, cfg.chatMode);
+        chat.press(cfg);
+        assertEquals(DisplayMode.ORIGINAL_ONLY, cfg.chatMode);
     }
 
     @Test
@@ -163,7 +163,7 @@ class SettingsCatalogTest {
         assertTrue(cfg.aiScreenText);
         assertFalse(cfg.aiChat);
         assertFalse(cfg.aiTooltip);
-        assertFalse(cfg.aiScreenScan);
+        assertNull(SettingsCatalog.byId("screen_scan"), "the 介面掃描 card is gone: P uses the 介面 engine");
     }
 
     @Test
@@ -227,7 +227,7 @@ class SettingsCatalogTest {
         // pressing a non-config entry never touches the config
         TranslatorConfig cfg = new TranslatorConfig();
         SettingsCatalog.byId("clear_cache").press(cfg);
-        assertTrue(cfg.translationRequestsEnabled);
+        assertFalse(cfg.translationRequestsEnabled);
     }
 
     @Test
@@ -251,6 +251,14 @@ class SettingsCatalogTest {
         TranslatorConfig cfg = TranslatorConfig.fromReader(new java.io.StringReader(
                 "{\"hubShareConsent\":true,\"hubIntroSeen\":true,\"hubStartupPromptDisabled\":true}"));
         assertTrue(cfg.hubStartupPromptDisabled, "known fields still load; removed ones are ignored");
+    }
+
+    @Test
+    void oldConfigWithTheRemovedScreenScanFieldStillLoadsAndKeepsTheScreenEngine() {
+        TranslatorConfig cfg = TranslatorConfig.fromReader(new java.io.StringReader(
+                "{\"aiScreenScan\":true,\"aiScreenText\":false,\"settingsIntroSeen\":true}"));
+        assertFalse(cfg.aiScreenText, "the removed 介面掃描 field is ignored; P follows aiScreenText");
+        assertTrue(cfg.settingsIntroSeen);
     }
 
     @Test

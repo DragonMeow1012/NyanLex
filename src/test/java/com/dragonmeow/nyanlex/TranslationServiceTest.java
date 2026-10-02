@@ -28,13 +28,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TranslationServiceTest {
 
     @Test
-    void explicitScreenRescanInvalidatesOnlyCapturedRowsAndUsesScanEngine() {
-        TranslatorConfig cfg = new TranslatorConfig();
+    void explicitScreenRescanInvalidatesOnlyCapturedRowsAndUsesScreenEngine() {
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.targetLang = "zh-TW";
         cfg.screenTextMode = DisplayMode.TRANSLATION;
-        cfg.aiScreenText = false;
-        cfg.aiScreenScan = true;
+        cfg.aiScreenText = true;
         AtomicInteger calls = new AtomicInteger();
         TranslationCache machine = new TranslationCache(inlineTranslator(new AtomicInteger()), cfg.targetLang, DIRECT, 100);
         TranslationCache ai = new TranslationCache(inlineTranslator(calls), cfg.targetLang, DIRECT, 100);
@@ -46,6 +45,49 @@ class TranslationServiceTest {
         assertEquals(1, calls.get());
         assertEquals("你好", service.translateScreenText("Hello").translated());
         assertEquals("鑽石劍", machine.getCached("Diamond Sword"));
+    }
+
+    @Test
+    void aFreshConfigSendsNothingFromAnySurface() {
+        for (boolean ai : new boolean[] {false, true}) {
+            TranslatorConfig cfg = new TranslatorConfig(); // fresh install: 送出翻譯請求 is OFF
+            cfg.screenTextMode = DisplayMode.TRANSLATION; // every surface shows translations ...
+            assertFalse(cfg.translationRequestsEnabled);
+            cfg.aiChat = cfg.aiTooltip = cfg.aiScoreboard = cfg.aiName = cfg.aiBossBar = cfg.aiTitle
+                    = cfg.aiActionBar = cfg.aiBook = cfg.aiScreenText = ai;
+            AtomicInteger calls = new AtomicInteger();
+            TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
+            List<String> texts = List.of("Hello", "Diamond Sword", "Welcome to the server");
+            for (String t : texts) {
+                s.translateChat(t);
+                s.translateItemLine(t);
+                s.translateHeld(t);
+                s.translateScoreboardLine(t);
+                s.translateUi(t);
+                s.translateBossBar(t);
+                s.translateTitle(t);
+                s.translateActionBar(t);
+                s.translateBook(t);
+                s.translateScreenText(t);
+                s.warmUp(t);
+                s.requestChatAsync(t, r -> { });
+                s.translateChatAsync(t, r -> { });
+                s.requestActionBarAsync(t, r -> { });
+                s.requestLiveScreenTextAsync(t, r -> { });
+            }
+            s.retranslate(texts);              // R
+            s.retranslateScreen(texts);        // P
+            s.warmTooltipBatch(texts);
+            s.warmTooltipBatchBackground(texts); // the warm-up path
+            s.requestItemLines(texts);
+            s.warmBookBatch(texts);
+            s.warmScoreboardBatch(texts);
+            s.warmNamesBatch(texts);
+            s.translateChatSegmentsAsync(texts, r -> { });
+            pump(s);
+            pump(s);
+            assertEquals(0, calls.get(), "ai=" + ai + ": no text may reach a translation service while the master switch is off");
+        }
     }
 
     private static final Executor DIRECT = Runnable::run;
@@ -78,7 +120,7 @@ class TranslationServiceTest {
 
     @Test
     void chatTranslationModeReplacesText() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
@@ -94,7 +136,7 @@ class TranslationServiceTest {
 
     @Test
     void chatBothModeUsesBlockFormat() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.BOTH;
         TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
@@ -111,7 +153,7 @@ class TranslationServiceTest {
 
     @Test
     void chatOriginalOnlyDoesNotTranslate() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.ORIGINAL_ONLY;
         AtomicInteger calls = new AtomicInteger();
@@ -124,7 +166,7 @@ class TranslationServiceTest {
 
     @Test
     void targetLanguageChangeNotifiesVisibleSurfaceOnce() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
         AtomicInteger changes = new AtomicInteger();
@@ -140,7 +182,7 @@ class TranslationServiceTest {
 
     @Test
     void actionBarMissCompletesAsynchronouslyAndReusesNumberTemplate() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.actionBarMode = DisplayMode.TRANSLATION;
         cfg.aiActionBar = false;
@@ -164,7 +206,7 @@ class TranslationServiceTest {
 
     @Test
     void perSurfaceModesAreIndependent() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.ORIGINAL_ONLY;   // chat off
         cfg.tooltipMode = DisplayMode.TRANSLATION;  // items on
@@ -180,7 +222,7 @@ class TranslationServiceTest {
 
     @Test
     void alreadyChineseIsLeftAlone() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         AtomicInteger calls = new AtomicInteger();
         TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
@@ -191,7 +233,7 @@ class TranslationServiceTest {
 
     @Test
     void itemTooltipShowsOriginalFirstThenTranslationAfterCacheFills() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -218,7 +260,7 @@ class TranslationServiceTest {
 
     @Test
     void japaneseItemLocaleDisambiguatesAllHanItemWithoutAffectingChat() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -240,7 +282,7 @@ class TranslationServiceTest {
 
     @Test
     void renderPathNeverBlocks() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         AtomicInteger calls = new AtomicInteger();
         // Manual executor we deliberately never drain -> proves the render path never blocks.
@@ -255,7 +297,7 @@ class TranslationServiceTest {
 
     @Test
     void requestChatAsyncDeliversTranslation() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
         List<String> got = new ArrayList<>();
@@ -267,7 +309,7 @@ class TranslationServiceTest {
 
     @Test
     void oneShotMarkedChatWaitsForExactStyleProjectionAfterPlainCacheHit() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         List<String> sent = new ArrayList<>();
         Translator translator = (text, target) -> {
@@ -294,7 +336,7 @@ class TranslationServiceTest {
 
     @Test
     void wantsChatTranslationRespectsTogglesAndFilter() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
         assertTrue(s.wantsChatTranslation("Hello"));
@@ -307,7 +349,7 @@ class TranslationServiceTest {
 
     @Test
     void playerNamesNeverLeaveTheClientAndComeBackVerbatim() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         List<String> sent = new ArrayList<>();
         Translator t = (text, target) -> {
@@ -332,7 +374,7 @@ class TranslationServiceTest {
 
     @Test
     void surfacesShowingAPlayerNameAreLeftAlone() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         AtomicInteger calls = new AtomicInteger();
         TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
@@ -345,7 +387,7 @@ class TranslationServiceTest {
 
     @Test
     void nameTagsTranslateEverythingButRestorePlayerNames() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         List<String> sent = new ArrayList<>();
         Translator t = (text, target) -> {
@@ -371,7 +413,7 @@ class TranslationServiceTest {
 
     @Test
     void cacheHitWithoutAProtectedNameDoesNotRescanProtectedNames() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         AtomicInteger nameSnapshots = new AtomicInteger();
         TranslationService s = service(cfg, inlineTranslator(new AtomicInteger()), DIRECT);
@@ -390,7 +432,7 @@ class TranslationServiceTest {
 
     @Test
     void protectedNameVerificationReusesTheSuppliedSet() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         Set<String> containsOnly = new AbstractSet<>() {
             @Override
@@ -422,7 +464,7 @@ class TranslationServiceTest {
 
     @Test
     void translatedTooltipColumnGapCollapsesButScoreboardKeepsItsLayout() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
@@ -450,7 +492,7 @@ class TranslationServiceTest {
 
     @Test
     void numericTooltipValuesAreNotTranslated() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         AtomicInteger calls = new AtomicInteger();
         TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
@@ -463,7 +505,7 @@ class TranslationServiceTest {
 
     @Test
     void calendarDateSharesOneTranslatorCallAcrossDatesAndLocalizesOnlyForZhDisplay() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -487,7 +529,7 @@ class TranslationServiceTest {
 
     @Test
     void nonChineseTargetNeverLocalizesTheCalendarDate() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.targetLang = "fr";
@@ -504,7 +546,7 @@ class TranslationServiceTest {
 
     @Test
     void untranslatedCalendarDateIsNeverLocalized() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -532,7 +574,7 @@ class TranslationServiceTest {
                 return out;
             }
         };
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         TranslationService s = service(cfg, fake, DIRECT);
@@ -571,7 +613,7 @@ class TranslationServiceTest {
                         .replace("Bits", "比特").replace("Gems", "寶石"), "en");
             }
         };
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         TranslationService service = service(cfg, fake, DIRECT);
@@ -603,7 +645,7 @@ class TranslationServiceTest {
             };
             return new TranslationResult(out, "en");
         };
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         TranslationService s = service(cfg, poison, DIRECT);
@@ -631,7 +673,7 @@ class TranslationServiceTest {
         // while carrying a distinct request key — exactly the 429 request-storm pattern.
         // (★-style icon runs no longer churn at all: TemplateText slots them, so those
         // variants share ONE key — punctuation runs are what is left for the guard.)
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.churnGuard = true;
@@ -653,7 +695,7 @@ class TranslationServiceTest {
     void churnGuardDisabledTranslatesEveryVariant() {
         // config.churnGuard=false is the safety valve: if the detector ever misfires on a
         // real server, turning it off must restore translate-everything behaviour.
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.churnGuard = false;
@@ -677,7 +719,7 @@ class TranslationServiceTest {
         // render lookup queries — otherwise a warmed line containing a player name misses
         // on its first frame, is bought a SECOND time, and flashes the original until the
         // extra round trip lands.
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -702,7 +744,7 @@ class TranslationServiceTest {
     void wholeLinePlayerNameIsNeverBoughtByTheTooltipWarm() {
         // Preserved protection: a line that IS just a protected player name must neither
         // be bought by the warm (money) nor translated by the render (IDs stay verbatim).
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -726,7 +768,7 @@ class TranslationServiceTest {
         // window); the hovered tooltip's warm dispatches to the worker IMMEDIATELY. Even
         // when the background line was enqueued FIRST, the hover line's request is the
         // first to exist and complete.
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.scoreboardMode = DisplayMode.TRANSLATION;
         cfg.tooltipMode = DisplayMode.TRANSLATION;
@@ -753,7 +795,7 @@ class TranslationServiceTest {
 
     @Test
     void repeatedHoverFramesDoNotEnqueueDuplicates() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -776,7 +818,7 @@ class TranslationServiceTest {
     void retranslateReallyRebuysAStyledLine() {
         // User bug: R felt like a no-op. The de-styled tier-2 copy survived invalidate,
         // kept serving the OLD value and made the re-warm skip the purchase entirely.
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -803,7 +845,7 @@ class TranslationServiceTest {
         // back), so the title never displayed its translation, never stored its raw alias,
         // and was re-bought on every encounter — while an icon-free line worked fine.
         String title = " Heroic Spirit Sceptre ✪✪✪✪✪";
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -830,7 +872,7 @@ class TranslationServiceTest {
 
     @Test
     void mangledListedNameRevertsToOriginalAndSelfHealsOnce() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -864,7 +906,7 @@ class TranslationServiceTest {
 
     @Test
     void listedNameKeptVerbatimStillDisplays() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         AtomicInteger calls = new AtomicInteger();
@@ -885,7 +927,7 @@ class TranslationServiceTest {
 
     @Test
     void inconsistentHeldItemNameIsDeterministicallyDerivedFromTooltipTitle() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = true;
         AtomicInteger contextualNameCalls = new AtomicInteger();
@@ -945,7 +987,7 @@ class TranslationServiceTest {
 
     @Test
     void aiAndGtSurfaceSettingsUseDifferentEnginePaths() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -977,7 +1019,7 @@ class TranslationServiceTest {
 
     @Test
     void existingGtCacheStaysHiddenUntilAiActuallyFailsThenAiRecoveryWins() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -1018,7 +1060,7 @@ class TranslationServiceTest {
 
     @Test
     void strictAiModeNeverFallsBackToGtAndRecoversOnAi() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -1054,7 +1096,7 @@ class TranslationServiceTest {
 
     @Test
     void gtModeFailureNeverStartsAi() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = false;
@@ -1078,7 +1120,7 @@ class TranslationServiceTest {
 
     @Test
     void afterBothFailGtMayDisplayFirstButAiStillBecomesFinal() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -1115,7 +1157,7 @@ class TranslationServiceTest {
 
     @Test
     void exactStyleChatCallbackUpgradesGtToRecoveredAiSpanResult() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -1166,7 +1208,7 @@ class TranslationServiceTest {
 
     @Test
     void exactStyleChatDoesNotRetryInBackgroundAndHealsWhenSeenAgain() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -1216,7 +1258,7 @@ class TranslationServiceTest {
 
     @Test
     void styleFallbackPrefixSurvivesOuterWhitespaceRestoration() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.chatMode = DisplayMode.TRANSLATION;
         cfg.aiChat = true;
@@ -1245,9 +1287,9 @@ class TranslationServiceTest {
 
     @Test
     void screenTextMissStillDeliversExactlyOnce() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
-        cfg.aiScreenScan = true;
+        cfg.aiScreenText = true;
         AtomicInteger aiCalls = new AtomicInteger();
         AtomicInteger gtCalls = new AtomicInteger();
         TranslationCache gt = new TranslationCache((text, target) -> {
@@ -1272,9 +1314,9 @@ class TranslationServiceTest {
 
     @Test
     void gtOnlyScreenTextPathIsUnchanged() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
-        cfg.aiScreenScan = false;
+        cfg.aiScreenText = false;
         AtomicInteger aiCalls = new AtomicInteger();
         TranslationCache gt = new TranslationCache((text, target) ->
                 new TranslationResult("機器譯文", "en"), cfg.targetLang, DIRECT, 100);

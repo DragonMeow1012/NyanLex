@@ -40,7 +40,7 @@ class RarityLineTranslationTest {
     }
 
     private static TranslatorConfig zhTwConfig() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.targetLang = "zh-TW";
         return cfg;
@@ -149,7 +149,7 @@ class RarityLineTranslationTest {
 
     @Test
     void nonChineseTargetFallsThroughToTheOrdinaryTranslator() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.targetLang = "fr-FR";
         AtomicInteger calls = new AtomicInteger();
@@ -171,7 +171,7 @@ class RarityLineTranslationTest {
     @Test
     void simplifiedChineseTargetFallsThroughToTheOrdinaryTranslator() {
         // P1.7 is scoped to zh_TW/zh_HK; zh_CN keeps going through the ordinary path.
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.targetLang = "zh-CN";
         AtomicInteger calls = new AtomicInteger();

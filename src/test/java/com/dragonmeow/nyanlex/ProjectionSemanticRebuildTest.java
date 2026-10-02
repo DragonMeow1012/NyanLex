@@ -126,7 +126,7 @@ class ProjectionSemanticRebuildTest {
     }
 
     private static TranslatorConfig aiConfig() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.targetLang = "zh-TW";
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.chatMode = DisplayMode.TRANSLATION;

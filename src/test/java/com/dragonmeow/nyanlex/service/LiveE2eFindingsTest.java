@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.service;
 
 import com.dragonmeow.nyanlex.cache.TranslationCache;
 import com.dragonmeow.nyanlex.config.DisplayMode;
+import com.dragonmeow.nyanlex.TestConfigs;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.translate.AiSettings;
 import com.dragonmeow.nyanlex.translate.HttpTransport;
@@ -111,7 +112,7 @@ class LiveE2eFindingsTest {
     private static TranslationService service(FakeAi ai, TranslationDebugLog log, DisplayMode tooltipMode) {
         OpenAiTranslator translator = new OpenAiTranslator(ai,
                 () -> new AiSettings("https://api.openai.com/v1", "gpt-4o-mini", List.of("key-1")));
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.targetLang = TARGET;
         cfg.tooltipMode = tooltipMode;
         cfg.aiTooltip = true;

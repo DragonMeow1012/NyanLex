@@ -37,7 +37,6 @@ public final class Fabric26ConfigScreen extends Screen {
     private static final long STATUS_MS = 4_000L;
 
     private final Screen parent;
-    private final boolean showIntro;
     private final SettingsPanel panel;
     private final Host host = new Host();
     private final Canvas canvas = new Canvas();
@@ -47,12 +46,6 @@ public final class Fabric26ConfigScreen extends Screen {
     public Fabric26ConfigScreen(Screen parent) {
         super(Component.translatable(SettingsCatalog.KEY_TITLE));
         this.parent = parent;
-        TranslatorConfig cfg = NyanLexFabric26.config();
-        this.showIntro = !cfg.settingsIntroSeen;
-        if (showIntro) {
-            cfg.settingsIntroSeen = true;
-            NyanLexFabric26.saveConfig();
-        }
         this.panel = new SettingsPanel(host);
     }
 
@@ -172,8 +165,6 @@ public final class Fabric26ConfigScreen extends Screen {
             }
         }
 
-        @Override public boolean showIntro() { return showIntro; }
-
         @Override public String modVersion() { return NyanLexFabric26.modVersion(); }
 
         @Override
@@ -216,7 +207,6 @@ public final class Fabric26ConfigScreen extends Screen {
         switch (action) {
             case OPEN_LANGUAGE -> open(new Fabric26LanguageScreen(this));
             case OPEN_KEYBINDS -> open(new Fabric26KeybindScreen(this));
-            case OPEN_HELP -> open(new Fabric26HelpScreen(this));
             case OPEN_AI -> open(new Fabric26AiScreen(this));
             case OPEN_PROVIDER -> open(new Fabric26ProviderScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new Fabric26RequestsScreen(this));

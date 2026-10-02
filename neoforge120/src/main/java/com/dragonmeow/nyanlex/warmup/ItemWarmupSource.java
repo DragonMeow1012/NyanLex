@@ -10,7 +10,7 @@ public interface ItemWarmupSource {
     /** Number of registered items the source will enumerate. */
     int totalItemCount();
 
-    /** Whether tooltips can currently be probed (a world and player exist). */
+    /** Whether tooltips can currently be probed (the item registry is ready; a world is not required). */
     boolean isAvailable();
 
     /** Probe up to {@code maxItems} further items; empty once {@link #isExhausted()}. */

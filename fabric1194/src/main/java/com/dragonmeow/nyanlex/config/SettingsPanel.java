@@ -24,8 +24,7 @@ public final class SettingsPanel {
     public static final class State {
         SettingsCategory category = SettingsCategory.GENERAL;
         final Map<SettingsCategory, Integer> scroll = new EnumMap<>(SettingsCategory.class);
-        final Set<String> expanded = new HashSet<>(Set.of("chat"));
-        boolean introDismissed;
+        final Set<String> expanded = new HashSet<>();
     }
 
     private static final State SESSION = new State();
@@ -77,6 +76,7 @@ public final class SettingsPanel {
     static final int C_WARN = 0xFFFFD75E;
     static final int C_GOOD = 0xFF7FE08F;
     static final int C_TRACK = 0xFF2A2E3C;
+    static final int C_NOTICE = 0xC03A3118;
 
     // ------------------------------------------------------------------ metrics
 
@@ -114,10 +114,6 @@ public final class SettingsPanel {
     private int cx, cy, cw;
     private int searchW;
     private int listX, listY, listW, listH;
-    private int introY;
-    private boolean introShown;
-    private List<String> introLines = List.of();
-    private int introH;
 
     private final StringBuilder query = new StringBuilder();
     private int caret;
@@ -161,6 +157,8 @@ public final class SettingsPanel {
         boolean stacked;
         int ctrlW;
         int ctrlH;
+        /** SURFACE / BULK cards: width of each button (shrunk to fit when the card is stacked). */
+        int[] multiW;
         /** FILE cards: index of the path line inside {@link #desc} (-1 otherwise) and the full path. */
         int pathLine = -1;
         String fullPath;
@@ -205,20 +203,8 @@ public final class SettingsPanel {
         cy = py + INNER;
         cw = px + pw - INNER - cx;
         searchW = cw - HELP_W - 4;
-        introLines = List.of();
-        if (host.showIntro() && !state.introDismissed) {
-            List<String> lines = UiText.wrap(host.text(SettingsCatalog.KEY_INTRO), cw, host::textWidth);
-            if (lines.size() > 2) {
-                lines = new ArrayList<>(lines.subList(0, 2));
-                lines.set(1, UiText.fit(lines.get(1) + "…", cw, host::textWidth));
-            }
-            introLines = lines;
-        }
-        introShown = !introLines.isEmpty();
-        introH = introShown ? introLines.size() * LINE_H + 4 : 0;
-        introY = cy + SEARCH_H + 3;
         listX = cx;
-        listY = cy + SEARCH_H + 4 + introH;
+        listY = cy + SEARCH_H + 4;
         listW = cw;
         listH = py + ph - INNER - listY;
         dirty = true;
@@ -298,9 +284,13 @@ public final class SettingsPanel {
         measureControl(r);
         boolean hasCtrl = r.ctrlW > 0;
         int textColW = inner - r.ctrlW - 8;
-        r.stacked = card.kind() == SettingCard.Kind.WARMUP || (hasCtrl && textColW < 112);
+        r.stacked = card.kind() == SettingCard.Kind.WARMUP || card.kind() == SettingCard.Kind.NOTICE
+                || (hasCtrl && textColW < 112);
+        if (r.multiW != null && r.stacked && r.ctrlW > inner) shrinkMulti(r, inner);
+        if (card.kind() == SettingCard.Kind.NOTICE && r.ctrlW > inner) r.ctrlW = inner;
         int textW = r.stacked || !hasCtrl ? inner : textColW;
-        String desc = card.kind() == SettingCard.Kind.INFO ? aboutText(card) : SettingsModel.description(card, lang);
+        String desc = card.kind() == SettingCard.Kind.INFO && card.id().equals("about_info")
+                ? aboutText(card) : SettingsModel.description(card, lang);
         r.desc = UiText.wrap(desc, textW, host::textWidth);
         if (card.kind() == SettingCard.Kind.FILE) {
             r.file = fileEntry(card);
@@ -364,11 +354,73 @@ public final class SettingsPanel {
                 r.ctrlW = Math.max(46, Math.min(112, host.textWidth(host.text(SettingsModel.KEY_BTN_OPEN)) + 14));
                 r.ctrlH = 14;
             }
+            case NOTICE -> {
+                r.ctrlW = 24 + 6 + host.textWidth(noticeSwitchText(card.entry(), cfg));
+                r.ctrlH = 12;
+            }
+            case SURFACE, BULK -> {
+                r.multiW = multiWidths(card);
+                r.ctrlW = totalWidth(r.multiW);
+                r.ctrlH = 14;
+            }
             default -> {
                 r.ctrlW = 0;
                 r.ctrlH = 0;
             }
         }
+    }
+
+    static final int MULTI_GAP = 4;
+
+    /** The privacy card's switch caption, e.g. "送出翻譯請求：關". */
+    private String noticeSwitchText(SettingEntry entry, TranslatorConfig cfg) {
+        return host.text(entry.labelKey(), host.text(entry.isOn(cfg) ? SettingsCatalog.STATE_ON : SettingsCatalog.STATE_OFF));
+    }
+
+    private static int totalWidth(int[] ws) {
+        int total = (ws.length - 1) * MULTI_GAP;
+        for (int w : ws) total += w;
+        return total;
+    }
+
+    /** Scales the buttons down so that they fit {@code avail} pixels (their text gets shortened). */
+    private static void shrinkMulti(Row r, int avail) {
+        int n = r.multiW.length;
+        int room = Math.max(n * 12, avail - (n - 1) * MULTI_GAP);
+        int natural = totalWidth(r.multiW) - (n - 1) * MULTI_GAP;
+        int[] scaled = new int[n];
+        for (int i = 0; i < n; i++) scaled[i] = Math.max(12, r.multiW[i] * room / natural);
+        r.multiW = scaled;
+        r.ctrlW = totalWidth(scaled);
+    }
+
+    /** Widths of the buttons of a SURFACE (mode, engine) or BULK card. */
+    private int[] multiWidths(SettingCard card) {
+        if (card.kind() == SettingCard.Kind.SURFACE) {
+            int mode = 0;
+            for (StateText label : card.entry().options().labels()) mode = Math.max(mode, host.textWidth(resolve(label)));
+            int engine = Math.max(host.textWidth(resolve(SettingsCatalog.engineState(true))),
+                    host.textWidth(resolve(SettingsCatalog.engineState(false))));
+            return new int[] {Math.max(34, mode + 12), Math.max(32, engine + 12)};
+        }
+        int[] ws = new int[card.buttons().size()];
+        for (int i = 0; i < ws.length; i++) {
+            ws[i] = Math.max(36, host.textWidth(host.text(card.buttons().get(i).labelKey())) + 8);
+        }
+        return ws;
+    }
+
+    /** Button rectangles of a SURFACE / BULK card, left to right, inside its control area. */
+    private int[][] multiRects(Row r) {
+        int[] rc = controlRect(r);
+        int[] ws = r.multiW;
+        int[][] out = new int[ws.length][];
+        int x = rc[0];
+        for (int i = 0; i < ws.length; i++) {
+            out[i] = new int[] {x, rc[1], ws[i], rc[3]};
+            x += ws[i] + MULTI_GAP;
+        }
+        return out;
     }
 
     private String toggleStateText(SettingEntry entry, TranslatorConfig cfg) {
@@ -384,7 +436,24 @@ public final class SettingsPanel {
         if (override != null) return override;
         StateText st = entry.state(host.config());
         if (st != null) return resolve(st);
-        if (entry.type() == SettingEntry.Type.SUBSCREEN) return host.text(SettingsModel.KEY_BTN_OPEN);
+        SettingAction action = entry.action();
+        if (action != null) {
+            switch (action) {
+                case OPEN_DO_NOT_TRANSLATE:
+                    return host.text(SettingsModel.KEY_BTN_EDIT);
+                case HUB_DOWNLOAD:
+                    return host.text(SettingsModel.KEY_BTN_DETECT);
+                case HUB_OPEN_REPO:
+                    return host.text(SettingsModel.KEY_BTN_OPEN);
+                case EXPORT_TRANSLATIONS:
+                    return host.text(SettingsModel.KEY_BTN_EXPORT);
+                case IMPORT_TRANSLATIONS:
+                    return host.text(SettingsModel.KEY_BTN_IMPORT);
+                default:
+                    break;
+            }
+        }
+        if (entry.type() == SettingEntry.Type.SUBSCREEN) return host.text(SettingsModel.KEY_BTN_SETTINGS);
         return host.text(entry.destructive() ? SettingsModel.KEY_BTN_CLEAR : SettingsModel.KEY_BTN_RUN);
     }
 
@@ -469,12 +538,6 @@ public final class SettingsPanel {
 
         drawSidebar(c, mx, my, searching);
         drawSearch(c, mx, my);
-        if (introShown) {
-            for (int i = 0; i < introLines.size(); i++) {
-                String hint = introLines.get(i);
-                c.text(hint, cx + (cw - host.textWidth(hint)) / 2, introY + 1 + i * LINE_H, C_WARN);
-            }
-        }
 
         c.pushClip(listX, listY, listW, listH);
         if (rows.isEmpty() && searching) {
@@ -642,8 +705,9 @@ public final class SettingsPanel {
         int y = rowScreenY(r);
         boolean hover = in(mx, my, cardX, y, cardW, r.h) && in(mx, my, listX, listY, listW, listH)
                 && openDropdownId == null;
-        rrect(c, cardX, y, cardW, r.h, hover ? C_CARD_HOVER : C_CARD);
-        border(c, cardX, y, cardW, r.h, C_CARD_EDGE);
+        boolean notice = card.kind() == SettingCard.Kind.NOTICE;
+        rrect(c, cardX, y, cardW, r.h, notice ? C_NOTICE : hover ? C_CARD_HOVER : C_CARD);
+        border(c, cardX, y, cardW, r.h, notice ? C_WARN : C_CARD_EDGE);
         if (r.indent > 0) c.fill(listX + 2, y - 1, 1, r.h + CARD_GAP, C_PANEL_EDGE);
 
         int tx = cardX + CARD_PAD;
@@ -676,6 +740,9 @@ public final class SettingsPanel {
             case SLIDER -> drawSlider(c, r, mx, my);
             case BUTTON -> drawButton(c, r, mx, my);
             case FILE -> drawFileButton(c, r, mx, my);
+            case NOTICE -> drawNoticeSwitch(c, r, mx, my);
+            case SURFACE -> drawSurface(c, r, mx, my);
+            case BULK -> drawBulk(c, r, mx, my);
             case WARMUP -> drawWarmup(c, r, ty, mx, my);
             default -> { }
         }
@@ -684,6 +751,10 @@ public final class SettingsPanel {
 
     private void drawTitle(UiCanvas c, Row r, int x, int y, int maxW) {
         String title = UiText.fit(r.title, maxW, host::textWidth);
+        if (r.card.kind() == SettingCard.Kind.NOTICE) {
+            c.text(title, x, y, C_WARN);
+            return;
+        }
         String[] words = SettingsModel.tokens(query.toString());
         String lower = title.toLowerCase(java.util.Locale.ROOT);
         int ms = -1;
@@ -822,6 +893,56 @@ public final class SettingsPanel {
         rrect(c, rc[0], rc[1], rc[2], rc[3], bg);
         String label = UiText.fit(buttonText(e), rc[2] - 8, host::textWidth);
         c.text(label, rc[0] + (rc[2] - host.textWidth(label)) / 2, rc[1] + 3, enabled ? C_TITLE : C_DISABLED_TEXT);
+    }
+
+    private void drawNoticeSwitch(UiCanvas c, Row r, int mx, int my) {
+        SettingEntry e = r.card.entry();
+        TranslatorConfig cfg = host.config();
+        boolean on = e.isOn(cfg);
+        int[] rc = controlRect(r);
+        rrect(c, rc[0], rc[1], 24, 12, on ? C_ON : C_OFF);
+        c.fill(on ? rc[0] + 14 : rc[0] + 2, rc[1] + 2, 8, 8, C_KNOB);
+        String caption = UiText.fit(noticeSwitchText(e, cfg), Math.max(20, rc[2] - 30), host::textWidth);
+        c.text(caption, rc[0] + 30, rc[1] + 2, on ? C_GOOD : C_WARN);
+    }
+
+    private static final int C_AI = 0xFF2E5E9E;
+    private static final int C_AI_HOVER = 0xFF3E72B8;
+
+    private void drawSurface(UiCanvas c, Row r, int mx, int my) {
+        SettingEntry mode = r.card.entry();
+        SettingEntry engine = r.card.engineEntry();
+        TranslatorConfig cfg = host.config();
+        int[][] rects = multiRects(r);
+        int[] m = rects[0];
+        boolean hoverMode = in(mx, my, m[0], m[1], m[2], m[3]);
+        rrect(c, m[0], m[1], m[2], m[3], hoverMode ? C_BUTTON_HOVER : C_BUTTON);
+        int idx = Math.max(0, Math.min(mode.options().labels().size() - 1, mode.options().index().applyAsInt(cfg)));
+        int modeColor = idx == 0 ? C_GOOD : idx == 1 ? C_CRUMB : C_DESC;
+        centered(c, resolve(mode.options().labels().get(idx)), m, modeColor);
+        int[] e = rects[1];
+        boolean ai = engine.isOn(cfg);
+        boolean hoverEngine = in(mx, my, e[0], e[1], e[2], e[3]);
+        rrect(c, e[0], e[1], e[2], e[3], ai ? (hoverEngine ? C_AI_HOVER : C_AI) : (hoverEngine ? C_BUTTON_HOVER : C_BUTTON));
+        centered(c, resolve(engine.state(cfg)), e, C_TITLE);
+    }
+
+    private void drawBulk(UiCanvas c, Row r, int mx, int my) {
+        TranslatorConfig cfg = host.config();
+        int[][] rects = multiRects(r);
+        for (int i = 0; i < rects.length; i++) {
+            SettingCard.BulkButton b = r.card.buttons().get(i);
+            int[] rc = rects[i];
+            boolean hover = in(mx, my, rc[0], rc[1], rc[2], rc[3]);
+            boolean active = b.active().test(cfg);
+            rrect(c, rc[0], rc[1], rc[2], rc[3], active ? (hover ? C_AI_HOVER : C_AI) : (hover ? C_BUTTON_HOVER : C_BUTTON));
+            centered(c, host.text(b.labelKey()), rc, C_TITLE);
+        }
+    }
+
+    private void centered(UiCanvas c, String text, int[] rc, int color) {
+        String label = UiText.fit(text, rc[2] - 6, host::textWidth);
+        c.text(label, rc[0] + (rc[2] - host.textWidth(label)) / 2, rc[1] + 3, color);
     }
 
     private void drawFileButton(UiCanvas c, Row r, int mx, int my) {
@@ -1000,12 +1121,7 @@ public final class SettingsPanel {
         searchFocused = false;
         if (in(mx, my, cx + searchW + 4, cy, HELP_W, SEARCH_H)) {
             host.playClick();
-            host.runAction(SettingAction.OPEN_HELP);
-            return true;
-        }
-        if (introShown && in(mx, my, cx, introY, cw, introH)) {
-            state.introDismissed = true;
-            resize(screenW, screenH);
+            selectCategory(SettingsCategory.ABOUT); // the usage notes live in 關於
             return true;
         }
         // sidebar
@@ -1072,6 +1188,14 @@ public final class SettingsPanel {
                 host.sideEffect(e.sideEffect());
                 changed();
             }
+            case NOTICE -> {
+                // only the switch reacts; the text is just text
+                if (in(mx, my, rc[0], rc[1] - 1, rc[2], rc[3] + 2) && host.beforeToggle(e)) {
+                    e.press(host.config());
+                    host.sideEffect(e.sideEffect());
+                    changed();
+                }
+            }
             case DROPDOWN -> {
                 if (in(mx, my, rc[0] - 2, rc[1] - 2, rc[2] + 4, rc[3] + 4)) {
                     openDropdownId = card.id();
@@ -1091,6 +1215,26 @@ public final class SettingsPanel {
             }
             case FILE -> {
                 if (r.file != null && in(mx, my, rc[0], rc[1], rc[2], rc[3])) host.openFileLocation(r.file);
+            }
+            case SURFACE -> {
+                int[][] rects = multiRects(r);
+                if (in(mx, my, rects[0][0], rects[0][1], rects[0][2], rects[0][3])) {
+                    card.entry().press(host.config());
+                    changed();
+                } else if (in(mx, my, rects[1][0], rects[1][1], rects[1][2], rects[1][3])) {
+                    card.engineEntry().press(host.config());
+                    changed();
+                }
+            }
+            case BULK -> {
+                int[][] rects = multiRects(r);
+                for (int i = 0; i < rects.length; i++) {
+                    if (in(mx, my, rects[i][0], rects[i][1], rects[i][2], rects[i][3])) {
+                        card.buttons().get(i).apply().accept(host.config());
+                        changed();
+                        break;
+                    }
+                }
             }
             case WARMUP -> {
                 WarmupStatus st = host.warmupStatus();
@@ -1370,6 +1514,15 @@ public final class SettingsPanel {
         ensureLayout();
         Row r = rowById(cardId);
         return r == null ? null : controlRect(r);
+    }
+
+    /** Rectangle of the i-th button of a SURFACE / BULK card, or null. */
+    int[] buttonBounds(String cardId, int index) {
+        ensureLayout();
+        Row r = rowById(cardId);
+        if (r == null) return null;
+        int[][] rects = multiRects(r);
+        return index < rects.length ? rects[index] : null;
     }
 
     /** Rectangle of the i-th warm-up button, or null. */

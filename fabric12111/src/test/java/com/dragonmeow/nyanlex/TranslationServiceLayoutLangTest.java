@@ -52,7 +52,7 @@ class TranslationServiceLayoutLangTest {
 
     @Test
     void translationKeepsOriginalIndentation() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         TranslationService s = service(cfg);
@@ -66,7 +66,7 @@ class TranslationServiceLayoutLangTest {
 
     @Test
     void setTargetLangRetranslatesIntoTheNewLanguage() {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.aiTooltip = true; // AI engine: automatic item hover (see TranslationService#isManualItemTranslation)
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         TranslationService s = service(cfg);
@@ -84,7 +84,7 @@ class TranslationServiceLayoutLangTest {
 
     @Test
     void uiPrewriteOfSharedConfigStillSwitchesRuntimeCachesAndJapaneseStore(@TempDir Path dir) {
-        TranslatorConfig cfg = new TranslatorConfig();
+        TranslatorConfig cfg = TestConfigs.translating();
         cfg.tooltipMode = DisplayMode.TRANSLATION;
         cfg.aiTooltip = true;
         AtomicInteger calls = new AtomicInteger();

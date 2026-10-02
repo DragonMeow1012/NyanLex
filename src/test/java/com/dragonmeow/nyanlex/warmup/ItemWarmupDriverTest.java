@@ -1,6 +1,7 @@
 package com.dragonmeow.nyanlex.warmup;
 
 import com.dragonmeow.nyanlex.cache.TranslationCache;
+import com.dragonmeow.nyanlex.TestConfigs;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.translate.PriorityTranslationExecutor;
@@ -89,7 +90,7 @@ class ItemWarmupDriverTest {
     }
 
     private static TranslatorConfig cfg() {
-        TranslatorConfig c = new TranslatorConfig();
+        TranslatorConfig c = TestConfigs.translating();
         c.itemWarmupEnabled = true;
         c.itemWarmupChunkDelayMs = 3000;
         c.itemWarmupMaxItemsPerSession = 3000;
@@ -99,6 +100,56 @@ class ItemWarmupDriverTest {
     private static ItemWarmupDriver driver(FakeSource s, FakeBackend b, TranslatorConfig c,
                                            AtomicLong clock) {
         return new ItemWarmupDriver(s, b, () -> c, clock::get);
+    }
+
+    @Test
+    void itemsThatCannotBeProbedAreSkippedCountedAndFilledByTheNextRun() {
+        // Title screen: no world, so a mod item whose tooltip needs world data comes back "failed".
+        List<ItemWarmupTarget> list = new ArrayList<>(items(10));
+        list.set(3, ItemWarmupTarget.failed("mod:item3", "mod"));
+        list.set(7, ItemWarmupTarget.failed("mod:item7", "mod"));
+        FakeSource source = new FakeSource(list);
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        TranslatorConfig c = cfg();
+        ItemWarmupDriver d = driver(source, backend, c, clock);
+        assertTrue(d.start());
+        for (int i = 0; i < 20 && d.state() == ItemWarmupDriver.State.RUNNING; i++) {
+            d.tick();
+            clock.addAndGet(60_000);
+        }
+        assertEquals(ItemWarmupDriver.State.DONE, d.state());
+        assertEquals(2, d.progress().skippedFailed());
+        assertEquals(8, d.progress().submittedItems());
+        assertFalse(backend.ready.contains("Item 3"), "a skipped item is never submitted");
+
+        // Inside a world the same items now build: only the missing ones are sent, cached ones are skipped.
+        source.items.set(3, item(3));
+        source.items.set(7, item(7));
+        d = driver(source, backend, c, clock);
+        assertTrue(d.start());
+        for (int i = 0; i < 20 && d.state() == ItemWarmupDriver.State.RUNNING; i++) {
+            d.tick();
+            clock.addAndGet(60_000);
+        }
+        assertEquals(ItemWarmupDriver.State.DONE, d.state());
+        assertEquals(0, d.progress().skippedFailed());
+        assertEquals(2, d.progress().submittedItems());
+        assertEquals(8, d.progress().skippedCached());
+        assertTrue(backend.ready.contains("Item 3") && backend.ready.contains("Item 7"));
+    }
+
+    @Test
+    void runsWithoutAWorldBecauseTheSourceOnlyNeedsTheRegistry() {
+        FakeSource source = new FakeSource(items(5));
+        source.available = true; // registry ready at the title screen; no level or player involved
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        ItemWarmupDriver d = driver(source, backend, cfg(), clock);
+        assertTrue(d.start());
+        d.tick();
+        assertEquals(ItemWarmupDriver.State.DONE, d.state());
+        assertEquals(5, d.progress().submittedItems());
     }
 
     @Test
@@ -362,7 +413,7 @@ class ItemWarmupDriverTest {
         CountDownLatch finished = new CountDownLatch(3);
         List<String> order = new CopyOnWriteArrayList<>();
         try {
-            TranslatorConfig c = new TranslatorConfig();
+            TranslatorConfig c = TestConfigs.translating();
             c.aiTooltip = true;
             TranslationCache gt = new TranslationCache((text, target) -> new TranslationResult("G:" + text, "en"),
                     c.targetLang, Runnable::run, 1000);
