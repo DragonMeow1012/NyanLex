@@ -730,6 +730,22 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return true;
     }
 
+    /** Result messages of the mod: the action bar in game, a toast on menu screens - never the chat. */
+    static void notifyUser(final String message) {
+        final Minecraft mc = Minecraft.getInstance();
+        mc.execute(new Runnable() {
+            @Override public void run() {
+                if (mc.level != null && mc.screen == null && mc.gui != null) {
+                    mc.gui.setOverlayMessage(new TextComponent(message), false);
+                } else {
+                    net.minecraft.client.gui.components.toasts.SystemToast.addOrUpdate(mc.getToasts(),
+                            net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds.WORLD_BACKUP,
+                            new TextComponent("NyanLex Translator"), new TextComponent(message));
+                }
+            }
+        });
+    }
+
     static void translationFile(boolean importing) {
         Minecraft mc = Minecraft.getInstance();
         final String target = currentTarget(mc);
@@ -737,7 +753,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         com.dragonmeow.nyanlex.translate.TranslationFileDialog.open(importing,
                 () -> TRANSLATOR.exportTranslations(target, snapshot),
                 file -> TRANSLATOR.importTranslations(file, target, snapshot),
-                message -> mc.execute(() -> mc.gui.getChat().addMessage(new TextComponent(message))));
+                message -> notifyUser(message));
     }
 
     public static boolean beginInternalRender() {

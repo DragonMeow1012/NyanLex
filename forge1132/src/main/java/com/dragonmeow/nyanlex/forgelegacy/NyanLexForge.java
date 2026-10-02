@@ -145,6 +145,22 @@ public final class NyanLexForge {
         }
     }
 
+    /** Result messages of the mod: the action bar in game, a toast on menu screens - never the chat. */
+    static void notifyUser(final String message) {
+        final Minecraft mc = Minecraft.getInstance();
+        mc.addScheduledTask(new Runnable() {
+            @Override public void run() {
+                if (mc.world != null && mc.currentScreen == null && mc.ingameGUI != null) {
+                    mc.ingameGUI.setOverlayMessage(new TextComponentString(message), false);
+                } else {
+                    net.minecraft.client.gui.toasts.SystemToast.addOrUpdate(mc.getToastGui(),
+                            net.minecraft.client.gui.toasts.SystemToast.Type.WORLD_BACKUP,
+                            new TextComponentString("NyanLex Translator"), new TextComponentString(message));
+                }
+            }
+        });
+    }
+
     static void translationFile(boolean importing) {
         final Minecraft mc = Minecraft.getInstance();
         final String target = currentTarget();
@@ -152,7 +168,7 @@ public final class NyanLexForge {
         com.dragonmeow.nyanlex.translate.TranslationFileDialog.open(importing,
                 () -> TRANSLATOR.exportTranslations(target, snapshot),
                 file -> TRANSLATOR.importTranslations(file, target, snapshot),
-                message -> mc.addScheduledTask(() -> mc.ingameGUI.getChatGUI().printChatMessage(new TextComponentString(message))));
+                message -> notifyUser(message));
     }
 
     @SubscribeEvent public void screenKey(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre event) {
