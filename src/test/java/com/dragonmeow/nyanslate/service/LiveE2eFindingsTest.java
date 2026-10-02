@@ -105,11 +105,15 @@ class LiveE2eFindingsTest {
     }
 
     private static TranslationService service(FakeAi ai, TranslationDebugLog log) {
+        return service(ai, log, DisplayMode.TRANSLATION);
+    }
+
+    private static TranslationService service(FakeAi ai, TranslationDebugLog log, DisplayMode tooltipMode) {
         OpenAiTranslator translator = new OpenAiTranslator(ai,
                 () -> new AiSettings("https://api.openai.com/v1", "gpt-4o-mini", List.of("key-1")));
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.targetLang = TARGET;
-        cfg.tooltipMode = DisplayMode.TRANSLATION;
+        cfg.tooltipMode = tooltipMode;
         cfg.aiTooltip = true;
         TranslationCache google = new TranslationCache(translator, TARGET, DIRECT, 100);
         TranslationCache aiCache = new TranslationCache(translator, TARGET, DIRECT, 100);
@@ -245,6 +249,56 @@ class LiveE2eFindingsTest {
             assertTrue(d.translated().contains("⟦/CS" + i + "⟧"));
         }
         assertFalse(com.dragonmeow.nyanslate.translate.TextFilter.isStyleFallback(d.translated()));
+    }
+
+    // ------------------------------------------------------------------ R6
+
+    /** A provider that mangles exactly the "Griffin" unit (drops its value token) every time. */
+    private static FakeAi aiThatBreaksGriffin() {
+        FakeAi ai = new FakeAi();
+        ai.transform = wire -> wire.contains("Griffin")
+                ? wire.replaceAll("\\{mt\\d+\\}", "") : FakeAi.translateWords(wire);
+        return ai;
+    }
+
+    private static final String R6_PARAGRAPH = com.dragonmeow.nyanslate.translate.ParagraphModel.join(
+            List.of("LEGENDARY", "Seller: Notch", "Gain 5 Coins from Griffin Burrows",
+                    "Buy it now: 1,000 coins"));
+
+    @Test
+    void r6FinishedSegmentsShowWhileAFailedOneStaysOriginal() {
+        FakeAi ai = aiThatBreaksGriffin();
+        TranslationService s = service(ai, new TranslationDebugLog(() -> true));
+        s.warmTooltipBatch(List.of(R6_PARAGRAPH));
+        pump(s);
+        assertTrue(s.isTooltipTranslationReady(R6_PARAGRAPH),
+                "finished segments must be displayable although one segment failed");
+        TranslationDecision d = s.translateItemLine(R6_PARAGRAPH);
+        assertTrue(d.changed(), "partial composition expected");
+        assertTrue(d.translated().contains("Gain 5 Coins from Griffin Burrows"),
+                "the failed segment keeps its original wording: " + d.translated());
+        assertFalse(d.translated().contains("Seller"), "finished trade row is translated: " + d.translated());
+        assertFalse(d.translated().contains("Buy it now"), d.translated());
+        assertTrue(d.translated().contains("Notch"));
+        assertEquals(4 - 1, com.dragonmeow.nyanslate.translate.ParagraphModel.countBreakTokens(d.translated()),
+                "row structure is untouched: " + d.translated());
+    }
+
+    @Test
+    void r6NothingFinishedYetStaysFullyOriginal() {
+        FakeAi ai = new FakeAi();
+        TranslationService s = service(ai, new TranslationDebugLog(() -> true));
+        assertFalse(s.isTooltipTranslationReady(R6_PARAGRAPH));
+        assertFalse(s.translateItemLine(R6_PARAGRAPH).changed());
+    }
+
+    @Test
+    void r6BothModeKeepsItsCompleteMirrorRule() {
+        FakeAi ai = aiThatBreaksGriffin();
+        TranslationService s = service(ai, new TranslationDebugLog(() -> true), DisplayMode.BOTH);
+        s.warmTooltipBatch(List.of(R6_PARAGRAPH));
+        pump(s);
+        assertFalse(s.isTooltipTranslationReady(R6_PARAGRAPH));
     }
 
     // ------------------------------------------------------------------ R4

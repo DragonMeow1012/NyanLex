@@ -1352,7 +1352,9 @@ public final class TranslationService {
             return resolved;
         };
 
-        String composed = TooltipSegmentPlanner.compose(original, plan, resolver);
+        TooltipSegmentPlanner.Composition composition =
+                TooltipSegmentPlanner.composeDetailed(original, plan, resolver);
+        String composed = composition.full();
         if (tracing) trace.record(original, traces, composed);
         if (composed != null) {
             structuredComposeMemo.put(original, composed);
@@ -1375,6 +1377,13 @@ public final class TranslationService {
                 TranslationDecision old = decide(original, wholeMasked, cachedWhole, mode, selected, allowRequest);
                 if (old.changed()) return old;
             }
+        }
+        // R6: some segments are done, others failed validation or are still in flight. Show
+        // what is finished and leave only the unfinished segments in the original wording
+        // (never memoised, so each arriving segment replaces its raw span on the next frame).
+        // BOTH mode stays all-or-nothing: its appended block must mirror the whole tooltip.
+        if (composition.partial() != null && mode != DisplayMode.BOTH && !strictFullTooltip.get()) {
+            return TranslationDecision.of(mode, original, composition.partial());
         }
         return TranslationDecision.unchanged(original);
     }
@@ -1749,15 +1758,30 @@ public final class TranslationService {
         }
     }
 
-    /** Whether every segment of a structured tooltip paragraph already has a final
-     *  translation — mirrors {@link #enchantListReady}. Used by {@link
-     *  #isTooltipTranslationReady}. */
-    private boolean structuredTooltipReady(TooltipSegmentPlanner.Plan plan, String original,
-                                           boolean useAi) {
+    /** What {@link #isTooltipTranslationReady} reports for a structured paragraph: every
+     *  segment final, or (R6, not BOTH) at least one finished so the paragraph can show its
+     *  finished segments while a failed/in-flight one stays original. */
+    private boolean structuredTooltipDisplayable(TooltipSegmentPlanner.Plan plan, String original,
+                                                 boolean useAi) {
+        int[] progress = structuredTooltipProgress(plan, original, useAi);
+        if (progress[0] == progress[1]) return true;
+        // Only a segment that needed the provider counts as progress: a rarity word resolved
+        // from the local term table is "done" on the very first frame and must not make every
+        // tooltip flash a half-translated state before anything was actually answered.
+        return config.tooltipMode != DisplayMode.BOTH && progress[2] > 0;
+    }
+
+    /** {@code {finalSegments, translatableSegments, finalSegmentsThatNeededTheProvider}}. */
+    private int[] structuredTooltipProgress(TooltipSegmentPlanner.Plan plan, String original,
+                                            boolean useAi) {
         TermTable terms = new TermTable(config.termOverrides);
         DoNotTranslateMatcher termsNow = doNotTranslateTerms();
+        int done = 0;
+        int total = 0;
+        int doneRemote = 0;
         for (TooltipSegmentPlanner.Segment segment : plan.segments()) {
             String rawSegmentText = original.substring(segment.start(), segment.end());
+            boolean ready;
             switch (segment.kind()) {
                 case RARITY: {
                     RarityLineComposer.Match m = (RarityLineComposer.Match) segment.detail();
@@ -1766,20 +1790,28 @@ public final class TranslationService {
                         String viaTable = terms.type(word);
                         return viaTable != null ? viaTable : peekLearnedTerm(word, useAi);
                     });
-                    if (composed == null) return false;
+                    ready = composed != null;
                     break;
                 }
                 case ENCHANT: {
                     EnchantListComposer.Match m = (EnchantListComposer.Match) segment.detail();
+                    ready = true;
                     for (String name : m.names()) {
-                        if (resolveEnchantName(name, useAi) == null) return false;
+                        if (resolveEnchantName(name, useAi) == null) {
+                            ready = false;
+                            break;
+                        }
                     }
                     break;
                 }
                 case SCROLL: {
                     ScrollNameListComposer.Match m = (ScrollNameListComposer.Match) segment.detail();
+                    ready = true;
                     for (String name : m.names()) {
-                        if (resolveEnchantName(name, useAi) == null) return false;
+                        if (resolveEnchantName(name, useAi) == null) {
+                            ready = false;
+                            break;
+                        }
                     }
                     break;
                 }
@@ -1787,14 +1819,19 @@ public final class TranslationService {
                 case STATS:
                 case PROSE:
                 case ABILITY:
-                    if (resolveEnchantName(rawSegmentText, useAi) == null) return false;
+                    ready = resolveEnchantName(rawSegmentText, useAi) != null;
                     break;
                 case INERT:
                 default:
-                    break;
+                    continue;
+            }
+            total++;
+            if (ready) {
+                done++;
+                if (segment.kind() != TooltipSegmentPlanner.Kind.RARITY) doneRemote++;
             }
         }
-        return true;
+        return new int[] {done, total, doneRemote};
     }
 
     /** Whether some segment of a structured tooltip paragraph currently has a request
@@ -2356,7 +2393,7 @@ public final class TranslationService {
         TooltipSegmentPlanner.Plan structuredPlan =
                 TooltipSegmentPlanner.plan(source, isZhTwOrHk(activeTargetLang));
         if (structuredPlan != null) {
-            return structuredTooltipReady(structuredPlan, source, config.aiTooltip);
+            return structuredTooltipDisplayable(structuredPlan, source, config.aiTooltip);
         }
         NameMasker.Masked masked = mask(source);
         if (!translatableMasked(masked, true)) {
@@ -2464,17 +2501,26 @@ public final class TranslationService {
     public boolean isTooltipFullyDisplayedTranslated(List<String> lines) {
         if (lines == null) return false;
         boolean sawTranslatableLine = false;
-        for (String line : lines) {
-            if (line == null || config.tooltipMode == DisplayMode.ORIGINAL_ONLY
-                    || !shouldTranslateItem(line)) {
-                continue;
+        // "Fully" means every segment: the R6 partial composition must not count here.
+        strictFullTooltip.set(Boolean.TRUE);
+        try {
+            for (String line : lines) {
+                if (line == null || config.tooltipMode == DisplayMode.ORIGINAL_ONLY
+                        || !shouldTranslateItem(line)) {
+                    continue;
+                }
+                sawTranslatableLine = true;
+                if (translateItemLine(line).changed()) continue;
+                if (isTooltipTranslationPending(line)) return false;
             }
-            sawTranslatableLine = true;
-            if (translateItemLine(line).changed()) continue;
-            if (isTooltipTranslationPending(line)) return false;
+        } finally {
+            strictFullTooltip.set(Boolean.FALSE);
         }
         return sawTranslatableLine;
     }
+
+    /** Set while a caller needs the all-segments-final answer instead of the R6 partial one. */
+    private final ThreadLocal<Boolean> strictFullTooltip = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     /**
      * R/Y ("retranslate this item") policy entry point: whether the hotkey should
