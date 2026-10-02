@@ -28,8 +28,6 @@ public final class SettingsModel {
     public static final String KEY_ENGINE_LABEL = "nyanlex.settings.engine";
     /** Words that older builds (or other tools) used for the translation service; searching them still finds the service rows. */
     private static final String ENGINE_SEARCH_WORDS = "引擎 翻譯引擎 来源 來源 服務 服务 engine provider source service";
-    public static final String KEY_MODE = "nyanlex.ui.mode";
-    public static final String KEY_MODE_TIP = "nyanlex.ui.mode.tip";
     public static final String KEY_SEARCH_HINT = "nyanlex.ui.search.hint";
     public static final String KEY_SEARCH_EMPTY = "nyanlex.ui.search.empty";
     public static final String KEY_BTN_OPEN = "nyanlex.ui.btn.open";
@@ -80,7 +78,6 @@ public final class SettingsModel {
     public static final String KEY_WARMUP_HUD_RUNNING = "nyanlex.ui.hud.running";
     public static final String KEY_WARMUP_HUD_PAUSED = "nyanlex.ui.hud.paused";
     public static final String KEY_WARMUP_HUD_DONE = "nyanlex.ui.hud.done";
-    public static final String KEY_WARMUP_RESUMED = "nyanlex.ui.warmup.resumed";
     public static final String KEY_SIDEBAR_TITLE = "nyanlex.ui.sidebar_title";
     public static final String KEY_STAT_PENDING = "nyanlex.ui.stat.pending";
     public static final String KEY_FILES_GROUP = "nyanlex.ui.files.group";
@@ -199,7 +196,7 @@ public final class SettingsModel {
 
     /** Every lang key the card UI uses beyond {@link SettingsCatalog#allLangKeys()} (for the lang test). */
     public static List<String> allLangKeys() {
-        List<String> keys = new ArrayList<>(List.of(KEY_MODE, KEY_MODE_TIP, KEY_SEARCH_HINT,
+        List<String> keys = new ArrayList<>(List.of(KEY_SEARCH_HINT,
                 KEY_SEARCH_EMPTY, KEY_BTN_OPEN, KEY_BTN_RUN, KEY_BTN_CLEAR, KEY_DONE_SHORT,
                 KEY_BTN_SETTINGS, KEY_BTN_EDIT, KEY_BTN_DETECT, KEY_BTN_EXPORT, KEY_BTN_IMPORT,
                 KEY_ALL_TITLE, KEY_ALL_DESC, KEY_ALL_COL_MODE, KEY_ALL_COL_ENGINE, KEY_ALL_MIXED,
@@ -211,7 +208,7 @@ public final class SettingsModel {
                 KEY_NARRATE_CLOSED,
                 KEY_ABOUT_TITLE, KEY_ABOUT_VERSION, KEY_WARMUP_START,
                 KEY_WARMUP_DETAILS, KEY_WARMUP_IDLE, KEY_WARMUP_HUD_RUNNING, KEY_WARMUP_HUD_PAUSED,
-                KEY_WARMUP_HUD_DONE, KEY_WARMUP_RESUMED, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING,
+                KEY_WARMUP_HUD_DONE, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING,
                 KEY_FILES_GROUP, KEY_FILES_GROUP_DESC,
                 KEY_PROVIDER_FIXED, KEY_PROVIDER_FIXED_DESC));
         keys.addAll(DialogContent.allLangKeys());
