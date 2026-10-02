@@ -1,8 +1,8 @@
 package com.dragonmeow.nyanlex.fabric;
 
 import com.dragonmeow.nyanlex.translate.HookGuard;
-import com.dragonmeow.nyanlex.cache.LanguageFileStore;
 import com.dragonmeow.nyanlex.cache.DynamicNamespacedStore;
+import com.dragonmeow.nyanlex.cache.LanguageFileStore;
 import com.dragonmeow.nyanlex.cache.NamespacedStore;
 import com.dragonmeow.nyanlex.cache.PersistentStore;
 import com.dragonmeow.nyanlex.cache.ProviderLanguageFileStore;
@@ -30,7 +30,6 @@ import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.translate.AiSettings;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerTransport;
-import com.dragonmeow.nyanlex.translate.ExchangeDumpWriter;
 import com.dragonmeow.nyanlex.translate.OpenAiTranslator;
 import com.dragonmeow.nyanlex.translate.ParagraphModel;
 import com.dragonmeow.nyanlex.translate.RequestPacer;
@@ -51,6 +50,7 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -61,8 +61,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.client.input.KeyEvent;
-import net.minecraft.network.chat.Style;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.network.chat.Style;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
@@ -106,7 +106,10 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static HubDownloadState hubDownloadState;
     private static HubDownloader hubDownloader;
     private static final HubDownloadJob hubDownloadJob = new HubDownloadJob();
-    private static volatile boolean hubStartupChecked;
+    private static boolean firstStartTried;
+    private static volatile com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState packState =
+            com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.IDLE;
+    private static volatile HubPlan packPlan;
     private static volatile boolean keybindMigrationChecked;
 
     private static KeyMapping modeKey;
@@ -214,7 +217,9 @@ public final class NyanLexFabric implements ClientModInitializer {
             return builder;
         }
 
-        boolean mayReceiveRecovery() { return recoveryProgress.mayReceiveRecovery(); }
+        boolean mayReceiveRecovery() {
+            return recoveryProgress.mayReceiveRecovery();
+        }
     }
 
     /** Pure safety net: 原文＋翻譯 always goes out TOGETHER as one message (like 1.0.0);
@@ -404,7 +409,9 @@ public final class NyanLexFabric implements ClientModInitializer {
             List<Component> translated = snapshot.get(slot);
             if (translated == null) continue;
             int start = block.paragraphStarts.get(slot);
-            for (int row = 0; row < translated.size(); row++) assembledLines.set(start + row, translated.get(row));
+            for (int row = 0; row < translated.size(); row++) {
+                assembledLines.set(start + row, translated.get(row));
+            }
         }
         Component assembled = FabricTextStyle.joinStyledLines(assembledLines);
         Minecraft mc = Minecraft.getInstance();
@@ -447,6 +454,11 @@ public final class NyanLexFabric implements ClientModInitializer {
         return config;
     }
 
+    /** The game's config directory (where every mod file lives). */
+    public static Path configDirectory() {
+        return configPath.getParent();
+    }
+
     public static HubLocalCache hubLocalCache() {
         return hubLocalCache;
     }
@@ -463,6 +475,126 @@ public final class NyanLexFabric implements ClientModInitializer {
         return hubDownloadJob;
     }
 
+    // ---- All-item warm-up (AI engine only; see com.dragonmeow.nyanlex.warmup) ----
+
+    private static volatile java.util.function.BooleanSupplier aiRateLimitedProbe = () -> false;
+    private static com.dragonmeow.nyanlex.warmup.ItemWarmupDriver itemWarmupDriver;
+    private static int warmupWorldTicks;
+    private static boolean warmupAutoResumeTried;
+
+    /** The single per-launch warm-up driver (also keeps the per-launch item budget). */
+    public static synchronized com.dragonmeow.nyanlex.warmup.ItemWarmupDriver itemWarmupDriver() {
+        if (itemWarmupDriver == null) {
+            itemWarmupDriver = new com.dragonmeow.nyanlex.warmup.ItemWarmupDriver(
+                    new FabricItemWarmupSource(),
+                    new FabricItemWarmupSource.Backend(() -> aiRateLimitedProbe.getAsBoolean()),
+                    NyanLexFabric::config, System::currentTimeMillis);
+        }
+        return itemWarmupDriver;
+    }
+
+    /**
+     * Public entry point for the settings UI ("全物品預熱…"): opens the progress screen
+     * when a run is active, otherwise the scan-and-confirm screen (which explains why
+     * it cannot run under machine translation).
+     */
+    public static void openItemWarmupScreen(net.minecraft.client.gui.screens.Screen parent) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        var state = itemWarmupDriver().state();
+        if (state == com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.RUNNING
+                || state == com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.PAUSED) {
+            mc.setScreen(new ItemWarmupProgressScreen(parent));
+        } else {
+            mc.setScreen(new ItemWarmupConfirmScreen(parent));
+        }
+    }
+
+    /**
+     * Tooltip context for the warm-up: the live level's when a world is open, otherwise the
+     * registry-less {@code EMPTY} one so that the title screen can probe items too (the
+     * built-in registry lookup has unbound tags and makes every tooltip throw).
+     */
+    private static Item.TooltipContext warmupTooltipContext(Minecraft mc) {
+        return mc.level != null ? Item.TooltipContext.of(mc.level) : Item.TooltipContext.EMPTY;
+    }
+
+    /**
+     * Build one item's tooltip translation units exactly as the hover path would. Works without
+     * a world (player may be null); an item whose tooltip cannot be built (some mods need world
+     * data) comes back {@code failed} so the run can skip and count it.
+     */
+    static com.dragonmeow.nyanlex.warmup.ItemWarmupTarget itemWarmupTarget(Item item, Minecraft mc) {
+        Identifier id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
+        String itemId = id == null ? "" : id.toString();
+        String namespace = id == null ? "" : id.getNamespace();
+        int depth = tooltipProbeDepth.get();
+        tooltipProbeDepth.set(depth + 1);
+        try {
+            ItemStack stack = item.getDefaultInstance();
+            if (stack.isEmpty()) {
+                return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+            }
+            List<Component> lines = stack.getTooltipLines(warmupTooltipContext(mc), mc.player,
+                    TooltipFlag.Default.NORMAL);
+            if (lines == null || lines.isEmpty()) {
+                return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+            }
+            TooltipParagraphPlan plan = tooltipParagraphPlan(
+                    stack, lines, FabricTextStyle::paragraphRequestText);
+            return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, plan.sources());
+        } catch (RuntimeException | LinkageError e) {
+            return com.dragonmeow.nyanlex.warmup.ItemWarmupTarget.failed(itemId, namespace);
+        } finally {
+            if (depth == 0) tooltipProbeDepth.remove();
+            else tooltipProbeDepth.set(depth);
+        }
+    }
+
+    private static com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State warmupPrevState =
+            com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.IDLE;
+    private static volatile long warmupDoneAtMs = -1L;
+
+    /** Milliseconds since the warm-up last finished, or -1 when it has not finished this launch. */
+    public static long warmupMsSinceDone() {
+        long at = warmupDoneAtMs;
+        return at < 0 ? -1L : System.currentTimeMillis() - at;
+    }
+
+    /** Mod version for the settings "About" card. */
+    public static String modVersion() {
+        return FabricLoader.getInstance().getModContainer(MOD_ID)
+                .map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("");
+    }
+
+    /** Remembers state changes for the HUD ("done" timer) and tells the player when a paused run continues. */
+    private static void trackWarmupTransitions(com.dragonmeow.nyanlex.warmup.ItemWarmupDriver driver) {
+        var progress = driver.progress();
+        var state = progress.state();
+        if (state == com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.DONE
+                && warmupPrevState != com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.DONE) {
+            warmupDoneAtMs = System.currentTimeMillis();
+        }
+        warmupPrevState = state;
+    }
+
+    /** Per client tick: drive the warm-up, and resume it once per launch if the player opted in. */
+    private static void tickItemWarmup(Minecraft mc) {
+        if (config == null || service == null) return;
+        var driver = itemWarmupDriver();
+        if (mc != null && mc.player != null && mc.level != null) {
+            if (!warmupAutoResumeTried && config.itemWarmupEnabled
+                    && config.itemWarmupWarningAcknowledged && ++warmupWorldTicks >= 400) {
+                warmupAutoResumeTried = true;
+                driver.start();
+            }
+        } else {
+            warmupWorldTicks = 0;
+        }
+        driver.tick();
+        trackWarmupTransitions(driver);
+    }
+
     /** Spawns background hub work (identify/plan/download) as a daemon thread; also
      *  usable directly as the {@link Executor} {@link HubDownloadJob#start} wants. */
     public static Executor hubExecutor() {
@@ -475,29 +607,12 @@ public final class NyanLexFabric implements ClientModInitializer {
         thread.start();
     }
 
-    public static void postHubStatus(String msg) {
-        status(msg);
-    }
-
     private static List<String> loadedModIds() {
         List<String> ids = new ArrayList<>();
         for (net.fabricmc.loader.api.ModContainer container : FabricLoader.getInstance().getAllMods()) {
             ids.add(container.getMetadata().getId());
         }
         return ids;
-    }
-
-    private static List<Path> hubCandidateRoots() {
-        List<Path> roots = new ArrayList<>();
-        Path gameDir = FabricLoader.getInstance().getGameDir();
-        roots.add(gameDir);
-        Path parent = gameDir.getParent();
-        if (parent != null) {
-            roots.add(parent);
-            Path grandparent = parent.getParent();
-            if (grandparent != null) roots.add(grandparent);
-        }
-        return roots;
     }
 
     /** Realms detection via reflection: the {@code isRealm()} accessor's presence/shape
@@ -513,6 +628,19 @@ public final class NyanLexFabric implements ClientModInitializer {
         }
     }
 
+    private static List<Path> hubCandidateRoots() {
+        List<Path> roots = new ArrayList<>();
+        Path gameDir = FabricLoader.getInstance().getGameDir();
+        roots.add(gameDir);
+        Path parent = gameDir.getParent();
+        if (parent != null) {
+            roots.add(parent);
+            Path grandparent = parent.getParent();
+            if (grandparent != null) roots.add(grandparent);
+        }
+        return roots;
+    }
+
     /**
      * Runs the identify+plan step (current server, modpack, installed mods -> one
      * {@code index.json} fetch) on a background thread, then opens
@@ -520,6 +648,25 @@ public final class NyanLexFabric implements ClientModInitializer {
      * running, skips straight to {@link HubDownloadProgressScreen} instead -- this is
      * the "識別當前伺服器/MOD下載並匯入翻譯檔" button's click handler.
      */
+    private static final java.util.concurrent.atomic.AtomicBoolean HUB_PLANNING =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** True while a hub identify/plan pass runs in the background (settings UI disables its button). */
+    public static boolean hubPlanning() {
+        return HUB_PLANNING.get();
+    }
+
+    private static Runnable clearPlanningOnCrash(Runnable task) {
+        return () -> {
+            try {
+                task.run();
+            } catch (RuntimeException | Error e) {
+                HUB_PLANNING.set(false);
+                throw e;
+            }
+        };
+    }
+
     public static void startHubIdentifyAndPlan(net.minecraft.client.gui.screens.Screen hubScreen) {
         if (hubDownloader == null) return;
         if (hubDownloadJob.isRunning()) {
@@ -527,7 +674,8 @@ public final class NyanLexFabric implements ClientModInitializer {
             if (mc != null) mc.setScreen(new HubDownloadProgressScreen(hubScreen));
             return;
         }
-        runHubBackground(() -> {
+        if (!HUB_PLANNING.compareAndSet(false, true)) return; // a plan is already being built: ignore double clicks
+        runHubBackground(clearPlanningOnCrash(() -> {
             String host = null;
             String modpackLabel = null;
             List<String> modIds = loadedModIds();
@@ -554,26 +702,38 @@ public final class NyanLexFabric implements ClientModInitializer {
             final HubPlan finalPlan = plan;
             final String finalError = error;
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null) return;
+            if (mc == null) {
+                HUB_PLANNING.set(false);
+                return;
+            }
             mc.execute(() -> {
+                HUB_PLANNING.set(false);
                 if (finalPlan == null) {
-                    status(Component.translatable("screen.nyanlex.hub.progress.failed",
-                            finalError == null ? "" : finalError).getString());
+                    toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                            Component.translatable("message.nyanlex.hub.unreachable"));
+                    return;
+                }
+                if (!finalPlan.hasAnyContent()) {
+                    toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                            Component.translatable("message.nyanlex.hub.no_packs"));
                     return;
                 }
                 mc.setScreen(new HubDownloadConfirmScreen(hubScreen, finalPlan, finalHost,
                         finalModpackLabel, finalModCount));
             });
-        });
+        }));
     }
 
     /** Fired on every {@link HubDownloadJob} state change; only terminal states matter
      *  here (progress ticks are read live by whichever screen is open, if any). */
     private static void onHubDownloadJobChanged(HubDownloadJob job) {
         HubDownloadJob.State state = job.state();
-        // A6: CANCELLED must invalidate the render memo too — HubDownloader#download keeps
-        // every file already merged before the cancellation point, so a cancelled job can
-        // still have added rows a currently-open screen already rendered without.
+        // A6: CANCELLED must invalidate the render memo too. HubDownloader#download keeps
+        // every file already merged before the cancellation point (see its javadoc), so a
+        // cancelled job can still have added rows to HubLocalCache that the player's current
+        // screen already rendered (and cached) WITHOUT them — without this, those newly
+        // merged translations stay invisible until some unrelated later event happens to
+        // clear the memo.
         if (state != HubDownloadJob.State.DONE && state != HubDownloadJob.State.FAILED
                 && state != HubDownloadJob.State.CANCELLED) return;
         Minecraft mc = Minecraft.getInstance();
@@ -583,14 +743,16 @@ public final class NyanLexFabric implements ClientModInitializer {
             if (state == HubDownloadJob.State.DONE) {
                 var result = job.result();
                 if (result != null) {
-                    status(Component.translatable("message.nyanlex.hub.download_done",
-                            result.added()).getString());
+                    toast(Component.translatable("message.nyanlex.hub.download_done",
+                            result.added(), hubLocalCache.activeFile().toAbsolutePath().toString()));
                 }
             } else if (state == HubDownloadJob.State.FAILED) {
                 String reason = job.failureMessage();
-                status(Component.translatable("message.nyanlex.hub.download_failed",
-                        reason == null ? "" : reason).getString());
+                toast(Component.translatable("message.nyanlex.hub.download_failed",
+                        reason == null ? "" : reason));
             }
+            // CANCELLED: HubDownloadProgressScreen already shows its own cancelled state to
+            // whichever screen is open; only the memo invalidation above is needed here.
         });
     }
 
@@ -631,31 +793,89 @@ public final class NyanLexFabric implements ClientModInitializer {
     }
 
 
-/** Once per launch, the first time the title screen appears: a silent,
-     *  index.json-only check for mod translations the player doesn't have yet. */
-    private void maybeStartHubStartupCheck(Minecraft mc) {
-        if (hubStartupChecked || mc == null || mc.screen == null) return;
-        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
-        hubStartupChecked = true;
-        if (hubDownloader == null || config.hubStartupPromptDisabled) return;
+    // ---- translation packs found for the installed mods (快速設定 and 翻譯包)
+
+    /** State of the background pack check started by the questionnaire. */
+    public static com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState packState() {
+        return packState;
+    }
+
+    /** The mods that have a pack worth downloading, as one text line each, with the total size. */
+    public static com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo packInfo() {
+        HubPlan plan = packPlan;
+        if (plan == null) return new com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo(0, "", List.of());
+        List<String> lines = new ArrayList<>();
+        for (var item : plan.downloadable()) {
+            lines.add(item.label() + "\u3000" + HubDownloadConfirmScreen.formatBytes(item.bytes()));
+        }
+        return new com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo(lines.size(),
+                HubDownloadConfirmScreen.formatBytes(plan.totalDownloadBytes()), lines);
+    }
+
+    /**
+     * Looks, in the background, for translation packs for the installed mods. This only reads the
+     * public pack index (a plain GET); no player text and no list of mods is sent anywhere.
+     */
+    public static void startPackDetection() {
+        if (hubDownloader == null || config == null
+                || packState == com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.DETECTING) return;
+        packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.DETECTING;
+        packPlan = null;
         runHubBackground(() -> {
             try {
                 List<String> modIds = loadedModIds();
                 Optional<ModpackIdentity> modpack = ModpackDetector.detect(hubCandidateRoots(), modIds, null);
                 HubPlan plan = hubDownloader.planStartupMods(false, modpack.orElse(null), modIds,
                         config.targetLang, hubDownloadState);
-                if (plan.downloadable().isEmpty()) return;
-                Minecraft client = Minecraft.getInstance();
-                if (client == null) return;
-                client.execute(() -> {
-                    if (client.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
-                        client.setScreen(new HubStartupPromptScreen(client.screen, plan));
-                    }
-                });
-            } catch (IOException | RuntimeException ignored) {
-                // Startup check is best-effort and silent on failure.
+                if (plan.downloadable().isEmpty()) {
+                    packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.NONE;
+                } else {
+                    packPlan = plan;
+                    packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.FOUND;
+                }
+            } catch (IOException | RuntimeException e) {
+                packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.FAILED;
             }
         });
+    }
+
+    /** Downloads the packs found by {@link #startPackDetection()} in the background. */
+    public static void startPackDownload() {
+        HubPlan plan = packPlan;
+        if (plan == null || hubDownloader == null || hubDownloadJob.isRunning()) return;
+        hubDownloadJob.start(plan, hubDownloader, hubLocalCache, hubDownloadState, hubExecutor());
+    }
+
+    public static boolean packDownloading() {
+        return hubDownloadJob.isRunning();
+    }
+
+    /** An API key is entered, or a ChatGPT login is signed in: either one makes the AI service usable. */
+    public static boolean aiConfigured() {
+        if (config == null) return false;
+        if (config.aiUseCodex) {
+            return codexClient != null && codexClient.isSignedInCached();
+        }
+        if (config.aiApiKeys == null) return false;
+        for (String key : config.aiApiKeys) if (key != null && !key.isBlank()) return true;
+        return false;
+    }
+
+    /** The settings file (holds the API keys), for the AI settings notice. */
+    public static Path configFilePath() {
+        return configPath;
+    }
+
+    /**
+     * Once, on the title screen of a fresh install: the 快速設定 questionnaire. It is the only
+     * window that ever opens by itself, and only on the first start.
+     */
+    private void maybeStartFirstRun(Minecraft mc) {
+        if (firstStartTried || mc == null || config == null || mc.getOverlay() != null) return;
+        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
+        firstStartTried = true;
+        if (!com.dragonmeow.nyanlex.config.QuickSetupPanel.firstStartDue(config)) return;
+        mc.setScreen(new QuickSetupScreen(mc.screen));
     }
 
     public static CodexAppServerClient codexClient() {
@@ -666,8 +886,17 @@ public final class NyanLexFabric implements ClientModInitializer {
         return tokenUsage.snapshot();
     }
 
-    public static TranslationDebugLog debugLog() { return debugLog; }
-    public static void clearDebugLog() { if (debugLog != null) debugLog.clear(); }
+    public static TranslationDebugLog debugLog() {
+        return debugLog;
+    }
+
+    public static void clearDebugLog() {
+        if (debugLog != null) debugLog.clear();
+    }
+
+    public static KeyMapping modeKeyMapping() {
+        return modeKey;
+    }
 
     public static KeyMapping retranslateKeyMapping() {
         return retranslateKey;
@@ -896,15 +1125,20 @@ public final class NyanLexFabric implements ClientModInitializer {
         return translated == null ? text : translated;
     }
 
+    /** Apply cached translations at the final visible-tooltip draw boundary. */
     public static List<Component> visibleTooltip(List<Component> lines) {
         TranslationService s = service;
         Minecraft mc = Minecraft.getInstance();
         if (s == null || lines == null || lines.isEmpty() || !renderingCurrentScreen(mc)) return lines;
         DisplayMode mode = s.tooltipMode();
         if (mode == DisplayMode.ORIGINAL_ONLY) return lines;
-        for (Component line : lines) if (line != null && FabricTextStyle.isSeparatorText(line.getString())) return lines;
+        for (Component line : lines) {
+            if (line != null && FabricTextStyle.isSeparatorText(line.getString())) return lines;
+        }
         List<String> requests = new ArrayList<>();
-        for (Component line : lines) if (line != null && !line.getString().isBlank()) requests.add(FabricTextStyle.requestText(line));
+        for (Component line : lines) {
+            if (line != null && !line.getString().isBlank()) requests.add(FabricTextStyle.requestText(line));
+        }
         s.warmTooltipBatch(requests);
         List<Component> translatedLines = new ArrayList<>(lines.size());
         boolean changed = false;
@@ -913,8 +1147,11 @@ public final class NyanLexFabric implements ClientModInitializer {
             if (line == null) { translatedLines.add(null); continue; }
             maxLen = Math.max(maxLen, line.getString().length());
             Component translated = FabricTextStyle.renderTranslated("visibleTooltip", line, s::translateItemLine);
-            if (translated != null) { translatedLines.add(translated); maxLen = Math.max(maxLen, translated.getString().length()); changed = true; }
-            else translatedLines.add(line);
+            if (translated != null) {
+                translatedLines.add(translated);
+                maxLen = Math.max(maxLen, translated.getString().length());
+                changed = true;
+            } else translatedLines.add(line);
         }
         Component hint = translationHintLine(s, requests);
         if (!changed) return hint == null ? lines : appendLine(lines, hint);
@@ -923,7 +1160,10 @@ public final class NyanLexFabric implements ClientModInitializer {
             out = translatedLines;
         } else {
             List<Component> both = new ArrayList<>(lines.size() + translatedLines.size() + 2);
-            both.addAll(lines); both.add(FabricTextStyle.separatorLine(maxLen)); both.addAll(translatedLines); both.add(FabricTextStyle.separatorLine(maxLen));
+            both.addAll(lines);
+            both.add(FabricTextStyle.separatorLine(maxLen));
+            both.addAll(translatedLines);
+            both.add(FabricTextStyle.separatorLine(maxLen));
             out = both;
         }
         return hint == null ? out : appendLine(out, hint);
@@ -936,23 +1176,30 @@ public final class NyanLexFabric implements ClientModInitializer {
         return out;
     }
 
-    /** Manual item mode only: a trailing grey italic hint line telling the player this
-     *  tooltip has a line nothing has requested yet, and which key sends that request --
-     *  or that a prior key press is still in flight. See root NyanLexFabric.java. */
+    /**
+     * Manual item mode only (see {@link TranslationService#isManualItemTranslation()}):
+     * a trailing grey italic hint line telling the player this tooltip has a line
+     * nothing has requested yet, and which key sends that request -- or that a prior
+     * key press is still in flight. {@code requests} is the exact set fed to {@link
+     * TranslationService#warmTooltipBatch}/{@code translateItemLine} above, so the
+     * hint line itself is never part of what gets translated/requested.
+     */
     private static Component translationHintLine(TranslationService s, List<String> requests) {
-        if (!s.isManualItemTranslation() || config == null || !config.translationRequestsEnabled) return null;
-        boolean pending = false;
+        if (config == null) return null;
+        // Online translation off: pressing the key asks to start it, so say that. Machine translation with
+        // online translation on: pressing the key translates what is still missing. Nothing else gets a hint
+        // (the AI service translates by itself, and a line already on its way gains nothing from a key press).
+        boolean requestsOff = !config.translationRequestsEnabled;
+        if (!requestsOff && !s.isManualItemTranslation()) return null;
         boolean missing = false;
         for (String request : requests) {
             if (request == null || request.isBlank()) continue;
-            if (s.isTooltipTranslationPending(request)) pending = true;
-            else if (!s.isTooltipTranslationReady(request)) missing = true;
+            if (!s.isTooltipTranslationPending(request) && !s.isTooltipTranslationReady(request)) missing = true;
         }
-        if (!pending && !missing) return null;
-        Component message = pending
-                ? Component.translatable("message.nyanlex.tooltip_hint_pending")
-                : Component.translatable("message.nyanlex.tooltip_hint",
-                        retranslateKey == null ? "R" : retranslateKey.getTranslatedKeyMessage().getString());
+        if (!missing) return null;
+        Component message = Component.translatable(requestsOff
+                        ? "message.nyanlex.tooltip_hint_start" : "message.nyanlex.tooltip_hint",
+                retranslateKey == null ? "R" : retranslateKey.getTranslatedKeyMessage().getString());
         return message.copy().setStyle(Style.EMPTY
                 .withColor(net.minecraft.network.chat.TextColor.fromRgb(0xAAAAAA)).withItalic(true));
     }
@@ -1087,13 +1334,15 @@ public final class NyanLexFabric implements ClientModInitializer {
             t.setDaemon(true);
             return t;
         };
+
         ExecutorService executor = new com.dragonmeow.nyanlex.translate.PriorityTranslationExecutor(
                 workers, threadFactory);
 
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         // 事前冷卻節流：one pacer PER ENGINE so Google and AI space their own requests
         // without blocking each other. The cooldown is read live from config.
-        SwitchingMachineTranslator google = new SwitchingMachineTranslator(transport,
+        SwitchingMachineTranslator google = new SwitchingMachineTranslator(
+                transport,
                 () -> config.sourceLang,
                 () -> config.machineTranslationProvider,
                 new RequestPacer(() -> config.requestCooldownMs));
@@ -1115,19 +1364,19 @@ public final class NyanLexFabric implements ClientModInitializer {
                 () -> new AiSettings("codex://app-server", config.codexModel,
                         java.util.Collections.emptyList(), config.aiGlossary),
                 RequestPacer.disabled());
-        // 2026-10-02: a bounded, rotating on-disk trace of real AI request/response
-        // bodies (never headers/keys) plus each exchange's per-unit verdicts, active only
-        // while the player has the debug overlay on -- lets a player who hits a
-        // translation failure send the files under nyanlex-debug/ for offline
-        // diagnosis. See ExchangeDumpWriter's class doc (root tree).
-        ExchangeDumpWriter exchangeDump = new ExchangeDumpWriter(
-                configPath.getParent().resolve("nyanlex-debug"),
-                () -> config != null && config.debugTranslationOverlay, 20,
+        // 偵錯模式: the one local error log (newest 1000 entries, API keys masked). It is written only
+        // when something goes wrong while the mode is on; nothing else is ever dumped.
+        com.dragonmeow.nyanlex.translate.DebugErrorLog errorLog = new com.dragonmeow.nyanlex.translate.DebugErrorLog(
+                configPath.getParent().resolve(com.dragonmeow.nyanlex.config.FileLocations.DEBUG_LOG_FILE),
+                () -> config != null && config.debugTranslationOverlay,
+                com.dragonmeow.nyanlex.translate.DebugErrorLog.DEFAULT_MAX_ENTRIES,
                 () -> config == null ? java.util.List.of() : config.secretValues());
-        apiAi.setExchangeDumpSink(exchangeDump);
-        codexAi.setExchangeDumpSink(exchangeDump);
+        com.dragonmeow.nyanlex.translate.DebugErrorLog.install(errorLog);
+        apiAi.setExchangeDumpSink(errorLog.exchangeSink());
+        codexAi.setExchangeDumpSink(errorLog.exchangeSink());
         SwitchingAiTranslator ai = new SwitchingAiTranslator(
                 apiAi, codexAi, () -> config.aiUseCodex);
+        aiRateLimitedProbe = ai::isRateLimited;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             CodexAppServerClient client = codexClient;
             if (client != null) client.close();
@@ -1147,8 +1396,11 @@ public final class NyanLexFabric implements ClientModInitializer {
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, googleStore);
         TranslationCache aiCache = new TranslationCache(ai, config.targetLang, executor,
                 config.cacheMaxSize, config.failureBackoffMs, System::currentTimeMillis, aiStore);
-        cache.setFailureStore(new DynamicNamespacedStore(failureStore,
-                () -> "gt-" + MachineTranslationProvider.normalize(config.machineTranslationProvider)));
+        cache.setFailureStore(new DynamicNamespacedStore(failureStore, () -> {
+            String provider = MachineTranslationProvider.normalize(config.machineTranslationProvider);
+            return MachineTranslationProvider.GOOGLE.id().equals(provider)
+                    ? "gt" : "gt-" + provider;
+        }));
         aiCache.setFailureStore(new NamespacedStore(failureStore, "ai"));
         // One-time migration only: old builds mixed dispatcher-produced GT stand-ins
         // into ai-cache. New requests always go through the independently owned GT cache.
@@ -1156,6 +1408,8 @@ public final class NyanLexFabric implements ClientModInitializer {
         debugLog = new TranslationDebugLog(() -> config != null && config.debugTranslationOverlay);
         cache.setDebugLog("GT", debugLog);
         aiCache.setDebugLog("AI", debugLog);
+        cache.setInfoLog(LOGGER::warn);
+        aiCache.setInfoLog(LOGGER::warn);
         // A GT result shown after AI failure remains provisional from the AI cache's
         // perspective, so AI retries after its global 429 gate reopens.
         aiCache.setProvisionalRetryGate(() ->
@@ -1173,14 +1427,6 @@ public final class NyanLexFabric implements ClientModInitializer {
         // the machine-translation engine is cache-only. See
         // TranslationService#isManualItemTranslation()/#isManualScreenTranslation().
         service.setInfoLog(LOGGER::info);
-        // 2026-10-02: per-segment tooltip trace, same gate/rotation discipline and dumpDir
-        // as exchangeDump above -- captures the ONE layer an HTTP exchange dump cannot see
-        // (which TooltipSegmentPlanner segment a row became, its LOCAL cache key, hit/
-        // pending/missing) so a future "why did this ONE row never translate" investigation
-        // reads it straight off disk. See TooltipTraceWriter's class doc.
-        service.setTooltipTraceWriter(new com.dragonmeow.nyanlex.translate.TooltipTraceWriter(
-                configPath.getParent().resolve("nyanlex-debug"),
-                () -> config != null && config.debugTranslationOverlay, 20));
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
         service.setItemSourceLanguage(() -> {
@@ -1223,7 +1469,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         boolean originalsNow = service.toggleShowOriginal();
         FabricTextStyle.clearRenderMemo();
         if (originalsNow) flushPendingChatOriginals();
-        status(Component.translatable(originalsNow ? "message.nyanlex.show_original" : "message.nyanlex.show_translation").getString());
+        feedback(Component.translatable(originalsNow ? "message.nyanlex.show_original" : "message.nyanlex.show_translation"));
     }
 
     private void syncGameLanguage(net.minecraft.client.Minecraft mc) {
@@ -1279,10 +1525,26 @@ public final class NyanLexFabric implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(
                 tickClient -> HookGuard.run("event.clientTick", () -> onClientTick(tickClient)));
+        net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry.addLast(
+                Identifier.tryParse(MOD_ID + ":warmup_hud"),
+                (graphics, tickCounter) -> HookGuard.run("event.warmupHud", () -> WarmupHudOverlay.render(graphics)));
 
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
+            // The consent box (and nothing else) swallows input while it is up; it never closes the screen.
+            ScreenMouseEvents.allowMouseClick(screen).register(
+                    (scr, event) -> !ConsentOverlay.mouseClicked(scr, event.x(), event.y(), event.button()));
+            ScreenMouseEvents.allowMouseRelease(screen).register((scr, event) -> !ConsentOverlay.covers(scr));
+            ScreenMouseEvents.allowMouseScroll(screen).register((scr, mx, my, h2, v2) -> !ConsentOverlay.mouseScrolled(scr, mx, my, v2));
+            ScreenKeyboardEvents.allowKeyPress(screen).register(
+                    (scr, keyEvent) -> !ConsentOverlay.keyPressed(scr, keyEvent.key(), keyEvent.modifiers()));
+            ScreenKeyboardEvents.allowKeyRelease(screen).register((scr, keyEvent) -> !ConsentOverlay.covers(scr));
+            ScreenEvents.afterRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> HookGuard.run("event.warmupHud", () -> {
+                WarmupHudOverlay.renderOnScreen(scr, graphics);
+                ConsentOverlay.render(scr, graphics, mouseX, mouseY);
+            }));
             ScreenKeyboardEvents.afterKeyPress(screen).register(
-                    (scr, keyEvent) -> HookGuard.run("event.screenKey", () -> onScreenKey(scr, keyEvent)));
+                    (scr, keyEvent) ->
+                            HookGuard.run("event.screenKey", () -> onScreenKey(scr, keyEvent)));
             ScreenEvents.beforeRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> HookGuard.runSticky("event.screenBeforeRender",
                     () -> SCREEN_RENDER_STACK.get().push(scr)));
             ScreenEvents.afterRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> HookGuard.runSticky("event.screenAfterRender", () -> {
@@ -1559,7 +1821,9 @@ public final class NyanLexFabric implements ClientModInitializer {
             retireAnnouncement(evicted);
             if (original != null) {
                 Minecraft mc = Minecraft.getInstance();
-                if (mc != null && mc.gui != null) mc.gui.getChat().addMessage(decorate(evicted.params, original));
+                if (mc != null && mc.gui != null) {
+                    mc.gui.getChat().addMessage(decorate(evicted.params, original));
+                }
             }
         }
         return pending;
@@ -1570,7 +1834,8 @@ public final class NyanLexFabric implements ClientModInitializer {
                               int requestSlot, boolean finalResult) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
-        mc.execute(() -> completeChatOnClient(mc, id, epoch, mode, builder, requestSlot, finalResult));
+        mc.execute(() -> completeChatOnClient(
+                mc, id, epoch, mode, builder, requestSlot, finalResult));
     }
 
     private void completeChatOnClient(Minecraft mc, long id, long epoch, DisplayMode mode,
@@ -1596,7 +1861,8 @@ public final class NyanLexFabric implements ClientModInitializer {
             if (replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, decorated)) {
                 pending.displayedMessage = decorated;
             } else {
-                // The prior line was cleared/trimmed; do not resurrect it at the tail.
+                // The prior line was cleared/trimmed or chat internals changed. Never
+                // resurrect stale text at the tail and break chat ordering.
                 retirePending(pending);
                 return;
             }
@@ -1619,13 +1885,15 @@ public final class NyanLexFabric implements ClientModInitializer {
         return live.acceptResult(requestSlot, finalResult);
     }
 
-    /** Never hold chat hostage: after the bounded wait the original is shown and the
-     *  late translation replaces or updates the shown original when supported. */
+    /** Never hold chat hostage: after the bounded wait the original is shown and a
+     *  late translation replaces the shown original when supported. */
     private void flushStaleChats(Minecraft mc) {
         if (mc == null || mc.gui == null) return;
         long now = System.nanoTime();
         for (PendingChat retired : chatDelivery.retireIf(p -> p.displayedMessage != null
-                && now - p.queuedAtNanos > DISPLAYED_CHAT_RETENTION_NANOS)) retireAnnouncement(retired);
+                && now - p.queuedAtNanos > DISPLAYED_CHAT_RETENTION_NANOS)) {
+            retireAnnouncement(retired);
+        }
         while (true) {
             flushReadyChats(mc);
             if (chatDelivery.isQueueEmpty()) break;
@@ -1643,7 +1911,8 @@ public final class NyanLexFabric implements ClientModInitializer {
     }
 
     private void flushReadyChats(Minecraft mc) {
-        for (PendingChat pending : chatDelivery.drainReady(config.deliverChatTranslationsInOrder)) {
+        for (PendingChat pending :
+                chatDelivery.drainReady(config.deliverChatTranslationsInOrder)) {
             addPendingChat(mc, pending);
             if (!pending.mayReceiveRecovery()) retirePending(pending);
         }
@@ -1661,12 +1930,14 @@ public final class NyanLexFabric implements ClientModInitializer {
         if (config == null || service == null) return;
         Object connection = mc == null ? null : mc.getConnection();
         Object world = mc == null ? null : mc.level;
-        boolean originalOnly = config.chatMode == DisplayMode.ORIGINAL_ONLY || service.isShowOriginalOnly();
+        boolean originalOnly = config.chatMode == DisplayMode.ORIGINAL_ONLY
+                || service.isShowOriginalOnly();
         applyChatTransition(mc, chatDelivery.observe(connection, world,
                 ChatRequestProfile.capture(config, service.targetLang()), originalOnly));
     }
 
-    private void applyChatTransition(Minecraft mc, ChatDeliverySession.Transition<PendingChat> transition) {
+    private void applyChatTransition(Minecraft mc,
+                                     ChatDeliverySession.Transition<PendingChat> transition) {
         if (transition.kind() == ChatDeliverySession.TransitionKind.NONE) return;
         if (transition.kind() == ChatDeliverySession.TransitionKind.FLUSH_ORIGINALS
                 && mc != null && mc.gui != null) {
@@ -1686,8 +1957,8 @@ public final class NyanLexFabric implements ClientModInitializer {
 
     private Component pendingOriginal(PendingChat pending) {
         PendingBlock block = pending.block;
-        return block == null || block.lines.isEmpty()
-                ? pending.message : FabricTextStyle.joinStyledLines(new ArrayList<>(block.lines));
+        if (block == null || block.lines.isEmpty()) return pending.message;
+        return FabricTextStyle.joinStyledLines(new ArrayList<>(block.lines));
     }
 
     private void retirePending(PendingChat pending) {
@@ -1716,7 +1987,8 @@ public final class NyanLexFabric implements ClientModInitializer {
         return pendingChatDisplay(pending, mode, builder == null ? null : builder.get());
     }
 
-    private static Component pendingChatDisplay(PendingChat pending, DisplayMode mode, Component translated) {
+    private static Component pendingChatDisplay(PendingChat pending, DisplayMode mode,
+                                                Component translated) {
         if (mode == DisplayMode.TRANSLATION) return translated != null ? translated : pending.message;
         if (mode == DisplayMode.BOTH) return FabricTextStyle.chatBlock(pending.message, translated);
         return pending.message;
@@ -1725,7 +1997,7 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static boolean chatRescaleQueued;
 
     /** Coalesce every late-translation backfill of one task-loop pass into a single
-     *  vanilla chat rescale: {@code schedule} always enqueues (unlike execute, which runs
+     *  vanilla chat rescale: {@code tell} always enqueues (unlike execute, which runs
      *  inline on the render thread), and runAllTasks drains it before this frame renders. */
     private static void requestChatRescale(Minecraft mc) {
         if (chatRescaleQueued) return;
@@ -1787,6 +2059,8 @@ public final class NyanLexFabric implements ClientModInitializer {
         }
         if (service == null) return;
         if (tooltipProbeDepth.get() > 0) return;
+        // Search-tree tooltips are background work; only the client thread inside the
+        // current screen's render scope may enter the urgent tooltip path.
         Minecraft tooltipClient = Minecraft.getInstance();
         if (tooltipClient == null || tooltipClient.player == null
                 || !tooltipClient.isSameThread()
@@ -1994,7 +2268,8 @@ public final class NyanLexFabric implements ClientModInitializer {
     }
 
     private void onClientTick(Minecraft mc) {
-        maybeStartHubStartupCheck(mc);
+        ConsentOverlay.tick();
+        maybeStartFirstRun(mc);
         maybeMigrateKeybinds(mc);
         SCREEN_RENDER_STACK.remove();
         refreshScannedScreen();
@@ -2018,6 +2293,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         syncGameLanguage(mc);
         observeChatDeliveryContext(mc);
         refreshOnlineNames(mc);
+        tickItemWarmup(mc);
         if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(mc);
@@ -2031,11 +2307,8 @@ public final class NyanLexFabric implements ClientModInitializer {
 
     private void onScreenKey(net.minecraft.client.gui.screens.Screen screen, KeyEvent keyEvent) {
         if (service == null) return;
-        if (screen instanceof TranslationConfigScreen || screen instanceof AiConfigScreen
-                || screen instanceof TranslationKeybindScreen || screen instanceof TranslationLanguageScreen
-                || screen instanceof TranslationRequestsScreen
-                || screen instanceof CodexModelScreen || screen instanceof CodexEffortScreen) return;
-        // Keys typed into a text input (chat, signs, books, search boxes) are text, not hotkeys.
+        // Keys typed into a text input (chat, signs, books, search and settings boxes) are
+        // text, not hotkeys.
         if (ScreenTextInput.isTyping(screen)) return;
         if (toggleKey != null && toggleKey.matches(keyEvent)) {
             flipShowOriginal();
@@ -2057,6 +2330,17 @@ public final class NyanLexFabric implements ClientModInitializer {
                 || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
                 || !screenTranslationAllowed(screen)) return;
         if (gateBlocksManual(service.isManualScreenTranslation())) return;
+        // 線上翻譯 off: ask on the spot; the scan then runs once for this very screen.
+        ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.SCREEN, () -> {
+            if (Minecraft.getInstance().screen == screen) scanAndTranslateScreenNow(screen);
+        });
+    }
+
+    private void scanAndTranslateScreenNow(net.minecraft.client.gui.screens.Screen screen) {
+        if (screen == null || service == null
+                || screen instanceof net.minecraft.client.gui.screens.ChatScreen
+                || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
+                || !screenTranslationAllowed(screen)) return;
         SCREEN_CAPTURE.begin(screen);
         TOOLTIP_CAPTURE.begin(screen);
         captureScreenText(screen.getTitle(), true);
@@ -2092,7 +2376,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         FabricTextStyle.clearRenderMemo();
         synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
         screenRefreshRequested = screen;
-        status(Component.translatable("message.nyanlex.screen_scan", sources.size()).getString());
+        feedback(Component.translatable("message.nyanlex.screen_scan", sources.size()));
     }
 
     private static void refreshScannedScreen() {
@@ -2204,9 +2488,7 @@ public final class NyanLexFabric implements ClientModInitializer {
      * Registers the player's main inventory and armor slots every {@link
      * #ITEM_WARM_SCAN_INTERVAL_NANOS} so Loadout-menu lore (drawn from the player's actual
      * gear) has a matchable id/modifier before it is ever hovered or opened. The registry
-     * itself is not persisted, so this must run again after every relog. Armor moved off
-     * {@code Inventory} and onto the entity's equipment in this API generation, so it is
-     * read via {@code getItemBySlot} instead of {@code Inventory.armor}.
+     * itself is not persisted, so this must run again after every relog.
      */
     private void warmLoadoutItems(Minecraft mc) {
         if (mc == null || mc.player == null || service == null) {
@@ -2300,21 +2582,18 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static void gateMessage(String key, int minutes) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
-        mc.execute(() -> {
-            net.minecraft.network.chat.Component message = net.minecraft.network.chat.Component.translatable(key, Integer.toString(minutes));
-            if (mc.level != null && mc.gui != null) {
-                mc.gui.setOverlayMessage(message, false);
-            } else {
-                net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),
-                        net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-                        net.minecraft.network.chat.Component.literal("NyanLex Translator"), message);
-            }
-        });
+        mc.execute(() -> feedback(Component.translatable(key, Integer.toString(minutes))));
     }
 
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
         if (gateBlocksManual(service.isManualItemTranslation())) return;
+        // 線上翻譯 off: ask on the spot; the request then goes out once for this very item.
+        ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.ITEM, () -> retranslateItemNow(stack));
+    }
+
+    private void retranslateItemNow(ItemStack stack) {
+        if (stack == null || stack.isEmpty() || service == null) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
         List<String> sources = lastTooltipStack == stack ? lastTooltipParagraphSources : null;
@@ -2340,21 +2619,20 @@ public final class NyanLexFabric implements ClientModInitializer {
         if (itemName != null && !itemName.isBlank()) requests.add(itemName);
         if (sources != null) requests.addAll(sources);
         List<String> requestList = List.copyOf(requests);
-        // R follows the actual on-screen state of THIS tooltip (TranslationService#
-        // isTooltipFullyDisplayedTranslated -- the ACTUAL composed display result of every
-        // line, same as the renderer itself uses), not a per-line readiness flag: a line
-        // still showing original text -> only buy what is missing (no invalidation, so an
-        // already-correct segment shared with another item is never thrown away); every
-        // line already translated (AI cache, hub, legacy lazy conversion, or
-        // segment-composed) -> invalidate and resend the whole tooltip. See root
-        // NyanLexFabric#retranslateItem / TranslationService#isTooltipFullyDisplayedTranslated.
+        // R/Y policy lives entirely in TranslationService#shouldFullyRetranslateOnKeyPress
+        // (2026-10-02): the AI engine always does a full invalidate+resend (tooltips
+        // already auto-translate on hover under AI, so a deliberate key press can only
+        // mean "redo it"); the machine-translation engine follows the on-screen-state rule
+        // (buy only what's missing while something is still in flight, full invalidate
+        // once nothing is outstanding) — see that method's doc for the full rationale,
+        // including the fix for R/Y being a permanent no-op on a persistently-failing line.
         if (service.shouldFullyRetranslateOnKeyPress(requestList)) {
             service.retranslate(requestList);
         } else {
             service.requestItemLines(requestList);
         }
         FabricTextStyle.clearRenderMemo();
-        status(Component.translatable("message.nyanlex.retranslate", stack.getHoverName().getString()).getString());
+        feedback(Component.translatable("message.nyanlex.retranslate", stack.getHoverName().getString()));
     }
 
     public static void testAi(String baseUrl, String model, List<String> keys, java.util.function.Consumer<String> onResult) {
@@ -2384,7 +2662,7 @@ public final class NyanLexFabric implements ClientModInitializer {
 
     public static void testCodex(java.util.function.Consumer<String> onResult) {
         if (codexTransport == null || config == null) {
-            onResult.accept("Codex is not initialized");
+            onResult.accept(Component.translatable("message.nyanlex.not_initialized").getString());
             return;
         }
         Thread thread = new Thread(() -> {
@@ -2397,7 +2675,8 @@ public final class NyanLexFabric implements ClientModInitializer {
                 String translated = ai.translate("Hello, world", "zh-TW").translatedText();
                 result = "Hello, world -> " + translated;
             } catch (Exception error) {
-                result = "Codex: " + (error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+                result = Component.translatable("message.nyanlex.failed",
+                        error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage()).getString();
             }
             final String message = result;
             Minecraft client = Minecraft.getInstance();
@@ -2411,20 +2690,65 @@ public final class NyanLexFabric implements ClientModInitializer {
     public static void translationFile(boolean importing) {
         TranslationService currentService = service;
         if (currentService == null) return;
-        com.dragonmeow.nyanlex.translate.TranslationFileDialog.open(importing,
-                currentService::exportTranslations, currentService::importTranslations, message -> {
+        com.dragonmeow.nyanlex.translate.TranslationFileDialog.openOutcome(importing,
+                currentService::exportTranslations, currentService::importTranslations, outcome -> {
                     Minecraft client = Minecraft.getInstance();
                     if (client != null) client.execute(() -> {
-                        status(message);
+                        toast(fileOutcomeText(outcome));
                         refreshCurrentQuestScreen();
                     });
                 });
     }
 
-    private static void status(String msg) {
+    private static Component fileOutcomeText(com.dragonmeow.nyanlex.translate.TranslationFileDialog.Outcome outcome) {
+        return switch (outcome.kind()) {
+            case BUSY -> Component.translatable("message.nyanlex.file.busy");
+            case EXPORTED -> Component.translatable("message.nyanlex.file.exported", outcome.files(),
+                    outcome.files() > 1 ? outcome.first() + " … " + outcome.last() : outcome.first());
+            case IMPORTED -> outcome.failedFiles() == 0
+                    ? Component.translatable("message.nyanlex.file.imported", outcome.count(), outcome.files(),
+                            outcome.totalFiles())
+                    : Component.translatable("message.nyanlex.file.imported_failed", outcome.count(), outcome.files(),
+                            outcome.totalFiles(), outcome.failedFiles(), outcome.first());
+            case FAILED -> Component.translatable("message.nyanlex.file.failed",
+                    outcome.first() == null || outcome.first().isEmpty()
+                            ? Component.translatable("message.nyanlex.failed", "").getString() : outcome.first());
+        };
+    }
+
+    /** Style insertion that marks a component as the mod's own action bar line (never sent for translation). */
+    private static final String OWN_FEEDBACK_MARK = "nyanlex:feedback";
+
+    /** True for the lines {@link #feedback} puts in the action bar: the translator hooks must leave them alone. */
+    public static boolean isOwnFeedback(Component component) {
+        return component != null && OWN_FEEDBACK_MARK.equals(component.getStyle().getInsertion());
+    }
+
+    /**
+     * The result of R, P or G: one line in the action bar above the hotbar for a few seconds while a
+     * world is open, a system notification otherwise. The mod never writes into the chat.
+     */
+    private static void feedback(Component message) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc != null && mc.player != null) {
-            mc.gui.getChat().addMessage(Component.translatable("message.nyanlex.prefix", msg));
+        if (mc == null) return;
+        if (mc.level != null && mc.gui != null) {
+            mc.gui.setOverlayMessage(message.copy().withStyle(style -> style.withInsertion(OWN_FEEDBACK_MARK)), false);
+        } else {
+            toast(message);
         }
+    }
+
+    /** A system notification at the top right: what happened in a menu, or in the background. */
+    public static void toast(Component message) {
+        toast(Component.translatable("nyanlex.ui.about.title"), message);
+    }
+
+    /** A system notification with its own title. */
+    public static void toast(Component title, Component message) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),
+                net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
+                title, message));
     }
 }

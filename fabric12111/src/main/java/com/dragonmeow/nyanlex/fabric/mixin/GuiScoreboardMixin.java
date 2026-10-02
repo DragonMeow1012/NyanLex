@@ -235,7 +235,7 @@ public abstract class GuiScoreboardMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanlex$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {
-        if (!HookGuard.enter("GuiScoreboard.actionBar")) {
+        if (NyanLexFabric.isOwnFeedback(text) || !HookGuard.enter("GuiScoreboard.actionBar")) {
             com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.drawStringWithBackdrop(font, text, x, y, width, color));
             return;
         }
