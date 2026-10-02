@@ -24,6 +24,13 @@ except Exception:
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 CJK = re.compile(r"[一-鿿]")
 ALLOWED_TOP = {"index.json", "LICENSE", "README.md"}
+TOP_FIELDS = {"schema", "format", "hash", "language", "license", "rows", "entries"}
+# A file's optional "license" is an SPDX expression of the LGPL ids the gate accepts (canonical spelling),
+# joined with AND / OR and parentheses.  Files under a simple license carry no such field.
+LGPL_IDS = {"LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later"}
+SIMPLE_IDS = {"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "CC0-1.0", "Unlicense",
+              "CC-BY-3.0", "CC-BY-4.0", "Polyform-Shield"}
+LICENSE_OPERATORS = {"AND", "OR"}
 fails = []
 
 
@@ -82,8 +89,16 @@ def main():
         empty = [k for k, v in entries.items() if not isinstance(v, str) or not v or len(v) > 16384]
         if empty:
             fail(f"{r}: {len(empty)} empty / non-string / over-long values")
-        if set(d) - {"schema", "format", "hash", "language", "rows", "entries"}:
-            fail(f"{r}: unexpected top-level fields {sorted(set(d) - {'schema','format','hash','language','rows','entries'})}")
+        if set(d) - TOP_FIELDS:
+            fail(f"{r}: unexpected top-level fields {sorted(set(d) - TOP_FIELDS)}")
+        lic = d.get("license")
+        if "license" in d:
+            words = re.findall(r"[^\s()]+", lic) if isinstance(lic, str) else []
+            ids = [w for w in words if w not in LICENSE_OPERATORS]
+            if not isinstance(lic, str) or not lic.strip() or len(lic) > 256:
+                fail(f"{r}: license field is not a short non-empty string")
+            elif not ids or any(i not in LGPL_IDS | SIMPLE_IDS for i in ids) or not any(i in LGPL_IDS for i in ids):
+                fail(f"{r}: license {lic!r} is not an expression of the accepted LGPL ids (canonical spelling)")
         section = {"servers": "servers", "modpacks": "modpacks", "mods": "mods"}[kind]
         st = index.get(section, {}).get(ident, {}).get(lang)
         seen.add((section, ident, lang))
@@ -96,8 +111,11 @@ def main():
                 fail(f"{r}: index bytes {st['bytes']} != blob {len(blob)}")
             if st["sha256"] != hashlib.sha256(blob).hexdigest():
                 fail(f"{r}: index sha256 != sha256(blob)")
+            if st.get("license") != lic:
+                fail(f"{r}: index license {st.get('license')!r} != file license {lic!r}")
         no_cjk = sum(1 for v in entries.values() if not CJK.search(v))
-        print(f"{r}: rows={len(entries)} bytes={len(blob)} no-CJK-values={no_cjk}")
+        print(f"{r}: rows={len(entries)} bytes={len(blob)} no-CJK-values={no_cjk}"
+              + (f" license={lic}" if lic else ""))
         values.extend(entries.values())
 
     # 3. index lists nothing that has no file

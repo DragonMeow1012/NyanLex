@@ -10,7 +10,7 @@
 
 - **不收錄、不散布任何原文。** 檔案只含「原文內容的 SHA-256 雜湊 → 譯文」，無法由檔案還原原文，也不含玩家名稱或範例句。原文的著作權屬各原權利人（遊戲、伺服器、模組作者）。
 - **非官方。** 與 Mojang、Microsoft、任何伺服器（如 Hypixel）或模組作者**沒有**隸屬、合作或背書關係。
-- **授權：** 本資料夾內的資料以 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)（姓名標示－非商業性－相同方式分享）授權，詳見同目錄 `LICENSE`。程式碼仍為 repo 根目錄的 MIT 授權，不受影響。
+- **授權：** 預設以 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)（姓名標示－非商業性－相同方式分享）授權，詳見同目錄 `LICENSE`。**例外：** 檔案（及 `index.json` 中對應條目）標有 `license` 欄位的，依該欄位標示的授權，例如來源模組以 LGPL 授權者，其譯文沿用該 LGPL 授權（如 `LGPL-3.0-only`）。程式碼仍為 repo 根目錄的 MIT 授權，不受影響。
 - 譯文為機器翻譯／AI 產生，可能有誤，不保證正確。
 - **內容由維護者整理與更新。** 模組不會上傳玩家的翻譯，玩家端只有下載。
 
@@ -38,6 +38,7 @@ translation-hub/
 | `format` | 固定 `hub-hash-v1` |
 | `hash` | 雜湊演算法，`sha256` |
 | `language` | 目標語言，如 `zh-tw` |
+| `license` | 選用。來源專案的授權要求譯文沿用時才有（SPDX 運算式，如 `LGPL-3.0-only`；多個來源併成一檔時以 `AND` 連接）；沒有此欄位的檔案適用上述預設授權。`index.json` 的對應條目有同樣的值。客戶端不依此欄位做任何判斷 |
 | `rows` | 筆數 |
 | `entries` | 鍵為 `sha256(正規化快取 key)`（UTF-8），值為譯文；譯文內的 `⟦n⟧`、`⟦MT⟧` 等為程式內部保護 token，請勿改動 |
 
@@ -61,7 +62,7 @@ This folder holds **translated text** produced by AI and machine translation, fe
 
 - **No original text is stored or distributed.** Files contain only `SHA-256 hash of the source content -> translation`; the source cannot be recovered from a file, and no player names or sample sentences appear. Copyright in the original text belongs to its owners (the game, server and mod authors).
 - **Unofficial.** Not affiliated with, endorsed by or associated with Mojang, Microsoft, any server (for example Hypixel) or any mod author.
-- **License:** data in this folder is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (see `LICENSE` here). The program code remains MIT-licensed at the repository root and is unaffected.
+- **License:** by default, data in this folder is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (see `LICENSE` here). **Exception:** a file whose `license` field is set (and its entry in `index.json`) is under the license it names, for example a translation of a mod released under an LGPL license keeps that LGPL license (such as `LGPL-3.0-only`). The program code remains MIT-licensed at the repository root and is unaffected.
 - Translations are machine/AI generated and may contain errors.
 - **Content is curated and updated by the maintainers.** The mod never uploads a player's translations; the player side only downloads.
 
@@ -89,6 +90,7 @@ translation-hub/
 | `format` | Always `hub-hash-v1` |
 | `hash` | Hash algorithm, `sha256` |
 | `language` | Target language, e.g. `zh-tw` |
+| `license` | Optional. Present only when the source project's license requires the translation to keep it (an SPDX expression such as `LGPL-3.0-only`; several sources merged into one file are joined with `AND`). A file without it is under the default license above. The matching `index.json` entry carries the same value. The client makes no decision from this field |
 | `rows` | Entry count |
 | `entries` | Key is `sha256(normalized cache key)` (UTF-8); value is the translation. `⟦n⟧`, `⟦MT⟧` etc. are internal protection tokens, leave them intact |
 
