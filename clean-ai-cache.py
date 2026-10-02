@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""One-off cleaner for nyanslate disk caches (nyanslate-ai-cache.json / nyanslate-cache.json).
+"""One-off cleaner for nyanlex disk caches (nyanlex-ai-cache.json / nyanlex-cache.json).
 
 Removes junk identified in the 2026-07-10 audit (cache-dup-analysis.md):
   1. duplicate appended lines (keeps the LAST occurrence per key, matching FileStore load order)
   2. discarded experimental-build residue: "Sent: N (AI N / GT N)..." debug-overlay lines,
-     "[AI] x"-badge feedback loops, "__nyanslate_dynamic__" internal keys
+     "[AI] x"-badge feedback loops, "__nyanlex_dynamic__" internal keys
   3. identity echoes (value == key)
   4. values with bare CS marker residue (translator ate the brackets)
 
@@ -22,11 +22,11 @@ import sys
 import time
 
 DEFAULT_PATH = os.path.expandvars(
-    r"%APPDATA%\.minecraft\config\nyanslate-ai-cache.json")
+    r"%APPDATA%\.minecraft\config\nyanlex-ai-cache.json")
 
 DEBUG_STATS = re.compile(r"^Sent: \d+ \(AI \d+ / GT \d+\)")
 AI_BADGE = re.compile(r"\[AI\] ×")
-DYNAMIC_KEY = "__nyanslate_dynamic__"
+DYNAMIC_KEY = "__nyanlex_dynamic__"
 CS_WELLFORMED = re.compile(r"⟦\s*/?\s*CS\s*\d+\s*⟧")
 CS_RESIDUE = re.compile(r"⟦?\s*/?\s*CS\s*\d+\s*⟧?")
 

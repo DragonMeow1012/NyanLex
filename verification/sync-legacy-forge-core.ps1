@@ -6,12 +6,12 @@ Set-StrictMode -Version 2.0
 
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $canonicalRoot = Join-Path $repoRoot `
-    'fabric1144\src\main\java\com\dragonmeow\nyanslate\legacy'
+    'fabric1144\src\main\java\com\dragonmeow\nyanlex\legacy'
 $targets = @(
     (Join-Path $repoRoot `
-        'forge1122\src\main\java\com\dragonmeow\nyanslate\forgelegacy'),
+        'forge1122\src\main\java\com\dragonmeow\nyanlex\forgelegacy'),
     (Join-Path $repoRoot `
-        'forge1132\src\main\java\com\dragonmeow\nyanslate\forgelegacy')
+        'forge1132\src\main\java\com\dragonmeow\nyanlex\forgelegacy')
 )
 $files = @(
     'LegacyConfig.java',
@@ -25,8 +25,8 @@ $files = @(
     'LegacyTemplateText.java',
     'LegacyTranslator.java'
 )
-$canonicalPackage = 'com.dragonmeow.nyanslate.legacy'
-$forgePackage = 'com.dragonmeow.nyanslate.forgelegacy'
+$canonicalPackage = 'com.dragonmeow.nyanlex.legacy'
+$forgePackage = 'com.dragonmeow.nyanlex.forgelegacy'
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 $changed = 0
 

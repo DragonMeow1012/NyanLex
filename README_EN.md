@@ -1,8 +1,8 @@
-# Nyanslate 1.0.0
+# NyanLex Translator 1.0.0
 
 [繁體中文](README.md)
 
-Nyanslate (formerly Minecraft Translator) is a client-side real-time translation mod. It translates text that needs translation on screen without changing server data or sending chat messages for the player.
+NyanLex Translator (formerly Minecraft Translator) is a client-side real-time translation mod. It translates text that needs translation on screen without changing server data or sending chat messages for the player.
 
 ## Features
 
@@ -51,7 +51,7 @@ Before and after translation in Better Minecraft, including the quest title, lon
 
 Each JAR supports only the exact Minecraft version and loader in its filename.
 
-[Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/Nyanslate-1.0.0-all-versions.zip)
+[Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip)
 
 
 ### Fabric
@@ -60,34 +60,34 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.14.4 | 8 | [nyanslate-1.0.0-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.14.4.jar) |
-| 1.15.2 | 8 | [nyanslate-1.0.0-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.15.2.jar) |
-| 1.16.5 | 8 | [nyanslate-1.0.0-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.16.5.jar) |
-| 1.17.1 | 16 | [nyanslate-1.0.0-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.17.1.jar) |
-| 1.18.2 | 17 | [nyanslate-1.0.0-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.18.2.jar) |
-| 1.19.4 | 17 | [nyanslate-1.0.0-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.19.4.jar) |
-| 1.20.1 | 17 | [nyanslate-1.0.0-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.20.1.jar) |
-| 1.21.1 | 21 | [nyanslate-1.0.0-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.21.1.jar) |
-| 1.21.11 | 21 | [nyanslate-1.0.0-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.21.11.jar) |
-| 26.1.2 | 25 | [nyanslate-1.0.0-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.1.2.jar) |
-| 26.2 | 25 | [nyanslate-1.0.0-Fabric-26.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.2.jar) |
-| 26.3 | 25 | [nyanslate-1.0.0-Fabric-26.3.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.3.jar) |
+| 1.14.4 | 8 | [nyanlex-1.0.0-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) |
+| 1.15.2 | 8 | [nyanlex-1.0.0-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) |
+| 1.16.5 | 8 | [nyanlex-1.0.0-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) |
+| 1.17.1 | 16 | [nyanlex-1.0.0-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) |
+| 1.18.2 | 17 | [nyanlex-1.0.0-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) |
+| 1.19.4 | 17 | [nyanlex-1.0.0-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) |
+| 1.20.1 | 17 | [nyanlex-1.0.0-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) |
+| 1.21.1 | 21 | [nyanlex-1.0.0-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) |
+| 1.21.11 | 21 | [nyanlex-1.0.0-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) |
+| 26.1.2 | 25 | [nyanlex-1.0.0-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) |
+| 26.2 | 25 | [nyanlex-1.0.0-Fabric-26.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) |
+| 26.3 | 25 | [nyanlex-1.0.0-Fabric-26.3.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) |
 
 ### NeoForge
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.20.1 | 17 | [nyanslate-1.0.0-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-1.20.1.jar) |
-| 1.21.1 | 21 | [nyanslate-1.0.0-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-1.21.1.jar) |
-| 26.2 | 25 | [nyanslate-1.0.0-NeoForge-26.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-26.2.jar) |
-| 26.3 | 25 | [nyanslate-1.0.0-NeoForge-26.3.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-26.3.jar) |
+| 1.20.1 | 17 | [nyanlex-1.0.0-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) |
+| 1.21.1 | 21 | [nyanlex-1.0.0-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) |
+| 26.2 | 25 | [nyanlex-1.0.0-NeoForge-26.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) |
+| 26.3 | 25 | [nyanlex-1.0.0-NeoForge-26.3.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) |
 
 ### Forge
 
 | Minecraft | Java | Download |
 | --- | ---: | --- |
-| 1.12.2 | 8 | [nyanslate-1.0.0-Forge-1.12.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Forge-1.12.2.jar) |
-| 1.13.2 | 8 | [nyanslate-1.0.0-Forge-1.13.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Forge-1.13.2.jar) |
+| 1.12.2 | 8 | [nyanlex-1.0.0-Forge-1.12.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) |
+| 1.13.2 | 8 | [nyanlex-1.0.0-Forge-1.13.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) |
 
 ## Installation
 
@@ -136,11 +136,11 @@ Legacy UI:
 
 `P` captures currently visible text, including a hovered tooltip; it does not scan off-screen content or activate while typing. Items and mod-screen text now translate on demand (see Features above), so `R`/`P` are how you get those translations in the first place, not just a "re-" translate. Completion time depends on the translation service.
 
-If your keybinds look reset after upgrading: this release changes the mod id from `mctranslator` to `nyanslate`. The first launch automatically copies your old config file, translation caches, and any custom `options.txt` keybinds over to the new name (the old files are kept, not deleted), once.
+If your keybinds look reset after upgrading: this release changes the mod id from `mctranslator` to `nyanlex`. The first launch automatically copies your old config file, translation caches, and any custom `options.txt` keybinds over to the new name (the old files are kept, not deleted), once.
 
 ## 1.0.0 highlights
 
-- **Renamed to Nyanslate**: the package, mod id, config/cache filename prefix, and GitHub translation hub all moved to the new name. The first launch automatically copies your old `mctranslator-*` config, caches, and keybinds to the new name (originals are kept; existing new-named files are never overwritten).
+- **Renamed to NyanLex Translator**: the package, mod id, config/cache filename prefix, and GitHub translation hub all moved to the new name. The first launch automatically copies your config, caches, and keybinds saved under any earlier name to the new name (originals are kept; existing new-named files are never overwritten).
 - Item and mod-screen translation now triggers on demand (`R`/`P`); chat and other live text keep translating automatically, so nothing you haven't looked at gets translated ahead of time.
 - Tooltips now cache per segment, cutting down on re-requesting an entire long tooltip for one changed line.
 - Adds a startup check and download-confirmation flow for the GitHub AI translation hub, letting you pull in translations others have already shared and the community has reviewed; it can be turned off in settings.
@@ -187,4 +187,4 @@ If your keybinds look reset after upgrading: this release changes the mod id fro
 
 ## Source and issues
 
-See [PACKAGING.md](PACKAGING.md) for build commands and the release folder layout. Report problems through [GitHub Issues](https://github.com/DragonMeow1012/Nyanslate/issues).
+See [PACKAGING.md](PACKAGING.md) for build commands and the release folder layout. Report problems through [GitHub Issues](https://github.com/DragonMeow1012/NyanLex/issues).

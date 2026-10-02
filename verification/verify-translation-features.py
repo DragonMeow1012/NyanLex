@@ -16,20 +16,20 @@ TARGETS = ["forge1122", "forge1132", "fabric1144", "fabric1152", "fabric1165",
            "fabric1171", "fabric1182", "fabric1194", "fabric120", ".", "fabric12111",
            "fabric2612", "fabric26", "fabric263", "neoforge120", "neoforge", "neoforge26", "neoforge263"]
 LEGACY_TARGETS = TARGETS[:5]
-PREFIX = "com/dragonmeow/nyanslate/"
+PREFIX = "com/dragonmeow/nyanlex/"
 # design-1.0.7 section 5: every key exactly once in en_us/zh_tw (all targets) and in
 # zh_cn/zh_hk (non-Forge). Optional legacy ".short" variants are not required.
 REQUEST_KEYS = [
-    "config.nyanslate.requests.open",
-    "config.nyanslate.requests.open.paused",
-    "screen.nyanslate.requests.title",
-    "screen.nyanslate.requests.toggle",
-    "screen.nyanslate.requests.toggle.hint",
-    "screen.nyanslate.requests.terms",
-    "screen.nyanslate.requests.terms.hint",
+    "config.nyanlex.requests.open",
+    "config.nyanlex.requests.open.paused",
+    "screen.nyanlex.requests.title",
+    "screen.nyanlex.requests.toggle",
+    "screen.nyanlex.requests.toggle.hint",
+    "screen.nyanlex.requests.terms",
+    "screen.nyanlex.requests.terms.hint",
 ]
 # The requests screen class name is chosen per tree, so find it by its title key.
-REQUEST_UI_STRING = b"screen.nyanslate.requests.title"
+REQUEST_UI_STRING = b"screen.nyanlex.requests.title"
 CONFIG_FIELDS = [b"translationRequestsEnabled", b"doNotTranslateTerms"]
 # Modern core: translate/<name>.class
 MODERN_REQUEST_CLASSES = ["DoNotTranslateMatcher", "RequestGate", "RequestsPausedException"]
@@ -108,8 +108,8 @@ def check_jar(target, path):
         languages = ["en_us", "zh_tw"] if forge else ["en_us", "zh_tw", "zh_cn", "zh_hk"]
         extension = "lang" if target == "forge1122" else "json"
         for language in languages:
-            text = read_entry(jar, "assets/nyanslate/lang/" + language + "." + extension, target).decode("utf-8")
-            for key in ["config.nyanslate.translations.export", "config.nyanslate.translations.import", "key.nyanslate.screenscan"]:
+            text = read_entry(jar, "assets/nyanlex/lang/" + language + "." + extension, target).decode("utf-8")
+            for key in ["config.nyanlex.translations.export", "config.nyanlex.translations.import", "key.nyanlex.screenscan"]:
                 assert text.count(key) == 1, (target, language, key)
             for key in REQUEST_KEYS:
                 values = key_values(text, extension, key)
@@ -126,7 +126,7 @@ def check_jar(target, path):
             assert b"FMLCorePlugin:" in read_entry(jar, "META-INF/MANIFEST.MF", target), target
             assert PREFIX + "forgelegacy/ScreenTextTransformer.class" in jar.namelist()
         if target == "forge1132":
-            assert "nyanslate-screen-text.js" in jar.namelist()
+            assert "nyanlex-screen-text.js" in jar.namelist()
             assert "META-INF/coremods.json" in jar.namelist()
     return {"requests_ui": [name[len(PREFIX):] for name in request_ui]}
 
@@ -134,7 +134,7 @@ def check_jar(target, path):
 def main():
     results = []
     for target in TARGETS:
-        jars = [p for p in (ROOT / target / "build/libs").glob("nyanslate-" + VERSION + "-*.jar")
+        jars = [p for p in (ROOT / target / "build/libs").glob("nyanlex-" + VERSION + "-*.jar")
                 if not p.name.endswith(("-sources.jar", "-dev.jar", "-javadoc.jar"))]
         assert len(jars) == 1, (target, jars)
         path = jars[0]

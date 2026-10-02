@@ -1,6 +1,6 @@
-package com.dragonmeow.nyanslate.translate;
+package com.dragonmeow.nyanlex.translate;
 
-import com.dragonmeow.nyanslate.cache.FileStore;
+import com.dragonmeow.nyanlex.cache.FileStore;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -27,8 +27,8 @@ import java.util.regex.Pattern;
  * call the row-shape package-private test hooks ({@link TradeLineComposer#matchesRow},
  * {@link StatsLineComposer#matchesRow}) the same way {@link TooltipSegmentPlanner} itself
  * does, without reflection. Same safety rules as the other {@code verification/real-data}
- * tools in this directory: refuses a directory holding {@code nyanslate.json}/{@code
- * nyanslate-codex-home}; only ever opens a COPY of {@code nyanslate-ai-cache-<lang>
+ * tools in this directory: refuses a directory holding {@code nyanlex.json}/{@code
+ * nyanlex-codex-home}; only ever opens a COPY of {@code nyanlex-ai-cache-<lang>
  * .json}; stdout carries aggregate counts only; row-text SAMPLES go to a file (never
  * stdout), filtered through {@link PlayerNamePatterns#nameSpans} as an extra belt-and-braces
  * check even though an abandoned/prose row is not expected to carry a raw player name (those
@@ -64,20 +64,20 @@ public final class LegacySegmentAbandonReasons {
             return;
         }
         Path dataDir = Paths.get(args[0]).toAbsolutePath().normalize();
-        if (Files.exists(dataDir.resolve("nyanslate.json"))
-                || Files.exists(dataDir.resolve("nyanslate-codex-home"))) {
+        if (Files.exists(dataDir.resolve("nyanlex.json"))
+                || Files.exists(dataDir.resolve("nyanlex-codex-home"))) {
             System.err.println("REFUSED: looks like a live Minecraft config directory.");
             System.exit(3);
             return;
         }
-        Path cacheFile = dataDir.resolve("nyanslate-ai-cache-" + LANG_TAG + ".json");
+        Path cacheFile = dataDir.resolve("nyanlex-ai-cache-" + LANG_TAG + ".json");
         if (!Files.isRegularFile(cacheFile)) {
             System.err.println("NOTHING_TO_ANALYSE: no " + cacheFile.getFileName() + " in " + dataDir);
             System.exit(4);
             return;
         }
 
-        Path tempDir = Files.createTempDirectory("nyanslate-abandon-reasons-");
+        Path tempDir = Files.createTempDirectory("nyanlex-abandon-reasons-");
         try {
             Path copy = tempDir.resolve(cacheFile.getFileName());
             Files.copy(cacheFile, copy);

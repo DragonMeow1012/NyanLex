@@ -10,14 +10,14 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: nyanslate-1.0.7-Fabric-1.21.1.jar (mirrors the NeoForge classifier scheme).
+// Final jar name: nyanlex-1.0.7-Fabric-1.21.1.jar (mirrors the NeoForge classifier scheme).
 tasks.named('remapJar') {
     archiveClassifier = 'Fabric-1.21.1'
 }
 
 tasks.named('jar') {
     from('LICENSE') {
-        rename { 'LICENSE_Nyanslate' }
+        rename { 'LICENSE_NyanLex' }
     }
 }
 
@@ -73,13 +73,13 @@ processResources {
 }
 
 // Author-only: export validated AI-cache rows into translation-hub/ repository files.
-// See com.dragonmeow.nyanslate.hub.tool.HubExportTool for the full flag reference. Example:
+// See com.dragonmeow.nyanlex.hub.tool.HubExportTool for the full flag reference. Example:
 //   gradle hubExport -PcacheDir="C:\Users\me\AppData\Roaming\.minecraft\config" -Plang=zh-TW \
 //           -Pserver=hypixel.net -Pout=translation-hub -PmergeIndex -PdropChat
 tasks.register('hubExport', JavaExec) {
     group = 'translation hub'
     description = 'Author-only: export validated AI-cache rows into translation-hub/ repository files.'
-    mainClass = 'com.dragonmeow.nyanslate.hub.tool.HubExportTool'
+    mainClass = 'com.dragonmeow.nyanlex.hub.tool.HubExportTool'
     classpath = sourceSets.main.runtimeClasspath
     jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
     doFirst {

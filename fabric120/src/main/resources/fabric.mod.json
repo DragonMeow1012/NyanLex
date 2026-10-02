@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "id": "nyanslate",
+  "id": "nyanlex",
   "version": "${version}",
-  "name": "Nyanslate",
+  "name": "NyanLex Translator",
   "description": "Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation.",
-  "icon": "assets/nyanslate/icon.png",
+  "icon": "assets/nyanlex/icon.png",
   "authors": [
     "DragonMeow"
   ],
@@ -13,12 +13,12 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "com.dragonmeow.nyanslate.fabric.NyanslateFabric"
+      "com.dragonmeow.nyanlex.fabric.NyanLexFabric"
     ]
   },
   "mixins": [
     {
-      "config": "nyanslate.mixins.json",
+      "config": "nyanlex.mixins.json",
       "environment": "client"
     }
   ],

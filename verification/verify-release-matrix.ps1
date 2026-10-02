@@ -22,7 +22,7 @@ $expectedCodexRuns = 72
 # One CodeSource proof per core harness run and per Codex run.
 $expectedCodeSourceRuns = 92
 # 1.0.7 settings anchor: the request switch toggle of the new requests/terms screen.
-$requestSwitchUiKey = 'screen.nyanslate.requests.toggle'
+$requestSwitchUiKey = 'screen.nyanlex.requests.toggle'
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $verificationRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $gradleExecutables = @{
@@ -38,9 +38,9 @@ $fakeCodex = Join-Path $verificationRoot 'fake-codex.cmd'
 $fakeCodexPython = Join-Path $verificationRoot 'fake_codex.py'
 $protocolAssertion = Join-Path $verificationRoot 'assert-inline-protocol.ps1'
 $requiredDeliveryKeys = @(
-    'config.nyanslate.chat_delivery',
-    'config.nyanslate.chat_delivery.ordered',
-    'config.nyanslate.chat_delivery.ready_first'
+    'config.nyanlex.chat_delivery',
+    'config.nyanlex.chat_delivery.ordered',
+    'config.nyanlex.chat_delivery.ready_first'
 )
 
 function Require {
@@ -110,7 +110,7 @@ function New-FabricRow {
         Loader = 'fabric'
         Label = 'Fabric'
         Minecraft = $Minecraft
-        ArtifactName = "nyanslate-$releaseVersion-Fabric-$Minecraft.jar"
+        ArtifactName = "nyanlex-$releaseVersion-Fabric-$Minecraft.jar"
         MetadataKind = 'fabric'
         MetadataEntry = 'fabric.mod.json'
         MinecraftRange = $Minecraft
@@ -172,7 +172,7 @@ function New-TomlRow {
         Loader = $Loader
         Label = $Label
         Minecraft = $Minecraft
-        ArtifactName = "nyanslate-$releaseVersion-$Label-$Minecraft.jar"
+        ArtifactName = "nyanlex-$releaseVersion-$Label-$Minecraft.jar"
         MetadataKind = 'toml'
         MetadataEntry = $MetadataEntry
         MinecraftRange = $MinecraftRange
@@ -202,7 +202,7 @@ function New-Forge1122Row {
         Loader = 'forge'
         Label = 'Forge'
         Minecraft = '1.12.2'
-        ArtifactName = "nyanslate-$releaseVersion-Forge-1.12.2.jar"
+        ArtifactName = "nyanlex-$releaseVersion-Forge-1.12.2.jar"
         MetadataKind = 'forge1122'
         MetadataEntry = 'mcmod.info'
         MinecraftRange = '1.12.2'
@@ -216,8 +216,8 @@ function New-Forge1122Row {
         RuntimeJdk = 8
         BuildJdk = 8
         HarnessKind = 'forgelegacy'
-        MainClass = 'com.dragonmeow.nyanslate.forgelegacy.NyanslateForge'
-        SettingsClass = 'com.dragonmeow.nyanslate.forgelegacy.ForgeSettingsScreen'
+        MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge'
+        SettingsClass = 'com.dragonmeow.nyanlex.forgelegacy.ForgeSettingsScreen'
         LangCount = 2
         LangExtension = 'lang'
     }
@@ -231,72 +231,72 @@ $rows = @(
         -TomlVersion ('${file.jarVersion}') -LoaderDependency 'forge' `
         -LoaderDependencyRange '[25,)' -SourceRelease 8 -ClassMajor 52 `
         -RuntimeJdk 8 -BuildJdk 8 -HarnessKind 'forgelegacy' `
-        -MainClass 'com.dragonmeow.nyanslate.forgelegacy.NyanslateForge' `
-        -SettingsClass 'com.dragonmeow.nyanslate.forgelegacy.ForgeSettingsScreen' `
+        -MainClass 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge' `
+        -SettingsClass 'com.dragonmeow.nyanlex.forgelegacy.ForgeSettingsScreen' `
         -LangCount 2 -LangExtension 'json'
 
     New-FabricRow -Key 'fabric1144' -Project 'fabric1144' -Minecraft '1.14.4' `
         -LoaderRange '>=0.16.0' -JavaRange '>=8' -SourceRelease 8 `
         -ClassMajor 52 -RuntimeJdk 8 -HarnessKind 'legacy' `
-        -MainClass 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' `
-        -SettingsClass 'com.dragonmeow.nyanslate.legacy.LegacySettingsScreen'
+        -MainClass 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod' `
+        -SettingsClass 'com.dragonmeow.nyanlex.legacy.LegacySettingsScreen'
     New-FabricRow -Key 'fabric1152' -Project 'fabric1152' -Minecraft '1.15.2' `
         -LoaderRange '>=0.16.0' -JavaRange '>=8' -SourceRelease 8 `
         -ClassMajor 52 -RuntimeJdk 8 -HarnessKind 'legacy' `
-        -MainClass 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' `
-        -SettingsClass 'com.dragonmeow.nyanslate.legacy.LegacySettingsScreen'
+        -MainClass 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod' `
+        -SettingsClass 'com.dragonmeow.nyanlex.legacy.LegacySettingsScreen'
     New-FabricRow -Key 'fabric1165' -Project 'fabric1165' -Minecraft '1.16.5' `
         -LoaderRange '>=0.16.0' -JavaRange '>=8' -SourceRelease 8 `
         -ClassMajor 52 -RuntimeJdk 8 -HarnessKind 'legacy' `
-        -MainClass 'com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod' `
-        -SettingsClass 'com.dragonmeow.nyanslate.legacy.LegacySettingsScreen'
+        -MainClass 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod' `
+        -SettingsClass 'com.dragonmeow.nyanlex.legacy.LegacySettingsScreen'
     New-FabricRow -Key 'fabric1171' -Project 'fabric1171' -Minecraft '1.17.1' `
         -LoaderRange '>=0.16.0' -JavaRange '>=16' -SourceRelease 16 `
         -ClassMajor 60 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric1182' -Project 'fabric1182' -Minecraft '1.18.2' `
         -LoaderRange '>=0.16.0' -JavaRange '>=17' -SourceRelease 17 `
         -ClassMajor 61 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric1194' -Project 'fabric1194' -Minecraft '1.19.4' `
         -LoaderRange '>=0.16.0' -JavaRange '>=17' -SourceRelease 17 `
         -ClassMajor 61 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric120' -Project 'fabric120' -Minecraft '1.20.1' `
         -LoaderRange '>=0.16.0' -JavaRange '>=17' -SourceRelease 17 `
         -ClassMajor 61 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric1211' -Project '.' -Minecraft '1.21.1' `
         -LoaderRange '>=0.16.0' -JavaRange '>=21' -SourceRelease 21 `
         -ClassMajor 65 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric12111' -Project 'fabric12111' -Minecraft '1.21.11' `
         -LoaderRange '>=0.16.0' -JavaRange '>=21' -SourceRelease 21 `
         -ClassMajor 65 -RuntimeJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric.NyanslateFabric' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric.TranslationConfigScreen'
+        -MainClass 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric.TranslationConfigScreen'
     New-FabricRow -Key 'fabric2612' -Project 'fabric2612' -Minecraft '26.1.2' `
         -LoaderRange '>=0.19.0' -JavaRange '>=25' -SourceRelease 25 `
         -ClassMajor 69 -RuntimeJdk 25 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric26.Fabric26ConfigScreen'
+        -MainClass 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric26.Fabric26ConfigScreen'
     New-FabricRow -Key 'fabric26' -Project 'fabric26' -Minecraft '26.2' `
         -LoaderRange '>=0.19.0' -JavaRange '>=25' -SourceRelease 25 `
         -ClassMajor 69 -RuntimeJdk 25 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric26.Fabric26ConfigScreen'
+        -MainClass 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric26.Fabric26ConfigScreen'
     # No sources of its own: fabric263/build.gradle compiles ../fabric26 (java and
     # resources) plus ../platform263, against Minecraft 26.3 / Fabric Loader 0.19.5.
     New-FabricRow -Key 'fabric263' -Project 'fabric263' -Minecraft '26.3' `
         -LoaderRange '>=0.19.0' -JavaRange '>=25' -SourceRelease 25 `
         -ClassMajor 69 -RuntimeJdk 25 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.fabric26.NyanslateFabric26' `
-        -SettingsClass 'com.dragonmeow.nyanslate.fabric26.Fabric26ConfigScreen' `
+        -MainClass 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26' `
+        -SettingsClass 'com.dragonmeow.nyanlex.fabric26.Fabric26ConfigScreen' `
         -SourceProject 'fabric26' -PlatformProject 'platform263'
 
     New-TomlRow -Key 'neoforge120' -Project 'neoforge120' -Loader 'neoforge' `
@@ -305,8 +305,8 @@ $rows = @(
         -TomlVersion $releaseVersion -LoaderDependency 'forge' `
         -LoaderDependencyRange '[47,)' -SourceRelease 17 -ClassMajor 61 `
         -RuntimeJdk 21 -BuildJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.neoforge.NyanslateNeoForge' `
-        -SettingsClass 'com.dragonmeow.nyanslate.neoforge.TranslationConfigScreen' `
+        -MainClass 'com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge' `
+        -SettingsClass 'com.dragonmeow.nyanlex.neoforge.TranslationConfigScreen' `
         -LangCount 143 -LangExtension 'json'
     New-TomlRow -Key 'neoforge1211' -Project 'neoforge' -Loader 'neoforge' `
         -Label 'NeoForge' -Minecraft '1.21.1' `
@@ -315,8 +315,8 @@ $rows = @(
         -TomlVersion $releaseVersion -LoaderDependency 'neoforge' `
         -LoaderDependencyRange '[21.1.0,)' -SourceRelease 21 -ClassMajor 65 `
         -RuntimeJdk 21 -BuildJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.neoforge.NyanslateNeoForge' `
-        -SettingsClass 'com.dragonmeow.nyanslate.neoforge.TranslationConfigScreen' `
+        -MainClass 'com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge' `
+        -SettingsClass 'com.dragonmeow.nyanlex.neoforge.TranslationConfigScreen' `
         -LangCount 143 -LangExtension 'json'
     New-TomlRow -Key 'neoforge26' -Project 'neoforge26' -Loader 'neoforge' `
         -Label 'NeoForge' -Minecraft '26.2' `
@@ -325,8 +325,8 @@ $rows = @(
         -TomlVersion $releaseVersion -LoaderDependency 'neoforge' `
         -LoaderDependencyRange '[26.2,)' -SourceRelease 25 -ClassMajor 69 `
         -RuntimeJdk 25 -BuildJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.neoforge26.NyanslateNeoForge26' `
-        -SettingsClass 'com.dragonmeow.nyanslate.neoforge26.Neo26ConfigScreen' `
+        -MainClass 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26' `
+        -SettingsClass 'com.dragonmeow.nyanlex.neoforge26.Neo26ConfigScreen' `
         -LangCount 143 -LangExtension 'json'
     # No sources of its own: neoforge263/build.gradle compiles ../neoforge26 (java and
     # resources) plus ../platform263, against NeoForge 26.3.0.6-beta (ModDevGradle 2.0.147).
@@ -337,8 +337,8 @@ $rows = @(
         -TomlVersion $releaseVersion -LoaderDependency 'neoforge' `
         -LoaderDependencyRange '[26.3,)' -SourceRelease 25 -ClassMajor 69 `
         -RuntimeJdk 25 -BuildJdk 21 -HarnessKind 'modern' `
-        -MainClass 'com.dragonmeow.nyanslate.neoforge26.NyanslateNeoForge26' `
-        -SettingsClass 'com.dragonmeow.nyanslate.neoforge26.Neo26ConfigScreen' `
+        -MainClass 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26' `
+        -SettingsClass 'com.dragonmeow.nyanlex.neoforge26.Neo26ConfigScreen' `
         -LangCount 143 -LangExtension 'json' `
         -SourceProject 'neoforge26' -PlatformProject 'platform263'
 )
@@ -353,8 +353,8 @@ function Get-HarnessSpec {
     if ($Kind -ceq 'modern') {
         if ($Purpose -ceq 'core') {
             return [pscustomobject]@{
-                Source = 'modern\com\dragonmeow\nyanslate\translate\InlineCoreRegression.java'
-                Main = 'com.dragonmeow.nyanslate.translate.InlineCoreRegression'
+                Source = 'modern\com\dragonmeow\nyanlex\translate\InlineCoreRegression.java'
+                Main = 'com.dragonmeow.nyanlex.translate.InlineCoreRegression'
                 # v107 = 1.0.7 request-switch/do-not-translate cases (RequestSwitchAndTermsSuite).
                 Marker = ('INLINE_CORE_OK hostile=24 codex=21 v107=24 ' +
                     'coverage=recovery-assembly,result-progress,batch-budget,codex-state,' +
@@ -363,8 +363,8 @@ function Get-HarnessSpec {
             }
         }
         return [pscustomobject]@{
-            Source = 'modern\com\dragonmeow\nyanslate\translate\InlineCodexSimulation.java'
-            Main = 'com.dragonmeow.nyanslate.translate.InlineCodexSimulation'
+            Source = 'modern\com\dragonmeow\nyanlex\translate\InlineCodexSimulation.java'
+            Main = 'com.dragonmeow.nyanlex.translate.InlineCodexSimulation'
             Marker = 'INLINE_CODEX_OK modern'
             TransformPackage = $null
         }
@@ -372,15 +372,15 @@ function Get-HarnessSpec {
     if ($Kind -ceq 'legacy') {
         if ($Purpose -ceq 'core') {
             return [pscustomobject]@{
-                Source = 'legacy-core\com\dragonmeow\nyanslate\legacy\InlineLegacyCoreSimulation.java'
-                Main = 'com.dragonmeow.nyanslate.legacy.InlineLegacyCoreSimulation'
+                Source = 'legacy-core\com\dragonmeow\nyanlex\legacy\InlineLegacyCoreSimulation.java'
+                Main = 'com.dragonmeow.nyanlex.legacy.InlineLegacyCoreSimulation'
                 Marker = 'INLINE_LEGACY_CORE_OK'
                 TransformPackage = $null
             }
         }
         return [pscustomobject]@{
-            Source = 'legacy\com\dragonmeow\nyanslate\legacy\InlineCodexSimulation.java'
-            Main = 'com.dragonmeow.nyanslate.legacy.InlineCodexSimulation'
+            Source = 'legacy\com\dragonmeow\nyanlex\legacy\InlineCodexSimulation.java'
+            Main = 'com.dragonmeow.nyanlex.legacy.InlineCodexSimulation'
             Marker = 'INLINE_CODEX_OK legacy'
             TransformPackage = $null
         }
@@ -393,22 +393,22 @@ function Get-HarnessSpec {
             # omitted from Forge by a stale copied verification file.
             return @(
                 [pscustomobject]@{
-                    Source = 'legacy-core\com\dragonmeow\nyanslate\legacy\InlineLegacyCoreSimulation.java'
-                    Main = 'com.dragonmeow.nyanslate.forgelegacy.InlineLegacyCoreSimulation'
+                    Source = 'legacy-core\com\dragonmeow\nyanlex\legacy\InlineLegacyCoreSimulation.java'
+                    Main = 'com.dragonmeow.nyanlex.forgelegacy.InlineLegacyCoreSimulation'
                     Marker = 'INLINE_LEGACY_CORE_OK'
-                    TransformPackage = 'com.dragonmeow.nyanslate.forgelegacy'
+                    TransformPackage = 'com.dragonmeow.nyanlex.forgelegacy'
                 },
                 [pscustomobject]@{
-                    Source = 'forgelegacy\com\dragonmeow\nyanslate\forgelegacy\InlineForgeGlueRegression.java'
-                    Main = 'com.dragonmeow.nyanslate.forgelegacy.InlineForgeGlueRegression'
+                    Source = 'forgelegacy\com\dragonmeow\nyanlex\forgelegacy\InlineForgeGlueRegression.java'
+                    Main = 'com.dragonmeow.nyanlex.forgelegacy.InlineForgeGlueRegression'
                     Marker = 'INLINE_FORGE_GLUE_OK scenarios=725760'
                     TransformPackage = $null
                 }
             )
         }
         return [pscustomobject]@{
-            Source = 'forgelegacy\com\dragonmeow\nyanslate\forgelegacy\InlineCodexSimulation.java'
-            Main = 'com.dragonmeow.nyanslate.forgelegacy.InlineCodexSimulation'
+            Source = 'forgelegacy\com\dragonmeow\nyanlex\forgelegacy\InlineCodexSimulation.java'
+            Main = 'com.dragonmeow.nyanlex.forgelegacy.InlineCodexSimulation'
             Marker = 'INLINE_CODEX_OK legacy'
             TransformPackage = $null
         }
@@ -421,44 +421,44 @@ function Get-CoreClasses {
 
     if ($Kind -ceq 'modern') {
         return @(
-            'com.dragonmeow.nyanslate.config.TranslatorConfig',
-            'com.dragonmeow.nyanslate.service.ChatDeliveryQueue',
-            'com.dragonmeow.nyanslate.service.ChatDeliverySession',
-            'com.dragonmeow.nyanslate.service.ChatRequestProfile',
-            'com.dragonmeow.nyanslate.service.RecoveryAssembly',
-            'com.dragonmeow.nyanslate.service.TranslationService',
-            'com.dragonmeow.nyanslate.translate.TemplateText',
-            'com.dragonmeow.nyanslate.translate.CodexAppServerClient',
-            'com.dragonmeow.nyanslate.translate.SessionTokenUsage',
-            'com.dragonmeow.nyanslate.translate.DoNotTranslateMatcher',
-            'com.dragonmeow.nyanslate.translate.NameMasker',
-            'com.dragonmeow.nyanslate.translate.RequestGate',
-            'com.dragonmeow.nyanslate.translate.RequestPacer',
-            'com.dragonmeow.nyanslate.translate.RequestsPausedException',
-            'com.dragonmeow.nyanslate.cache.TranslationCache',
-            'com.dragonmeow.nyanslate.cache.FileStore'
+            'com.dragonmeow.nyanlex.config.TranslatorConfig',
+            'com.dragonmeow.nyanlex.service.ChatDeliveryQueue',
+            'com.dragonmeow.nyanlex.service.ChatDeliverySession',
+            'com.dragonmeow.nyanlex.service.ChatRequestProfile',
+            'com.dragonmeow.nyanlex.service.RecoveryAssembly',
+            'com.dragonmeow.nyanlex.service.TranslationService',
+            'com.dragonmeow.nyanlex.translate.TemplateText',
+            'com.dragonmeow.nyanlex.translate.CodexAppServerClient',
+            'com.dragonmeow.nyanlex.translate.SessionTokenUsage',
+            'com.dragonmeow.nyanlex.translate.DoNotTranslateMatcher',
+            'com.dragonmeow.nyanlex.translate.NameMasker',
+            'com.dragonmeow.nyanlex.translate.RequestGate',
+            'com.dragonmeow.nyanlex.translate.RequestPacer',
+            'com.dragonmeow.nyanlex.translate.RequestsPausedException',
+            'com.dragonmeow.nyanlex.cache.TranslationCache',
+            'com.dragonmeow.nyanlex.cache.FileStore'
         )
     }
     if ($Kind -ceq 'legacy') {
         return @(
-            'com.dragonmeow.nyanslate.legacy.LegacyConfig',
-            'com.dragonmeow.nyanslate.legacy.LegacyChatDeliveryQueue',
-            'com.dragonmeow.nyanslate.legacy.LegacyChatRequestProfile',
-            'com.dragonmeow.nyanslate.legacy.LegacyTemplateText',
-            'com.dragonmeow.nyanslate.legacy.LegacyTranslator',
-            'com.dragonmeow.nyanslate.legacy.LegacyCodexClient',
-            'com.dragonmeow.nyanslate.legacy.LegacySessionTokenUsage'
+            'com.dragonmeow.nyanlex.legacy.LegacyConfig',
+            'com.dragonmeow.nyanlex.legacy.LegacyChatDeliveryQueue',
+            'com.dragonmeow.nyanlex.legacy.LegacyChatRequestProfile',
+            'com.dragonmeow.nyanlex.legacy.LegacyTemplateText',
+            'com.dragonmeow.nyanlex.legacy.LegacyTranslator',
+            'com.dragonmeow.nyanlex.legacy.LegacyCodexClient',
+            'com.dragonmeow.nyanlex.legacy.LegacySessionTokenUsage'
         )
     }
     if ($Kind -ceq 'forgelegacy') {
         return @(
-            'com.dragonmeow.nyanslate.forgelegacy.LegacyConfig',
-            'com.dragonmeow.nyanslate.forgelegacy.LegacyChatDeliveryQueue',
-            'com.dragonmeow.nyanslate.forgelegacy.LegacyChatRequestProfile',
-            'com.dragonmeow.nyanslate.forgelegacy.LegacyTemplateText',
-            'com.dragonmeow.nyanslate.forgelegacy.LegacyTranslator',
-            'com.dragonmeow.nyanslate.forgelegacy.LegacyCodexClient',
-            'com.dragonmeow.nyanslate.forgelegacy.LegacySessionTokenUsage'
+            'com.dragonmeow.nyanlex.forgelegacy.LegacyConfig',
+            'com.dragonmeow.nyanlex.forgelegacy.LegacyChatDeliveryQueue',
+            'com.dragonmeow.nyanlex.forgelegacy.LegacyChatRequestProfile',
+            'com.dragonmeow.nyanlex.forgelegacy.LegacyTemplateText',
+            'com.dragonmeow.nyanlex.forgelegacy.LegacyTranslator',
+            'com.dragonmeow.nyanlex.forgelegacy.LegacyCodexClient',
+            'com.dragonmeow.nyanlex.forgelegacy.LegacySessionTokenUsage'
         )
     }
     throw "Unknown class matrix kind: $Kind"
@@ -520,7 +520,7 @@ function Get-JdkCandidates {
 
     $candidates = @()
     $override = [Environment]::GetEnvironmentVariable(
-        "NYANSLATE_JDK$Major", 'Process')
+        "NYANLEX_JDK$Major", 'Process')
     if (-not [string]::IsNullOrWhiteSpace($override)) {
         $candidates += $override
     }
@@ -596,7 +596,7 @@ function Resolve-Jdk {
         }
     }
 
-    $message = "JDK $Major was not found. Set NYANSLATE_JDK$Major to its home."
+    $message = "JDK $Major was not found. Set NYANLEX_JDK$Major to its home."
     if ($AllowMissing) {
         Write-Warning $message
         return $null
@@ -631,7 +631,7 @@ function Get-RequestSwitchUiReferences {
             $relative = $_.FullName.Substring($javaRoot.Length).TrimStart('\', '/')
             $segments = $relative -split '[\\/]'
             -not ($segments.Count -gt 4 -and $segments[0] -ceq 'com' -and
-                $segments[1] -ceq 'dragonmeow' -and $segments[2] -ceq 'nyanslate' -and
+                $segments[1] -ceq 'dragonmeow' -and $segments[2] -ceq 'nyanlex' -and
                 $corePackages -contains $segments[3])
         } | Where-Object {
             $code = [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8)
@@ -650,14 +650,14 @@ foreach ($row in $rows) {
             $settingsSource, [System.Text.Encoding]::UTF8)
         $keyMatches = [regex]::Matches(
             $settingsText,
-            '"(?<key>config\.nyanslate\.chat_delivery(?:\.[a-z_]+)?)"')
+            '"(?<key>config\.nyanlex\.chat_delivery(?:\.[a-z_]+)?)"')
         $uiDeliveryKeys = @($keyMatches | ForEach-Object {
             $_.Groups['key'].Value
         } | Select-Object -Unique)
         $deliveryKeys += $uiDeliveryKeys
     }
     if ($row.HarnessKind -ceq 'legacy') {
-        $deliveryKeys += 'config.nyanslate.chat_delivery.short'
+        $deliveryKeys += 'config.nyanlex.chat_delivery.short'
     }
     $row | Add-Member -NotePropertyName UiDeliveryKeys `
         -NotePropertyValue $uiDeliveryKeys
@@ -747,7 +747,7 @@ function Get-SharedSourceIssues {
         $issues += 'build.gradle adds source/resource directories beyond the two setSrcDirs calls'
     }
     $browserLinks = Join-Path $Row.PlatformRoot `
-        'src\main\java\com\dragonmeow\nyanslate\platform\BrowserLinks.java'
+        'src\main\java\com\dragonmeow\nyanlex\platform\BrowserLinks.java'
     if (-not (Test-Path -LiteralPath $browserLinks -PathType Leaf)) {
         $issues += "missing platform source $browserLinks"
     }
@@ -851,12 +851,12 @@ function Get-SourceReadiness {
         }
     }
     $requiredUiKeys = @(
-        'config.nyanslate.chat_delivery.ordered',
-        'config.nyanslate.chat_delivery.ready_first',
+        'config.nyanlex.chat_delivery.ordered',
+        'config.nyanlex.chat_delivery.ready_first',
         $(if ($Row.HarnessKind -ceq 'legacy') {
-            'config.nyanslate.chat_delivery.short'
+            'config.nyanlex.chat_delivery.short'
         } else {
-            'config.nyanslate.chat_delivery'
+            'config.nyanlex.chat_delivery'
         })
     )
     foreach ($key in $requiredUiKeys) {
@@ -871,7 +871,7 @@ function Get-SourceReadiness {
     }
 
     $resourceRoot = Join-Path $Row.SourceRoot 'src\main\resources'
-    $langRoot = Join-Path $resourceRoot 'assets\nyanslate\lang'
+    $langRoot = Join-Path $resourceRoot 'assets\nyanlex\lang'
     $langFiles = if (Test-Path -LiteralPath $langRoot -PathType Container) {
         @(Get-ChildItem -LiteralPath $langRoot -File -Force)
     } else {
@@ -1148,7 +1148,7 @@ function Assert-FabricMetadata {
     )
 
     $metadata = (Read-ZipEntryText $Archive 'fabric.mod.json') | ConvertFrom-Json
-    Require ([string]$metadata.id -ceq 'nyanslate') `
+    Require ([string]$metadata.id -ceq 'nyanlex') `
         "$($Row.Key) has wrong Fabric id"
     Require ([string]$metadata.version -ceq $releaseVersion) `
         "$($Row.Key) has wrong Fabric version: $($metadata.version)"
@@ -1178,10 +1178,10 @@ function Assert-Forge1122Metadata {
 
     $records = @((Read-ZipEntryText $Archive 'mcmod.info') | ConvertFrom-Json)
     $matches = @($records | Where-Object {
-        [string]$_.modid -ceq 'nyanslate'
+        [string]$_.modid -ceq 'nyanlex'
     })
     Require ($matches.Count -eq 1) `
-        "$($Row.Key) must contain one nyanslate mcmod.info record"
+        "$($Row.Key) must contain one nyanlex mcmod.info record"
     Require ([string]$matches[0].version -ceq $releaseVersion) `
         "$($Row.Key) has wrong mcmod.info version: $($matches[0].version)"
     Require ([string]$matches[0].mcversion -ceq $Row.MinecraftRange) `
@@ -1209,15 +1209,15 @@ function Assert-TomlMetadata {
 
     $modBlocks = @(Get-TomlBlocks $toml 'mods')
     $mainMods = @($modBlocks | Where-Object {
-        (Get-TomlValue $_ 'modId') -ceq 'nyanslate'
+        (Get-TomlValue $_ 'modId') -ceq 'nyanlex'
     })
     Require ($mainMods.Count -eq 1) `
-        "$($Row.Key) must contain one nyanslate TOML mod block"
+        "$($Row.Key) must contain one nyanlex TOML mod block"
     $tomlVersion = Get-TomlValue $mainMods[0] 'version'
     Require ($tomlVersion -ceq $Row.TomlVersion) `
         "$($Row.Key) has wrong TOML version: $tomlVersion"
 
-    $dependencies = @(Get-TomlBlocks $toml 'dependencies.nyanslate')
+    $dependencies = @(Get-TomlBlocks $toml 'dependencies.nyanlex')
     $minecraftDependencies = @($dependencies | Where-Object {
         (Get-TomlValue $_ 'modId') -ceq 'minecraft'
     })
@@ -1308,7 +1308,7 @@ function Assert-JarResources {
         $entry = $Archive.GetEntry($relative)
         Require ($null -ne $entry) `
             "$($Row.Key) JAR is missing source resource $relative"
-        if ($relative.StartsWith('assets/nyanslate/lang/',
+        if ($relative.StartsWith('assets/nyanlex/lang/',
                 [System.StringComparison]::Ordinal)) {
             $sourceHash = (Get-FileHash -LiteralPath $source.FullName `
                 -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -1320,13 +1320,13 @@ function Assert-JarResources {
 
     $sourceLangEntries = @($sourceFiles | Where-Object {
         $_.DirectoryName.Equals(
-            (Join-Path $resourceRoot 'assets\nyanslate\lang'),
+            (Join-Path $resourceRoot 'assets\nyanlex\lang'),
             [System.StringComparison]::OrdinalIgnoreCase)
     } | ForEach-Object {
-        'assets/nyanslate/lang/' + $_.Name
+        'assets/nyanlex/lang/' + $_.Name
     })
     $jarLangEntries = @($Archive.Entries | Where-Object {
-        $_.FullName.StartsWith('assets/nyanslate/lang/',
+        $_.FullName.StartsWith('assets/nyanlex/lang/',
             [System.StringComparison]::Ordinal) -and
         -not $_.FullName.EndsWith('/', [System.StringComparison]::Ordinal)
     } | ForEach-Object { $_.FullName })
@@ -1336,7 +1336,7 @@ function Assert-JarResources {
         "$($Row.Key) JAR language entry set"
 
     foreach ($locale in @('en_us', 'zh_tw')) {
-        $entryName = "assets/nyanslate/lang/$locale.$($Row.LangExtension)"
+        $entryName = "assets/nyanlex/lang/$locale.$($Row.LangExtension)"
         $text = Read-ZipEntryText $Archive $entryName
         Assert-DeliveryLanguageText $text $Row.LangExtension `
             "$($Row.Key) JAR $entryName" $Row.DeliveryKeys
@@ -1372,7 +1372,7 @@ function Assert-FinalJar {
             Assert-ArchiveClass $archive $className "$($Row.Key) required matrix"
         }
         $ownClasses = @($archive.Entries | Where-Object {
-            $_.FullName -match '^com/dragonmeow/nyanslate/.+\.class$'
+            $_.FullName -match '^com/dragonmeow/nyanlex/.+\.class$'
         })
         Require ($ownClasses.Count -gt 0) "$($Row.Key) JAR has no implementation classes"
         foreach ($entry in $ownClasses) {
@@ -1526,7 +1526,7 @@ function Get-MaterializedHarnessSource {
 
     $canonicalText = [System.IO.File]::ReadAllText(
         $source, [System.Text.Encoding]::UTF8)
-    $canonicalPackage = 'com.dragonmeow.nyanslate.legacy'
+    $canonicalPackage = 'com.dragonmeow.nyanlex.legacy'
     $expectedDeclaration = "package $canonicalPackage;"
     $replacementDeclaration = "package $($Harness.TransformPackage);"
     $occurrences = [regex]::Matches(
@@ -1576,38 +1576,38 @@ function Invoke-InlineHarness {
     $anchors = [string]::Join(';', [string[]]$Row.RequiredClasses)
 
     $environment = @{
-        NYANSLATE_CODEX_PATH = $fakeCodex
-        NYANSLATE_FAKE_LOG = $fakeLog
-        NYANSLATE_FAKE_EARLY_TURN = $EarlyTurn
-        NYANSLATE_FAKE_COMPLETED_FIRST = $CompletedFirst
+        NYANLEX_CODEX_PATH = $fakeCodex
+        NYANLEX_FAKE_LOG = $fakeLog
+        NYANLEX_FAKE_EARLY_TURN = $EarlyTurn
+        NYANLEX_FAKE_COMPLETED_FIRST = $CompletedFirst
     }
     if ($Mode -ceq 'final') {
-        $environment.NYANSLATE_FINAL_JAR = $Row.ArtifactPath
-        $environment.NYANSLATE_FINAL_HARNESS = $harnessSource
-        $environment.NYANSLATE_FINAL_LAUNCHER = $launcherSource
-        $environment.NYANSLATE_FINAL_MAIN = $Harness.Main
-        $environment.NYANSLATE_FINAL_ANCHORS = $anchors
-        $environment.NYANSLATE_FINAL_OUTPUT = $output
-        $environment.NYANSLATE_FINAL_RUNTIME = $runtime
-        $environment.NYANSLATE_FINAL_JAVA = Join-Path $RuntimeJdk 'bin\java.exe'
-        $environment.NYANSLATE_FINAL_JAVAC = Join-Path $RuntimeJdk 'bin\javac.exe'
-        $environment.NYANSLATE_FINAL_JAVA_RELEASE = [string]$Row.SourceRelease
-        $environment.NYANSLATE_FINAL_DEPENDENCY_NAMESPACE = `
+        $environment.NYANLEX_FINAL_JAR = $Row.ArtifactPath
+        $environment.NYANLEX_FINAL_HARNESS = $harnessSource
+        $environment.NYANLEX_FINAL_LAUNCHER = $launcherSource
+        $environment.NYANLEX_FINAL_MAIN = $Harness.Main
+        $environment.NYANLEX_FINAL_ANCHORS = $anchors
+        $environment.NYANLEX_FINAL_OUTPUT = $output
+        $environment.NYANLEX_FINAL_RUNTIME = $runtime
+        $environment.NYANLEX_FINAL_JAVA = Join-Path $RuntimeJdk 'bin\java.exe'
+        $environment.NYANLEX_FINAL_JAVAC = Join-Path $RuntimeJdk 'bin\javac.exe'
+        $environment.NYANLEX_FINAL_JAVA_RELEASE = [string]$Row.SourceRelease
+        $environment.NYANLEX_FINAL_DEPENDENCY_NAMESPACE = `
             $Row.FinalDependencyNamespace
         $selectedInit = $initScript
         $selectedTask = 'finalJarInline'
         $classpathMarker = 'FINAL_JAR_CLASSPATH_OK'
         $codeSourceMarker = 'FINAL_JAR_CODE_SOURCE_OK'
     } else {
-        $environment.NYANSLATE_SOURCE_HARNESS = $harnessSource
-        $environment.NYANSLATE_SOURCE_LAUNCHER = $sourceLauncher
-        $environment.NYANSLATE_SOURCE_MAIN = $Harness.Main
-        $environment.NYANSLATE_SOURCE_ANCHORS = $anchors
-        $environment.NYANSLATE_SOURCE_OUTPUT = $output
-        $environment.NYANSLATE_SOURCE_RUNTIME = $runtime
-        $environment.NYANSLATE_SOURCE_JAVA = Join-Path $RuntimeJdk 'bin\java.exe'
-        $environment.NYANSLATE_SOURCE_JAVAC = Join-Path $RuntimeJdk 'bin\javac.exe'
-        $environment.NYANSLATE_SOURCE_JAVA_RELEASE = [string]$Row.SourceRelease
+        $environment.NYANLEX_SOURCE_HARNESS = $harnessSource
+        $environment.NYANLEX_SOURCE_LAUNCHER = $sourceLauncher
+        $environment.NYANLEX_SOURCE_MAIN = $Harness.Main
+        $environment.NYANLEX_SOURCE_ANCHORS = $anchors
+        $environment.NYANLEX_SOURCE_OUTPUT = $output
+        $environment.NYANLEX_SOURCE_RUNTIME = $runtime
+        $environment.NYANLEX_SOURCE_JAVA = Join-Path $RuntimeJdk 'bin\java.exe'
+        $environment.NYANLEX_SOURCE_JAVAC = Join-Path $RuntimeJdk 'bin\javac.exe'
+        $environment.NYANLEX_SOURCE_JAVA_RELEASE = [string]$Row.SourceRelease
         $selectedInit = $sourceInitScript
         $selectedTask = 'sourceOutputInline'
         $classpathMarker = 'SOURCE_OUTPUT_CLASSPATH_OK'
@@ -1782,7 +1782,7 @@ Require ($initText.Contains('project.configurations.runtimeClasspath')) `
     'Final-JAR init script does not use dependency-only runtimeClasspath'
 Require ($initText.Contains("tasks.named('generateRemapClasspath')")) `
     'Mapped Fabric final-JAR verification does not use Loom production classpath'
-Require ($initText.Contains('NYANSLATE_FINAL_DEPENDENCY_NAMESPACE')) `
+Require ($initText.Contains('NYANLEX_FINAL_DEPENDENCY_NAMESPACE')) `
     'Final-JAR init script does not require an explicit production namespace'
 Require (-not $initText.Contains('project.sourceSets.main.runtimeClasspath')) `
     'Final-JAR init script must not put source-set runtime output on a classpath'

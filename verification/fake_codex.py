@@ -3,9 +3,9 @@ import os
 import sys
 import time
 
-log_path = os.environ.get("NYANSLATE_FAKE_LOG", "")
-early_turn = os.environ.get("NYANSLATE_FAKE_EARLY_TURN", "") == "1"
-completed_first = os.environ.get("NYANSLATE_FAKE_COMPLETED_FIRST", "") == "1"
+log_path = os.environ.get("NYANLEX_FAKE_LOG", "")
+early_turn = os.environ.get("NYANLEX_FAKE_EARLY_TURN", "") == "1"
+completed_first = os.environ.get("NYANLEX_FAKE_COMPLETED_FIRST", "") == "1"
 signed_in = True
 turn_number = 0
 

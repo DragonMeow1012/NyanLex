@@ -2,15 +2,15 @@ allprojects { project ->
     afterEvaluate {
         if (!project.plugins.hasPlugin('java')) return
 
-        def harnessValue = System.getenv('NYANSLATE_SOURCE_HARNESS')
-        def launcherValue = System.getenv('NYANSLATE_SOURCE_LAUNCHER')
-        def mainValue = System.getenv('NYANSLATE_SOURCE_MAIN')
-        def anchorsValue = System.getenv('NYANSLATE_SOURCE_ANCHORS')
-        def outputValue = System.getenv('NYANSLATE_SOURCE_OUTPUT')
-        def runtimeValue = System.getenv('NYANSLATE_SOURCE_RUNTIME')
-        def javaValue = System.getenv('NYANSLATE_SOURCE_JAVA')
-        def javacValue = System.getenv('NYANSLATE_SOURCE_JAVAC')
-        def releaseValue = System.getenv('NYANSLATE_SOURCE_JAVA_RELEASE')
+        def harnessValue = System.getenv('NYANLEX_SOURCE_HARNESS')
+        def launcherValue = System.getenv('NYANLEX_SOURCE_LAUNCHER')
+        def mainValue = System.getenv('NYANLEX_SOURCE_MAIN')
+        def anchorsValue = System.getenv('NYANLEX_SOURCE_ANCHORS')
+        def outputValue = System.getenv('NYANLEX_SOURCE_OUTPUT')
+        def runtimeValue = System.getenv('NYANLEX_SOURCE_RUNTIME')
+        def javaValue = System.getenv('NYANLEX_SOURCE_JAVA')
+        def javacValue = System.getenv('NYANLEX_SOURCE_JAVAC')
+        def releaseValue = System.getenv('NYANLEX_SOURCE_JAVA_RELEASE')
         if ([harnessValue, launcherValue, mainValue, anchorsValue, outputValue,
              runtimeValue, javaValue, javacValue, releaseValue]
                 .any { it == null || it.trim().isEmpty() }) return
@@ -110,14 +110,14 @@ allprojects { project ->
             executable = javaExecutable.absolutePath
             workingDir = runtime
             args rootsArgument, anchorsValue, mainValue, runtime.absolutePath
-            environment 'NYANSLATE_CODEX_PATH',
-                    (System.getenv('NYANSLATE_CODEX_PATH') ?: '')
-            environment 'NYANSLATE_FAKE_LOG',
-                    (System.getenv('NYANSLATE_FAKE_LOG') ?: '')
-            environment 'NYANSLATE_FAKE_EARLY_TURN',
-                    (System.getenv('NYANSLATE_FAKE_EARLY_TURN') ?: '')
-            environment 'NYANSLATE_FAKE_COMPLETED_FIRST',
-                    (System.getenv('NYANSLATE_FAKE_COMPLETED_FIRST') ?: '')
+            environment 'NYANLEX_CODEX_PATH',
+                    (System.getenv('NYANLEX_CODEX_PATH') ?: '')
+            environment 'NYANLEX_FAKE_LOG',
+                    (System.getenv('NYANLEX_FAKE_LOG') ?: '')
+            environment 'NYANLEX_FAKE_EARLY_TURN',
+                    (System.getenv('NYANLEX_FAKE_EARLY_TURN') ?: '')
+            environment 'NYANLEX_FAKE_COMPLETED_FIRST',
+                    (System.getenv('NYANLEX_FAKE_COMPLETED_FIRST') ?: '')
             doFirst {
                 if (!runtime.isDirectory() && !runtime.mkdirs()) {
                     throw new GradleException("Could not create source inline runtime: ${runtime}")

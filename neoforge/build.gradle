@@ -5,13 +5,13 @@ plugins {
 
 version = project.mod_version
 group = project.maven_group
-base { archivesName = 'nyanslate' }
+base { archivesName = 'nyanlex' }
 
-// Final jar name: nyanslate-1.0.7-NeoForge-1.21.1.jar (name-version-loader-mcversion)
+// Final jar name: nyanlex-1.0.7-NeoForge-1.21.1.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     archiveClassifier = 'NeoForge-1.21.1'
     from('../LICENSE') {
-        rename { 'LICENSE_Nyanslate' }
+        rename { 'LICENSE_NyanLex' }
     }
 }
 
@@ -29,7 +29,7 @@ neoForge {
     }
 
     mods {
-        nyanslate {
+        nyanlex {
             sourceSet sourceSets.main
         }
     }

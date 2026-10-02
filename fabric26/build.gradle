@@ -10,11 +10,11 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: nyanslate-1.0.7-Fabric-26.2.jar (name-version-loader-mcversion)
+// Final jar name: nyanlex-1.0.7-Fabric-26.2.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     archiveClassifier = "Fabric-${project.minecraft_version}"
     from('../LICENSE') {
-        rename { 'LICENSE_Nyanslate' }
+        rename { 'LICENSE_NyanLex' }
     }
 }
 

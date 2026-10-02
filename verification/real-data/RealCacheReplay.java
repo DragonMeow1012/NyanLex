@@ -1,16 +1,16 @@
-package com.dragonmeow.nyanslate.translate;
+package com.dragonmeow.nyanlex.translate;
 
-import com.dragonmeow.nyanslate.cache.DynamicNamespacedStore;
-import com.dragonmeow.nyanslate.cache.FileStore;
-import com.dragonmeow.nyanslate.cache.LanguageFileStore;
-import com.dragonmeow.nyanslate.cache.NamespacedStore;
-import com.dragonmeow.nyanslate.cache.PersistentStore;
-import com.dragonmeow.nyanslate.cache.ProviderLanguageFileStore;
-import com.dragonmeow.nyanslate.cache.TranslationCache;
-import com.dragonmeow.nyanslate.config.DisplayMode;
-import com.dragonmeow.nyanslate.config.TranslatorConfig;
-import com.dragonmeow.nyanslate.service.TranslationDecision;
-import com.dragonmeow.nyanslate.service.TranslationService;
+import com.dragonmeow.nyanlex.cache.DynamicNamespacedStore;
+import com.dragonmeow.nyanlex.cache.FileStore;
+import com.dragonmeow.nyanlex.cache.LanguageFileStore;
+import com.dragonmeow.nyanlex.cache.NamespacedStore;
+import com.dragonmeow.nyanlex.cache.PersistentStore;
+import com.dragonmeow.nyanlex.cache.ProviderLanguageFileStore;
+import com.dragonmeow.nyanlex.cache.TranslationCache;
+import com.dragonmeow.nyanlex.config.DisplayMode;
+import com.dragonmeow.nyanlex.config.TranslatorConfig;
+import com.dragonmeow.nyanlex.service.TranslationDecision;
+import com.dragonmeow.nyanlex.service.TranslationService;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -89,17 +89,17 @@ import java.util.regex.Pattern;
  * <pre>
  *   GSON=~/.gradle/caches/modules-2/files-2.1/com.google.code.gson/gson/2.10.1/&lt;hash&gt;/gson-2.10.1.jar
  *   javac -encoding UTF-8 -cp "$GSON" -d CORE  (every *.java under
- *         src/main/java/com/dragonmeow/nyanslate/{config,cache,service,style,translate})
+ *         src/main/java/com/dragonmeow/nyanlex/{config,cache,service,style,translate})
  *   javac -encoding UTF-8 -cp "CORE;$GSON" -d HARNESS verification/real-data/RealCacheReplay.java
  * </pre>
  * <p>Run (Windows classpath separator shown):</p>
  * <pre>
  *   java -Xmx4g -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -cp "HARNESS;CORE;$GSON" \
- *        com.dragonmeow.nyanslate.translate.RealCacheReplay &lt;cache-copy-dir&gt; &lt;out-dir&gt;
+ *        com.dragonmeow.nyanlex.translate.RealCacheReplay &lt;cache-copy-dir&gt; &lt;out-dir&gt;
  * </pre>
- * <p>{@code <cache-copy-dir>} holds COPIES of {@code nyanslate-ai-cache-zh-tw.json},
- * {@code nyanslate-cache[-provider]-zh-tw.json} and {@code nyanslate-failures-zh-tw.json}. A
- * directory containing {@code nyanslate.json} or {@code nyanslate-codex-home} (a live config
+ * <p>{@code <cache-copy-dir>} holds COPIES of {@code nyanlex-ai-cache-zh-tw.json},
+ * {@code nyanlex-cache[-provider]-zh-tw.json} and {@code nyanlex-failures-zh-tw.json}. A
+ * directory containing {@code nyanlex.json} or {@code nyanlex-codex-home} (a live config
  * directory) is refused; the config file is never opened. The harness copies the three cache files
  * into a fresh {@code <out-dir>/work-*} directory and mutates only that copy. {@code <out-dir>} also
  * receives {@code samples-*.txt} (at most 30 samples per category) which contains the player's cached
@@ -192,8 +192,8 @@ public final class RealCacheReplay {
         }
         Path dataDir = Paths.get(args[0]).toAbsolutePath().normalize();
         Path outDir = Paths.get(args[1]).toAbsolutePath().normalize();
-        if (Files.exists(dataDir.resolve("nyanslate.json"))
-                || Files.exists(dataDir.resolve("nyanslate-codex-home"))) {
+        if (Files.exists(dataDir.resolve("nyanlex.json"))
+                || Files.exists(dataDir.resolve("nyanlex-codex-home"))) {
             System.err.println("REFUSED: the directory looks like a live Minecraft config directory."
                     + " Pass a directory holding COPIES of the cache files only.");
             System.exit(3);
@@ -204,9 +204,9 @@ public final class RealCacheReplay {
         Path work = outDir.resolve("work-" + label + "-" + stamp);
         int copied = copyCacheFiles(dataDir, work);
         System.out.println("RUN dataset=" + label + " workCopyFiles=" + copied);
-        if (!Files.isRegularFile(work.resolve("nyanslate-ai-cache-" + LANG_TAG + ".json"))) {
+        if (!Files.isRegularFile(work.resolve("nyanlex-ai-cache-" + LANG_TAG + ".json"))) {
             // Never report success for a run that had nothing to replay (wrong/empty dir).
-            System.out.println("REAL_CACHE_REPLAY_NO_DATA (no nyanslate-ai-cache-" + LANG_TAG + ".json)");
+            System.out.println("REAL_CACHE_REPLAY_NO_DATA (no nyanlex-ai-cache-" + LANG_TAG + ".json)");
             System.exit(4);
         }
         Path samplesFile = outDir.resolve("samples-" + label + "-" + stamp + ".txt");
@@ -223,7 +223,7 @@ public final class RealCacheReplay {
     private static int copyCacheFiles(Path from, Path to) throws IOException {
         Files.createDirectories(to);
         Pattern allowed = Pattern.compile(
-                "nyanslate-(?:ai-cache|cache(?:-(?:youdao|deepl|microsoft))?|failures)-" + LANG_TAG + "\\.json");
+                "nyanlex-(?:ai-cache|cache(?:-(?:youdao|deepl|microsoft))?|failures)-" + LANG_TAG + "\\.json");
         int copied = 0;
         try (DirectoryStream<Path> files = Files.newDirectoryStream(from)) {
             for (Path file : files) {
@@ -244,11 +244,11 @@ public final class RealCacheReplay {
     /** @return 0 every asserted scenario passed, 1 a scenario failed, 4 nothing to replay */
     private int execute() throws Exception {
         String provider = detectProvider(work);
-        Path aiFile = work.resolve("nyanslate-ai-cache-" + LANG_TAG + ".json");
+        Path aiFile = work.resolve("nyanlex-ai-cache-" + LANG_TAG + ".json");
         Path gtFile = work.resolve("google".equals(provider)
-                ? "nyanslate-cache-" + LANG_TAG + ".json"
-                : "nyanslate-cache-" + provider + "-" + LANG_TAG + ".json");
-        Path failFile = work.resolve("nyanslate-failures-" + LANG_TAG + ".json");
+                ? "nyanlex-cache-" + LANG_TAG + ".json"
+                : "nyanlex-cache-" + provider + "-" + LANG_TAG + ".json");
+        Path failFile = work.resolve("nyanlex-failures-" + LANG_TAG + ".json");
         Journal ai0 = Journal.read(aiFile);
         Journal gt0 = Journal.read(gtFile);
         Journal fail0 = Journal.read(failFile);
@@ -355,9 +355,9 @@ public final class RealCacheReplay {
     private long termInputs;
 
     private static String detectProvider(Path dir) {
-        if (Files.isRegularFile(dir.resolve("nyanslate-cache-" + LANG_TAG + ".json"))) return "google";
+        if (Files.isRegularFile(dir.resolve("nyanlex-cache-" + LANG_TAG + ".json"))) return "google";
         for (String provider : List.of("deepl", "youdao", "microsoft")) {
-            if (Files.isRegularFile(dir.resolve("nyanslate-cache-" + provider + "-" + LANG_TAG + ".json"))) {
+            if (Files.isRegularFile(dir.resolve("nyanlex-cache-" + provider + "-" + LANG_TAG + ".json"))) {
                 return provider;
             }
         }
@@ -803,11 +803,11 @@ public final class RealCacheReplay {
 
         Rig(String provider) {
             cfg = userLikeConfig(provider);
-            PersistentStore googleStore = new ProviderLanguageFileStore(work, "nyanslate-cache", LANG,
+            PersistentStore googleStore = new ProviderLanguageFileStore(work, "nyanlex-cache", LANG,
                     () -> provider, cfg.persistentCacheMaxEntries);
-            PersistentStore aiStore = new LanguageFileStore(work, "nyanslate-ai-cache", LANG,
+            PersistentStore aiStore = new LanguageFileStore(work, "nyanlex-ai-cache", LANG,
                     cfg.persistentCacheMaxEntries);
-            PersistentStore failureStore = new LanguageFileStore(work, "nyanslate-failures", LANG,
+            PersistentStore failureStore = new LanguageFileStore(work, "nyanlex-failures", LANG,
                     cfg.persistentCacheMaxEntries);
             gt = new TranslationCache(gtFake, LANG, DIRECT, cfg.cacheMaxSize, cfg.failureBackoffMs,
                     System::currentTimeMillis, googleStore);

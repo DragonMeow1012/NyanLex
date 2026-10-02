@@ -1,7 +1,7 @@
 # Mirror the MC-agnostic core packages from the root tree (src\) — the canonical,
 # unit-tested copy — into the modern source-compatible loader trees. Run after
 # ANY edit under
-# src\main\java\com\dragonmeow\nyanslate\{cache,config,service,style,translate}.
+# src\main\java\com\dragonmeow\nyanlex\{cache,config,service,style,translate}.
 #
 #   powershell -ExecutionPolicy Bypass -File .\sync-core.ps1
 #
@@ -18,8 +18,8 @@ $trees = 'fabric1182', 'fabric1194', 'fabric120', 'fabric12111',
 $copied = 0
 foreach ($tree in $trees) {
     foreach ($pkg in $corePackages) {
-        $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanslate\$pkg"
-        $dstDir = Join-Path $root "$tree\src\main\java\com\dragonmeow\nyanslate\$pkg"
+        $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\$pkg"
+        $dstDir = Join-Path $root "$tree\src\main\java\com\dragonmeow\nyanlex\$pkg"
         if (-not (Test-Path $srcDir)) { continue }
         New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
 
@@ -94,10 +94,10 @@ function Convert-Fabric1171Core {
     }
 }
 
-$fabric1171Base = Join-Path $root 'fabric1171\src\main\java\com\dragonmeow\nyanslate'
+$fabric1171Base = Join-Path $root 'fabric1171\src\main\java\com\dragonmeow\nyanlex'
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 foreach ($pkg in $corePackages) {
-    $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanslate\$pkg"
+    $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\$pkg"
     $dstDir = Join-Path $fabric1171Base $pkg
     if (-not (Test-Path $srcDir)) { continue }
     New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
@@ -136,11 +136,11 @@ foreach ($pkg in $corePackages) {
 # cache/schema contract. FabricTextStyleIntegrationTest is deliberately target-
 # specific and is excluded by fabric12111/build.gradle, so it remains a manual
 # API-version port.
-$testSrcDir = Join-Path $root 'src\test\java\com\dragonmeow\nyanslate'
-$testDstDir = Join-Path $root 'fabric12111\src\test\java\com\dragonmeow\nyanslate'
+$testSrcDir = Join-Path $root 'src\test\java\com\dragonmeow\nyanlex'
+$testDstDir = Join-Path $root 'fabric12111\src\test\java\com\dragonmeow\nyanlex'
 foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     if ($f.Name -eq 'FabricTextStyleIntegrationTest.java') { continue }
-    # SettingsCatalogTest reads the nyanslate.settings.* lang keys, which only the root and
+    # SettingsCatalogTest reads the nyanlex.settings.* lang keys, which only the root and
     # fabric2612 trees ship (they are the only ones with the tabbed settings screen).
     if ($f.Name -in 'SettingsCatalogTest.java', 'SettingsModelTest.java', 'SettingsPanelTest.java') { continue }
     $relative = $f.FullName.Substring($testSrcDir.Length + 1)
@@ -160,11 +160,11 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
 }
 # Java 8 compatible boundaries shared unchanged by every loader.
 foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122', 'forge1132')) {
-    $sharedDestination = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\nyanslate\translate"
+    $sharedDestination = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\nyanlex\translate"
     New-Item -ItemType Directory -Force -Path $sharedDestination | Out-Null
     foreach ($sharedName in @('ScreenTranslationCapture.java', 'TranslationFile.java', 'TranslationFileDialog.java',
             'HookHealth.java', 'HookGuard.java')) {
-        $sharedSource = Join-Path $root "src\main\java\com\dragonmeow\nyanslate\translate\$sharedName"
+        $sharedSource = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\translate\$sharedName"
         $sharedFile = Join-Path $sharedDestination $sharedName
         if (-not (Test-Path $sharedFile) -or (Get-FileHash $sharedSource).Hash -ne (Get-FileHash $sharedFile).Hash) {
             Copy-Item -Force $sharedSource $sharedFile

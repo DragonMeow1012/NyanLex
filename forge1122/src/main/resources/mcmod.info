@@ -1,9 +1,9 @@
 [
   {
-    "modid": "nyanslate",
-    "name": "Nyanslate",
+    "modid": "nyanlex",
+    "name": "NyanLex Translator",
     "description": "Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation.",
-    "logoFile": "/assets/nyanslate/icon.png",
+    "logoFile": "/assets/nyanlex/icon.png",
     "version": "1.0.0",
     "mcversion": "1.12.2",
     "authorList": ["DragonMeow"],

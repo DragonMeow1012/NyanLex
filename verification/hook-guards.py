@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Apply / verify the HookGuard + HookHealth wrapper on every glue entry point of every loader tree.
 
-  python verification/hook-guards.py apply   # idempotently wrap entry points, regenerate NyanslateHooks.java
+  python verification/hook-guards.py apply   # idempotently wrap entry points, regenerate NyanLexHooks.java
   python verification/hook-guards.py check   # exit 1 if any entry point is unwrapped or a hook list drifted
 
 Entry points handled:
@@ -17,7 +17,7 @@ A wrapped method looks like
 
 with <fallback> = the original, untranslated value (the modified argument, or the redirected call
 made the way vanilla would). Begin/end style pairs use enterSticky (never auto-disabled).
-Every tree gets a generated NyanslateHooks.register(...) listing every hook id found in its glue
+Every tree gets a generated NyanLexHooks.register(...) listing every hook id found in its glue
 sources; the loader entry point calls it so "registered but never hit" hooks can be reported.
 """
 import os
@@ -34,7 +34,7 @@ STICKY_RE = re.compile(r'^(enter|exit|begin|end|before|after|prepare|clear)')
 AMBIENT_RE = re.compile(r'(^DebugHud\.)|(^ChatComponent\.(enter|exit))|(^Hud\..*[Dd]ebug)'
                         r'|(^event\.(onOverlayText|onOverlayPost)$)')
 GUARD_USE = re.compile(r'HookGuard\.(?:enter|enterSticky|run|runSticky|call)\(\s*"([^"]+)"')
-IMPORT = 'import com.dragonmeow.nyanslate.translate.HookGuard;'
+IMPORT = 'import com.dragonmeow.nyanlex.translate.HookGuard;'
 
 
 # ---------------------------------------------------------------- tiny Java scanner
@@ -179,7 +179,7 @@ def fallback_for(h):
 
 # ---------------------------------------------------------------- ids
 def hook_id(path, h):
-    name = h['name'].replace('nyanslate$', '', 1)
+    name = h['name'].replace('nyanlex$', '', 1)
     if h['kind'] == 'SubscribeEvent':
         return 'event.' + name
     if h['kind'] == 'Hook':
@@ -191,7 +191,7 @@ def hook_id(path, h):
 
 
 def is_sticky(h, names):
-    n = h['name'].replace('nyanslate$', '', 1)
+    n = h['name'].replace('nyanlex$', '', 1)
     if STICKY_RE.match(n):
         return True
     # Pre/Post event pairs share render state (push/pop): never half-disable them.
@@ -202,12 +202,12 @@ def is_sticky(h, names):
     return False
 
 
-NAMED_HOOKS = {'NyanslateForge.java': ('translateScreenString',)}
+NAMED_HOOKS = {'NyanLexForge.java': ('translateScreenString',)}
 
 
 def transform_handlers(path, src):
     handlers = find_handlers(src, NAMED_HOOKS.get(os.path.basename(path), ()))
-    names = {h['name'].replace('nyanslate$', '', 1) for h in handlers}
+    names = {h['name'].replace('nyanlex$', '', 1) for h in handlers}
     out, pos = [], 0
     for h in handlers:
         body = src[h['brace']:h['end']]
@@ -297,12 +297,12 @@ EXACT_RULES = [
 INIT_RULES = [
     (re.compile(r'(@Override public void onInitializeClient\(\) \{\n)'), 'LEGACY'),  # legacy: no slf4j
     (re.compile(r'(public void onInitializeClient\(\) \{\n)'), 'LOGGER'),
-    (re.compile(r'(public NyanslateNeoForge(?:26)?\((?:IEventBus modBus, ModContainer container)?\) \{\n)'), 'LOGGER'),
+    (re.compile(r'(public NyanLexNeoForge(?:26)?\((?:IEventBus modBus, ModContainer container)?\) \{\n)'), 'LOGGER'),
     (re.compile(r'(@Mod\.EventHandler public void init\(FMLInitializationEvent event\) \{\n)'), 'LEGACY'),
-    (re.compile(r'(public NyanslateForge\(\) \{\n)'), 'LEGACY'),
+    (re.compile(r'(public NyanLexForge\(\) \{\n)'), 'LEGACY'),
 ]
 TOKEN_RE = re.compile(r'(\+ " \| req " \+ tokens\.requests\(\))(?! \+ " \| " \+ com\.dragonmeow)')
-TOKEN_NEW = r'\1 + " | " + com.dragonmeow.nyanslate.translate.HookHealth.shortSummary()'
+TOKEN_NEW = r'\1 + " | " + com.dragonmeow.nyanlex.translate.HookHealth.shortSummary()'
 
 
 def wrap_block_lambda(src, head, hid):
@@ -324,10 +324,10 @@ def apply_exact(path, src):
     for _label, needle, repl in EXACT_RULES:
         src = needle.sub(repl, src)
     for needle, mode in INIT_RULES:
-        if 'NyanslateHooks.register' in src:
+        if 'NyanLexHooks.register' in src:
             break
-        call = ('NyanslateHooks.register(LOGGER::info, LOGGER::warn);' if mode == 'LOGGER'
-                else 'NyanslateHooks.register(null, null);')
+        call = ('NyanLexHooks.register(LOGGER::info, LOGGER::warn);' if mode == 'LOGGER'
+                else 'NyanLexHooks.register(null, null);')
         src, n = needle.subn(lambda m: m.group(1) + '        ' + call + '\n', src, count=1)
     src = TOKEN_RE.sub(TOKEN_NEW, src)
     return src
@@ -348,7 +348,7 @@ def tree_root(tree):
 
 def glue_files(tree):
     """All glue .java files of a tree (everything outside the mirrored core packages)."""
-    base = os.path.join(tree_root(tree), 'main', 'java', 'com', 'dragonmeow', 'nyanslate')
+    base = os.path.join(tree_root(tree), 'main', 'java', 'com', 'dragonmeow', 'nyanlex')
     if not os.path.isdir(base):
         return
     for dirpath, _dirs, files in os.walk(base):
@@ -356,7 +356,7 @@ def glue_files(tree):
         if rel[0] in CORE_PKGS or 'build' in rel:
             continue
         for fn in sorted(files):
-            if fn.endswith('.java') and fn != 'NyanslateHooks.java':
+            if fn.endswith('.java') and fn != 'NyanLexHooks.java':
                 yield os.path.join(dirpath, fn)
 
 
@@ -365,7 +365,7 @@ def hooks_package_dir(tree, files):
         if os.path.basename(os.path.dirname(f)) == 'mixin':
             return os.path.dirname(os.path.dirname(f))
     for f in files:
-        if os.path.basename(f) == 'NyanslateForge.java':
+        if os.path.basename(f) == 'NyanLexForge.java':
             return os.path.dirname(f)
     return None
 
@@ -375,9 +375,9 @@ def hooks_class(pkg, ids, header):
     amb = [i for i in ids if AMBIENT_RE.search(i)]
     ctx = [i for i in ids if not AMBIENT_RE.search(i)]
     fmt = lambda xs: ',\n            '.join('"%s"' % x for x in xs)
-    parts = ['package %s;\n\nimport com.dragonmeow.nyanslate.translate.HookHealth;\n\n' % pkg,
+    parts = ['package %s;\n\nimport com.dragonmeow.nyanlex.translate.HookHealth;\n\n' % pkg,
              '/** %s (generated by verification/hook-guards.py - do not edit by hand). */\n' % header,
-             'public final class NyanslateHooks {\n    private NyanslateHooks() {\n    }\n\n',
+             'public final class NyanLexHooks {\n    private NyanLexHooks() {\n    }\n\n',
              '    /** Registers every guarded hook id; call once from the loader entry point.\n'
              '     *  Sinks may be null (falls back to java.util.logging). */\n',
              '    public static void register(java.util.function.Consumer<String> info,\n'
@@ -436,7 +436,7 @@ def main():
             continue
         pkg = os.path.relpath(pkg_dir, os.path.join(tree_root(tree), 'main', 'java')).replace(os.sep, '.')
         content = hooks_class(pkg, ids, '%s: %d guarded hooks' % (tree, len(set(ids))))
-        target = os.path.join(pkg_dir, 'NyanslateHooks.java')
+        target = os.path.join(pkg_dir, 'NyanLexHooks.java')
         existing = read(target) if os.path.exists(target) else None
         if existing != content:
             if mode == 'apply':
@@ -445,9 +445,9 @@ def main():
             else:
                 print('HOOK LIST DRIFT %s' % os.path.relpath(target, ROOT))
                 bad += 1
-        entry_ok = any('NyanslateHooks.register' in read(p) for p in files)
+        entry_ok = any('NyanLexHooks.register' in read(p) for p in files)
         if not entry_ok:
-            print('NO NyanslateHooks.register CALL in %s' % tree)
+            print('NO NyanLexHooks.register CALL in %s' % tree)
             bad += 1
         print('%-12s %3d hooks (%d ambient)' % (tree, len(set(ids)), sum(1 for i in set(ids) if AMBIENT_RE.search(i))))
     if mode == 'check' and bad:

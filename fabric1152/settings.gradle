@@ -5,4 +5,4 @@ pluginManagement {
         mavenCentral()
     }
 }
-rootProject.name = "nyanslate-fabric1152"
+rootProject.name = "nyanlex-fabric1152"

@@ -1,6 +1,6 @@
-package com.dragonmeow.nyanslate.hub.tool;
+package com.dragonmeow.nyanlex.hub.tool;
 
-import com.dragonmeow.nyanslate.cache.FileStore;
+import com.dragonmeow.nyanlex.cache.FileStore;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -23,9 +23,9 @@ import java.util.Set;
  * been free under the segment-cache regime").
  *
  * <p>Safety rules mirror {@code RealCacheReplay.java}/{@code HubExportImportReplay.java} in
- * this same directory: a directory holding {@code nyanslate.json} or
- * {@code nyanslate-codex-home} is refused outright; the config file is NEVER opened.
- * Only {@code nyanslate-ai-cache-<lang>.json} is ever read, and only via
+ * this same directory: a directory holding {@code nyanlex.json} or
+ * {@code nyanlex-codex-home} is refused outright; the config file is NEVER opened.
+ * Only {@code nyanlex-ai-cache-<lang>.json} is ever read, and only via
  * {@link HubExportTool}'s own copy-before-read ({@code classify}/internal helpers) or a
  * single read-only {@link FileStore} load of a caller-supplied COPY. stdout carries
  * aggregate counts only, never row content.</p>
@@ -41,9 +41,9 @@ import java.util.Set;
  * <pre>
  *   java -Xmx2g -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 \
  *        -cp "HARNESS;build/classes/java/main;$GSON" \
- *        com.dragonmeow.nyanslate.hub.tool.LegacySegmentQuantification &lt;cache-copy-dir&gt;
+ *        com.dragonmeow.nyanlex.hub.tool.LegacySegmentQuantification &lt;cache-copy-dir&gt;
  * </pre>
- * <p>{@code <cache-copy-dir>} must hold a COPY of {@code nyanslate-ai-cache-zh-tw.json}
+ * <p>{@code <cache-copy-dir>} must hold a COPY of {@code nyanlex-ai-cache-zh-tw.json}
  * only (never the live config directory). Exit codes: 0 ok, 2 usage, 3 refused (looks like a
  * live config directory), 4 nothing to analyse (no zh-tw AI cache copy found).</p>
  */
@@ -58,15 +58,15 @@ public final class LegacySegmentQuantification {
             return;
         }
         Path dataDir = Paths.get(args[0]).toAbsolutePath().normalize();
-        if (Files.exists(dataDir.resolve("nyanslate.json"))
-                || Files.exists(dataDir.resolve("nyanslate-codex-home"))) {
+        if (Files.exists(dataDir.resolve("nyanlex.json"))
+                || Files.exists(dataDir.resolve("nyanlex-codex-home"))) {
             System.err.println("REFUSED: the directory looks like a live Minecraft config directory."
-                    + " Pass a directory holding a COPY of nyanslate-ai-cache-" + LANG_TAG
+                    + " Pass a directory holding a COPY of nyanlex-ai-cache-" + LANG_TAG
                     + ".json only.");
             System.exit(3);
             return;
         }
-        Path cacheFile = dataDir.resolve("nyanslate-ai-cache-" + LANG_TAG + ".json");
+        Path cacheFile = dataDir.resolve("nyanlex-ai-cache-" + LANG_TAG + ".json");
         if (!Files.isRegularFile(cacheFile)) {
             System.err.println("NOTHING_TO_ANALYSE: no " + cacheFile.getFileName() + " in " + dataDir);
             System.exit(4);
@@ -77,7 +77,7 @@ public final class LegacySegmentQuantification {
         // supplied directory's file is opened read-only exactly once, for this copy; every
         // later parse (including a SECOND internal copy FileStore itself may make while
         // loading) runs against the copy.
-        Path tempDir = Files.createTempDirectory("nyanslate-segment-quant-");
+        Path tempDir = Files.createTempDirectory("nyanlex-segment-quant-");
         try {
             Path copy = tempDir.resolve(cacheFile.getFileName());
             Files.copy(cacheFile, copy);
@@ -100,7 +100,7 @@ public final class LegacySegmentQuantification {
             // never eligible for this feature in the first place, with or without splitting.
             int multiRowCandidates = 0;
             for (String key : rawRows.keySet()) {
-                if (com.dragonmeow.nyanslate.translate.ParagraphModel.countBreakTokens(key) > 0) {
+                if (com.dragonmeow.nyanlex.translate.ParagraphModel.countBreakTokens(key) > 0) {
                     multiRowCandidates++;
                 }
             }

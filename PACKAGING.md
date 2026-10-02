@@ -1,9 +1,9 @@
-# Nyanslate 1.0.0 packaging
+# NyanLex Translator 1.0.0 packaging
 
-This is the first release under the new name **Nyanslate** (formerly Minecraft Translator).
+This is the first release under the new name **NyanLex Translator** (formerly Minecraft Translator).
 The package root, mod id, archive base name, and GitHub translation-hub URL all moved from
-`mctranslator` to `nyanslate`; jar names moved from `mctranslator-<version>-...` to
-`nyanslate-<version>-...`. See the project README for the full list of user-facing changes.
+`mctranslator` to `nyanlex`; jar names moved from `mctranslator-<version>-...` to
+`nyanlex-<version>-...`. See the project README for the full list of user-facing changes.
 
 The release contains 18 JARs. Each JAR is tied to one Minecraft version and loader.
 
@@ -56,20 +56,20 @@ Generated binaries are ignored by Git and stored under `mods-jar/1.0.0`:
 ```text
 mods-jar/1.0.0/
   fabric/
-    1.14.4/nyanslate-1.0.0-Fabric-1.14.4.jar
+    1.14.4/nyanlex-1.0.0-Fabric-1.14.4.jar
     ...
-    26.2/nyanslate-1.0.0-Fabric-26.2.jar
+    26.2/nyanlex-1.0.0-Fabric-26.2.jar
   neoforge/
-    1.20.1/nyanslate-1.0.0-NeoForge-1.20.1.jar
-    1.21.1/nyanslate-1.0.0-NeoForge-1.21.1.jar
-    26.2/nyanslate-1.0.0-NeoForge-26.2.jar
+    1.20.1/nyanlex-1.0.0-NeoForge-1.20.1.jar
+    1.21.1/nyanlex-1.0.0-NeoForge-1.21.1.jar
+    26.2/nyanlex-1.0.0-NeoForge-26.2.jar
   forge/
-    1.12.2/nyanslate-1.0.0-Forge-1.12.2.jar
-    1.13.2/nyanslate-1.0.0-Forge-1.13.2.jar
-  Nyanslate-1.0.0-Fabric.zip
-  Nyanslate-1.0.0-NeoForge.zip
-  Nyanslate-1.0.0-Forge.zip
-  Nyanslate-1.0.0-all-versions.zip
+    1.12.2/nyanlex-1.0.0-Forge-1.12.2.jar
+    1.13.2/nyanlex-1.0.0-Forge-1.13.2.jar
+  NyanLex-1.0.0-Fabric.zip
+  NyanLex-1.0.0-NeoForge.zip
+  NyanLex-1.0.0-Forge.zip
+  NyanLex-1.0.0-all-versions.zip
   SHA256SUMS.txt
 ```
 
@@ -83,7 +83,7 @@ Before publishing:
 - Confirm exactly 18 packaged JARs, 4 ZIPs, and `SHA256SUMS.txt`.
 - Compare each packaged JAR SHA-256 with its matching `build/libs` output.
 - Confirm loader metadata contains version 1.0.0 and the exact Minecraft range.
-- Confirm loader metadata mod id/entrypoint classes are `nyanslate` / `com.dragonmeow.nyanslate.*` (not the old `mctranslator` / `com.dragonmeow.mctranslator.*`).
+- Confirm loader metadata mod id/entrypoint classes are `nyanlex` / `com.dragonmeow.nyanlex.*` (not the old `mctranslator` / `com.dragonmeow.mctranslator.*`).
 - Run `git diff --check` and core unit tests.
 - Upload individual JARs plus the four ZIP files to tag `v1.0.0`.
 

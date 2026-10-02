@@ -3,20 +3,20 @@ loaderVersion="[25,)"
 
 [[mods]]
 logoFile="icon.png"
-modId="nyanslate"
+modId="nyanlex"
 version="${file.jarVersion}"
-displayName="Nyanslate"
+displayName="NyanLex Translator"
 authors="DragonMeow"
 description='''Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation.'''
 
-[[dependencies.nyanslate]]
+[[dependencies.nyanlex]]
 modId="forge"
 mandatory=true
 versionRange="[25,)"
 ordering="NONE"
 side="CLIENT"
 
-[[dependencies.nyanslate]]
+[[dependencies.nyanlex]]
 modId="minecraft"
 mandatory=true
 versionRange="[1.13.2]"

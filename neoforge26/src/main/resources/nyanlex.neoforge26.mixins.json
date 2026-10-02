@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.dragonmeow.nyanlex.neoforge26.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "OptionsScreenMixin",
+    "AbstractContainerScreenAccessor",
+    "ChatComponentAccessor",
+    "FontSplitMixin",
+    "TextFieldMixin",
+    "GuiGraphicsTextMixin",
+    "HudMixin",
+    "BossBarMixin",
+    "EntityNameTagMixin",
+    "BookPageMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

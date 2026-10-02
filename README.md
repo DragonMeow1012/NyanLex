@@ -1,8 +1,8 @@
-# Nyanslate 1.0.0
+# NyanLex Translator 1.0.0
 
 [English](README_EN.md)
 
-Nyanslate（前身 Minecraft Translator）是純客戶端即時翻譯模組。它只翻譯畫面上需要翻譯的文字，不修改伺服器資料，也不會代替玩家送出聊天訊息。
+NyanLex Translator（前身 Minecraft Translator）是純客戶端即時翻譯模組。它只翻譯畫面上需要翻譯的文字，不修改伺服器資料，也不會代替玩家送出聊天訊息。
 
 ## 主要功能
 
@@ -63,7 +63,7 @@ Better Minecraft 任務介面的實際翻譯前後，包含任務標題、長段
 
 每個 JAR 只支援檔名標示的 Minecraft 版本與 Loader，不可混用。
 
-[下載包含全部版本與分類資料夾的 ZIP](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/Nyanslate-1.0.0-all-versions.zip)
+[下載包含全部版本與分類資料夾的 ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip)
 
 
 ### Fabric
@@ -72,34 +72,34 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 
 | Minecraft | Java | 下載 |
 | --- | ---: | --- |
-| 1.14.4 | 8 | [nyanslate-1.0.0-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.14.4.jar) |
-| 1.15.2 | 8 | [nyanslate-1.0.0-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.15.2.jar) |
-| 1.16.5 | 8 | [nyanslate-1.0.0-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.16.5.jar) |
-| 1.17.1 | 16 | [nyanslate-1.0.0-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.17.1.jar) |
-| 1.18.2 | 17 | [nyanslate-1.0.0-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.18.2.jar) |
-| 1.19.4 | 17 | [nyanslate-1.0.0-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.19.4.jar) |
-| 1.20.1 | 17 | [nyanslate-1.0.0-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.20.1.jar) |
-| 1.21.1 | 21 | [nyanslate-1.0.0-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.21.1.jar) |
-| 1.21.11 | 21 | [nyanslate-1.0.0-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-1.21.11.jar) |
-| 26.1.2 | 25 | [nyanslate-1.0.0-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.1.2.jar) |
-| 26.2 | 25 | [nyanslate-1.0.0-Fabric-26.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.2.jar) |
-| 26.3 | 25 | [nyanslate-1.0.0-Fabric-26.3.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Fabric-26.3.jar) |
+| 1.14.4 | 8 | [nyanlex-1.0.0-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) |
+| 1.15.2 | 8 | [nyanlex-1.0.0-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) |
+| 1.16.5 | 8 | [nyanlex-1.0.0-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) |
+| 1.17.1 | 16 | [nyanlex-1.0.0-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) |
+| 1.18.2 | 17 | [nyanlex-1.0.0-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) |
+| 1.19.4 | 17 | [nyanlex-1.0.0-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) |
+| 1.20.1 | 17 | [nyanlex-1.0.0-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) |
+| 1.21.1 | 21 | [nyanlex-1.0.0-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) |
+| 1.21.11 | 21 | [nyanlex-1.0.0-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) |
+| 26.1.2 | 25 | [nyanlex-1.0.0-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) |
+| 26.2 | 25 | [nyanlex-1.0.0-Fabric-26.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) |
+| 26.3 | 25 | [nyanlex-1.0.0-Fabric-26.3.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) |
 
 ### NeoForge
 
 | Minecraft | Java | 下載 |
 | --- | ---: | --- |
-| 1.20.1 | 17 | [nyanslate-1.0.0-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-1.20.1.jar) |
-| 1.21.1 | 21 | [nyanslate-1.0.0-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-1.21.1.jar) |
-| 26.2 | 25 | [nyanslate-1.0.0-NeoForge-26.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-26.2.jar) |
-| 26.3 | 25 | [nyanslate-1.0.0-NeoForge-26.3.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-NeoForge-26.3.jar) |
+| 1.20.1 | 17 | [nyanlex-1.0.0-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) |
+| 1.21.1 | 21 | [nyanlex-1.0.0-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) |
+| 26.2 | 25 | [nyanlex-1.0.0-NeoForge-26.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) |
+| 26.3 | 25 | [nyanlex-1.0.0-NeoForge-26.3.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) |
 
 ### Forge
 
 | Minecraft | Java | 下載 |
 | --- | ---: | --- |
-| 1.12.2 | 8 | [nyanslate-1.0.0-Forge-1.12.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Forge-1.12.2.jar) |
-| 1.13.2 | 8 | [nyanslate-1.0.0-Forge-1.13.2.jar](https://github.com/DragonMeow1012/Nyanslate/releases/download/v1.0.0/nyanslate-1.0.0-Forge-1.13.2.jar) |
+| 1.12.2 | 8 | [nyanlex-1.0.0-Forge-1.12.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) |
+| 1.13.2 | 8 | [nyanlex-1.0.0-Forge-1.13.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) |
 
 ## 安裝
 
@@ -137,11 +137,11 @@ Fabric 1.17.1 以上與 NeoForge：
 
 `P` 擷取當下可見的文字，不包含尚未捲動到的內容；輸入文字時不會觸發。物品與介面文字改為手動觸發（見上方「主要功能」），`R`／`P` 是取得這些翻譯的方式，而不只是「重新」翻譯。重新翻譯完成時間取決於所選翻譯服務。
 
-升級後若快捷鍵改回預設值：這個版本把模組 id 從 `mctranslator` 改成 `nyanslate`，首次啟動會自動把你原本設定檔、翻譯快取與 `options.txt` 裡的舊快捷鍵複製到新名稱（不刪除舊檔），只做一次。
+升級後若快捷鍵改回預設值：這個版本把模組 id 改成 `nyanlex`，首次啟動會自動把舊版（含更早使用過的名稱）的設定檔、翻譯快取與 `options.txt` 裡的舊快捷鍵複製到新名稱（不刪除舊檔），只做一次。
 
 ## 1.0.0 重點
 
-- **模組更名為 Nyanslate**：套件、mod id、設定與快取檔名前綴、GitHub 翻譯倉庫全部換成新名稱；首次啟動自動從舊的 `mctranslator-*` 設定檔／快取／快捷鍵複製一份到新名稱（原檔不刪除、不覆蓋既有新檔）。
+- **模組更名為 NyanLex Translator**：套件、mod id、設定與快取檔名前綴、GitHub 翻譯倉庫全部換成新名稱；首次啟動自動從舊名稱的設定檔／快取／快捷鍵複製一份到新名稱（原檔不刪除、不覆蓋既有新檔）。
 - 物品與模組介面翻譯改為手動觸發（`R`／`P`），聊天等即時文字維持自動翻譯，避免翻譯還沒看到的格子。
 - 提示框改用分段快取，減少長提示框重複請求整段文字的次數。
 - 新增 GitHub AI 翻譯倉庫的啟動偵測與下載確認流程，可下載他人已分享、通過社群校對的翻譯，並可在設定關閉。
@@ -188,4 +188,4 @@ Fabric 1.17.1 以上與 NeoForge：
 
 ## 原始碼與回報
 
-各版本建置方式與 Release 資料夾結構請見 [PACKAGING.md](PACKAGING.md)。問題請提交到 [GitHub Issues](https://github.com/DragonMeow1012/Nyanslate/issues)。
+各版本建置方式與 Release 資料夾結構請見 [PACKAGING.md](PACKAGING.md)。問題請提交到 [GitHub Issues](https://github.com/DragonMeow1012/NyanLex/issues)。

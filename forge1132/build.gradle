@@ -13,8 +13,8 @@ apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
 version = '1.0.0'
-group = 'com.dragonmeow.nyanslate'
-archivesBaseName = 'nyanslate'
+group = 'com.dragonmeow.nyanlex'
+archivesBaseName = 'nyanlex'
 
 sourceCompatibility = targetCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8' // Need this here so eclipse task generates correctly.
 
@@ -100,7 +100,7 @@ dependencies {
 jar {
     classifier = 'Forge-1.13.2'
     from('../LICENSE') {
-        rename { 'LICENSE_Nyanslate' }
+        rename { 'LICENSE_NyanLex' }
     }
     manifest {
         attributes([

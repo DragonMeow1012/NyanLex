@@ -1,14 +1,14 @@
-package com.dragonmeow.nyanslate.hub.tool;
+package com.dragonmeow.nyanlex.hub.tool;
 
-import com.dragonmeow.nyanslate.hub.HubDownloadResult;
-import com.dragonmeow.nyanslate.hub.HubDownloadState;
-import com.dragonmeow.nyanslate.hub.HubDownloader;
-import com.dragonmeow.nyanslate.hub.HubLocalCache;
-import com.dragonmeow.nyanslate.hub.HubPlan;
-import com.dragonmeow.nyanslate.hub.HubRepository;
-import com.dragonmeow.nyanslate.translate.HttpTransport;
-import com.dragonmeow.nyanslate.translate.PlayerNamePatterns;
-import com.dragonmeow.nyanslate.translate.TranslationFile;
+import com.dragonmeow.nyanlex.hub.HubDownloadResult;
+import com.dragonmeow.nyanlex.hub.HubDownloadState;
+import com.dragonmeow.nyanlex.hub.HubDownloader;
+import com.dragonmeow.nyanlex.hub.HubLocalCache;
+import com.dragonmeow.nyanlex.hub.HubPlan;
+import com.dragonmeow.nyanlex.hub.HubRepository;
+import com.dragonmeow.nyanlex.translate.HttpTransport;
+import com.dragonmeow.nyanlex.translate.PlayerNamePatterns;
+import com.dragonmeow.nyanlex.translate.TranslationFile;
 
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
@@ -42,9 +42,9 @@ import java.util.regex.Pattern;
  * {@link HubExportTool#run}) samples for the human-reviewed publish checklist.
  *
  * <p>Safety rules mirror {@code RealCacheReplay.java} in this same directory: a directory
- * holding {@code nyanslate.json} or {@code nyanslate-codex-home} (a live config
+ * holding {@code nyanlex.json} or {@code nyanlex-codex-home} (a live config
  * directory) is refused outright; the config file is never opened. Only
- * {@code nyanslate-ai-cache-<lang>.json} is ever copied, into a fresh
+ * {@code nyanlex-ai-cache-<lang>.json} is ever copied, into a fresh
  * {@code <out-dir>/work-*} directory, and every later parse (including
  * {@link HubExportTool}'s own copy-before-read) runs against that copy or a further
  * temp copy of it — the real file is opened exactly once, read-only, for the first copy.
@@ -57,15 +57,15 @@ import java.util.regex.Pattern;
  * <pre>
  *   GSON=~/.gradle/caches/modules-2/files-2.1/com.google.code.gson/gson/2.11.0/&lt;hash&gt;/gson-2.11.0.jar
  *   javac -encoding UTF-8 -cp "$GSON" -d CORE  (every *.java under
- *         src/main/java/com/dragonmeow/nyanslate/{config,cache,service,style,translate,hub,hub/tool})
+ *         src/main/java/com/dragonmeow/nyanlex/{config,cache,service,style,translate,hub,hub/tool})
  *   javac -encoding UTF-8 -cp "CORE;$GSON" -d HARNESS verification/real-data/HubExportImportReplay.java
  * </pre>
  * <p>Run (Windows classpath separator shown):</p>
  * <pre>
  *   java -Xmx2g -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -cp "HARNESS;CORE;$GSON" \
- *        com.dragonmeow.nyanslate.hub.tool.HubExportImportReplay &lt;cache-copy-dir&gt; &lt;out-dir&gt;
+ *        com.dragonmeow.nyanlex.hub.tool.HubExportImportReplay &lt;cache-copy-dir&gt; &lt;out-dir&gt;
  * </pre>
- * <p>{@code <cache-copy-dir>} holds a COPY of {@code nyanslate-ai-cache-zh-tw.json} (or
+ * <p>{@code <cache-copy-dir>} holds a COPY of {@code nyanlex-ai-cache-zh-tw.json} (or
  * is the player's live config directory itself — this harness never opens anything there
  * except that one file, and only to make its own private copy). Exit codes: 0 every check
  * passed, 1 a check failed, 2 usage, 3 refused (live config directory signature found
@@ -96,16 +96,16 @@ public final class HubExportImportReplay {
         }
         Path dataDir = Paths.get(args[0]).toAbsolutePath().normalize();
         Path outDir = Paths.get(args[1]).toAbsolutePath().normalize();
-        if (Files.exists(dataDir.resolve("nyanslate.json"))
-                || Files.exists(dataDir.resolve("nyanslate-codex-home"))) {
+        if (Files.exists(dataDir.resolve("nyanlex.json"))
+                || Files.exists(dataDir.resolve("nyanlex-codex-home"))) {
             // Same contract as RealCacheReplay.java: <cache-copy-dir> must already be a
             // COPY-ONLY staging directory (just the whitelisted cache file), never the
             // live config directory itself, even though copyAiCacheOnly() below would
-            // only ever touch nyanslate-ai-cache-<lang>.json by exact name. Copying
+            // only ever touch nyanlex-ai-cache-<lang>.json by exact name. Copying
             // that one file out of %APPDATA%\.minecraft\config\ into a staging directory
             // is a separate, manual first step, done before this harness ever runs.
             System.err.println("REFUSED: the directory looks like a live Minecraft config directory."
-                    + " Pass a directory holding a COPY of nyanslate-ai-cache-" + LANG_TAG
+                    + " Pass a directory holding a COPY of nyanlex-ai-cache-" + LANG_TAG
                     + ".json only.");
             System.exit(3);
             return;
@@ -116,9 +116,9 @@ public final class HubExportImportReplay {
         Path work = outDir.resolve("work-" + label + "-" + stamp);
         int copied = copyAiCacheOnly(dataDir, work);
         System.out.println("RUN dataset=" + label + " workCopyFiles=" + copied);
-        Path aiCacheCopy = work.resolve("nyanslate-ai-cache-" + LANG_TAG + ".json");
+        Path aiCacheCopy = work.resolve("nyanlex-ai-cache-" + LANG_TAG + ".json");
         if (!Files.isRegularFile(aiCacheCopy)) {
-            System.out.println("HUB_REPLAY_NO_DATA (no nyanslate-ai-cache-" + LANG_TAG + ".json)");
+            System.out.println("HUB_REPLAY_NO_DATA (no nyanlex-ai-cache-" + LANG_TAG + ".json)");
             System.exit(4);
             return;
         }
@@ -132,13 +132,13 @@ public final class HubExportImportReplay {
         System.exit(status);
     }
 
-    /** Copies ONLY {@code nyanslate-ai-cache-<lang>.json}; every other file in
-     *  {@code from} (including {@code nyanslate.json}, GT caches, failure ledgers) is
+    /** Copies ONLY {@code nyanlex-ai-cache-<lang>.json}; every other file in
+     *  {@code from} (including {@code nyanlex.json}, GT caches, failure ledgers) is
      *  ignored, so even pointing this harness at a live config directory never copies
      *  anything beyond the one file {@link HubExportTool} itself needs. */
     private static int copyAiCacheOnly(Path from, Path to) throws IOException {
         Files.createDirectories(to);
-        String wanted = "nyanslate-ai-cache-" + LANG_TAG + ".json";
+        String wanted = "nyanlex-ai-cache-" + LANG_TAG + ".json";
         int copied = 0;
         try (DirectoryStream<Path> files = Files.newDirectoryStream(from)) {
             for (Path file : files) {
@@ -223,7 +223,7 @@ public final class HubExportImportReplay {
         HubDownloader downloader = new HubDownloader(repository);
         Path importDir = work.resolve("import");
         Files.createDirectories(importDir);
-        HubDownloadState state = new HubDownloadState(importDir.resolve("nyanslate-hub-state.json"));
+        HubDownloadState state = new HubDownloadState(importDir.resolve("nyanlex-hub-state.json"));
         HubPlan plan = downloader.plan(SERVER_HOST, null, List.of(), LANG, state);
         HubLocalCache importedCache = new HubLocalCache(importDir, LANG);
         HubDownloadResult downloadResult = downloader.download(plan, importedCache, state, null, () -> false);

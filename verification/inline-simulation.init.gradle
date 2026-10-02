@@ -1,10 +1,10 @@
 allprojects { project ->
     afterEvaluate {
         if (!project.plugins.hasPlugin('java')) return
-        def harness = System.getenv('NYANSLATE_INLINE_HARNESS')
-        def harnessMain = System.getenv('NYANSLATE_INLINE_MAIN')
-        def output = System.getenv('NYANSLATE_INLINE_OUTPUT')
-        def runtime = System.getenv('NYANSLATE_INLINE_RUNTIME')
+        def harness = System.getenv('NYANLEX_INLINE_HARNESS')
+        def harnessMain = System.getenv('NYANLEX_INLINE_MAIN')
+        def output = System.getenv('NYANLEX_INLINE_OUTPUT')
+        def runtime = System.getenv('NYANLEX_INLINE_RUNTIME')
         if (harness == null || harnessMain == null || output == null || runtime == null) return
         project.tasks.create(name: 'inlineSimulationClasses', type: JavaCompile) {
             source project.file(harness)
@@ -24,10 +24,10 @@ allprojects { project ->
                 main = harnessMain
             }
             args project.file(runtime).absolutePath
-            environment 'NYANSLATE_CODEX_PATH', System.getenv('NYANSLATE_CODEX_PATH')
-            environment 'NYANSLATE_FAKE_LOG', System.getenv('NYANSLATE_FAKE_LOG')
-            environment 'NYANSLATE_FAKE_EARLY_TURN', System.getenv('NYANSLATE_FAKE_EARLY_TURN')
-            environment 'NYANSLATE_FAKE_COMPLETED_FIRST', System.getenv('NYANSLATE_FAKE_COMPLETED_FIRST')
+            environment 'NYANLEX_CODEX_PATH', System.getenv('NYANLEX_CODEX_PATH')
+            environment 'NYANLEX_FAKE_LOG', System.getenv('NYANLEX_FAKE_LOG')
+            environment 'NYANLEX_FAKE_EARLY_TURN', System.getenv('NYANLEX_FAKE_EARLY_TURN')
+            environment 'NYANLEX_FAKE_COMPLETED_FIRST', System.getenv('NYANLEX_FAKE_COMPLETED_FIRST')
         }
     }
 }

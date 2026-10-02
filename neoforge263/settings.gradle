@@ -5,4 +5,4 @@ pluginManagement {
         mavenCentral()
     }
 }
-rootProject.name = "nyanslate-neoforge263"
+rootProject.name = "nyanlex-neoforge263"

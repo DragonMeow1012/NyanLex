@@ -3,25 +3,25 @@ loaderVersion = "[47,)"
 license = "MIT"
 
 [[mixins]]
-config = "nyanslate.neoforge.mixins.json"
+config = "nyanlex.neoforge.mixins.json"
 
 [[mods]]
 logoFile="icon.png"
-modId = "nyanslate"
+modId = "nyanlex"
 version = "${version}"
-displayName = "Nyanslate"
+displayName = "NyanLex Translator"
 description = "Client-side translation into multiple target languages with OpenAI-compatible AI or Google, Youdao, DeepL, and Microsoft machine translation."
 authors = "DragonMeow"
 displayTest = "IGNORE_ALL_VERSION"
 
-[[dependencies.nyanslate]]
+[[dependencies.nyanlex]]
 modId = "forge"
 mandatory = true
 versionRange = "[47,)"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.nyanslate]]
+[[dependencies.nyanlex]]
 modId = "minecraft"
 mandatory = true
 versionRange = "[1.20.1,1.20.2)"

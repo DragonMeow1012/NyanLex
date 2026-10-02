@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.dragonmeow.nyanlex.legacy.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "client": [
+    "ChatComponentMixin",
+    "DebugHudMixin",
+    "EntityNameTagMixin",
+    "FontTextMixin",
+    "ScreenRenderScopeMixin",
+    "ScreenKeyMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
