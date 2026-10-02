@@ -809,6 +809,32 @@ public final class NyanLexFabric implements ClientModInitializer {
         return d.changed() ? d.translated() : str;
     }
 
+    /** Interface text that is about to be cut to a width by the vanilla trim helper; see
+     *  {@link com.dragonmeow.nyanlex.translate.TrimTranslation}. */
+    public static String screenTextBeforeTrim(String str) {
+        return com.dragonmeow.nyanlex.translate.TrimTranslation.resolve(
+                str, NyanLexFabric::screenText, NyanLexFabric::trimCallerIsTextInput);
+    }
+
+    private static final StackWalker TRIM_CALLER_WALKER =
+            StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+
+    /** True when the trim was requested by a text input (edit box / multi-line field), whose
+     *  contents must never be replaced. Walked only once a translation already exists. */
+    private static boolean trimCallerIsTextInput() {
+        Class<?> caller = TRIM_CALLER_WALKER.walk(frames -> frames
+                .map(StackWalker.StackFrame::getDeclaringClass)
+                .filter(c -> c != NyanLexFabric.class && c != net.minecraft.client.gui.Font.class)
+                .findFirst()).orElse(null);
+        for (Class<?> c = caller; c != null; c = c.getSuperclass()) {
+            String n = c.getName();
+            if (n.equals("net.minecraft.client.gui.components.EditBox")
+                    || n.equals("net.minecraft.client.gui.components.MultilineTextField")
+                    || n.equals("net.minecraft.client.gui.components.MultiLineEditBox")) return true;
+        }
+        return false;
+    }
+
     public static net.minecraft.util.FormattedCharSequence screenText(net.minecraft.util.FormattedCharSequence fcs) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return fcs;
         if (fcs != null && Minecraft.getInstance().screen != null

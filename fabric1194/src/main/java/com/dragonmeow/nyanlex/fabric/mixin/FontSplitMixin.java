@@ -35,4 +35,23 @@ public abstract class FontSplitMixin {
             return text;
         }
     }
+
+    /**
+     * Interface labels that GUI code cuts to a width (and ends with an ellipsis) before drawing.
+     * The draw hooks would only see the cut fragment, so the WHOLE string goes through the
+     * interface-text pipeline first and the cut is made on the translation when one exists
+     * (same policy, gates and request rules as {@code translateBeforeWrap}; text inputs excluded).
+     */
+    @ModifyVariable(
+            method = "plainSubstrByWidth(Ljava/lang/String;I)Ljava/lang/String;",
+            at = @At("HEAD"), argsOnly = true, require = 0)
+    private String nyanlex$translateBeforeTrim(String text) {
+        if (!HookGuard.enter("FontSplit.translateBeforeTrim")) return text;
+        try {
+            return NyanLexFabric.screenTextBeforeTrim(text);
+        } catch (Throwable guardError) {
+            HookGuard.fail("FontSplit.translateBeforeTrim", guardError);
+            return text;
+        }
+    }
 }
