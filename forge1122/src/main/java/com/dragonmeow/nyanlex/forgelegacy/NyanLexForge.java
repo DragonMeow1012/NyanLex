@@ -50,6 +50,7 @@ public final class NyanLexForge {
     private static java.util.Set<String> screenSources = java.util.Collections.emptySet();
     private boolean scanKeyDown;
     private boolean keybindMigrationChecked;
+    private boolean firstRunChecked;
     private final Map<Integer, String> renderedNames = new ConcurrentHashMap<Integer, String>();
     private final LegacyChatDeliveryQueue<PendingChat> pendingChats = new LegacyChatDeliveryQueue<PendingChat>();
     private final Map<Long, PendingChat> pendingChatById = new LinkedHashMap<Long, PendingChat>();
@@ -85,10 +86,21 @@ public final class NyanLexForge {
         if (screen == null || !config.enabled || ForgeTextInput.focused(screen)
                 || screen instanceof net.minecraft.client.gui.GuiControls
                 || screen.getClass().getName().startsWith("com.dragonmeow.nyanlex.")) return false;
+        if (!config.translationRequestsEnabled) {
+            ForgeConsentScreen.open(Minecraft.getMinecraft(), true, new Runnable() {
+                @Override public void run() { beginScreenScan0(Minecraft.getMinecraft().currentScreen); }
+            });
+            return true;
+        }
+        beginScreenScan0(screen);
+        return true;
+    }
+
+    private void beginScreenScan0(net.minecraft.client.gui.GuiScreen screen) {
+        if (screen == null || screen.getClass().getName().startsWith("com.dragonmeow.nyanlex.")) return;
         SCREEN_CAPTURE.begin(screen);
         translatedScreen = screen;
         screenSources = java.util.Collections.emptySet();
-        return true;
     }
 
     @SubscribeEvent public void beforeScreen(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre event) {
@@ -209,6 +221,7 @@ public final class NyanLexForge {
             if (event.phase != TickEvent.Phase.END) return;
             Minecraft minecraft = Minecraft.getMinecraft();
             maybeMigrateKeybinds(minecraft);
+            maybeShowFirstRun(minecraft);
             SCREEN_CAPTURE.cancelUnless(minecraft.currentScreen);
             if (translatedScreen != minecraft.currentScreen) {
                 translatedScreen = null;
@@ -250,6 +263,20 @@ public final class NyanLexForge {
         } catch (Throwable guardError) {
             HookGuard.fail("event.onClientTick", guardError);
         }
+    }
+
+    /** First launch only: the quick setup opens once over the title screen. */
+    private void maybeShowFirstRun(Minecraft minecraft) {
+        if (firstRunChecked || minecraft == null || config == null) return;
+        if (!(minecraft.currentScreen instanceof net.minecraft.client.gui.GuiMainMenu)) return;
+        firstRunChecked = true;
+        if (config.firstRunDone) return;
+        if (config.translationRequestsEnabled) {
+            config.firstRunDone = true;
+            saveConfig();
+            return;
+        }
+        minecraft.displayGuiScreen(new ForgeSetupScreen(minecraft.currentScreen, false));
     }
 
     /** Once per launch, the first time the title screen appears: carry any saved
@@ -519,6 +546,14 @@ public final class NyanLexForge {
                 }
             }
             updatePointedTooltip(sources, target);
+            if (!config.translationRequestsEnabled) {
+                // Online translation is off: the only useful key press is the one that asks to start it.
+                if (missing) {
+                    lines.add("\u00a77" + I18n.format("screen.nyanlex.tooltip.start_hint",
+                            Keyboard.getKeyName(itemRetranslateKey.getKeyCode())));
+                }
+                return;
+            }
             if (ai) return;
             if (pointedTooltipTranslating) {
                 lines.add("§7" + I18n.format("screen.nyanlex.tooltip.translating"));
@@ -628,8 +663,22 @@ public final class NyanLexForge {
      * "I don't like this result, try again"). Machine engine: missing lines only, or a forced
      * full retranslate if every line is already cached (unchanged from round 3).
      */
-    private void handleRetranslateItemKey(Minecraft minecraft) {
+    private void handleRetranslateItemKey(final Minecraft minecraft) {
         if (config == null || !config.enabled) return;
+        if (!config.translationRequestsEnabled) {
+            boolean pointed = !pointedTooltipSources.isEmpty() && pointedTooltipTarget != null;
+            if (!pointed && !(minecraft.currentScreen == null && minecraft.player != null)) return;
+            final java.util.List<String> sources = new java.util.ArrayList<String>(pointedTooltipSources);
+            final String target = pointedTooltipTarget;
+            ForgeConsentScreen.open(minecraft, false, new Runnable() {
+                @Override public void run() {
+                    pointedTooltipSources = sources;
+                    pointedTooltipTarget = target;
+                    handleRetranslateItemKey(minecraft);
+                }
+            });
+            return;
+        }
         if (!pointedTooltipSources.isEmpty() && pointedTooltipTarget != null) {
             retranslatePointedTooltip();
             return;
@@ -770,6 +819,41 @@ public final class NyanLexForge {
         return false;
     }
 
+    static final int KEY_ITEM = 0;
+    static final int KEY_SCREEN = 1;
+    static final int KEY_SETTINGS = 2;
+
+    /** Name of a hotkey as the player has it bound (for the quick setup and hints). */
+    static String keyLabel(int which) {
+        if (instance == null) return "?";
+        KeyBinding key = which == KEY_ITEM ? instance.itemRetranslateKey
+                : which == KEY_SCREEN ? instance.screenScanKey : instance.settingsKey;
+        String name = Keyboard.getKeyName(key.getKeyCode());
+        return name.length() == 1 ? name.toUpperCase(java.util.Locale.ROOT) : name;
+    }
+
+    static String version() {
+        try {
+            return net.minecraftforge.fml.common.Loader.instance().getIndexedModList().get("nyanlex").getVersion();
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    /** Opens a web link after the player confirmed it. */
+    static void openLink(final net.minecraft.client.gui.GuiScreen parent, final String url) {
+        final Minecraft mc = Minecraft.getMinecraft();
+        mc.displayGuiScreen(new net.minecraft.client.gui.GuiConfirmOpenLink(new net.minecraft.client.gui.GuiYesNoCallback() {
+            @Override public void confirmClicked(boolean yes, int id) {
+                if (yes) {
+                    try { java.awt.Desktop.getDesktop().browse(new java.net.URI(url)); }
+                    catch (Throwable ignored) { }
+                }
+                mc.displayGuiScreen(parent);
+            }
+        }, url, 0, true));
+    }
+
     static LegacyConfig config() { return instance.config; }
     static LegacyCodexClient codexClient() { return instance.codexClient; }
     static void save() { instance.saveConfig(); }
@@ -794,8 +878,14 @@ public final class NyanLexForge {
 
     private LegacyConfig loadConfig() {
         if (configFile.isFile()) try {
-            LegacyConfig loaded = LegacyConfig.normalizeLoaded(
-                    GSON.fromJson(readConfigText(configFile), LegacyConfig.class));
+            com.google.gson.JsonElement tree = new com.google.gson.JsonParser().parse(readConfigText(configFile));
+            boolean hadRequests = tree != null && tree.isJsonObject()
+                    && tree.getAsJsonObject().has("translationRequestsEnabled");
+            boolean hadFirstRun = tree != null && tree.isJsonObject()
+                    && tree.getAsJsonObject().has("firstRunDone");
+            LegacyConfig loaded = LegacyConfig.applyUpgradeDefaults(
+                    LegacyConfig.normalizeLoaded(GSON.fromJson(tree, LegacyConfig.class)),
+                    hadRequests, hadFirstRun);
             if (loaded != null) { saveConfig(loaded); return loaded; }
         } catch (Exception ignored) {}
         LegacyConfig created = new LegacyConfig();
