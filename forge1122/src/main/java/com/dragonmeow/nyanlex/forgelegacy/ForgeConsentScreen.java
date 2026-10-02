@@ -33,6 +33,7 @@ final class ForgeConsentScreen extends GuiScreen {
     private List<String> note = Collections.emptyList();
     private int boxTop;
     private int boxBottom;
+    private boolean restored;
 
     private ForgeConsentScreen(GuiScreen parent, boolean screenScope, Runnable onAccept, int w, int h) {
         this.parent = parent;
@@ -76,6 +77,7 @@ final class ForgeConsentScreen extends GuiScreen {
     }
 
     private void restoreParent() {
+        restored = true;
         if (parent == null) {
             mc.displayGuiScreen(null);
             return;
@@ -118,5 +120,8 @@ final class ForgeConsentScreen extends GuiScreen {
         super.drawScreen(mouseX, mouseY, delta);
     }
 
-    @Override public void onGuiClosed() { }
+    /** Someone else replaced the screen while the question was open: the screen underneath goes away with it. */
+    @Override public void onGuiClosed() {
+        if (!restored && parent != null) parent.onGuiClosed();
+    }
 }

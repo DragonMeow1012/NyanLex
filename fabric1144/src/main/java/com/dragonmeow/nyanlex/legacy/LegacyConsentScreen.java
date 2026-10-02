@@ -29,6 +29,7 @@ final class LegacyConsentScreen extends Screen {
     private List<String> note = Collections.emptyList();
     private int boxTop;
     private int boxBottom;
+    private boolean restored;
 
     private LegacyConsentScreen(Screen parent, boolean screenScope, Runnable onAccept,
                                 int width, int height) {
@@ -75,6 +76,7 @@ final class LegacyConsentScreen extends Screen {
     }
 
     private void restoreParent() {
+        restored = true;
         if (parent == null) {
             minecraft.setScreen(null);
             return;
@@ -120,5 +122,8 @@ final class LegacyConsentScreen extends Screen {
 
     @Override public void onClose() { cancel(); }
 
-    @Override public void removed() { }
+    /** Someone else replaced the screen while the question was open: the screen underneath goes away with it. */
+    @Override public void removed() {
+        if (!restored && parent != null) parent.removed();
+    }
 }
