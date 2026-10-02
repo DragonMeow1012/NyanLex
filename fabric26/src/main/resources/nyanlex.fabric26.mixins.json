@@ -9,7 +9,6 @@
     "AbstractContainerScreenAccessor",
     "ChatComponentAccessor",
     "FontSplitMixin",
-    "TextFieldMixin",
     "GuiGraphicsTextMixin",
     "HudMixin",
     "BossBarMixin",

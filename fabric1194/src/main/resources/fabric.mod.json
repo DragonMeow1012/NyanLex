@@ -20,6 +20,10 @@
     {
       "config": "nyanlex.mixins.json",
       "environment": "client"
+    },
+    {
+      "config": "nyanlex.compat.mixins.json",
+      "environment": "client"
     }
   ],
   "depends": {
