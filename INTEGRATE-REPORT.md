@@ -55,7 +55,7 @@ Estimated failure rate (inference from the offline analysis table, not a re-run)
 - `sync-core.ps1`: second run `done: 0 file(s) synced` (0 drift); `verification/sync-legacy-forge-core.ps1 -Check`: `SYNC_FORGE_CORE_OK files=20 changed=0`.
 - `python verification/hook-guards.py check`: OK (after `apply`, see caveat below).
 - **`compileJava` on all 18 targets: rc=0**: root, fabric1144, fabric1152, fabric1165, fabric1171, fabric1182, fabric1194, fabric120, neoforge120 (gradle 8.13, online), neoforge, fabric12111 (gradle 9.5.0), fabric2612, fabric26, neoforge26, fabric263, neoforge263, forge1122, forge1132 (wrappers + temurin 8). Driver script and per-target logs: scratchpad `compile_all.sh`, `clog2/`.
-- Jar `fabric2612/build/libs/nyanslate-1.0.0-Fabric-26.1.2.jar` (gradle 9.5.0 `build`, JDK 25): SHA-256 `89145032051d61c406a96a819e76cd927bcec2ea35e1c03f30f7ae62ab452740`; 450 entries, `<old-id>` occurrences 0 (names and contents); `git grep -i <old-id>` on the tree: 0.
+- Jar `fabric2612/build/libs/nyanslate-1.0.0-Fabric-26.1.2.jar` (gradle 9.5.0 `build`, JDK 25): SHA-256 `89145032051d61c406a96a819e76cd927bcec2ea35e1c03f30f7ae62ab452740`; 450 entries; the legacy personal identifier occurs 0 times in entry names and contents, and 0 times in `git grep` of the tree (the grep word is deliberately not written here).
 - No real game launch.
 
 ## 5. Not done / caveats
