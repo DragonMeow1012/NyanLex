@@ -14,7 +14,7 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 - Player names are masked only from the TAB list; ordinary item text such as `with Chest` is no longer guessed as a player name.
 - **Items and mod screens now translate on demand**: press `R` on the item under your cursor, or `P` to rescan the current screen. Anything already translated is served straight from the cache; text you haven't triggered is never requested automatically. Chat, scoreboards, name tags, boss bars, titles, action bars, and books are unaffected and keep translating automatically.
 - **Segmented tooltip cache**: long tooltips (title plus multi-line body) cache and restore per segment, so only the segment that actually changed needs a fresh request.
-- **GitHub AI translation hub**: at startup (can be turned off in settings), the mod quietly checks whether ready-made translations exist for your current server, modpack, or installed mods, then asks before downloading and merging them into the local cache. It only reads the hub's `index.json` and the files it needs - nothing local is ever uploaded.
+- **GitHub AI translation hub**: at startup (can be turned off in settings), the mod quietly checks whether ready-made translations exist for your current server, modpack, or installed mods, and downloads only after you confirm (the confirmation screen lists each source with its size, the expected total and where the files will be stored), merging them into the local cache. It only reads the hub's `index.json` and the files you confirm - nothing local is ever uploaded. Hub content is curated by the maintainers, holds only translated text and hashes (never the original text) and is licensed CC BY-NC-SA 4.0; see [translation-hub/README.md](translation-hub/README.md).
 - **Reorganized settings**: a new "do-not-translate filter" screen holds the pause-new-requests switch (still shows cached translations) and a case-insensitive, whole-word do-not-translate term list.
 - Export/import translation JSON to merge a friend's translations locally while keeping your own.
 
@@ -143,7 +143,7 @@ If your keybinds look reset after upgrading: this release changes the mod id fro
 - **Renamed to NyanLex Translator**: the package, mod id, config/cache filename prefix, and GitHub translation hub all moved to the new name. The first launch automatically copies your config, caches, and keybinds saved under any earlier name to the new name (originals are kept; existing new-named files are never overwritten).
 - Item and mod-screen translation now triggers on demand (`R`/`P`); chat and other live text keep translating automatically, so nothing you haven't looked at gets translated ahead of time.
 - Tooltips now cache per segment, cutting down on re-requesting an entire long tooltip for one changed line.
-- Adds a startup check and download-confirmation flow for the GitHub AI translation hub, letting you pull in translations others have already shared and the community has reviewed; it can be turned off in settings.
+- Adds a startup check and download-confirmation flow for the GitHub AI translation hub, letting you download the translations curated by the maintainers (only when you press download); the startup check can be turned off in settings.
 - Adds a "do-not-translate filter" settings screen that consolidates the previously scattered request toggle and term list.
 
 ## 1.0.6 highlights

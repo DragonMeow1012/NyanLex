@@ -71,6 +71,12 @@ class SettingsPanelTest {
         @Override public WarmupStatus warmupStatus() { return warm; }
         @Override public void warmupCommand(WarmupCommand c) { commands.add(c); }
         @Override public boolean showIntro() { return intro; }
+        final List<FileLocations.Entry> opened = new ArrayList<>();
+        @Override public List<FileLocations.Entry> fileLocations() {
+            return FileLocations.entries(java.nio.file.Path.of(
+                    "C:/Users/SomeVeryLongUserName/AppData/Roaming/.minecraft/config"), "zh-TW");
+        }
+        @Override public void openFileLocation(FileLocations.Entry entry) { opened.add(entry); }
         @Override public String modVersion() { return "1.0.0"; }
         @Override public String clipboard() { return clipboard; }
         @Override public void close() { closed = true; }
@@ -155,6 +161,7 @@ class SettingsPanelTest {
     private static List<SettingGroup> groups() {
         List<SettingGroup> out = new ArrayList<>();
         for (SettingsModel.Node n : SettingsModel.nodes(SettingsCategory.DISPLAY)) out.add(n.group());
+        for (SettingsModel.Node n : SettingsModel.nodes(SettingsCategory.ADVANCED)) if (n.isGroup()) out.add(n.group());
         return out;
     }
 
@@ -257,6 +264,46 @@ class SettingsPanelTest {
         int[] card = p.cardBounds("language");
         p.mouseClicked(card[0] + 4, card[1] + 3, 0);
         assertTrue(host.actions.isEmpty());
+    }
+
+    @Test
+    void fileLocationCardsListEveryFileAndOpenTheirOwnEntry() {
+        FakeHost host = new FakeHost();
+        SettingsPanel.State st = new SettingsPanel.State();
+        st.expanded.add(SettingsModel.FILES_GROUP_ID);
+        SettingsPanel p = new SettingsPanel(host, st);
+        p.resize(480, 270);
+        p.setCategory(SettingsCategory.ADVANCED);
+        assertTrue(p.isExpanded(SettingsModel.FILES_GROUP_ID));
+        for (String id : FileLocations.IDS) assertNotNull(SettingsModel.byId("file." + id), id);
+        int[] ctl = p.controlBounds("file.ai_cache");
+        assertNotNull(ctl, "AI cache card must be laid out");
+        click(p, ctl);
+        assertEquals(1, host.opened.size());
+        assertEquals("ai_cache", host.opened.get(0).id());
+        assertTrue(host.opened.get(0).path().toString().replace('\\', '/').endsWith("config/nyanlex-ai-cache-zh-tw.json"));
+    }
+
+    @Test
+    void hoveringAShortenedPathShowsTheFullPath() {
+        FakeHost host = new FakeHost();
+        SettingsPanel.State st = new SettingsPanel.State();
+        st.expanded.add(SettingsModel.FILES_GROUP_ID);
+        SettingsPanel p = new SettingsPanel(host, st);
+        p.resize(256, 240);
+        p.setCategory(SettingsCategory.ADVANCED);
+        int[] card = p.cardBounds("file.config");
+        assertNotNull(card);
+        Rec c = new Rec();
+        p.render(c, -1, -1);
+        String full = host.fileLocations().get(0).path().toString();
+        assertTrue(c.texts.stream().noneMatch(t -> t.s().equals(full)), "narrow screen shortens the path");
+        // hover the last text line of the card (the path line)
+        Rec hovered = new Rec();
+        p.render(hovered, card[0] + 20, card[1] + card[3] - 6);
+        String joined = hovered.texts.stream().map(Text::s).reduce("", String::concat);
+        assertTrue(joined.contains(full.substring(0, 10)) && joined.contains(full.substring(full.length() - 10)),
+                "hover tooltip carries the complete path");
     }
 
     @Test

@@ -14,7 +14,7 @@ import net.minecraft.util.FormattedCharSequence;
 import java.util.List;
 
 /**
- * GitHub AI 翻譯倉庫設定 — repository share/consent preferences, the
+ * GitHub AI 翻譯倉庫設定 (download-only; nothing downloads before the player confirms) — the
  * "識別當前伺服器/MOD下載並匯入翻譯檔" action button, the startup-check toggle, and
  * "清除倉庫翻譯".
  */
@@ -28,11 +28,8 @@ public final class TranslationHubScreen extends Screen {
     private static final long CLEAR_CONFIRM_WINDOW_MS = 4_000L;
 
     private final Screen parent;
-    private boolean showIntro;
     private List<FormattedCharSequence> introLines = List.of();
-    private List<FormattedCharSequence> questionLines = List.of();
     private int introY;
-    private int questionY;
     private Button identifyButton;
     private Button clearButton;
     private long clearArmedUntilMs;
@@ -50,15 +47,7 @@ public final class TranslationHubScreen extends Screen {
         int half = (contentW - 6) / 2;
         int lineH = this.font.lineHeight + 1;
 
-        // First open ever: show the full explanation once, then remember it was seen.
-        showIntro = !cfg.hubIntroSeen;
-        if (showIntro) {
-            cfg.hubIntroSeen = true;
-            NyanLexNeoForge.saveConfig();
-        }
-        Component introText = Component.translatable(
-                showIntro ? "screen.nyanlex.hub.intro" : "screen.nyanlex.hub.hint");
-        introLines = this.font.split(introText, contentW);
+        introLines = this.font.split(Component.translatable("screen.nyanlex.hub.hint"), contentW);
 
         int y = 30;
         introY = y;
@@ -70,19 +59,6 @@ public final class TranslationHubScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.translatable("config.nyanlex.hub.open_repo"),
                         this::confirmOpenRepo)
                 .bounds(contentX + contentW - half, y, half, 20).build());
-        y += 28;
-
-        questionLines = this.font.split(
-                Component.translatable("screen.nyanlex.hub.consent.question"), contentW);
-        questionY = y;
-        y += questionLines.size() * lineH + 6;
-
-        int consentW = Math.min(half * 2, contentW);
-        this.addRenderableWidget(Button.builder(consentLabel(cfg), b -> {
-            cfg.hubShareConsent = !cfg.hubShareConsent;
-            NyanLexNeoForge.saveConfig();
-            b.setMessage(consentLabel(cfg));
-        }).bounds(this.width / 2 - consentW / 2, y, consentW, 20).build());
         y += 28;
 
         clearArmedUntilMs = 0L;
@@ -128,13 +104,6 @@ public final class TranslationHubScreen extends Screen {
                 Component.translatable("gui.cancel")));
     }
 
-    private static Component consentLabel(TranslatorConfig cfg) {
-        return Component.translatable("config.nyanlex.hub.consent",
-                Component.translatable(cfg.hubShareConsent
-                        ? "config.nyanlex.hub.consent.yes"
-                        : "config.nyanlex.hub.consent.no"));
-    }
-
     private static Component startupCheckLabel(TranslatorConfig cfg) {
         return Component.translatable("config.nyanlex.hub.startup_check",
                 Component.translatable(cfg.hubStartupPromptDisabled ? "options.off" : "options.on"));
@@ -167,17 +136,11 @@ public final class TranslationHubScreen extends Screen {
         g.drawCenteredString(this.font, this.title, this.width / 2, 12, 0xFFFFFF);
 
         int lineH = this.font.lineHeight + 1;
-        int introColor = showIntro ? 0xFFFFD700 : 0xFF909090;
+        int introColor = 0xFFB0B0B0;
         int ly = introY;
         for (FormattedCharSequence line : introLines) {
             g.drawCenteredString(this.font, line, this.width / 2, ly, introColor);
             ly += lineH;
-        }
-
-        int qy = questionY;
-        for (FormattedCharSequence line : questionLines) {
-            g.drawCenteredString(this.font, line, this.width / 2, qy, 0xFFA0A0A0);
-            qy += lineH;
         }
     }
 

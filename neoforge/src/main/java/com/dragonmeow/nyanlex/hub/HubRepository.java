@@ -1,7 +1,6 @@
 package com.dragonmeow.nyanlex.hub;
 
 import com.dragonmeow.nyanlex.translate.HttpTransport;
-import com.dragonmeow.nyanlex.translate.TranslationFile;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -28,20 +27,20 @@ public final class HubRepository {
         return HubIndex.read(new StringReader(body));
     }
 
-    public TranslationFile fetchServerFile(String host, String language) throws IOException {
+    public HubFile fetchServerFile(String host, String language) throws IOException {
         return fetch(HubPaths.serverPath(host, language));
     }
 
-    public TranslationFile fetchModpackFile(String slug, String language) throws IOException {
+    public HubFile fetchModpackFile(String slug, String language) throws IOException {
         return fetch(HubPaths.modpackPath(slug, language));
     }
 
-    public TranslationFile fetchModFile(String modId, String language) throws IOException {
+    public HubFile fetchModFile(String modId, String language) throws IOException {
         return fetch(HubPaths.modPath(modId, language));
     }
 
-    private TranslationFile fetch(String relativePath) throws IOException {
+    private HubFile fetch(String relativePath) throws IOException {
         String body = transport.get(baseUrl + "/" + relativePath);
-        return TranslationFile.read(body);
+        return HubFile.read(body);
     }
 }

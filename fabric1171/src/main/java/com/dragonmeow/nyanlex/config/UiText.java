@@ -110,4 +110,23 @@ public final class UiText {
         while (end > 0 && width.applyAsInt(text.substring(0, end)) > budget) end--;
         return text.substring(0, end).stripTrailing() + ellipsis;
     }
+
+    /** Like {@link #fit} but keeps both ends and cuts the middle ("C:\Users\…\cache.json"),
+     *  the useful shape for a long file path. */
+    public static String fitMiddle(String text, int maxWidth, ToIntFunction<String> width) {
+        if (text == null) return "";
+        if (width.applyAsInt(text) <= maxWidth) return text;
+        String ellipsis = "…";
+        int budget = maxWidth - width.applyAsInt(ellipsis);
+        if (budget <= 0) return ellipsis;
+        int head = (text.length() + 1) / 2;
+        int tail = text.length() - head;
+        // Drop characters alternately from the middle outwards until it fits.
+        int left = head, right = tail;
+        while (left + right > 0
+                && width.applyAsInt(text.substring(0, left) + text.substring(text.length() - right)) > budget) {
+            if (left >= right) left--; else right--;
+        }
+        return text.substring(0, left) + ellipsis + text.substring(text.length() - right);
+    }
 }

@@ -203,10 +203,6 @@ public final class SettingsCatalog {
                         SettingEntry.SideEffect.NONE))));
 
         map.put(SettingsPage.HUB, pairs(List.of(
-                toggle(SettingsPage.HUB, "share", c -> c.hubShareConsent,
-                        c -> onOff(c.hubShareConsent),
-                        c -> c.hubShareConsent = !c.hubShareConsent,
-                        SettingEntry.SideEffect.NONE),
                 // Stored inverted (hubStartupPromptDisabled); shown as "on = check at startup".
                 toggle(SettingsPage.HUB, "startup", c -> !c.hubStartupPromptDisabled,
                         c -> onOff(!c.hubStartupPromptDisabled),

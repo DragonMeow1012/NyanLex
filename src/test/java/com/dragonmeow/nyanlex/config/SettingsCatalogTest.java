@@ -51,7 +51,7 @@ class SettingsCatalogTest {
         assertEquals(9, SettingsCatalog.rows(SettingsPage.DISPLAY).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.AI).size());
         assertEquals(6, SettingsCatalog.entries(SettingsPage.REQUESTS).size());
-        assertEquals(5, SettingsCatalog.entries(SettingsPage.HUB).size());
+        assertEquals(4, SettingsCatalog.entries(SettingsPage.HUB).size());
         assertEquals(4, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
     }
 
@@ -240,11 +240,17 @@ class SettingsCatalogTest {
     }
 
     @Test
-    void hubSharingToggleAndIntroFlagDefaults() {
+    void introFlagDefaultsAndNoShareEntryExists() {
         TranslatorConfig cfg = new TranslatorConfig();
         assertFalse(cfg.settingsIntroSeen);
-        SettingsCatalog.byId("share").press(cfg);
-        assertTrue(cfg.hubShareConsent);
+        assertNull(SettingsCatalog.byId("share"), "the hub is download-only: no share toggle");
+    }
+
+    @Test
+    void oldConfigWithRemovedShareFieldsStillLoads() {
+        TranslatorConfig cfg = TranslatorConfig.fromReader(new java.io.StringReader(
+                "{\"hubShareConsent\":true,\"hubIntroSeen\":true,\"hubStartupPromptDisabled\":true}"));
+        assertTrue(cfg.hubStartupPromptDisabled, "known fields still load; removed ones are ignored");
     }
 
     @Test

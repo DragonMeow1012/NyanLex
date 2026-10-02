@@ -1,7 +1,6 @@
 package com.dragonmeow.nyanlex.hub;
 
 import com.dragonmeow.nyanlex.cache.LanguageFileStore;
-import com.dragonmeow.nyanlex.translate.TranslationFile;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -15,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,12 +29,16 @@ import java.util.Map;
  * own cache first and only falls back to {@link #get} on a miss.</p>
  */
 public final class HubLocalCache {
-    private static final int SCHEMA = 1;
+    /** Local file schema 2: rows keyed by {@link HubKeyHash} (same as the repository files;
+     *  no source text is ever stored). A schema 1 file (keyed by source text) is ignored. */
+    private static final int SCHEMA = 2;
     private static final Gson GSON = new Gson();
 
     private static final class Row {
         final String value;
         final String source;
+        /** In-memory only: passed {@link HubImportValidator#acceptsOnHit} once already. */
+        boolean verified;
 
         Row(String value, String source) {
             this.value = value;
@@ -78,6 +80,7 @@ public final class HubLocalCache {
     }
 
     private final Path directory;
+    private boolean dirty;
     private String language;
     private Map<String, Row> rows = new LinkedHashMap<>();
 
@@ -93,6 +96,7 @@ public final class HubLocalCache {
         String next = LanguageFileStore.languageTag(targetLanguage);
         if (next.equals(language)) return;
         language = next;
+        dirty = false;
         rows = load();
     }
 
@@ -104,10 +108,26 @@ public final class HubLocalCache {
         return directory.resolve(HubPaths.hubCacheFileName(language));
     }
 
+    /**
+     * Look up by the normalized cache key (hashed here with {@link HubKeyHash}). A row is
+     * validated against this real key the first time it hits; a row that does not fit
+     * (token counts, reshaped tokens, foreign URL) is dropped for good and {@code null}
+     * returned, so a structurally wrong row never reaches the display path.
+     */
     public synchronized String get(String key) {
         if (key == null) return null;
-        Row row = rows.get(key);
-        return row == null ? null : row.value;
+        String hash = HubKeyHash.of(key);
+        Row row = rows.get(hash);
+        if (row == null) return null;
+        if (!row.verified) {
+            if (!HubImportValidator.acceptsOnHit(key, row.value)) {
+                rows.remove(hash);
+                dirty = true;
+                return null;
+            }
+            row.verified = true;
+        }
+        return row.value;
     }
 
     public synchronized int size() {
@@ -120,30 +140,28 @@ public final class HubLocalCache {
      * active language. A key that already exists — from an earlier, higher-priority
      * source, or from this exact source re-downloaded — is never replaced.
      */
-    public synchronized MergeResult mergeFromFile(TranslationFile file, HubSource source) {
+    public synchronized MergeResult mergeFromFile(HubFile file, HubSource source) {
         if (file == null) return MergeResult.LANGUAGE_REJECTED;
-        if (!LanguageFileStore.languageTag(file.language).equals(language)) {
+        if (!LanguageFileStore.languageTag(file.language()).equals(language)) {
             return MergeResult.LANGUAGE_REJECTED;
         }
         int added = 0, rejected = 0, present = 0;
         String encodedSource = source == null ? null : source.encode();
-        for (Map<String, String> part : List.of(file.machine, file.ai)) {
-            for (Map.Entry<String, String> entry : part.entrySet()) {
-                String key = entry.getKey();
-                String value = entry.getValue();
-                if (rows.containsKey(key)) {
-                    present++;
-                    continue;
-                }
-                if (!HubImportValidator.accepts(key, value)) {
-                    rejected++;
-                    continue;
-                }
-                rows.put(key, new Row(value, encodedSource));
-                added++;
+        for (Map.Entry<String, String> entry : file.entries().entrySet()) {
+            String hash = entry.getKey();
+            String value = entry.getValue();
+            if (rows.containsKey(hash)) {
+                present++;
+                continue;
             }
+            if (!HubImportValidator.acceptsOnMerge(value)) {
+                rejected++;
+                continue;
+            }
+            rows.put(hash, new Row(value, encodedSource));
+            added++;
         }
-        if (added > 0) persist();
+        if (added > 0 || dirty) persist();
         return new MergeResult(added, rejected, present, false);
     }
 
@@ -155,7 +173,7 @@ public final class HubLocalCache {
         int before = rows.size();
         rows.values().removeIf(row -> encoded.equals(row.source));
         int removed = before - rows.size();
-        if (removed > 0) persist();
+        if (removed > 0 || dirty) persist();
         return removed;
     }
 
@@ -171,6 +189,7 @@ public final class HubLocalCache {
         if (!Files.isRegularFile(file)) return loaded;
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             JsonObject json = new JsonParser().parse(reader).getAsJsonObject();
+            if (!json.has("schema") || json.get("schema").getAsInt() != SCHEMA) return loaded;
             JsonObject rowsJson = json.has("rows") && json.get("rows").isJsonObject()
                     ? json.getAsJsonObject("rows") : new JsonObject();
             for (Map.Entry<String, JsonElement> entry : rowsJson.entrySet()) {
@@ -178,7 +197,7 @@ public final class HubLocalCache {
                 JsonObject row = entry.getValue().getAsJsonObject();
                 String value = row.has("v") && !row.get("v").isJsonNull() ? row.get("v").getAsString() : null;
                 String source = row.has("s") && !row.get("s").isJsonNull() ? row.get("s").getAsString() : null;
-                if (value != null) loaded.put(entry.getKey(), new Row(value, source));
+                if (value != null && HubKeyHash.isHash(entry.getKey())) loaded.put(entry.getKey(), new Row(value, source));
             }
         } catch (IOException | RuntimeException ignored) {
             // Best-effort cache: a damaged file simply starts empty again.
@@ -206,6 +225,7 @@ public final class HubLocalCache {
                 GSON.toJson(json, writer);
             }
             Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            dirty = false;
         } catch (IOException ignored) {
             // Best-effort cache: a failed write is retried on the next successful merge.
         }

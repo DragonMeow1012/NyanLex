@@ -1,7 +1,6 @@
 package com.dragonmeow.nyanlex.hub;
 
 import com.dragonmeow.nyanlex.translate.HttpTransport;
-import com.dragonmeow.nyanlex.translate.TranslationFile;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -45,43 +44,65 @@ class HubRepositoryTest {
         assertEquals(0, repository.fetchIndex().modIds().size());
     }
 
+    private static String hubJson(int schema, String key, String value) {
+        return "{\"schema\":" + schema + ",\"format\":\"hub-hash-v1\",\"hash\":\"sha256\","
+                + "\"language\":\"zh-tw\",\"rows\":1,\"entries\":{\"" + HubKeyHash.of(key) + "\":\""
+                + value + "\"}}";
+    }
+
     @Test
     void fetchServerFileUsesServerPath() throws IOException {
         Map<String, String> responses = new HashMap<>();
-        String json = "{\"schema\":1,\"format\":\"modern-template-v1\",\"language\":\"zh-tw\","
-                + "\"provider\":\"none\",\"machine\":{},\"ai\":{\"Diamond Sword\":\"鑽石劍\"}}";
-        responses.put("https://example.com/hub/servers/hypixel.net/zh-tw.json", json);
+        responses.put("https://example.com/hub/servers/hypixel.net/zh-tw.json", hubJson(2, "Diamond Sword", "鑽石劍"));
         HubRepository repository = new HubRepository(fakeTransport(responses), "https://example.com/hub");
 
-        TranslationFile file = repository.fetchServerFile("hypixel.net", "zh-TW");
+        HubFile file = repository.fetchServerFile("hypixel.net", "zh-TW");
 
-        assertEquals("鑽石劍", file.ai.get("Diamond Sword"));
+        assertEquals("鑽石劍", file.entries().get(HubKeyHash.of("Diamond Sword")));
     }
 
     @Test
     void fetchModpackFileUsesModpackPath() throws IOException {
         Map<String, String> responses = new HashMap<>();
-        String json = "{\"schema\":1,\"format\":\"modern-template-v1\",\"language\":\"zh-tw\","
-                + "\"provider\":\"none\",\"machine\":{},\"ai\":{\"Ender Pearl\":\"終界珍珠\"}}";
-        responses.put("https://example.com/hub/modpacks/my-pack/zh-tw.json", json);
+        responses.put("https://example.com/hub/modpacks/my-pack/zh-tw.json", hubJson(2, "Ender Pearl", "終界珍珠"));
         HubRepository repository = new HubRepository(fakeTransport(responses), "https://example.com/hub");
 
-        TranslationFile file = repository.fetchModpackFile("my-pack", "zh-TW");
+        HubFile file = repository.fetchModpackFile("my-pack", "zh-TW");
 
-        assertEquals("終界珍珠", file.ai.get("Ender Pearl"));
+        assertEquals("終界珍珠", file.entries().get(HubKeyHash.of("Ender Pearl")));
     }
 
     @Test
     void fetchModFileUsesModPath() throws IOException {
         Map<String, String> responses = new HashMap<>();
-        String json = "{\"schema\":1,\"format\":\"modern-template-v1\",\"language\":\"zh-tw\","
-                + "\"provider\":\"none\",\"machine\":{},\"ai\":{\"Somemod Item\":\"某模組物品\"}}";
-        responses.put("https://example.com/hub/mods/somemod/zh-tw.json", json);
+        responses.put("https://example.com/hub/mods/somemod/zh-tw.json", hubJson(2, "Somemod Item", "某模組物品"));
         HubRepository repository = new HubRepository(fakeTransport(responses), "https://example.com/hub");
 
-        TranslationFile file = repository.fetchModFile("somemod", "zh-TW");
+        HubFile file = repository.fetchModFile("somemod", "zh-TW");
 
-        assertEquals("某模組物品", file.ai.get("Somemod Item"));
+        assertEquals("某模組物品", file.entries().get(HubKeyHash.of("Somemod Item")));
+    }
+
+    @Test
+    void schema1FileContainingSourceTextIsRejected() {
+        Map<String, String> responses = new HashMap<>();
+        responses.put("https://example.com/hub/servers/hypixel.net/zh-tw.json",
+                "{\"schema\":1,\"format\":\"modern-template-v1\",\"language\":\"zh-tw\","
+                        + "\"provider\":\"none\",\"machine\":{},\"ai\":{\"Diamond Sword\":\"鑽石劍\"}}");
+        HubRepository repository = new HubRepository(fakeTransport(responses), "https://example.com/hub");
+
+        assertThrows(IOException.class, () -> repository.fetchServerFile("hypixel.net", "zh-TW"));
+    }
+
+    @Test
+    void entryWithANonHashKeyIsRejected() {
+        Map<String, String> responses = new HashMap<>();
+        responses.put("https://example.com/hub/servers/hypixel.net/zh-tw.json",
+                "{\"schema\":2,\"format\":\"hub-hash-v1\",\"language\":\"zh-tw\","
+                        + "\"entries\":{\"Diamond Sword\":\"鑽石劍\"}}");
+        HubRepository repository = new HubRepository(fakeTransport(responses), "https://example.com/hub");
+
+        assertThrows(IOException.class, () -> repository.fetchServerFile("hypixel.net", "zh-TW"));
     }
 
     @Test

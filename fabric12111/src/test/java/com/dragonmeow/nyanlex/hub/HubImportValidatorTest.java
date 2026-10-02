@@ -6,35 +6,35 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Covers both halves of {@link HubImportValidator#accepts}: the shared
+/** Covers both halves of {@link HubImportValidator#acceptsOnHit}: the shared
  *  {@code TranslationCache.usableForBulkTransfer} shape checks, and the hub-specific
  *  {@link TextFilter#hasForeignUrl} guard. */
 class HubImportValidatorTest {
 
     @Test
     void acceptsAnOrdinaryTranslatedRow() {
-        assertTrue(HubImportValidator.accepts("Diamond Sword", "鑽石劍"));
+        assertTrue(HubImportValidator.acceptsOnHit("Diamond Sword", "鑽石劍"));
     }
 
     @Test
     void rejectsUntranslatedEcho() {
-        assertFalse(HubImportValidator.accepts("Diamond Sword", "Diamond Sword"));
+        assertFalse(HubImportValidator.acceptsOnHit("Diamond Sword", "Diamond Sword"));
     }
 
     @Test
     void rejectsMismatchedProtectedPlaceholderCount() {
         // usableForBulkTransfer requires the exact same ⟦n⟧ multiset.
-        assertFalse(HubImportValidator.accepts("Hello ⟦0⟧, welcome", "你好，歡迎"));
+        assertFalse(HubImportValidator.acceptsOnHit("Hello ⟦0⟧, welcome", "你好，歡迎"));
     }
 
     @Test
     void rejectsATranslationThatIntroducesAUrlTheSourceNeverHad() {
-        assertFalse(HubImportValidator.accepts("Buy VIP now", "立即購買 VIP，詳見 http://evil.example.com"));
+        assertFalse(HubImportValidator.acceptsOnHit("Buy VIP now", "立即購買 VIP，詳見 http://evil.example.com"));
     }
 
     @Test
     void acceptsATranslationThatKeepsTheSourcesOwnUrl() {
-        assertTrue(HubImportValidator.accepts(
+        assertTrue(HubImportValidator.acceptsOnHit(
                 "Visit hypixel.net/store for more", "造訪 hypixel.net/store 瞭解更多"));
     }
 
@@ -61,5 +61,12 @@ class HubImportValidatorTest {
     @Test
     void hasForeignUrlFalseWhenNeitherSideHasOne() {
         assertFalse(TextFilter.hasForeignUrl("Diamond Sword", "鑽石劍"));
+    }
+
+    @Test
+    void mergeCheckIsSourceFreeAndRejectsAnyUrlOrEmptyValue() {
+        assertTrue(HubImportValidator.acceptsOnMerge("鑽石劍"));
+        assertFalse(HubImportValidator.acceptsOnMerge(""));
+        assertFalse(HubImportValidator.acceptsOnMerge("造訪 example.com"));
     }
 }

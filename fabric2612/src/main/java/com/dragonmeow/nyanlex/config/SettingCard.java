@@ -14,6 +14,8 @@ public final class SettingCard {
         BUTTON,
         /** Warm-up card: status, progress bar and pause/resume/stop buttons. */
         WARMUP,
+        /** A file or folder the mod keeps: purpose, full path and an "open" button (Advanced > file locations). */
+        FILE,
         /** Text only. */
         INFO
     }

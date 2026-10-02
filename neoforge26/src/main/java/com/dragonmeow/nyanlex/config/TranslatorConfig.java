@@ -132,7 +132,7 @@ public final class TranslatorConfig {
      */
     public java.util.List<String> doNotTranslateTerms = new java.util.ArrayList<>();
 
-    // ---- GitHub AI translation hub (community sharing) ----
+    // ---- GitHub AI translation hub (download only) ----
 
     /**
      * @deprecated Superseded by the explicit "識別當前伺服器/MOD下載並匯入翻譯檔" button
@@ -143,17 +143,11 @@ public final class TranslatorConfig {
     @Deprecated
     public boolean hubAutoImport = false;
 
-    /** The player has agreed to share their own AI translations to the community hub. */
-    public boolean hubShareConsent = false;
-
     /**
      * Whether the settings screen's first-open hint ("第一次使用？按右上 ? 看說明") has already
      * been shown once. Field type is part of the persisted format and must never change.
      */
     public boolean settingsIntroSeen = false;
-
-    /** Whether the hub screen's first-open explanation has already been shown once. */
-    public boolean hubIntroSeen = false;
 
     /**
      * When {@code true}, the loader skips the once-per-launch startup check (fetching

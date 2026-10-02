@@ -12,6 +12,7 @@
 - **非官方。** 與 Mojang、Microsoft、任何伺服器（如 Hypixel）或模組作者**沒有**隸屬、合作或背書關係。
 - **授權：** 本資料夾內的資料以 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)（姓名標示－非商業性－相同方式分享）授權，詳見同目錄 `LICENSE`。程式碼仍為 repo 根目錄的 MIT 授權，不受影響。
 - 譯文為機器／社群產生，可能有誤，不保證正確。
+- **內容由維護者整理與更新。** 模組不會上傳玩家的翻譯，玩家端只有下載。
 
 ### 資料夾結構
 
@@ -62,6 +63,7 @@ This folder holds **translated text** produced by the community and by AI, fetch
 - **Unofficial.** Not affiliated with, endorsed by or associated with Mojang, Microsoft, any server (for example Hypixel) or any mod author.
 - **License:** data in this folder is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (see `LICENSE` here). The program code remains MIT-licensed at the repository root and is unaffected.
 - Translations are machine/community generated and may contain errors.
+- **Content is curated and updated by the maintainers.** The mod never uploads a player's translations; the player side only downloads.
 
 ### Layout
 

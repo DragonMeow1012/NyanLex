@@ -475,6 +475,11 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         return config;
     }
 
+    /** The game's config directory (where every mod file lives). */
+    public static Path configDirectory() {
+        return configPath.getParent();
+    }
+
     public static HubLocalCache hubLocalCache() {
         return hubLocalCache;
     }
@@ -753,7 +758,7 @@ public final class NyanLexFabric26 implements ClientModInitializer {
                 var result = job.result();
                 if (result != null) {
                     status(Component.translatable("message.nyanlex.hub.download_done",
-                            result.added()).getString());
+                            result.added(), hubLocalCache.activeFile().toAbsolutePath().toString()).getString());
                 }
             } else if (state == HubDownloadJob.State.FAILED) {
                 String reason = job.failureMessage();

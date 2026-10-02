@@ -1,5 +1,7 @@
 package com.dragonmeow.nyanlex.config;
 
+import java.util.List;
+
 /**
  * Everything the settings panel needs from the surrounding game: config access, text,
  * actions and the warm-up driver. Implemented by each loader's screen glue.
@@ -50,6 +52,13 @@ public interface UiHost {
     default String clipboard() { return ""; }
 
     default void playClick() { }
+
+    /** Every file/folder the mod keeps, for the 進階 > 檔案位置 group; empty when the glue has none. */
+    default List<FileLocations.Entry> fileLocations() { return List.of(); }
+
+    /** Opens the file manager on {@code entry} (selecting the file). Glue falls back to the
+     *  game's own folder opener when {@link FileOpener#reveal} fails. */
+    default void openFileLocation(FileLocations.Entry entry) { }
 
     /** Leave the settings screen (the "完成" button). */
     void close();

@@ -128,6 +128,7 @@ public final class SettingsPanel {
     private boolean dirty = true;
     private Map<SettingsCategory, Integer> searchCounts = new EnumMap<>(SettingsCategory.class);
 
+    private String tooltipText;
     private String openDropdownId;
     private String dragSliderId;
     private boolean ignoreSlash;
@@ -160,6 +161,10 @@ public final class SettingsPanel {
         boolean stacked;
         int ctrlW;
         int ctrlH;
+        /** FILE cards: index of the path line inside {@link #desc} (-1 otherwise) and the full path. */
+        int pathLine = -1;
+        String fullPath;
+        FileLocations.Entry file;
         boolean header() { return group != null; }
     }
 
@@ -230,6 +235,7 @@ public final class SettingsPanel {
         int y = 0;
         if (searching) {
             for (SettingCard card : SettingsModel.search(q, lang)) {
+                if (hidden(card)) continue;
                 searchCounts.merge(card.category(), 1, Integer::sum);
                 Row r = cardRow(card, 0, true);
                 r.y = y;
@@ -238,6 +244,10 @@ public final class SettingsPanel {
             }
         } else {
             for (SettingsModel.Node node : SettingsModel.nodes(state.category)) {
+                if (node.isGroup() && SettingsModel.FILES_GROUP_ID.equals(node.group().id())
+                        && host.fileLocations().isEmpty()) {
+                    continue; // this loader's glue does not provide file locations
+                }
                 if (node.isGroup()) {
                     Row header = new Row();
                     header.group = node.group();
@@ -266,6 +276,11 @@ public final class SettingsPanel {
         clampScroll();
     }
 
+    /** FILE cards only exist where the glue can tell the paths. */
+    private boolean hidden(SettingCard card) {
+        return card.kind() == SettingCard.Kind.FILE && host.fileLocations().isEmpty();
+    }
+
     private int cardWidth(int indent) { return listW - SCROLLBAR_W - 3 - indent; }
 
     private Row cardRow(SettingCard card, int indent, boolean crumb) {
@@ -287,6 +302,13 @@ public final class SettingsPanel {
         int textW = r.stacked || !hasCtrl ? inner : textColW;
         String desc = card.kind() == SettingCard.Kind.INFO ? aboutText(card) : SettingsModel.description(card, lang);
         r.desc = UiText.wrap(desc, textW, host::textWidth);
+        if (card.kind() == SettingCard.Kind.FILE) {
+            r.file = fileEntry(card);
+            r.fullPath = r.file == null ? "-" : r.file.path().toString();
+            r.desc = new ArrayList<>(r.desc);
+            r.pathLine = r.desc.size();
+            r.desc.add(UiText.fitMiddle(r.fullPath, textW, host::textWidth));
+        }
         int head = CARD_PAD - 1 + (r.crumb != null ? LINE_H : 0) + LINE_H;
         int block = head + (r.desc.isEmpty() ? 0 : 2 + r.desc.size() * LINE_H) + CARD_PAD - 1;
         if (card.kind() == SettingCard.Kind.WARMUP) {
@@ -298,6 +320,12 @@ public final class SettingsPanel {
             r.h = Math.max(block, r.ctrlH + 2 * CARD_PAD);
         }
         return r;
+    }
+
+    private FileLocations.Entry fileEntry(SettingCard card) {
+        String id = card.id().startsWith("file.") ? card.id().substring(5) : card.id();
+        for (FileLocations.Entry e : host.fileLocations()) if (e.id().equals(id)) return e;
+        return null;
     }
 
     private String aboutText(SettingCard card) {
@@ -330,6 +358,10 @@ public final class SettingsPanel {
             }
             case BUTTON -> {
                 r.ctrlW = Math.max(58, Math.min(112, host.textWidth(buttonText(card.entry())) + 14));
+                r.ctrlH = 14;
+            }
+            case FILE -> {
+                r.ctrlW = Math.max(46, Math.min(112, host.textWidth(host.text(SettingsModel.KEY_BTN_OPEN)) + 14));
                 r.ctrlH = 14;
             }
             default -> {
@@ -427,6 +459,7 @@ public final class SettingsPanel {
     public void render(UiCanvas c, int mx, int my) {
         mouseX = mx;
         mouseY = my;
+        tooltipText = null;
         ensureLayout();
         String q = query.toString();
         boolean searching = q.trim().length() > 0;
@@ -473,6 +506,7 @@ public final class SettingsPanel {
         }
 
         if (openDropdownId != null) drawDropdownPopup(c, mx, my);
+        if (tooltipText != null && openDropdownId == null) drawTooltip(c, tooltipText, mx, my);
     }
 
     private void drawSidebar(UiCanvas c, int mx, int my, boolean searching) {
@@ -592,6 +626,7 @@ public final class SettingsPanel {
         StringBuilder sb = new StringBuilder();
         for (SettingCard card : group.cards()) {
             SettingEntry e = card.entry();
+            if (e == null) continue;
             StateText st = e.state(cfg);
             if (st == null) continue;
             if (sb.length() > 0) sb.append(" / ");
@@ -624,8 +659,14 @@ public final class SettingsPanel {
         ty += LINE_H;
         if (!r.desc.isEmpty()) {
             ty += 2;
-            for (String line : r.desc) {
-                c.text(line, tx, ty, C_DESC);
+            for (int li = 0; li < r.desc.size(); li++) {
+                String line = r.desc.get(li);
+                boolean pathLine = li == r.pathLine;
+                c.text(line, tx, ty, pathLine ? C_CRUMB : C_DESC);
+                if (pathLine && r.fullPath != null && in(mx, my, tx, ty - 1, textMaxW, LINE_H + 1)
+                        && in(mx, my, listX, listY, listW, listH) && openDropdownId == null) {
+                    tooltipText = r.fullPath;
+                }
                 ty += LINE_H;
             }
         }
@@ -634,6 +675,7 @@ public final class SettingsPanel {
             case DROPDOWN -> drawDropdownBox(c, r, mx, my);
             case SLIDER -> drawSlider(c, r, mx, my);
             case BUTTON -> drawButton(c, r, mx, my);
+            case FILE -> drawFileButton(c, r, mx, my);
             case WARMUP -> drawWarmup(c, r, ty, mx, my);
             default -> { }
         }
@@ -780,6 +822,39 @@ public final class SettingsPanel {
         rrect(c, rc[0], rc[1], rc[2], rc[3], bg);
         String label = UiText.fit(buttonText(e), rc[2] - 8, host::textWidth);
         c.text(label, rc[0] + (rc[2] - host.textWidth(label)) / 2, rc[1] + 3, enabled ? C_TITLE : C_DISABLED_TEXT);
+    }
+
+    private void drawFileButton(UiCanvas c, Row r, int mx, int my) {
+        int[] rc = controlRect(r);
+        boolean hover = in(mx, my, rc[0], rc[1], rc[2], rc[3]);
+        rrect(c, rc[0], rc[1], rc[2], rc[3], hover ? C_BUTTON_HOVER : C_BUTTON);
+        String label = UiText.fit(host.text(SettingsModel.KEY_BTN_OPEN), rc[2] - 8, host::textWidth);
+        c.text(label, rc[0] + (rc[2] - host.textWidth(label)) / 2, rc[1] + 3, C_TITLE);
+    }
+
+    /** Full-text hover box for a shortened path: wrapped by characters (a path has no spaces). */
+    private void drawTooltip(UiCanvas c, String text, int mx, int my) {
+        int maxW = Math.min(pw - 16, 320);
+        List<String> lines = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            cur.append(text.charAt(i));
+            if (host.textWidth(cur.toString()) > maxW - 8 && cur.length() > 1) {
+                cur.setLength(cur.length() - 1);
+                lines.add(cur.toString());
+                cur.setLength(0);
+                cur.append(text.charAt(i));
+            }
+        }
+        if (cur.length() > 0) lines.add(cur.toString());
+        int w = 8;
+        for (String line : lines) w = Math.max(w, host.textWidth(line) + 8);
+        int h = lines.size() * LINE_H + 6;
+        int x = Math.max(px + 2, Math.min(mx + 8, px + pw - w - 2));
+        int y = my + 14 + h > py + ph ? my - h - 4 : my + 14;
+        rrect(c, x, y, w, h, 0xF0161A24);
+        border(c, x, y, w, h, C_ACCENT);
+        for (int i = 0; i < lines.size(); i++) c.text(lines.get(i), x + 4, y + 3 + i * LINE_H, C_TITLE);
     }
 
     // ---- warm-up card
@@ -1013,6 +1088,9 @@ public final class SettingsPanel {
                 if (host.enabled(e) && in(mx, my, rc[0], rc[1], rc[2], rc[3])) {
                     host.runAction(e.action());
                 }
+            }
+            case FILE -> {
+                if (r.file != null && in(mx, my, rc[0], rc[1], rc[2], rc[3])) host.openFileLocation(r.file);
             }
             case WARMUP -> {
                 WarmupStatus st = host.warmupStatus();

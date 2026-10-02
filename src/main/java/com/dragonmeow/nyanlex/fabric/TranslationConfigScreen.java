@@ -1,5 +1,7 @@
 package com.dragonmeow.nyanlex.fabric;
 
+import com.dragonmeow.nyanlex.config.FileLocations;
+import com.dragonmeow.nyanlex.config.FileOpener;
 import com.dragonmeow.nyanlex.config.SettingAction;
 import com.dragonmeow.nyanlex.config.SettingEntry;
 import com.dragonmeow.nyanlex.config.SettingsCatalog;
@@ -114,16 +116,6 @@ public final class TranslationConfigScreen extends Screen {
         }
 
         @Override
-        public boolean beforeToggle(SettingEntry entry) {
-            TranslatorConfig cfg = NyanLexFabric.config();
-            if (entry.id().equals("share") && !cfg.hubShareConsent && !cfg.hubIntroSeen) {
-                confirmShareConsent(); // first time: explain the hub and ask before sharing anything
-                return false;
-            }
-            return true;
-        }
-
-        @Override
         public String buttonLabel(SettingEntry entry) {
             if (entry.action() != SettingAction.HUB_DOWNLOAD) return null;
             HubDownloadJob job = NyanLexFabric.hubDownloadJob();
@@ -159,6 +151,21 @@ public final class TranslationConfigScreen extends Screen {
                     NyanLexFabric.config().itemWarmupEnabled = false;
                     NyanLexFabric.saveConfig();
                 }
+            }
+        }
+
+        @Override
+        public java.util.List<FileLocations.Entry> fileLocations() {
+            return FileLocations.entries(NyanLexFabric.configDirectory(), NyanLexFabric.config().targetLang);
+        }
+
+        @Override
+        public void openFileLocation(FileLocations.Entry entry) {
+            if (FileOpener.reveal(entry.path())) return;
+            // Fall back to the game's own folder opener on the closest existing folder.
+            java.nio.file.Path folder = entry.path().toAbsolutePath().getParent();
+            if (folder != null && java.nio.file.Files.isDirectory(folder)) {
+                Util.getPlatform().openFile(folder.toFile());
             }
         }
 
@@ -227,19 +234,6 @@ public final class TranslationConfigScreen extends Screen {
             if (this.minecraft != null) this.minecraft.setScreen(this);
         }, title, message, Component.translatable(SettingsCatalog.KEY_CONFIRM_YES),
                 Component.translatable("gui.cancel")));
-    }
-
-    /** First enabling of "分享翻譯": show the hub explanation + consent question once. */
-    private void confirmShareConsent() {
-        confirm(Component.translatable("screen.nyanlex.hub.title"),
-                Component.translatable("screen.nyanlex.hub.intro").append("\n\n")
-                        .append(Component.translatable("screen.nyanlex.hub.consent.question")), () -> {
-                    TranslatorConfig cfg = NyanLexFabric.config();
-                    cfg.hubShareConsent = true;
-                    cfg.hubIntroSeen = true;
-                    NyanLexFabric.saveConfig();
-                    panel.invalidate();
-                });
     }
 
     private void confirmClearCache() {

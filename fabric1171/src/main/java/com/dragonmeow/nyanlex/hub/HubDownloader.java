@@ -1,6 +1,5 @@
 package com.dragonmeow.nyanlex.hub;
 
-import com.dragonmeow.nyanlex.translate.TranslationFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -116,7 +115,7 @@ public final class HubDownloader {
             if (cancelled != null && cancelled.getAsBoolean()) {
                 return result.asCancelled();
             }
-            TranslationFile file = fetch(item.source(), language);
+            HubFile file = fetch(item.source(), language);
             if (file != null) {
                 // If the player switched languages mid-download, cache's active language no
                 // longer matches `language`; mergeFromFile already rejects a language mismatch
@@ -135,7 +134,7 @@ public final class HubDownloader {
         return result;
     }
 
-    private TranslationFile fetch(HubSource source, String language) throws IOException {
+    private HubFile fetch(HubSource source, String language) throws IOException {
         switch (source.kind()) {
             case SERVER:
                 return repository.fetchServerFile(source.identifier(), language);

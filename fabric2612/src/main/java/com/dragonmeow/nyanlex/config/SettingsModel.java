@@ -39,6 +39,9 @@ public final class SettingsModel {
     public static final String KEY_WARMUP_RESUMED = "nyanlex.ui.warmup.resumed";
     public static final String KEY_SIDEBAR_TITLE = "nyanlex.ui.sidebar_title";
     public static final String KEY_STAT_PENDING = "nyanlex.ui.stat.pending";
+    public static final String KEY_FILES_GROUP = "nyanlex.ui.files.group";
+    public static final String KEY_FILES_GROUP_DESC = "nyanlex.ui.files.group.desc";
+    public static final String FILES_GROUP_ID = "files";
 
     private static final Map<SettingsCategory, List<Node>> NODES = build();
 
@@ -144,7 +147,12 @@ public final class SettingsModel {
                 KEY_SEARCH_EMPTY, KEY_BTN_OPEN, KEY_BTN_RUN, KEY_BTN_CLEAR, KEY_DONE_SHORT,
                 KEY_ABOUT_TITLE, KEY_ABOUT_DESC, KEY_ABOUT_VERSION, KEY_WARMUP_START,
                 KEY_WARMUP_DETAILS, KEY_WARMUP_IDLE, KEY_WARMUP_HUD_RUNNING, KEY_WARMUP_HUD_PAUSED,
-                KEY_WARMUP_HUD_DONE, KEY_WARMUP_RESUMED, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING));
+                KEY_WARMUP_HUD_DONE, KEY_WARMUP_RESUMED, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING,
+                KEY_FILES_GROUP, KEY_FILES_GROUP_DESC));
+        for (String id : FileLocations.IDS) {
+            keys.add(FileLocations.titleKey(id));
+            keys.add(FileLocations.descKey(id));
+        }
         for (SettingsCategory c : SettingsCategory.values()) {
             keys.add(c.nameKey());
             keys.add(c.shortKey());
@@ -172,9 +180,21 @@ public final class SettingsModel {
                     nodes.add(new Node(card(entry, category), null));
                 }
             }
+            if (category == SettingsCategory.ADVANCED) nodes.add(new Node(null, filesGroup()));
             map.put(category, List.copyOf(nodes));
         }
         return map;
+    }
+
+    /** Advanced > file locations: one FILE card per entry of {@link FileLocations#IDS}. */
+    private static SettingGroup filesGroup() {
+        List<SettingCard> cards = new ArrayList<>();
+        for (String id : FileLocations.IDS) {
+            cards.add(new SettingCard("file." + id, SettingCard.Kind.FILE, SettingsCategory.ADVANCED, null,
+                    FileLocations.titleKey(id), FileLocations.descKey(id), FILES_GROUP_ID, KEY_FILES_GROUP));
+        }
+        return new SettingGroup(FILES_GROUP_ID, SettingsCategory.ADVANCED, KEY_FILES_GROUP,
+                KEY_FILES_GROUP_DESC, List.copyOf(cards));
     }
 
     private static SettingGroup surfaceGroup(SettingsRow row) {

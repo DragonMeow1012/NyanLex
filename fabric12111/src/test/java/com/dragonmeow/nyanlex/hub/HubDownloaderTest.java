@@ -34,11 +34,11 @@ class HubDownloaderTest {
         for (Map.Entry<String, String> row : rows.entrySet()) {
             if (!first) ai.append(',');
             first = false;
-            ai.append('"').append(row.getKey()).append("\":\"").append(row.getValue()).append('"');
+            ai.append('"').append(HubKeyHash.of(row.getKey())).append("\":\"").append(row.getValue()).append('"');
         }
         ai.append('}');
-        return "{\"schema\":1,\"format\":\"modern-template-v1\",\"language\":\"" + language
-                + "\",\"provider\":\"none\",\"machine\":{},\"ai\":" + ai + "}";
+        return "{\"schema\":2,\"format\":\"hub-hash-v1\",\"hash\":\"sha256\",\"language\":\"" + language
+                + "\",\"entries\":" + ai + "}";
     }
 
     private static HttpTransport recordingTransport(Map<String, String> responses, List<String> requested) {
@@ -261,5 +261,42 @@ class HubDownloaderTest {
         assertEquals(HubSource.modpack("my-pack"), item.source());
         assertTrue(item.hasContent());
         assertEquals(80, item.bytes());
+    }
+
+    @Test
+    void planningNeverRequestsAnyRepositoryFileOnlyTheIndex() throws IOException {
+        Map<String, String> responses = new HashMap<>();
+        responses.put(INDEX_URL, "{\"schema\":1,\"servers\":{\"hypixel.net\":{\"zh-tw\":"
+                + "{\"rows\":1,\"bytes\":50,\"sha256\":\"sha-server\"}}},\"modpacks\":{},"
+                + "\"mods\":{\"somemod\":{\"zh-tw\":{\"rows\":1,\"bytes\":30,\"sha256\":\"sha-mod\"}}}}");
+        responses.put(BASE + "/servers/hypixel.net/zh-tw.json",
+                translationFileJson("zh-tw", Map.of("Diamond Sword", "鑽石劍")));
+        responses.put(BASE + "/mods/somemod/zh-tw.json",
+                translationFileJson("zh-tw", Map.of("Somemod Item", "某物品")));
+        List<String> requested = new ArrayList<>();
+        HubDownloader downloader = new HubDownloader(new HubRepository(
+                recordingTransport(responses, requested), BASE));
+        HubDownloadState state = new HubDownloadState(tempDir().resolve("state.json"));
+
+        // Identify-and-plan, the startup check and a language switch re-plan: index only.
+        downloader.plan("hypixel.net", null, List.of("somemod"), "zh-TW", state);
+        downloader.planStartupMods(false, null, List.of("somemod"), "zh-TW", state);
+        downloader.plan("hypixel.net", null, List.of("somemod"), "ja-JP", state);
+
+        assertEquals(List.of(INDEX_URL, INDEX_URL, INDEX_URL), requested,
+                "without a user-confirmed download() no repository file is ever fetched");
+    }
+
+    @Test
+    void startupCheckDisabledMakesZeroRequestsAtAll() throws IOException {
+        List<String> requested = new ArrayList<>();
+        HubDownloader downloader = new HubDownloader(new HubRepository(
+                recordingTransport(new HashMap<>(), requested), BASE));
+        HubDownloadState state = new HubDownloadState(tempDir().resolve("state.json"));
+
+        HubPlan plan = downloader.planStartupMods(true, null, List.of("somemod"), "zh-TW", state);
+
+        assertTrue(plan.isEmpty());
+        assertTrue(requested.isEmpty(), "the opt-out must not even fetch index.json");
     }
 }

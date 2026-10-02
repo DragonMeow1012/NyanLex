@@ -51,8 +51,8 @@ class SettingsModelTest {
     void everyCatalogEntryBecomesExactlyOneCard() {
         List<String> cardIds = ids(SettingsModel.allCards());
         assertEquals(cardIds.size(), new HashSet<>(cardIds).size(), "card ids are unique");
-        // every entry once, plus the text-only info card under 關於
-        assertEquals(SettingsCatalog.allEntries().size() + 1, cardIds.size());
+        // every entry once, plus the text-only info card under 關於 and one FILE card per mod file
+        assertEquals(SettingsCatalog.allEntries().size() + 1 + FileLocations.IDS.size(), cardIds.size());
         for (SettingEntry entry : SettingsCatalog.allEntries()) {
             assertNotNull(SettingsModel.byId(entry.id()), entry.id());
         }
@@ -127,7 +127,7 @@ class SettingsModelTest {
         assertEquals(List.of("chat.engine"), ids(SettingsModel.search("聊天 引擎", lang)).stream()
                 .filter(id -> id.equals("chat") || id.equals("chat.engine")).collect(Collectors.toList()));
         // category name
-        assertTrue(ids(SettingsModel.search("倉庫", lang)).containsAll(List.of("share", "startup", "download")));
+        assertTrue(ids(SettingsModel.search("倉庫", lang)).containsAll(List.of("startup", "download")));
         assertTrue(SettingsModel.search("   ", lang).isEmpty());
         assertTrue(SettingsModel.search(null, lang).isEmpty());
         assertTrue(SettingsModel.search("zzzzqqq", lang).isEmpty());

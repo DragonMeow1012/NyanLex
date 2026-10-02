@@ -1,6 +1,5 @@
 package com.dragonmeow.nyanlex.hub;
 
-import com.dragonmeow.nyanlex.translate.TranslationFile;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -19,8 +18,11 @@ class HubLocalCacheTest {
         return Files.createTempDirectory("nyanlex-hub-test");
     }
 
-    private static TranslationFile fileOf(String language, Map<String, String> ai) {
-        return new TranslationFile("modern-template-v1", language, "", Map.of(), ai);
+    /** Test helper: a schema 2 file for the given source-key -> translation rows. */
+    private static HubFile fileOf(String language, Map<String, String> rows) {
+        Map<String, String> hashed = new LinkedHashMap<>();
+        rows.forEach((key, value) -> hashed.put(HubKeyHash.of(key), value));
+        return new HubFile(language, hashed);
     }
 
     @Test
@@ -71,16 +73,73 @@ class HubLocalCacheTest {
     }
 
     @Test
-    void rowsFailingValidationAreRejected() throws IOException {
+    void mergeRejectsValuesWithAnyUrlButKeepsOrdinaryOnes() throws IOException {
         HubLocalCache cache = new HubLocalCache(tempDir(), "zh-TW");
 
         HubLocalCache.MergeResult result = cache.mergeFromFile(
-                fileOf("zh-TW", Map.of("Diamond Sword", "Diamond Sword")), // untranslated echo
+                fileOf("zh-TW", Map.of("Buy VIP", "買 VIP http://evil.example.com", "Diamond Sword", "鑽石劍")),
                 HubSource.server("hypixel.net"));
 
-        assertEquals(0, result.added());
+        assertEquals(1, result.added());
         assertEquals(1, result.rejectedValidation());
+    }
+
+    @Test
+    void hitValidationDropsAnUntranslatedEchoRow() throws IOException {
+        HubLocalCache cache = new HubLocalCache(tempDir(), "zh-TW");
+        cache.mergeFromFile(fileOf("zh-TW", Map.of("Diamond Sword", "Diamond Sword")),
+                HubSource.server("hypixel.net"));
+        assertEquals(1, cache.size());
+
         assertNull(cache.get("Diamond Sword"));
+        assertEquals(0, cache.size(), "the failing row is dropped on first hit");
+    }
+
+    @Test
+    void hitValidationDropsARowWhoseTokensDoNotFitTheLocalKey() throws IOException {
+        // The file has no source text, so a hostile row can claim any hash. A hit whose
+        // token multiset differs from the real local key must never be displayed.
+        HubLocalCache cache = new HubLocalCache(tempDir(), "zh-TW");
+        cache.mergeFromFile(fileOf("zh-TW", Map.of("Hello ⟦0⟧, welcome", "你好，歡迎")),
+                HubSource.server("hypixel.net"));
+
+        assertNull(cache.get("Hello ⟦0⟧, welcome"));
+        assertEquals(0, cache.size());
+    }
+
+    @Test
+    void hitValidationAcceptsAWellFormedRowAndPassesTheSameKeyFromAnyItem() throws IOException {
+        HubLocalCache cache = new HubLocalCache(tempDir(), "zh-TW");
+        cache.mergeFromFile(fileOf("zh-TW", Map.of("Seller: ⟦0⟧", "賣家：⟦0⟧")),
+                HubSource.server("hypixel.net"));
+
+        assertEquals("賣家：⟦0⟧", cache.get("Seller: ⟦0⟧"));
+        assertEquals("賣家：⟦0⟧", cache.get("Seller: ⟦0⟧"));
+    }
+
+    @Test
+    void localFileStoresOnlyHashesNeverTheSourceKey() throws IOException {
+        Path dir = tempDir();
+        HubLocalCache cache = new HubLocalCache(dir, "zh-TW");
+        cache.mergeFromFile(fileOf("zh-TW", Map.of("Secret English Source Line", "祕密譯文")),
+                HubSource.server("hypixel.net"));
+
+        String disk = Files.readString(cache.activeFile());
+        assertTrue(disk.contains(HubKeyHash.of("Secret English Source Line")));
+        assertTrue(!disk.contains("Secret English Source Line"));
+    }
+
+    @Test
+    void anOldSchema1LocalFileIsIgnored() throws IOException {
+        Path dir = tempDir();
+        HubLocalCache probe = new HubLocalCache(dir, "zh-TW");
+        Files.writeString(probe.activeFile(),
+                "{\"schema\":1,\"language\":\"zh-tw\",\"rows\":{\"Diamond Sword\":{\"v\":\"鑽石劍\"}}}");
+
+        HubLocalCache reopened = new HubLocalCache(dir, "zh-TW");
+
+        assertEquals(0, reopened.size());
+        assertNull(reopened.get("Diamond Sword"));
     }
 
     @Test
