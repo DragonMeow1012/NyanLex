@@ -358,8 +358,8 @@ class LangPackBuilderTest {
             assertTrue(LangPackBuilder.licenseAccepted(ok), ok);
         }
         for (String refused : new String[] {null, "", "  ", "All Rights Reserved", "ARR", "LicenseRef-All-Rights-Reserved",
-                "LicenseRef-Custom (Modrinth: Custom)", "LicenseRef-", "LicenseRef-tr7zw-Protective-License",
-                "Some Mod License (LicenseRef-Some-Mod-License)", "Create Mod License (LicenseRef-Create-Mod-License)",
+                "LicenseRef-Custom (Modrinth: Custom)", "LicenseRef-", "LicenseRef-Example-Protective-License",
+                "Some Mod License (LicenseRef-Some-Mod-License)", "Example Mod License (LicenseRef-Example-Mod-License)",
                 // GPL, AGPL and MPL, every version
                 "GPL", "GPL-2.0-only", "GPL-2.0+", "GPL-3.0", "GPL-3.0-only", "GPL-3.0-or-later", "AGPL-3.0",
                 "AGPL-3.0-only", "AGPL-3.0-or-later", "LicenseRef-AGPL-3.0", "MPL-2.0", "MPL-1.1",
