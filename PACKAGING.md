@@ -83,6 +83,9 @@ Before publishing:
 - Compare each packaged JAR SHA-256 with its matching `build/libs` output.
 - Confirm loader metadata contains version 1.0.0 and the exact Minecraft range.
 - Confirm loader metadata mod id/entrypoint classes are `nyanlex` / `com.dragonmeow.nyanlex.*`.
+- Confirm each Fabric JAR depends on Fabric API under the right id (`fabric` for 1.14.4 to 1.17.1, `fabric-api` from 1.18.2) and lists no other dependency besides Fabric Loader, Minecraft and Java.
+- Confirm the icon declaration: `iconFile` (and no `logoFile`) in `neoforge.mods.toml`, `logoFile` in the Forge-format `mods.toml` and `mcmod.info`, and that the icon file is inside the JAR.
+- Confirm no JAR contains folders of earlier project names, the screenshot driver, `translation-hub` files, `hub/tool` classes, or test classes other than the known legacy `LegacyTranslator$TestBackend` and `LegacyTranslator$TestAiHttp`.
 - Run `git diff --check` and core unit tests.
 - Upload individual JARs plus the four ZIP files to tag `v1.0.0`.
 

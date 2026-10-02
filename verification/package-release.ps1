@@ -372,6 +372,63 @@ function Assert-JarHasClass {
         "Missing loader entrypoint class: $entryName"
 }
 
+function Test-TomlKeyPresent {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Key
+    )
+
+    # Any active (non-comment) assignment of the key counts, whatever the quoting.
+    return [regex]::IsMatch(
+        $Text, ('(?m)^\s*{0}\s*=' -f [regex]::Escape($Key)))
+}
+
+function Assert-JarHasEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.Compression.ZipArchive]$Archive,
+        [Parameter(Mandatory = $true)][string]$EntryName,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    Require ($null -ne $Archive.GetEntry($EntryName)) `
+        "Missing $Description entry: $EntryName"
+}
+
+# Entry-name rules for every release JAR. Folders of the earlier project names,
+# the screenshot-driver tooling, the translation-hub repository files and the
+# author-only hub tooling must never reach a release JAR.
+$forbiddenEntryRules = @(
+    [pscustomobject]@{ Name = 'asset folder of an earlier project name'; Pattern = '(?i)^assets/(nyanslate|mctranslator)(/|$)' },
+    [pscustomobject]@{ Name = 'earlier project name'; Pattern = '(?i)nyanslate|mctranslator|minecrafttranslator' },
+    [pscustomobject]@{ Name = 'screenshot driver'; Pattern = '(?i)uishot|screenshot|shotdriver' },
+    [pscustomobject]@{ Name = 'translation-hub repository file'; Pattern = '(?i)(^|/)translation-hub(/|$)' },
+    [pscustomobject]@{ Name = 'author-only hub tool'; Pattern = '(?i)(^|/)hub/tool(/|$)' }
+)
+# Test helper classes are rejected unless the artifact row lists them explicitly.
+$testClassPattern = '(^|[/$])Test[A-Z0-9_]|[A-Za-z0-9_]Tests?(\$[^/]*)?\.class$'
+
+function Assert-JarContentRules {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.Compression.ZipArchive]$Archive,
+        [Parameter(Mandatory = $true)]$Artifact
+    )
+
+    $allowedTestClasses = @($Artifact.AllowedTestClasses)
+    foreach ($entry in @($Archive.Entries)) {
+        $name = [string]$entry.FullName
+        foreach ($rule in $forbiddenEntryRules) {
+            Require ($name -notmatch $rule.Pattern) `
+                "$($Artifact.Source) contains forbidden content ($($rule.Name)): $name"
+        }
+        if ($name -cmatch $testClassPattern) {
+            Require ($allowedTestClasses -ccontains $name) `
+                "$($Artifact.Source) contains an unexpected test class: $name"
+        }
+    }
+}
+
 function Assert-FabricMetadata {
     param(
         [Parameter(Mandatory = $true)]
@@ -392,6 +449,27 @@ function Assert-FabricMetadata {
         "$($Artifact.Source) has wrong Fabric Loader range: $($metadata.depends.fabricloader)"
     Require ([string]$metadata.depends.java -ceq $Artifact.JavaRange) `
         "$($Artifact.Source) has wrong Java range: $($metadata.depends.java)"
+
+    # Fabric API is declared as 'fabric' on Minecraft 1.14 to 1.17 and as
+    # 'fabric-api' from 1.18 on. A wrong id keeps the mod from loading at all,
+    # and nothing besides the four known dependencies may be listed.
+    $dependencyNames = @($metadata.depends.PSObject.Properties |
+        ForEach-Object { [string]$_.Name })
+    $expectedDependencyNames = @(
+        'fabricloader', 'minecraft', 'java', $Artifact.FabricApiId)
+    Require ($dependencyNames.Count -eq $expectedDependencyNames.Count -and
+            @($expectedDependencyNames | Where-Object {
+                $dependencyNames -cnotcontains $_
+            }).Count -eq 0) `
+        ("$($Artifact.Source) has the wrong dependency set. Expected: " +
+            ($expectedDependencyNames -join ', ') +
+            "; actual: " + ($dependencyNames -join ', '))
+    Require ([string]$metadata.depends.($Artifact.FabricApiId) -ceq '*') `
+        "$($Artifact.Source) must depend on Fabric API as '$($Artifact.FabricApiId)': *"
+
+    Require ([string]$metadata.icon -ceq 'assets/nyanlex/icon.png') `
+        "$($Artifact.Source) has wrong Fabric icon path: $($metadata.icon)"
+    Assert-JarHasEntry $Archive 'assets/nyanlex/icon.png' 'Fabric icon'
 
     $clientEntrypoints = @($metadata.entrypoints.client)
     Require ($clientEntrypoints.Count -eq 1) `
@@ -417,6 +495,9 @@ function Assert-Forge1122Metadata {
         "$($Artifact.Source) has wrong Forge mod version: $($metadata.version)"
     Require ([string]$metadata.mcversion -ceq $Artifact.MinecraftRange) `
         "$($Artifact.Source) has wrong Minecraft version: $($metadata.mcversion)"
+    Require ([string]$metadata.logoFile -ceq '/assets/nyanlex/icon.png') `
+        "$($Artifact.Source) has wrong Forge logo path: $($metadata.logoFile)"
+    Assert-JarHasEntry $Archive 'assets/nyanlex/icon.png' 'Forge logo'
 
     $manifest = Read-ZipEntryText $Archive 'META-INF/MANIFEST.MF'
     $implementationVersion = Get-ManifestValue $manifest 'Implementation-Version'
@@ -444,6 +525,14 @@ function Assert-TomlMetadata {
     })
     Require ($mainMods.Count -eq 1) `
         "$($Artifact.Source) must contain one nyanlex TOML mod block"
+    # neoforge.mods.toml reads 'iconFile' and must not carry 'logoFile'; the
+    # Forge-format mods.toml (Forge 1.13.2, NeoForge 1.20.1) reads 'logoFile'.
+    $wrongIconKey = if ($Artifact.IconKey -ceq 'iconFile') { 'logoFile' } else { 'iconFile' }
+    Require ((Get-TomlValue $mainMods[0] $Artifact.IconKey) -ceq 'icon.png') `
+        "$($Artifact.Source) must set $($Artifact.IconKey) = ""icon.png"""
+    Require (-not (Test-TomlKeyPresent $toml $wrongIconKey)) `
+        "$($Artifact.Source) must not contain $wrongIconKey"
+    Assert-JarHasEntry $Archive 'icon.png' 'mod icon'
     $tomlVersion = Get-TomlValue $mainMods[0] 'version'
     Require ($tomlVersion -ceq $Artifact.TomlVersion) `
         "$($Artifact.Source) has wrong TOML version: $tomlVersion"
@@ -507,6 +596,7 @@ function Assert-SourceJar {
             Group-Object FullName | Where-Object { $_.Count -ne 1 })
         Require ($duplicateEntries.Count -eq 0) `
             "$($Artifact.Source) contains duplicate ZIP entries"
+        Assert-JarContentRules $archive $Artifact
         switch ($Artifact.MetadataKind) {
             'fabric' { Assert-FabricMetadata $archive $Artifact }
             'forge1122' { Assert-Forge1122Metadata $archive $Artifact }
@@ -518,29 +608,38 @@ function Assert-SourceJar {
     }
 }
 
+# Test helper classes that the legacy trees still ship (known, allowed).
+$noTestClasses = @()
+$fabricLegacyTestClasses = @(
+    'com/dragonmeow/nyanlex/legacy/LegacyTranslator$TestBackend.class',
+    'com/dragonmeow/nyanlex/legacy/LegacyTranslator$TestAiHttp.class')
+$forgeLegacyTestClasses = @(
+    'com/dragonmeow/nyanlex/forgelegacy/LegacyTranslator$TestBackend.class',
+    'com/dragonmeow/nyanlex/forgelegacy/LegacyTranslator$TestAiHttp.class')
+
 # The source and destination of every publishable JAR are intentionally explicit.
 # Adding a release target requires a reviewed row here and a matching ZIP count below.
 $artifacts = @(
-    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.12.2'; Source = "forge1122\build\libs\nyanlex-$releaseVersion-Forge-1.12.2.jar"; Relative = "forge/1.12.2/nyanlex-$releaseVersion-Forge-1.12.2.jar"; MetadataKind = 'forge1122'; MinecraftRange = '1.12.2'; MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge' },
-    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.13.2'; Source = "forge1132\build\libs\nyanlex-$releaseVersion-Forge-1.13.2.jar"; Relative = "forge/1.13.2/nyanlex-$releaseVersion-Forge-1.13.2.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = ('$' + '{file.jarVersion}'); MinecraftRange = '[1.13.2]'; LoaderRange = '[25,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[25,)'; MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge' },
+    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.12.2'; Source = "forge1122\build\libs\nyanlex-$releaseVersion-Forge-1.12.2.jar"; Relative = "forge/1.12.2/nyanlex-$releaseVersion-Forge-1.12.2.jar"; MetadataKind = 'forge1122'; MinecraftRange = '1.12.2'; MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge'; AllowedTestClasses = $forgeLegacyTestClasses },
+    [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.13.2'; Source = "forge1132\build\libs\nyanlex-$releaseVersion-Forge-1.13.2.jar"; Relative = "forge/1.13.2/nyanlex-$releaseVersion-Forge-1.13.2.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = ('$' + '{file.jarVersion}'); MinecraftRange = '[1.13.2]'; LoaderRange = '[25,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[25,)'; MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge'; IconKey = 'logoFile'; AllowedTestClasses = $forgeLegacyTestClasses },
 
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.14.4'; Source = "fabric1144\build\libs\nyanlex-$releaseVersion-Fabric-1.14.4.jar"; Relative = "fabric/1.14.4/nyanlex-$releaseVersion-Fabric-1.14.4.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.14.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.15.2'; Source = "fabric1152\build\libs\nyanlex-$releaseVersion-Fabric-1.15.2.jar"; Relative = "fabric/1.15.2/nyanlex-$releaseVersion-Fabric-1.15.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.15.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.16.5'; Source = "fabric1165\build\libs\nyanlex-$releaseVersion-Fabric-1.16.5.jar"; Relative = "fabric/1.16.5/nyanlex-$releaseVersion-Fabric-1.16.5.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.16.5'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.17.1'; Source = "fabric1171\build\libs\nyanlex-$releaseVersion-Fabric-1.17.1.jar"; Relative = "fabric/1.17.1/nyanlex-$releaseVersion-Fabric-1.17.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.17.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=16'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.18.2'; Source = "fabric1182\build\libs\nyanlex-$releaseVersion-Fabric-1.18.2.jar"; Relative = "fabric/1.18.2/nyanlex-$releaseVersion-Fabric-1.18.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.18.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.19.4'; Source = "fabric1194\build\libs\nyanlex-$releaseVersion-Fabric-1.19.4.jar"; Relative = "fabric/1.19.4/nyanlex-$releaseVersion-Fabric-1.19.4.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.19.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.20.1'; Source = "fabric120\build\libs\nyanlex-$releaseVersion-Fabric-1.20.1.jar"; Relative = "fabric/1.20.1/nyanlex-$releaseVersion-Fabric-1.20.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.20.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.1'; Source = "build\libs\nyanlex-$releaseVersion-Fabric-1.21.1.jar"; Relative = "fabric/1.21.1/nyanlex-$releaseVersion-Fabric-1.21.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.21.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.11'; Source = "fabric12111\build\libs\nyanlex-$releaseVersion-Fabric-1.21.11.jar"; Relative = "fabric/1.21.11/nyanlex-$releaseVersion-Fabric-1.21.11.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.21.11'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.1.2'; Source = "fabric2612\build\libs\nyanlex-$releaseVersion-Fabric-26.1.2.jar"; Relative = "fabric/26.1.2/nyanlex-$releaseVersion-Fabric-26.1.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.1.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.2'; Source = "fabric26\build\libs\nyanlex-$releaseVersion-Fabric-26.2.jar"; Relative = "fabric/26.2/nyanlex-$releaseVersion-Fabric-26.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26' },
-    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.3'; Source = "fabric263\build\libs\nyanlex-$releaseVersion-Fabric-26.3.jar"; Relative = "fabric/26.3/nyanlex-$releaseVersion-Fabric-26.3.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.3'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26' },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.14.4'; Source = "fabric1144\build\libs\nyanlex-$releaseVersion-Fabric-1.14.4.jar"; Relative = "fabric/1.14.4/nyanlex-$releaseVersion-Fabric-1.14.4.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.14.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod'; FabricApiId = 'fabric'; AllowedTestClasses = $fabricLegacyTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.15.2'; Source = "fabric1152\build\libs\nyanlex-$releaseVersion-Fabric-1.15.2.jar"; Relative = "fabric/1.15.2/nyanlex-$releaseVersion-Fabric-1.15.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.15.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod'; FabricApiId = 'fabric'; AllowedTestClasses = $fabricLegacyTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.16.5'; Source = "fabric1165\build\libs\nyanlex-$releaseVersion-Fabric-1.16.5.jar"; Relative = "fabric/1.16.5/nyanlex-$releaseVersion-Fabric-1.16.5.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.16.5'; LoaderRange = '>=0.16.0'; JavaRange = '>=8'; MainClass = 'com.dragonmeow.nyanlex.legacy.LegacyTranslatorMod'; FabricApiId = 'fabric'; AllowedTestClasses = $fabricLegacyTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.17.1'; Source = "fabric1171\build\libs\nyanlex-$releaseVersion-Fabric-1.17.1.jar"; Relative = "fabric/1.17.1/nyanlex-$releaseVersion-Fabric-1.17.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.17.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=16'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric'; FabricApiId = 'fabric'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.18.2'; Source = "fabric1182\build\libs\nyanlex-$releaseVersion-Fabric-1.18.2.jar"; Relative = "fabric/1.18.2/nyanlex-$releaseVersion-Fabric-1.18.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.18.2'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric'; FabricApiId = 'fabric-api'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.19.4'; Source = "fabric1194\build\libs\nyanlex-$releaseVersion-Fabric-1.19.4.jar"; Relative = "fabric/1.19.4/nyanlex-$releaseVersion-Fabric-1.19.4.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.19.4'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric'; FabricApiId = 'fabric-api'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.20.1'; Source = "fabric120\build\libs\nyanlex-$releaseVersion-Fabric-1.20.1.jar"; Relative = "fabric/1.20.1/nyanlex-$releaseVersion-Fabric-1.20.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.20.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=17'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric'; FabricApiId = 'fabric-api'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.1'; Source = "build\libs\nyanlex-$releaseVersion-Fabric-1.21.1.jar"; Relative = "fabric/1.21.1/nyanlex-$releaseVersion-Fabric-1.21.1.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.21.1'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric'; FabricApiId = 'fabric-api'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '1.21.11'; Source = "fabric12111\build\libs\nyanlex-$releaseVersion-Fabric-1.21.11.jar"; Relative = "fabric/1.21.11/nyanlex-$releaseVersion-Fabric-1.21.11.jar"; MetadataKind = 'fabric'; MinecraftRange = '1.21.11'; LoaderRange = '>=0.16.0'; JavaRange = '>=21'; MainClass = 'com.dragonmeow.nyanlex.fabric.NyanLexFabric'; FabricApiId = 'fabric-api'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.1.2'; Source = "fabric2612\build\libs\nyanlex-$releaseVersion-Fabric-26.1.2.jar"; Relative = "fabric/26.1.2/nyanlex-$releaseVersion-Fabric-26.1.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.1.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26'; FabricApiId = 'fabric-api'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.2'; Source = "fabric26\build\libs\nyanlex-$releaseVersion-Fabric-26.2.jar"; Relative = "fabric/26.2/nyanlex-$releaseVersion-Fabric-26.2.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.2'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26'; FabricApiId = 'fabric-api'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'fabric'; Label = 'Fabric'; Minecraft = '26.3'; Source = "fabric263\build\libs\nyanlex-$releaseVersion-Fabric-26.3.jar"; Relative = "fabric/26.3/nyanlex-$releaseVersion-Fabric-26.3.jar"; MetadataKind = 'fabric'; MinecraftRange = '26.3'; LoaderRange = '>=0.19.0'; JavaRange = '>=25'; MainClass = 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26'; FabricApiId = 'fabric-api'; AllowedTestClasses = $noTestClasses },
 
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.20.1'; Source = "neoforge120\build\libs\nyanlex-$releaseVersion-NeoForge-1.20.1.jar"; Relative = "neoforge/1.20.1/nyanlex-$releaseVersion-NeoForge-1.20.1.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[1.20.1,1.20.2)'; LoaderRange = '[47,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[47,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge' },
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.21.1'; Source = "neoforge\build\libs\nyanlex-$releaseVersion-NeoForge-1.21.1.jar"; Relative = "neoforge/1.21.1/nyanlex-$releaseVersion-NeoForge-1.21.1.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[1.21.1,1.21.2)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[21.1.0,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge' },
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.2'; Source = "neoforge26\build\libs\nyanlex-$releaseVersion-NeoForge-26.2.jar"; Relative = "neoforge/26.2/nyanlex-$releaseVersion-NeoForge-26.2.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[26.2,26.3)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.2,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26' },
-    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.3'; Source = "neoforge263\build\libs\nyanlex-$releaseVersion-NeoForge-26.3.jar"; Relative = "neoforge/26.3/nyanlex-$releaseVersion-NeoForge-26.3.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[26.3,26.4)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.3,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26' }
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.20.1'; Source = "neoforge120\build\libs\nyanlex-$releaseVersion-NeoForge-1.20.1.jar"; Relative = "neoforge/1.20.1/nyanlex-$releaseVersion-NeoForge-1.20.1.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[1.20.1,1.20.2)'; LoaderRange = '[47,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[47,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge'; IconKey = 'logoFile'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '1.21.1'; Source = "neoforge\build\libs\nyanlex-$releaseVersion-NeoForge-1.21.1.jar"; Relative = "neoforge/1.21.1/nyanlex-$releaseVersion-NeoForge-1.21.1.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[1.21.1,1.21.2)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[21.1.0,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge'; IconKey = 'iconFile'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.2'; Source = "neoforge26\build\libs\nyanlex-$releaseVersion-NeoForge-26.2.jar"; Relative = "neoforge/26.2/nyanlex-$releaseVersion-NeoForge-26.2.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[26.2,26.3)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.2,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26'; IconKey = 'iconFile'; AllowedTestClasses = $noTestClasses },
+    [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.3'; Source = "neoforge263\build\libs\nyanlex-$releaseVersion-NeoForge-26.3.jar"; Relative = "neoforge/26.3/nyanlex-$releaseVersion-NeoForge-26.3.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[26.3,26.4)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.3,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26'; IconKey = 'iconFile'; AllowedTestClasses = $noTestClasses }
 )
 
 $zipSpecs = @(
