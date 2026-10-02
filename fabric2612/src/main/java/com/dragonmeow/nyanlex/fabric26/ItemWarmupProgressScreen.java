@@ -25,7 +25,7 @@ public final class ItemWarmupProgressScreen extends Screen {
     @Override
     protected void init() {
         int centerX = this.width / 2;
-        int y = this.height / 2 + 40;
+        int y = this.height / 2 + 76;
         pauseButton = this.addRenderableWidget(Button.builder(
                 Component.translatable("screen.nyanlex.warmup.pause"), b -> togglePause())
                 .bounds(centerX - 185, y, 120, 20).build());
@@ -77,15 +77,33 @@ public final class ItemWarmupProgressScreen extends Screen {
         g.centeredText(this.font,
                 Component.translatable("screen.nyanlex.warmup.progress.counts",
                         p.scanned(), p.totalItems()), centerX, barY + 20, 0xFFE0E0E0);
+        // Sent / translated are items the AI worked on; scanned above is every item looked at.
         g.centeredText(this.font,
                 Component.translatable("screen.nyanlex.warmup.progress.detail",
-                        p.submittedItems(), p.skippedCached(), p.sessionLimit()),
+                        p.submittedItems(), p.translatedItems(), p.failedItems()),
                 centerX, barY + 32, 0xFFA0A0A0);
+        g.centeredText(this.font,
+                Component.translatable("screen.nyanlex.warmup.progress.skips",
+                        p.skippedCached(), p.skippedNative()),
+                centerX, barY + 44, 0xFFA0A0A0);
+        boolean active = p.state() == ItemWarmupDriver.State.RUNNING
+                || p.state() == ItemWarmupDriver.State.PAUSED;
+        if (active) {
+            Component speed = p.itemsPerMinute() > 0
+                    ? Component.translatable("screen.nyanlex.warmup.progress.speed",
+                            p.itemsPerMinute(), Math.max(1, p.etaMinutes()))
+                    : Component.translatable("screen.nyanlex.warmup.progress.speed.unknown");
+            g.centeredText(this.font, speed, centerX, barY + 56, 0xFFE0E0E0);
+            g.centeredText(this.font,
+                    Component.translatable("screen.nyanlex.warmup.progress.inflight",
+                            p.inflightRequests(), p.concurrency()),
+                    centerX, barY + 68, 0xFFA0A0A0);
+        }
         if (p.skippedFailed() > 0) {
             boolean inWorld = this.minecraft != null && this.minecraft.level != null;
             g.centeredText(this.font, Component.translatable(inWorld
                             ? "screen.nyanlex.warmup.skipped.world" : "screen.nyanlex.warmup.skipped",
-                            p.skippedFailed()), centerX, barY + 76, 0xFFC0C0C0);
+                            p.skippedFailed()), centerX, barY + 112, 0xFFC0C0C0);
         }
 
         Component state = Component.translatable("screen.nyanlex.warmup.state."
@@ -100,11 +118,15 @@ public final class ItemWarmupProgressScreen extends Screen {
         if (p.state() == ItemWarmupDriver.State.PAUSED) {
             g.centeredText(this.font, Component.translatable("screen.nyanlex.warmup.reason."
                     + p.pauseReason().name().toLowerCase(java.util.Locale.ROOT)),
-                    centerX, barY + 48, 0xFFFFD700);
+                    centerX, barY + 82, 0xFFFFD700);
+        } else if (p.state() == ItemWarmupDriver.State.RUNNING && p.yielding()) {
+            g.centeredText(this.font,
+                    Component.translatable("screen.nyanlex.warmup.progress.yield"),
+                    centerX, barY + 82, 0xFFFFD700);
         } else if (p.state() == ItemWarmupDriver.State.DONE && p.limitReached()) {
             g.centeredText(this.font,
                     Component.translatable("screen.nyanlex.warmup.progress.limit"),
-                    centerX, barY + 48, 0xFFFFD700);
+                    centerX, barY + 82, 0xFFFFD700);
         }
     }
 

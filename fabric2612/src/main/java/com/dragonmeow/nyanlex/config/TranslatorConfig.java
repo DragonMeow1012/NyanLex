@@ -28,6 +28,8 @@ public final class TranslatorConfig {
     public static final int DEFAULT_PERSISTENT_CACHE_ENTRIES = 100_000;
     public static final int MAX_PERSISTENT_CACHE_ENTRIES = 250_000;
     private static final int LEGACY_REQUEST_COOLDOWN_MS = 6000;
+    private static final int LEGACY_WARMUP_CHUNK_DELAY_MS = 3000;
+    private static final int LEGACY_WARMUP_MAX_ITEMS = 3000;
 
     // Per-surface display mode. Each surface can independently be 不翻譯 (ORIGINAL_ONLY: not
     // translated and nothing sent for it) / 雙語 (BOTH) / 譯文 (TRANSLATION). Configured via the
@@ -173,11 +175,11 @@ public final class TranslatorConfig {
     /** Show the small warm-up progress readout in the HUD corner while a run is active. */
     public boolean itemWarmupHud = true;
 
-    /** Minimum pause between two warm-up chunks, in milliseconds. */
-    public int itemWarmupChunkDelayMs = 3000;
+    /** Minimum pause between two warm-up requests, in milliseconds (independent of the interactive cooldown). */
+    public int itemWarmupChunkDelayMs = 1500;
 
-    /** Upper bound of items submitted per game launch (cached items do not count). */
-    public int itemWarmupMaxItemsPerSession = 3000;
+    /** Upper bound of items submitted per game launch; {@code 0} (the default) means no limit. */
+    public int itemWarmupMaxItemsPerSession = 0;
 
     // Chat is always non-blocking (non-blocking): the original is shown immediately
     // and the translation is appended asynchronously when ready — never hard-waits.
@@ -330,6 +332,10 @@ public final class TranslatorConfig {
         doNotTranslateTerms = normalizedTerms(doNotTranslateTerms);
         termOverrides = normalizedTermOverrides(termOverrides);
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
+        // Older versions shipped 3000 ms / 3000 items as the defaults: those are the old
+        // defaults, not a choice, so they move to the new pace (1.5 s, no per-launch limit).
+        if (itemWarmupChunkDelayMs == LEGACY_WARMUP_CHUNK_DELAY_MS) itemWarmupChunkDelayMs = 1500;
+        if (itemWarmupMaxItemsPerSession == LEGACY_WARMUP_MAX_ITEMS) itemWarmupMaxItemsPerSession = 0;
         if (itemWarmupChunkDelayMs < 500) itemWarmupChunkDelayMs = 500;
         if (itemWarmupMaxItemsPerSession < 0) itemWarmupMaxItemsPerSession = 0;
         if (pacingDefaultsVersion < PACING_DEFAULTS_VERSION) {

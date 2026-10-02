@@ -37,6 +37,42 @@ public final class RequestPacer {
     /** Next wall-clock time a request may be sent. Guarded by {@code this}. */
     private long nextAllowedAt;
 
+    /**
+     * Worker-thread marker of the item warm-up lane. The lane paces itself (its own
+     * dispatch interval and concurrency), so AI requests it makes skip the interactive
+     * cooldown; a request of any other thread still reserves and waits for its slot.
+     */
+    private static final ThreadLocal<Boolean> UNPACED = new ThreadLocal<>();
+
+    /** Mark the current thread as the warm-up lane; returns the previous mark for {@link #restoreUnpaced}. */
+    public static Boolean bindUnpaced() {
+        Boolean previous = UNPACED.get();
+        UNPACED.set(Boolean.TRUE);
+        return previous;
+    }
+
+    public static void restoreUnpaced(Boolean previous) {
+        if (previous == null) UNPACED.remove();
+        else UNPACED.set(previous);
+    }
+
+    /** Whether the current thread is exempt from the interactive cooldown. */
+    public static boolean isUnpacedThread() {
+        return Boolean.TRUE.equals(UNPACED.get());
+    }
+
+    /**
+     * Like {@link #acquire()}, but a thread marked by {@link #bindUnpaced} only checks the
+     * request switch and reserves nothing (interactive requests keep their own spacing).
+     */
+    public void acquireForAi() {
+        if (isUnpacedThread()) {
+            RequestGate.checkOpen();
+            return;
+        }
+        acquire();
+    }
+
     /** Production constructor: real clock, real sleep. */
     public RequestPacer(LongSupplier cooldownMs) {
         this(cooldownMs, System::currentTimeMillis, Thread::sleep);

@@ -24,6 +24,11 @@ public final class WarmupHud {
                             BiFunction<String, Object[], String> lang) {
         if (!hudEnabled || st == null) return null;
         if (st.state() == ItemWarmupDriver.State.RUNNING) {
+            if (st.hasSpeed()) {
+                return new View(lang.apply(SettingsModel.KEY_WARMUP_HUD_RUNNING_RATE,
+                        new Object[] {st.scanned(), st.total(), st.itemsPerMinute()}),
+                        st.fraction(), 0xFF4C9AFF);
+            }
             return new View(lang.apply(SettingsModel.KEY_WARMUP_HUD_RUNNING,
                     new Object[] {st.scanned(), st.total()}), st.fraction(), 0xFF4C9AFF);
         }

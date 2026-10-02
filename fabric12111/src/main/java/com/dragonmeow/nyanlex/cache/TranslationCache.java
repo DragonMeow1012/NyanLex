@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.cache;
 
 import com.dragonmeow.nyanlex.translate.ChurnGuard;
 import com.dragonmeow.nyanlex.translate.RequestGate;
+import com.dragonmeow.nyanlex.translate.RequestPacer;
 import com.dragonmeow.nyanlex.translate.RequestsPausedException;
 import com.dragonmeow.nyanlex.translate.TemplateText;
 import com.dragonmeow.nyanlex.translate.TextFilter;
@@ -58,14 +59,13 @@ public final class TranslationCache {
     /** Per-request item budget of a window-collected AI batch ({@link #setWindowedBatching}).
      * One AI request carries a fixed system prompt, so a collected screen is packed into as
      * few requests as possible; only the overflow beyond this budget becomes a next request. */
-    static final int MAX_WINDOWED_BATCH_CHARS = 4_000;
+    static final int MAX_WINDOWED_BATCH_CHARS = BatchBudget.WINDOWED_CHARS;
     /** A windowed batch still outstanding after this long no longer holds the next one back,
      * so a hung transport can never stall the engine's collector for good. */
     private static final long WINDOWED_BATCH_STALE_MS = 120_000L;
     /** perf ②: ledger retries that fell due together (typically all of them after the master
      * switch was off for a while) enter the collector at most this many per tick. */
     static final int MAX_DUE_RETRIES_PER_TICK = 16;
-    private static final int BATCH_ITEM_OVERHEAD = 16;
     private static final int CONTENT_FAILURE_LIMIT = 3;
     private static final int MAX_FINAL_WAITER_FAMILIES = 512;
     /** Explicit/chat requests may keep healing during this session. Passive item
@@ -1190,6 +1190,7 @@ public final class TranslationCache {
                 } else {
                     long now = clock.getAsLong();
                     item = new Queued(snapshot, now);
+                    item.background = RequestPacer.isUnpacedThread();
                     queue.put(snapshot.key(), item);
                     queueGrew = true;
                     queuedChars += batchChars(snapshot.key());
@@ -1197,6 +1198,7 @@ public final class TranslationCache {
                 }
             }
             if (!rejected) {
+                if (!RequestPacer.isUnpacedThread()) item.background = false;
                 item.highPriority |= highPriority;
                 item.mergeContext(surfaceContext);
                 if (callback != null) {
@@ -1212,7 +1214,7 @@ public final class TranslationCache {
     }
 
     private static int batchChars(String text) {
-        return (text == null ? 0 : text.length()) + BATCH_ITEM_OVERHEAD;
+        return BatchBudget.unitChars(text);
     }
 
     private int configuredBatchWindowMs() {
@@ -1308,6 +1310,7 @@ public final class TranslationCache {
             }
 
             Flight ours = new Flight();
+            ours.warm = item.background;
             for (Callback callback : item.callbacks) ours.add(callback);
             Flight existing = flights.putIfAbsent(key, ours);
             if (existing != null) {
@@ -1368,7 +1371,7 @@ public final class TranslationCache {
      */
     private List<Queued> drainQueued(int budget) {
         List<Queued> drained = new ArrayList<>(Math.min(MAX_BATCH, queue.size()));
-        int drainedChars = 0;
+        BatchBudget packer = new BatchBudget(budget);
         boolean budgetFull = false;
         // Hovered entries are first, but share this request with as many already
         // collected normal entries as the safety budget permits.
@@ -1379,20 +1382,20 @@ public final class TranslationCache {
                 Queued next = iterator.next().getValue();
                 if (next.highPriority != highPass) continue;
                 int nextChars = batchChars(next.snapshot.key());
-                if (!drained.isEmpty() && drainedChars + nextChars > budget) {
+                if (!packer.fits(nextChars)) {
                     budgetFull = true;
                     break;
                 }
                 drained.add(next);
-                drainedChars += nextChars;
+                packer.add(nextChars);
                 iterator.remove();
-                if (drainedChars >= budget) {
+                if (packer.full()) {
                     budgetFull = true;
                     break;
                 }
             }
         }
-        queuedChars = Math.max(0, queuedChars - drainedChars);
+        queuedChars = Math.max(0, queuedChars - packer.chars());
         queueStartedAtMs = queue.isEmpty() ? -1L : clock.getAsLong();
         return drained;
     }
@@ -1717,6 +1720,186 @@ public final class TranslationCache {
     }
 
     // -------------------------------------------------------------------------
+    // Item warm-up lane
+    // -------------------------------------------------------------------------
+
+    /** Concurrent requests the dedicated warm-up pool can run (the driver chooses how many it uses). */
+    public static final int WARM_LANE_THREADS = 3;
+
+    private static final ThreadLocal<WarmCollector> WARM_COLLECTOR = new ThreadLocal<>();
+
+    private volatile java.util.concurrent.ExecutorService warmPool;
+
+    /** One collected request unit of the warm-up lane with its own surface context. */
+    private record WarmEntry(TranslationTemplate.Snapshot snapshot, List<String> context) {
+    }
+
+    /** Units gathered on the calling thread while {@link #collectWarmLane} runs, per cache. */
+    private static final class WarmCollector {
+        private final Map<TranslationCache, Map<String, WarmEntry>> pending = new LinkedHashMap<>();
+
+        void add(TranslationCache cache, List<TranslationTemplate.Snapshot> snapshots,
+                 List<String> context) {
+            Map<String, WarmEntry> entries =
+                    pending.computeIfAbsent(cache, ignored -> new LinkedHashMap<>());
+            for (TranslationTemplate.Snapshot snapshot : snapshots) {
+                WarmEntry existing = entries.get(snapshot.key());
+                if (existing == null || (existing.context() == null && context != null)) {
+                    entries.put(snapshot.key(), new WarmEntry(snapshot, context));
+                }
+            }
+        }
+    }
+
+    /**
+     * Run {@code body} (which warms background items through the usual paths), but instead
+     * of feeding the shared collector with the units it discovers, gather them and send
+     * everything missing, per cache, as ONE request on the dedicated warm-up pool. That
+     * request skips the interactive cooldown (the warm-up driver paces itself) and never
+     * shows up as interactive work. Returns how many requests were dispatched.
+     */
+    public static int collectWarmLane(Runnable body) {
+        WarmCollector previous = WARM_COLLECTOR.get();
+        WarmCollector collector = new WarmCollector();
+        WARM_COLLECTOR.set(collector);
+        try {
+            body.run();
+        } finally {
+            if (previous == null) WARM_COLLECTOR.remove();
+            else WARM_COLLECTOR.set(previous);
+        }
+        int dispatched = 0;
+        for (Map.Entry<TranslationCache, Map<String, WarmEntry>> entry
+                : collector.pending.entrySet()) {
+            dispatched += entry.getKey().dispatchWarmLane(entry.getValue().values());
+        }
+        return dispatched;
+    }
+
+    /** @return how many requests were handed over */
+    private int dispatchWarmLane(Collection<WarmEntry> entries) {
+        if (entries.isEmpty() || !requestsAllowed()) return 0;
+        List<TranslationTemplate.Snapshot> send = new ArrayList<>();
+        Map<String, Flight> owned = new LinkedHashMap<>();
+        Map<String, List<String>> contexts = new java.util.HashMap<>();
+        for (WarmEntry entry : entries) {
+            String key = entry.snapshot().key();
+            Flight ours = new Flight();
+            ours.warm = true;
+            // The driver bounds what it hands over, so the lane does not compete for the
+            // interactive pending-entry permits; it still holds (and returns) one each.
+            pendingEntries.incrementAndGet();
+            if (flights.putIfAbsent(key, ours) == null) {
+                owned.put(key, ours);
+                send.add(entry.snapshot());
+                if (entry.context() != null) contexts.put(key, entry.context());
+            } else {
+                releasePendingEntry();
+            }
+        }
+        if (send.isEmpty()) return 0;
+        long expectedGeneration = generation.get();
+        Map<String, Long> expectedRevisions = revisions(send);
+        // Masking and segment decomposition can change unit sizes after the driver packed
+        // its items, so the lane re-applies the shared request budget: a part that does not
+        // fit leaves as its own request (a single oversized unit goes alone).
+        int handedOver = 0;
+        int from = 0;
+        while (from < send.size()) {
+            BatchBudget packer = BatchBudget.windowed();
+            int to = from;
+            while (to < send.size() && packer.fits(batchChars(send.get(to).key()))) {
+                packer.add(batchChars(send.get(to).key()));
+                to++;
+            }
+            List<TranslationTemplate.Snapshot> part = new ArrayList<>(send.subList(from, to));
+            Map<String, Flight> partOwned = new LinkedHashMap<>();
+            Map<String, List<String>> partContexts = new java.util.HashMap<>();
+            for (TranslationTemplate.Snapshot snapshot : part) {
+                partOwned.put(snapshot.key(), owned.get(snapshot.key()));
+                List<String> context = contexts.get(snapshot.key());
+                if (context != null) partContexts.put(snapshot.key(), context);
+            }
+            if (submitWarmPart(part, partOwned, partContexts, expectedGeneration,
+                    expectedRevisions)) {
+                handedOver++;
+            }
+            from = to;
+        }
+        return handedOver;
+    }
+
+    private boolean submitWarmPart(List<TranslationTemplate.Snapshot> part,
+                                   Map<String, Flight> owned,
+                                   Map<String, List<String>> contexts,
+                                   long expectedGeneration,
+                                   Map<String, Long> expectedRevisions) {
+        Runnable task = () -> {
+            Boolean previous = RequestPacer.bindUnpaced();
+            try {
+                if (generation.get() == expectedGeneration) {
+                    translateBatch(part, null, contexts.isEmpty() ? null : contexts,
+                            expectedGeneration, expectedRevisions);
+                }
+            } finally {
+                RequestPacer.restoreUnpaced(previous);
+                owned.forEach(this::finishFlight);
+            }
+        };
+        boolean accepted;
+        try {
+            warmExecutor().execute(task);
+            accepted = true;
+        } catch (RejectedExecutionException e) {
+            accepted = false;
+        }
+        if (!accepted) owned.forEach(this::finishFlight);
+        return accepted;
+    }
+
+    /** The dedicated pool when the cache runs on the priority executor, else that executor. */
+    private Executor warmExecutor() {
+        if (!(executor instanceof PriorityTranslationExecutor)) return executor;
+        java.util.concurrent.ExecutorService pool = warmPool;
+        if (pool == null) {
+            synchronized (this) {
+                pool = warmPool;
+                if (pool == null) {
+                    AtomicInteger counter = new AtomicInteger();
+                    java.util.concurrent.ThreadPoolExecutor created =
+                            new java.util.concurrent.ThreadPoolExecutor(WARM_LANE_THREADS,
+                                    WARM_LANE_THREADS, 30L, java.util.concurrent.TimeUnit.SECONDS,
+                                    new java.util.concurrent.LinkedBlockingQueue<>(16), runnable -> {
+                                Thread thread = new Thread(runnable,
+                                        "nyanlex-warm-" + counter.incrementAndGet());
+                                thread.setDaemon(true);
+                                return thread;
+                            });
+                    created.allowCoreThreadTimeOut(true);
+                    warmPool = pool = created;
+                }
+            }
+        }
+        return pool;
+    }
+
+    /**
+     * Whether anything other than the item warm-up is collected or in flight on this cache
+     * (chat, tooltip, key-triggered translation). The warm-up yields while this is true.
+     */
+    public boolean hasInteractiveWork() {
+        synchronized (queueLock) {
+            for (Queued queued : queue.values()) {
+                if (!queued.background) return true;
+            }
+        }
+        for (Flight flight : flights.values()) {
+            if (!flight.warm) return true;
+        }
+        return false;
+    }
+
+    // -------------------------------------------------------------------------
     // Explicit batch APIs
     // -------------------------------------------------------------------------
 
@@ -1749,6 +1932,11 @@ public final class TranslationCache {
         List<TranslationTemplate.Snapshot> candidates = prepareMissing(sources, true);
         if (candidates.isEmpty()) return;
         List<String> requestContext = context(surfaceLines);
+        WarmCollector lane = highPriority ? null : WARM_COLLECTOR.get();
+        if (lane != null) {
+            lane.add(this, candidates, requestContext);
+            return;
+        }
         if (batchWindowMs != null) {
             for (TranslationTemplate.Snapshot snapshot : candidates) {
                 enqueue(snapshot, null, requestContext, highPriority);
@@ -3013,6 +3201,8 @@ public final class TranslationCache {
 
         private final List<Callback> callbacks = new ArrayList<>();
         private boolean closed;
+        /** Started by the item warm-up lane (or its fallout); never counts as interactive work. */
+        volatile boolean warm;
 
         synchronized AddResult add(Callback callback) {
             if (closed) return AddResult.CLOSED;
@@ -3039,6 +3229,8 @@ public final class TranslationCache {
         List<String> surfaceContext;
         boolean conflictingContext;
         boolean highPriority;
+        /** Queued from the item warm-up lane's worker thread (fallout of a warm request). */
+        boolean background;
 
         Queued(TranslationTemplate.Snapshot snapshot, long enqueuedAtMs) {
             this.snapshot = snapshot;

@@ -1045,6 +1045,10 @@ public final class SettingsPanel {
         if (!st.available() && !st.active()) return host.text(SettingsCatalog.KEY_NEEDS_AI);
         switch (st.state()) {
             case RUNNING:
+                if (st.hasSpeed()) {
+                    return host.text("screen.nyanlex.warmup.state.running.speed",
+                            st.itemsPerMinute(), Math.max(1, st.etaMinutes()));
+                }
                 return host.text("screen.nyanlex.warmup.state.running");
             case PAUSED:
                 return host.text("screen.nyanlex.warmup.reason."

@@ -2,18 +2,32 @@ package com.dragonmeow.nyanlex.config;
 
 import com.dragonmeow.nyanlex.warmup.ItemWarmupDriver;
 
-/** Snapshot of the item warm-up for the settings card and the HUD readout. */
+/**
+ * Snapshot of the item warm-up for the settings card and the HUD readout.
+ *
+ * <p>{@code scanned} (items looked at, cached or not) and {@code submitted} / {@code translated}
+ * (items actually sent / stored by the AI) are different numbers and never mixed.</p>
+ */
 public record WarmupStatus(boolean available, ItemWarmupDriver.State state,
                            ItemWarmupDriver.PauseReason reason, int scanned, int total,
-                           int submitted, boolean limitReached) {
+                           int submitted, boolean limitReached, int translated,
+                           int itemsPerMinute, int etaMinutes, boolean yielding) {
 
     public static final WarmupStatus UNAVAILABLE = new WarmupStatus(false,
             ItemWarmupDriver.State.IDLE, ItemWarmupDriver.PauseReason.NONE, 0, 0, 0, false);
 
+    /** Without speed figures (nothing measured yet). */
+    public WarmupStatus(boolean available, ItemWarmupDriver.State state,
+                        ItemWarmupDriver.PauseReason reason, int scanned, int total,
+                        int submitted, boolean limitReached) {
+        this(available, state, reason, scanned, total, submitted, limitReached, 0, 0, -1, false);
+    }
+
     /** From the driver's progress; {@code available} is whether a run could start now. */
     public static WarmupStatus of(boolean available, ItemWarmupDriver.Progress p) {
         return new WarmupStatus(available, p.state(), p.pauseReason(), p.scanned(),
-                p.totalItems(), p.submittedItems(), p.limitReached());
+                p.totalItems(), p.submittedItems(), p.limitReached(), p.translatedItems(),
+                p.itemsPerMinute(), p.etaMinutes(), p.yielding());
     }
 
     public boolean active() {
@@ -31,4 +45,9 @@ public record WarmupStatus(boolean available, ItemWarmupDriver.State state,
     }
 
     public int percent() { return Math.round(fraction() * 100f); }
+
+    /** A throughput figure exists (shown as "about N per minute"). */
+    public boolean hasSpeed() {
+        return state == ItemWarmupDriver.State.RUNNING && itemsPerMinute > 0;
+    }
 }

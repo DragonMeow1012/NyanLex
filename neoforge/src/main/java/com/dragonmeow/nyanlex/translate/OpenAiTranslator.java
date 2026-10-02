@@ -889,7 +889,7 @@ public final class OpenAiTranslator implements Translator {
         boolean hasUsableKey = keys.stream().anyMatch(key -> key != null && !key.isBlank());
         if (!hasUsableKey) {
             try {
-                pacer.acquire();
+                pacer.acquireForAi();
                 String content = parseContent(transport.post(url, body, Map.of()));
                 resetRateLimitGate();
                 return content;
@@ -911,7 +911,7 @@ public final class OpenAiTranslator implements Translator {
             headers.put("Authorization", "Bearer " + key);
             for (int attempt = 0; attempt <= RETRIES_PER_KEY; attempt++) {
                 try {
-                    pacer.acquire(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
+                    pacer.acquireForAi(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
                     String content = parseContent(transport.post(url, body, headers));
                     clearKeyState(key);
                     resetRateLimitGate(); // any success proves the quota is back

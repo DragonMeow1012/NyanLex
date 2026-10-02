@@ -2298,7 +2298,28 @@ public final class TranslationService {
      */
     public void warmTooltipBatchBackground(List<String> sources) {
         if (!config.aiTooltip) return;
-        warmMasked(sources, true, config.tooltipMode, config.aiTooltip, false, true);
+        // Dedicated warm-up lane: every unit this call discovers leaves as one request on
+        // its own pool, outside the interactive collector and its cooldown.
+        TranslationCache.collectWarmLane(() ->
+                warmMasked(sources, true, config.tooltipMode, config.aiTooltip, false, true));
+    }
+
+    /** Whether chat, tooltips or key-triggered translation are queued or in flight. */
+    public boolean isInteractiveTranslationBusy() {
+        return google.hasInteractiveWork() || ai.hasInteractiveWork();
+    }
+
+    /** Whether the AI engine is the ChatGPT-authenticated Codex route. */
+    public boolean isCodexEngine() {
+        return config.aiUseCodex;
+    }
+
+    /**
+     * Whether the item text needs no translation at all (already in the target language,
+     * a number, a machine code...): the core's own verdict, the same one the render path uses.
+     */
+    public boolean isItemTextNativeOrUntranslatable(String source) {
+        return source == null || !shouldTranslateItem(source);
     }
 
     /** Whether the item warm-up can run at all: the AI engine owns item text. */

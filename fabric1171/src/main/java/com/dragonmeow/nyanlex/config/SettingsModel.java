@@ -77,6 +77,7 @@ public final class SettingsModel {
     public static final String KEY_WARMUP_DETAILS = "nyanlex.ui.warmup.details";
     public static final String KEY_WARMUP_IDLE = "nyanlex.ui.warmup.idle";
     public static final String KEY_WARMUP_HUD_RUNNING = "nyanlex.ui.hud.running";
+    public static final String KEY_WARMUP_HUD_RUNNING_RATE = "nyanlex.ui.hud.running_rate";
     public static final String KEY_WARMUP_HUD_PAUSED = "nyanlex.ui.hud.paused";
     public static final String KEY_WARMUP_HUD_DONE = "nyanlex.ui.hud.done";
     public static final String KEY_SIDEBAR_TITLE = "nyanlex.ui.sidebar_title";
@@ -213,7 +214,7 @@ public final class SettingsModel {
                 KEY_NARRATE_SLIDER, KEY_NARRATE_VALUE, KEY_NARRATE_GROUP, KEY_NARRATE_OPEN,
                 KEY_NARRATE_CLOSED,
                 KEY_ABOUT_TITLE, KEY_ABOUT_VERSION, KEY_ABOUT_GITHUB, KEY_ABOUT_GITHUB + ".tip", KEY_WARMUP_START,
-                KEY_WARMUP_DETAILS, KEY_WARMUP_IDLE, KEY_WARMUP_HUD_RUNNING, KEY_WARMUP_HUD_PAUSED,
+                KEY_WARMUP_DETAILS, KEY_WARMUP_IDLE, KEY_WARMUP_HUD_RUNNING, KEY_WARMUP_HUD_RUNNING_RATE, KEY_WARMUP_HUD_PAUSED,
                 KEY_WARMUP_HUD_DONE, KEY_SIDEBAR_TITLE, KEY_STAT_PENDING,
                 KEY_FILES_GROUP, KEY_FILES_GROUP_DESC,
                 KEY_PROVIDER_FIXED, KEY_PROVIDER_FIXED_DESC));

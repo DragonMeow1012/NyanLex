@@ -21,4 +21,25 @@ public interface ItemWarmupBackend {
 
     /** Submit the units at background (lowest) priority; never blocks. */
     void warm(List<String> sources);
+
+    /**
+     * Chat, tooltip or key-triggered translation is queued or in flight: the warm-up holds
+     * back new requests until it is done. Backends without the notion never yield.
+     */
+    default boolean interactiveBusy() {
+        return false;
+    }
+
+    /** The AI engine is the ChatGPT (Codex) sign-in: the warm-up keeps one request at a time. */
+    default boolean usesCodex() {
+        return false;
+    }
+
+    /**
+     * The unit needs no translation at all (already in the target language, a number, a
+     * machine code): the core's own verdict, never sent.
+     */
+    default boolean needsNoTranslation(String source) {
+        return false;
+    }
 }
