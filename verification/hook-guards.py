@@ -426,6 +426,13 @@ def main():
             # every annotated handler must carry its own enter + fail (belt and braces for `check`)
             for h in find_handlers(new, NAMED_HOOKS.get(os.path.basename(path), ())):
                 hid = hook_id(path, h)
+                # A handler may name its hook itself (HookGuard.run("<own id>", ...), or an
+                # enter/fail pair that shares an id with a sibling handler). Only a handler with no
+                # guard call at all, or an enter without its fail, is a real gap.
+                body = new[h['brace']:h['end']]
+                if 'HookGuard.' in body and (not re.search(r'HookGuard\.enter(Sticky)?\(', body)
+                                             or 'HookGuard.fail(' in body):
+                    continue
                 if new.count('"%s"' % hid) < 2 and mode == 'check':
                     print('MISSING guard for %s in %s' % (hid, path))
                     bad += 1

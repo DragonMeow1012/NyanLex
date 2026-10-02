@@ -2390,33 +2390,58 @@ public final class NyanLexNeoForge {
     // The consent box (and nothing else) swallows input while it is up; it never closes the screen.
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onConsentMouseClick(net.neoforged.neoforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {
-        if (ConsentOverlay.mouseClicked(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getButton())) {
-            event.setCanceled(true);
+        if (!HookGuard.enter("event.onConsentMouseClick")) return;
+        try {
+            if (ConsentOverlay.mouseClicked(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getButton())) {
+                event.setCanceled(true);
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onConsentMouseClick", guardError);
         }
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onConsentMouseRelease(net.neoforged.neoforge.client.event.ScreenEvent.MouseButtonReleased.Pre event) {
-        if (ConsentOverlay.covers(event.getScreen())) event.setCanceled(true);
+        if (!HookGuard.enter("event.onConsentMouseRelease")) return;
+        try {
+            if (ConsentOverlay.covers(event.getScreen())) event.setCanceled(true);
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onConsentMouseRelease", guardError);
+        }
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onConsentMouseScroll(net.neoforged.neoforge.client.event.ScreenEvent.MouseScrolled.Pre event) {
-        if (ConsentOverlay.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDeltaY())) {
-            event.setCanceled(true);
+        if (!HookGuard.enter("event.onConsentMouseScroll")) return;
+        try {
+            if (ConsentOverlay.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDeltaY())) {
+                event.setCanceled(true);
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onConsentMouseScroll", guardError);
         }
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onConsentKeyPress(net.neoforged.neoforge.client.event.ScreenEvent.KeyPressed.Pre event) {
-        if (ConsentOverlay.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers())) {
-            event.setCanceled(true);
+        if (!HookGuard.enter("event.onConsentKeyPress")) return;
+        try {
+            if (ConsentOverlay.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers())) {
+                event.setCanceled(true);
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onConsentKeyPress", guardError);
         }
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onConsentKeyRelease(net.neoforged.neoforge.client.event.ScreenEvent.KeyReleased.Pre event) {
-        if (ConsentOverlay.covers(event.getScreen())) event.setCanceled(true);
+        if (!HookGuard.enter("event.onConsentKeyRelease")) return;
+        try {
+            if (ConsentOverlay.covers(event.getScreen())) event.setCanceled(true);
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onConsentKeyRelease", guardError);
+        }
     }
 
     @SubscribeEvent

@@ -38,12 +38,12 @@ public final class NyanLexHooks {
             "TextField.translateWhole",
             "event.onClientChat",
             "event.onClientTick",
+            "event.onConsentInput",
             "event.onItemTooltip",
             "event.onRenderNameTag",
             "event.onScreenKeyPressed",
             "event.onScreenRenderPost",
             "event.onScreenRenderPre",
-            "event.onConsentInput",
             "event.onWarmupHud");
     }
 }
