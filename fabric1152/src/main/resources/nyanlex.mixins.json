@@ -8,6 +8,7 @@
     "DebugHudMixin",
     "EntityNameTagMixin",
     "FontTextMixin",
+    "OptionsScreenMixin",
     "ScreenRenderScopeMixin",
     "ScreenKeyMixin"
   ],

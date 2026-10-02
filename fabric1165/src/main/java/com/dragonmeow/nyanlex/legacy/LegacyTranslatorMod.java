@@ -594,6 +594,12 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         }, url, true));
     }
 
+    /** The "Translation settings..." button on the Options screen. */
+    public static void openSettings(Screen parent) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null && config != null) mc.setScreen(new LegacySettingsScreen(parent));
+    }
+
     static LegacyConfig config() { return config; }
     static LegacyCodexClient codexClient() { return codexClient; }
     static LegacySessionTokenUsage.Snapshot tokenUsageSnapshot() {

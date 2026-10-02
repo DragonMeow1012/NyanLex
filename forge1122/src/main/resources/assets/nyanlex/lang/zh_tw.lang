@@ -95,3 +95,4 @@ config.nyanlex.mine.hint=匯出或匯入目前語言已存的翻譯，方便分�
 config.nyanlex.chat_delivery.short=聊天順序：%s
 config.nyanlex.enabled=翻譯功能：開啟
 config.nyanlex.disabled=翻譯功能：關閉
+screen.nyanlex.options=翻譯設定…

@@ -94,5 +94,6 @@
   "config.nyanlex.mine.hint": "Export or import the saved translations for the current language to share or back them up.",
   "config.nyanlex.chat_delivery.short": "Chat order: %s",
   "config.nyanlex.enabled": "Translation: On",
-  "config.nyanlex.disabled": "Translation: Off"
+  "config.nyanlex.disabled": "Translation: Off",
+  "screen.nyanlex.options": "Translation settings..."
 }

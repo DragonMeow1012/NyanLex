@@ -102,6 +102,25 @@ public final class NyanLexForge {
         screenSources = java.util.Collections.emptySet();
     }
 
+    private static final int OPTIONS_BUTTON_ID = 9137;
+
+    /** Adds the "Translation settings..." button to the vanilla Options screen. */
+    @SubscribeEvent public void onInitGui(net.minecraftforge.client.event.GuiScreenEvent.InitGuiEvent.Post event) {
+        if (!HookGuard.enter("event.onInitGui")) return;
+        try {
+            final net.minecraft.client.gui.GuiScreen gui = event.getGui();
+            if (!(gui instanceof net.minecraft.client.gui.GuiOptions)) return;
+            event.addButton(new ForgeButton(OPTIONS_BUTTON_ID, 6, 6, 110, 20,
+                    I18n.format("screen.nyanlex.options"), new ForgeButton.Handler() {
+                @Override public void onForgeButton(net.minecraft.client.gui.GuiButton button) {
+                    Minecraft.getInstance().displayGuiScreen(new ForgeSettingsScreen(gui));
+                }
+            }));
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onInitGui", guardError);
+        }
+    }
+
     @SubscribeEvent public void beforeScreen(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre event) {
         HookGuard.enterSticky("event.beforeScreen");
         try {

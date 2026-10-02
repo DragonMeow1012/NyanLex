@@ -126,5 +126,6 @@
   "config.nyanlex.about.github.desc": "By DragonMeow. Source code, updates and bug reports are all there.",
   "screen.nyanlex.help.quick": "Too much text? Let the setup helper do it for you",
   "config.nyanlex.surface.hint": "Chat and entity name tags are always translated automatically; items, the scoreboard, screens and other text depend on the translation service.",
-  "config.nyanlex.mine.hint": "Export or import the saved translations for the current language to share or back them up."
+  "config.nyanlex.mine.hint": "Export or import the saved translations for the current language to share or back them up.",
+  "screen.nyanlex.options": "Translation settings..."
 }

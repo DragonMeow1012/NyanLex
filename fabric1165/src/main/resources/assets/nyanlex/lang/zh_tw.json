@@ -126,5 +126,6 @@
   "config.nyanlex.about.github.desc": "作者 DragonMeow。原始碼、更新消息和問題回報都在這裡。",
   "screen.nyanlex.help.quick": "字太多不想看？讓設定小精靈幫你搞定",
   "config.nyanlex.surface.hint": "聊天與生物名牌一律自動翻譯；物品、記分板、介面等文字依翻譯服務而定。",
-  "config.nyanlex.mine.hint": "匯出或匯入目前語言已存的翻譯，方便分享或備份。"
+  "config.nyanlex.mine.hint": "匯出或匯入目前語言已存的翻譯，方便分享或備份。",
+  "screen.nyanlex.options": "翻譯設定…"
 }

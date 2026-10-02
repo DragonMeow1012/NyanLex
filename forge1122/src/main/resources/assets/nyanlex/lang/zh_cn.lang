@@ -1,0 +1,109 @@
+screen.nyanlex.ai.codex.login=使用 ChatGPT 登录
+screen.nyanlex.ai.codex.logout=登出游戏专用账号
+screen.nyanlex.ai.codex.refresh=刷新
+screen.nyanlex.provider.google=Google 翻译（非官方端点）
+category.nyanlex=NyanLex Translator
+key.nyanlex.mode=打开翻译设置
+key.nyanlex.retranslate=重新翻译指向的物品
+key.nyanlex.toggle=快速切换原文／翻译
+screen.nyanlex.config.title=翻译设置
+screen.nyanlex.ai.title=AI 翻译设置
+config.nyanlex.mode.original=原文
+config.nyanlex.mode.both=原文＋翻译
+config.nyanlex.mode.translation=只有翻译
+config.nyanlex.engine.machine=机翻
+config.nyanlex.engine.ai=AI
+config.nyanlex.language=翻译语言：%s
+config.nyanlex.language.follow=跟随游戏（%s）
+config.nyanlex.chat_delivery.ordered=按顺序
+config.nyanlex.chat_delivery.ready_first=完成即发
+config.nyanlex.requests.open=不翻译词汇…
+screen.nyanlex.ai.test=测试连接
+screen.nyanlex.requests.title=不翻译词汇
+screen.nyanlex.requests.terms=不翻译词汇（以逗号分隔）
+screen.nyanlex.requests.terms.hint=例：MyServer, Steve（保留原文；不区分大小写、整词匹配）
+key.nyanlex.screenscan=重新翻译当前整个界面
+config.nyanlex.translations.export=导出翻译档
+config.nyanlex.translations.import=导入翻译档
+config.nyanlex.request_cooldown.open=翻译冷却设置…
+screen.nyanlex.cooldown.title=翻译冷却设置
+config.nyanlex.ai.machine_fallback=AI 翻译失败时使用机翻补译：%s
+config.nyanlex.help.open=说明书
+screen.nyanlex.help.title=说明书
+screen.nyanlex.help.body=聊天消息与生物名牌一律自动翻译。
+
+按 [G] 打开翻译设置、按 [P] 翻译当前打开的整个界面、按 [R] 翻译你指向的物品（没有打开任何界面时，则翻译手上拿的物品）。快捷键可以在“翻译设置 → 一般 → 快捷键”修改。
+
+在线翻译默认是关闭的：第一次使用请用“快速设置”一步步选好，或到“翻译设置 → 一般”开启“在线翻译”。关闭时只会显示已保存的翻译，不会发送任何文字；这时按 [R] 或 [P]，会先询问是否开始在线翻译。
+
+翻译服务可选“AI”或“机翻”。选用 AI 时，物品和界面文字会像聊天一样自动翻译，这时按 [R]／[P] 是强制重新翻译一次；选用机翻（Google 翻译，非官方端点，可能随时受到限制）时，物品和界面不会自动翻译，要按 [R] 或 [P] 才会发送。AI 需要自备 API 密钥，或登录 ChatGPT（会使用你账号的 Codex 额度）；API 密钥只保存在这台电脑，不会上传。
+
+“AI 翻译失败时使用机翻补译”只在选用 AI 时才有作用。
+
+“不翻译词汇”可以让服务器或品牌名称保持原文（不区分大小写、整词匹配）。
+
+“我的翻译”可以导出或导入当前语言已保存的翻译；“高级”里可以调整翻译冷却与聊天顺序。开启调试模式后，界面角落会显示翻译状态。
+screen.nyanlex.tooltip.hint=按 [%s] 翻译
+screen.nyanlex.tooltip.translating=翻译中…
+screen.nyanlex.consent.title=要开始在线翻译吗？
+screen.nyanlex.consent.body.item=这个物品的文字会发送到%s。
+screen.nyanlex.consent.body.screen=这个界面的文字会发送到%s。
+screen.nyanlex.consent.note=按下“开始翻译”会开启在线翻译，之后随时可以在设置里关闭。
+screen.nyanlex.consent.cancel=取消
+screen.nyanlex.consent.accept=开始翻译
+screen.nyanlex.service.ai=AI 翻译服务（%s）
+screen.nyanlex.service.codex=ChatGPT（使用你的 Codex 额度）
+screen.nyanlex.tooltip.start_hint=按 [%s] 开始翻译
+screen.nyanlex.setup.welcome.title=欢迎使用 NyanLex Translator
+screen.nyanlex.setup.welcome.body=设置小精灵会带你完成几个简单的选择，让游戏里的文字变成你看得懂的语言。
+screen.nyanlex.setup.welcome.hint=这些选择之后都能在“翻译设置”里修改。
+screen.nyanlex.setup.later=稍后再设置
+screen.nyanlex.setup.start=开始
+screen.nyanlex.setup.back=上一步
+screen.nyanlex.setup.next=下一步
+screen.nyanlex.setup.finish=完成
+screen.nyanlex.setup.method.title=你想用哪种方式翻译？
+screen.nyanlex.setup.method.machine=机翻
+screen.nyanlex.setup.method.machine.desc=不用任何设置就能开始。聊天等文字会自动翻译；物品和界面需要按快捷键翻译（默认 R 翻译物品、P 翻译整个界面）。文字会发送到 Google 翻译（非官方端点）。
+screen.nyanlex.setup.method.ai=AI
+screen.nyanlex.setup.method.ai.desc=译文更自然，物品和界面也会自动翻译。需要自备 API 密钥，或登录 ChatGPT（会使用你账号的 Codex 额度）。
+screen.nyanlex.setup.method.off=先不要
+screen.nyanlex.setup.method.off.desc=暂不开启在线翻译，只显示已经有的翻译，不会发送任何文字。
+screen.nyanlex.setup.method.hint=只有你设置要翻译的文字会发送；随时可以在设置里关闭“在线翻译”。
+screen.nyanlex.setup.method.ai_missing=请先填入 API 密钥或登录 ChatGPT，才能使用 AI。
+screen.nyanlex.setup.done.title=设置完成！
+screen.nyanlex.setup.done.intro=记住这三个快捷键就能开始：
+screen.nyanlex.setup.done.key.item=[%s] 翻译光标指向的物品；没开任何界面时，翻译手上拿的物品
+screen.nyanlex.setup.done.key.screen=[%s] 翻译目前打开的整个界面
+screen.nyanlex.setup.done.key.settings=[%s] 打开翻译设置
+screen.nyanlex.setup.done.keys_hint=按键不顺手？可以到“翻译设置 → 一般 → 快捷键”改成你习惯的按键。
+screen.nyanlex.setup.done.keys_button=设置快捷键…
+screen.nyanlex.setup.done.footer=其他细节都在说明书里，等哪天睡不着再翻翻也不迟。
+screen.nyanlex.cat.general=一般
+screen.nyanlex.cat.display=显示
+screen.nyanlex.cat.service=翻译服务
+screen.nyanlex.cat.mine=我的翻译
+screen.nyanlex.cat.advanced=高级
+screen.nyanlex.cat.about=关于
+config.nyanlex.quick_setup.open=快速设置…
+config.nyanlex.online=在线翻译：%s
+config.nyanlex.state.on=开
+config.nyanlex.state.off=关
+config.nyanlex.online.desc=会发送：你要翻译的聊天、物品和界面文字。发送到：%s。要停止：把这个开关关掉，就只会显示已保存的翻译。
+config.nyanlex.keys.open=快捷键…
+config.nyanlex.display=显示方式：%s
+config.nyanlex.service=翻译服务：%s
+config.nyanlex.machine.title=机翻：Google 翻译（非官方端点）
+config.nyanlex.machine.desc=使用机翻时，物品和界面不会自动翻译，请按快捷键翻译。Google 的非官方端点可能随时受到限制或失效。
+config.nyanlex.about.version=NyanLex Translator %s
+config.nyanlex.about.help=说明书…
+config.nyanlex.about.github=GitHub…
+config.nyanlex.about.github.desc=作者 DragonMeow。源代码、更新消息和问题反馈都在这里。
+screen.nyanlex.help.quick=字太多不想看？让设置小精灵帮你搞定
+config.nyanlex.debug.short=调试模式：%s
+config.nyanlex.surface.hint=聊天与生物名牌一律自动翻译；物品、计分板、界面等文字视翻译服务而定。
+config.nyanlex.mine.hint=导出或导入目前语言已保存的翻译，方便分享或备份。
+config.nyanlex.chat_delivery.short=聊天顺序：%s
+config.nyanlex.enabled=翻译功能：开启
+config.nyanlex.disabled=翻译功能：关闭
+screen.nyanlex.options=翻译设置…
