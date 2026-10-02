@@ -336,22 +336,63 @@ public final class TooltipSegmentPlanner {
      * existing "resolve everything or compose nothing" contract, generalised across kinds.
      */
     public static String compose(String original, Plan plan, SegmentResolver resolver) {
+        return composeDetailed(original, plan, resolver).full();
+    }
+
+    /**
+     * Result of one resolver pass over a plan.
+     *
+     * @param full     every segment resolved, spliced; {@code null} while any is missing
+     * @param partial  the segments that DID resolve spliced in, each still-missing segment kept
+     *                 as its raw original span (tokens untouched, so the paragraph's marker
+     *                 multiset is unchanged); {@code null} unless some segment that needed the
+     *                 provider (anything but a locally composed rarity row) resolved and some
+     *                 other segment did not
+     * @param resolved number of non-inert segments that resolved
+     * @param total    number of non-inert segments
+     */
+    public record Composition(String full, String partial, int resolved, int total) {
+    }
+
+    /** Like {@link #compose}, but also reports and splices the partial state (R6: a segment
+     *  that failed validation must not hold every other, finished segment of the paragraph
+     *  back in English). {@code resolver} is called exactly once per segment, same contract. */
+    public static Composition composeDetailed(String original, Plan plan, SegmentResolver resolver) {
         List<Segment> segments = plan.segments();
         List<String> resolved = new ArrayList<>(segments.size());
         boolean anyMissing = false;
+        int resolvedCount = 0;
+        int remoteResolved = 0;
+        int total = 0;
         for (Segment segment : segments) {
             String rawSegmentText = original.substring(segment.start(), segment.end());
             String value = resolver.resolve(segment, rawSegmentText);
             resolved.add(value);
             if (value == null) anyMissing = true;
+            if (segment.kind() != Kind.INERT) {
+                total++;
+                if (value != null) {
+                    resolvedCount++;
+                    if (segment.kind() != Kind.RARITY) remoteResolved++;
+                }
+            }
         }
-        if (anyMissing) return null;
+        String full = anyMissing ? null : splice(original, segments, resolved, false);
+        String partial = anyMissing && remoteResolved > 0
+                ? splice(original, segments, resolved, true) : null;
+        return new Composition(full, partial, resolvedCount, total);
+    }
+
+    private static String splice(String original, List<Segment> segments, List<String> resolved,
+                                 boolean rawForMissing) {
         StringBuilder out = new StringBuilder(original.length());
         int cursor = 0;
         for (int i = 0; i < segments.size(); i++) {
             Segment segment = segments.get(i);
             out.append(original, cursor, segment.start());
-            out.append(resolved.get(i));
+            String value = resolved.get(i);
+            out.append(value != null || !rawForMissing
+                    ? value : original.substring(segment.start(), segment.end()));
             cursor = segment.end();
         }
         out.append(original, cursor, original.length());

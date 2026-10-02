@@ -2171,6 +2171,10 @@ public final class TranslationService {
         // stored translation (and its retokenised template) stays untouched; scoreboard /
         // boss bar / chat / book surfaces never pass through here.
         String tightened = TemplateText.collapseTranslatedColumnGaps(d.translated());
+        // R3: a Chinese target gets full-width punctuation after Chinese text (display only).
+        if (activeTargetLang != null && activeTargetLang.toLowerCase(java.util.Locale.ROOT).startsWith("zh")) {
+            tightened = TemplateText.fullWidthPunctuationAfterCjk(tightened);
+        }
         return tightened.equals(d.translated()) ? d
                 : TranslationDecision.of(d.mode(), d.original(), tightened);
     }

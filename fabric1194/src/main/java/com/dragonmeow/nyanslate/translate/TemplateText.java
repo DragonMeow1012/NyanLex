@@ -322,6 +322,39 @@ public final class TemplateText {
         return String.join("\n", lines);
     }
 
+    // A half-width ":;,!?" typed right after a Chinese character (optionally with protocol
+    // tokens such as a closing colour marker in between). Only when what follows is a space,
+    // a protocol token, the end of the text or non-ASCII, so "標籤:value" / "網址:http://x" /
+    // "時間 10:30" (no CJK before the colon) stay exactly as written.
+    private static final Pattern HALF_WIDTH_PUNCT_AFTER_CJK = Pattern.compile(
+            "([\\u3400-\\u4dbf\\u4e00-\\u9fff](?:\\u27E6[^\\u27E6\\u27E7]*\\u27E7)*)([:;,!?])"
+                    + "(?=[ \\t\\u00A0]|\\u27E6|$|[^\\u0000-\\u007F])");
+
+    /**
+     * Display-only typography for Chinese targets: the model often answers a stat row with a
+     * half-width colon ("傷害:") while its neighbours use the full-width one ("力量："), which
+     * reads as an inconsistent tooltip. Rewrites ":;,!?" that directly follow a Chinese
+     * character to "：；，！？". Applied AFTER the cache lookup, like {@link
+     * #collapseTranslatedColumnGaps}; stored translations and cache keys are never touched.
+     */
+    public static String fullWidthPunctuationAfterCjk(String text) {
+        if (text == null || text.isEmpty() || !CJK_CHAR.matcher(text).find()) return text;
+        java.util.regex.Matcher matcher = HALF_WIDTH_PUNCT_AFTER_CJK.matcher(text);
+        StringBuilder out = null;
+        int cursor = 0;
+        while (matcher.find()) {
+            if (out == null) out = new StringBuilder(text.length());
+            out.append(text, cursor, matcher.start(2));
+            char c = matcher.group(2).charAt(0);
+            out.append(c == ':' ? '：' : c == ';' ? '；' : c == ',' ? '，'
+                    : c == '!' ? '！' : '？');
+            cursor = matcher.end(2);
+        }
+        if (out == null) return text;
+        out.append(text, cursor, text.length());
+        return out.toString();
+    }
+
     public static Prepared prepare(String source) {
         if (source == null || source.isEmpty()) return new Prepared(source, List.of());
         Prepared hit = MEMO.get(source);

@@ -301,6 +301,21 @@ class LiveE2eFindingsTest {
         assertFalse(s.isTooltipTranslationReady(R6_PARAGRAPH));
     }
 
+    // ------------------------------------------------------------------ R3
+
+    @Test
+    void r3HalfWidthColonAfterChineseIsFullWidthOnDisplayOnly() {
+        FakeAi ai = new FakeAi(); // answers "Crit Damage: {mt0}" with CJK + a half-width ':'
+        TranslationService s = service(ai, new TranslationDebugLog(() -> true));
+        String line = "Crit Damage: +50%";
+        s.warmTooltipBatch(List.of(line));
+        pump(s);
+        TranslationDecision d = s.translateItemLine(line);
+        assertTrue(d.changed());
+        assertTrue(d.translated().contains("："), d.translated());
+        assertFalse(d.translated().matches(".*\\p{IsHan}:.*"), d.translated());
+    }
+
     // ------------------------------------------------------------------ R4
 
     @Test

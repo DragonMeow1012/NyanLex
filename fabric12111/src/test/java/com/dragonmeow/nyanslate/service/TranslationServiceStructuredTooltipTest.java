@@ -325,10 +325,15 @@ class TranslationServiceStructuredTooltipTest {
         s.warmTooltipBatch(List.of(hyperion));
         pump(s);
 
+        // R6 (2026-10-02, supersedes the old all-or-nothing rule): the unresolvable scroll-name
+        // segment keeps its ORIGINAL wording while every finished segment shows translated --
+        // each segment is wholly one language, so there is no half-translated/corrupted line.
         TranslationDecision d = s.translateItemLine(hyperion);
-        assertFalse(d.changed(),
-                "one segment permanently unresolved: the WHOLE group stays the original English, "
-                        + "never a half-translated/corrupted mix");
+        assertTrue(d.changed(), "finished segments are shown");
+        assertTrue(d.translated().contains("賣家"), "the finished trade row is translated");
+        assertTrue(d.translated().contains("● Wither Shield"),
+                "the unresolved scroll segment stays the original English: " + d.translated());
+        assertFalse(d.translated().contains("凋零盾"));
 
         // The other segments the first attempt legitimately resolved remain correct and
         // independently displayable on their own combo -- the one failure never corrupted

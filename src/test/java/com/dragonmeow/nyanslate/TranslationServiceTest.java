@@ -437,8 +437,9 @@ class TranslationServiceTest {
         pump(s);
         TranslationDecision tooltip = s.translateItemLine(line);
         assertTrue(tooltip.changed());
-        assertEquals("NPC 出售價格:  50,000", tooltip.translated(),
-                "the tooltip display collapses the translated column gap to two spaces");
+        assertEquals("NPC 出售價格：  50,000", tooltip.translated(),
+                "the tooltip display collapses the translated column gap to two spaces "
+                        + "(and, R3, writes the colon after Chinese text full-width)");
 
         s.translateScoreboardLine(line);
         pump(s);
