@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric.FabricTextStyle;
 import com.dragonmeow.nyanslate.fabric.NyanslateFabric;
 import com.dragonmeow.nyanslate.service.TranslationDecision;
@@ -38,28 +39,38 @@ public abstract class GuiScoreboardMixin {
 
     @Inject(method = "displayScoreboardSidebar", at = @At("HEAD"), require = 0)
     private void nyanslate$prepare(PoseStack pose, Objective objective, CallbackInfo ci) {
-        nyanslate$sources.clear();
-        nyanslate$rendered.clear();
-        TranslationService service = NyanslateFabric.service();
-        if (service == null || objective == null) return;
-        Scoreboard board = objective.getScoreboard();
-        Collection<Score> all = board.getPlayerScores(objective);
-        List<Score> visible = all.stream().filter(s -> s.getOwner() != null && !s.getOwner().startsWith("#")).toList();
-        List<Score> shown = visible.size() > 15 ? visible.stream().skip(visible.size() - 15L).toList() : visible;
-        List<Component> rows = shown.stream().map(s -> (Component) PlayerTeam.formatNameForTeam(
-                board.getPlayersTeam(s.getOwner()), new net.minecraft.network.chat.TextComponent(s.getOwner()))).toList();
-        Component heading = objective.getDisplayName();
-        List<String> requests = new ArrayList<>();
-        requests.add(FabricTextStyle.paragraphRequestText(List.of(heading)));
-        for (Component row : rows) requests.add(FabricTextStyle.paragraphRequestText(List.of(row)));
-        service.warmScoreboardBatch(requests);
-        for (Component row : rows) enqueue(row, translated("scoreboard", row, service::translateScoreboardLine));
-        enqueue(heading, translated("scoreboard", heading, service::translateScoreboardLine));
+        HookGuard.enterSticky("GuiScoreboard.prepare");
+        try {
+            nyanslate$sources.clear();
+            nyanslate$rendered.clear();
+            TranslationService service = NyanslateFabric.service();
+            if (service == null || objective == null) return;
+            Scoreboard board = objective.getScoreboard();
+            Collection<Score> all = board.getPlayerScores(objective);
+            List<Score> visible = all.stream().filter(s -> s.getOwner() != null && !s.getOwner().startsWith("#")).toList();
+            List<Score> shown = visible.size() > 15 ? visible.stream().skip(visible.size() - 15L).toList() : visible;
+            List<Component> rows = shown.stream().map(s -> (Component) PlayerTeam.formatNameForTeam(
+                    board.getPlayersTeam(s.getOwner()), new net.minecraft.network.chat.TextComponent(s.getOwner()))).toList();
+            Component heading = objective.getDisplayName();
+            List<String> requests = new ArrayList<>();
+            requests.add(FabricTextStyle.paragraphRequestText(List.of(heading)));
+            for (Component row : rows) requests.add(FabricTextStyle.paragraphRequestText(List.of(row)));
+            service.warmScoreboardBatch(requests);
+            for (Component row : rows) enqueue(row, translated("scoreboard", row, service::translateScoreboardLine));
+            enqueue(heading, translated("scoreboard", heading, service::translateScoreboardLine));
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.prepare", guardError);
+        }
     }
 
     @Inject(method = "displayScoreboardSidebar", at = @At("RETURN"), require = 0)
     private void nyanslate$clear(PoseStack pose, Objective objective, CallbackInfo ci) {
-        nyanslate$sources.clear(); nyanslate$rendered.clear();
+        HookGuard.enterSticky("GuiScoreboard.clear");
+        try {
+            nyanslate$sources.clear(); nyanslate$rendered.clear();
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.clear", guardError);
+        }
     }
 
     private static Component translated(String id, Component source, Function<String, TranslationDecision> fn) {
@@ -78,30 +89,48 @@ public abstract class GuiScoreboardMixin {
     @Redirect(method = "displayScoreboardSidebar", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/gui/Font;draw(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/network/chat/Component;FFI)I"), require = 0)
     private int nyanslate$score(Font font, PoseStack pose, Component text, float x, float y, int color) {
-        Component value = take(text);
-        return InternalRenderGuard.call(() -> font.draw(pose, value, x, y, color));
+        if (!HookGuard.enter("GuiScoreboard.score")) return font.draw(pose, text, x, y, color);
+        try {
+            Component value = take(text);
+            return InternalRenderGuard.call(() -> font.draw(pose, value, x, y, color));
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.score", guardError);
+            return font.draw(pose, text, x, y, color);
+        }
     }
 
     @Redirect(method = "renderSelectedItemName", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/gui/Font;drawShadow(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/network/chat/Component;FFI)I"), require = 0)
     private int nyanslate$held(Font font, PoseStack pose, Component text, float x, float y, int color) {
-        TranslationService service = NyanslateFabric.service();
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc != null && mc.player != null) {
-            NyanslateFabric.registerItemEntity(mc.player.getMainHandItem());
+        if (!HookGuard.enter("GuiScoreboard.held")) return font.drawShadow(pose, text, x, y, color);
+        try {
+            TranslationService service = NyanslateFabric.service();
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc != null && mc.player != null) {
+                NyanslateFabric.registerItemEntity(mc.player.getMainHandItem());
+            }
+            return drawTranslated("held", service == null ? null : service::translateHeld, font, pose, text, x, y, color);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.held", guardError);
+            return font.drawShadow(pose, text, x, y, color);
         }
-        return drawTranslated("held", service == null ? null : service::translateHeld, font, pose, text, x, y, color);
     }
 
     @Redirect(method = "render", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/gui/Font;drawShadow(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/network/chat/Component;FFI)I"), require = 0)
     private int nyanslate$hud(Font font, PoseStack pose, Component text, float x, float y, int color) {
-        TranslationService service = NyanslateFabric.service();
-        if (service != null && text == overlayMessageString)
-            return drawTranslated("actionBar", service::translateActionBar, font, pose, text, x, y, color);
-        if (service != null && (text == title || text == subtitle))
-            return drawTranslated("title", service::translateTitle, font, pose, text, x, y, color);
-        return InternalRenderGuard.call(() -> font.drawShadow(pose, text, x, y, color));
+        if (!HookGuard.enter("GuiScoreboard.hud")) return font.drawShadow(pose, text, x, y, color);
+        try {
+            TranslationService service = NyanslateFabric.service();
+            if (service != null && text == overlayMessageString)
+                return drawTranslated("actionBar", service::translateActionBar, font, pose, text, x, y, color);
+            if (service != null && (text == title || text == subtitle))
+                return drawTranslated("title", service::translateTitle, font, pose, text, x, y, color);
+            return InternalRenderGuard.call(() -> font.drawShadow(pose, text, x, y, color));
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.hud", guardError);
+            return font.drawShadow(pose, text, x, y, color);
+        }
     }
 
     private static int drawTranslated(String id, Function<String, TranslationDecision> fn, Font font,

@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric.NyanslateFabric;
 import com.dragonmeow.nyanslate.fabric.FabricTextStyle;
 import com.dragonmeow.nyanslate.service.TranslationDecision;
@@ -68,57 +69,67 @@ public abstract class GuiScoreboardMixin {
     @Inject(method = "displayScoreboardSidebar", at = @At("HEAD"), require = 0)
     private void nyanslate$prepareScoreboard(GuiGraphics graphics, Objective objective,
                                                 CallbackInfo ci) {
-        nyanslate$scoreboardSources.clear();
-        nyanslate$scoreboardRendered.clear();
-        TranslationService service = NyanslateFabric.service();
-        if (service == null || objective == null) return;
+        HookGuard.enterSticky("GuiScoreboard.prepareScoreboard");
+        try {
+            nyanslate$scoreboardSources.clear();
+            nyanslate$scoreboardRendered.clear();
+            TranslationService service = NyanslateFabric.service();
+            if (service == null || objective == null) return;
 
-        Component title = objective.getDisplayName();
-        Scoreboard scoreboard = objective.getScoreboard();
-        NumberFormat numberFormat = objective.numberFormatOrDefault(StyledFormat.SIDEBAR_DEFAULT);
-        List<PlayerScoreEntry> entries = scoreboard.listPlayerScores(objective).stream()
-                .filter(entry -> !entry.isHidden())
-                .sorted(SCORE_DISPLAY_ORDER)
-                .limit(15L)
-                .toList();
-        List<Component> rows = entries.stream()
-                .map(entry -> (Component) PlayerTeam.formatNameForTeam(
-                        scoreboard.getPlayersTeam(entry.owner()), entry.ownerName()))
-                .toList();
-        List<Component> scores = entries.stream()
-                .map(entry -> (Component) entry.formatValue(numberFormat))
-                .toList();
-        // Each scoreboard row owns one stable semantic key. The complete sidebar is
-        // still supplied as AI context by warmScoreboardBatch, but optional/animated
-        // neighbouring rows can no longer rename or re-request Purse/Bits/Gems.
-        service.warmScoreboardBatch(nyanslate$scoreboardRequests(title, rows));
+            Component title = objective.getDisplayName();
+            Scoreboard scoreboard = objective.getScoreboard();
+            NumberFormat numberFormat = objective.numberFormatOrDefault(StyledFormat.SIDEBAR_DEFAULT);
+            List<PlayerScoreEntry> entries = scoreboard.listPlayerScores(objective).stream()
+                    .filter(entry -> !entry.isHidden())
+                    .sorted(SCORE_DISPLAY_ORDER)
+                    .limit(15L)
+                    .toList();
+            List<Component> rows = entries.stream()
+                    .map(entry -> (Component) PlayerTeam.formatNameForTeam(
+                            scoreboard.getPlayersTeam(entry.owner()), entry.ownerName()))
+                    .toList();
+            List<Component> scores = entries.stream()
+                    .map(entry -> (Component) entry.formatValue(numberFormat))
+                    .toList();
+            // Each scoreboard row owns one stable semantic key. The complete sidebar is
+            // still supplied as AI context by warmScoreboardBatch, but optional/animated
+            // neighbouring rows can no longer rename or re-request Purse/Bits/Gems.
+            service.warmScoreboardBatch(nyanslate$scoreboardRequests(title, rows));
 
-        Component translatedTitle = FabricTextStyle.renderTranslated(
-                "scoreboard", title, service::translateScoreboardLine);
-        nyanslate$enqueueScoreboardRow(
-                title, translatedTitle == null ? title : translatedTitle);
-        List<Component> renderedRows = new ArrayList<>(rows);
+            Component translatedTitle = FabricTextStyle.renderTranslated(
+                    "scoreboard", title, service::translateScoreboardLine);
+            nyanslate$enqueueScoreboardRow(
+                    title, translatedTitle == null ? title : translatedTitle);
+            List<Component> renderedRows = new ArrayList<>(rows);
 
-        for (int i = 0; i < rows.size(); i++) {
-            Component row = rows.get(i);
-            Component translated = FabricTextStyle.renderTranslated(
-                    "scoreboard", row, service::translateScoreboardLine);
-            if (translated != null) renderedRows.set(i, translated);
-        }
+            for (int i = 0; i < rows.size(); i++) {
+                Component row = rows.get(i);
+                Component translated = FabricTextStyle.renderTranslated(
+                        "scoreboard", row, service::translateScoreboardLine);
+                if (translated != null) renderedRows.set(i, translated);
+            }
 
-        for (int i = 0; i < entries.size(); i++) {
-            nyanslate$enqueueScoreboardRow(rows.get(i), renderedRows.get(i));
-            // Score values are dynamic layout fields, never an independent translation
-            // unit. Keeping them in the draw sequence prevents equal strings colliding.
-            nyanslate$enqueueScoreboardRow(scores.get(i), scores.get(i));
+            for (int i = 0; i < entries.size(); i++) {
+                nyanslate$enqueueScoreboardRow(rows.get(i), renderedRows.get(i));
+                // Score values are dynamic layout fields, never an independent translation
+                // unit. Keeping them in the draw sequence prevents equal strings colliding.
+                nyanslate$enqueueScoreboardRow(scores.get(i), scores.get(i));
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.prepareScoreboard", guardError);
         }
     }
 
     @Inject(method = "displayScoreboardSidebar", at = @At("RETURN"), require = 0)
     private void nyanslate$clearScoreboard(GuiGraphics graphics, Objective objective,
                                               CallbackInfo ci) {
-        nyanslate$scoreboardSources.clear();
-        nyanslate$scoreboardRendered.clear();
+        HookGuard.enterSticky("GuiScoreboard.clearScoreboard");
+        try {
+            nyanslate$scoreboardSources.clear();
+            nyanslate$scoreboardRendered.clear();
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.clearScoreboard", guardError);
+        }
     }
 
     private void nyanslate$enqueueScoreboardRow(Component source, Component rendered) {
@@ -155,13 +166,18 @@ public abstract class GuiScoreboardMixin {
             require = 0)
     private void nyanslate$scoreboard(GuiGraphics g, Font font, Component text,
                                         int x, int y, int color, boolean shadow) {
-        // Do not fall back to translating this isolated row: the outer hook already
-        // queued its complete blank-line-delimited paragraph (or intentionally kept it).
-        Component translated = text == null ? null : nyanslate$takeScoreboardRow(text);
-        Component toDraw = translated == null ? text : translated;
-        Component rendered = toDraw;
-        com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(
-                () -> g.drawString(font, rendered, x, y, color, shadow));
+        if (!HookGuard.enter("GuiScoreboard.scoreboard")) return;
+        try {
+            // Do not fall back to translating this isolated row: the outer hook already
+            // queued its complete blank-line-delimited paragraph (or intentionally kept it).
+            Component translated = text == null ? null : nyanslate$takeScoreboardRow(text);
+            Component toDraw = translated == null ? text : translated;
+            Component rendered = toDraw;
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(
+                    () -> g.drawString(font, rendered, x, y, color, shadow));
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.scoreboard", guardError);
+        }
     }
 
     @Redirect(
@@ -171,12 +187,17 @@ public abstract class GuiScoreboardMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$heldName(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {
-        TranslationService s = NyanslateFabric.service();
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc != null && mc.player != null) {
-            NyanslateFabric.registerItemEntity(mc.player.getMainHandItem());
+        if (!HookGuard.enter("GuiScoreboard.heldName")) return;
+        try {
+            TranslationService s = NyanslateFabric.service();
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc != null && mc.player != null) {
+                NyanslateFabric.registerItemEntity(mc.player.getMainHandItem());
+            }
+            nyanslate$backdrop("held", g, font, text, x, y, width, color, s == null ? null : s::translateHeld);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.heldName", guardError);
         }
-        nyanslate$backdrop("held", g, font, text, x, y, width, color, s == null ? null : s::translateHeld);
     }
 
     @Redirect(
@@ -186,8 +207,13 @@ public abstract class GuiScoreboardMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$title(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {
-        TranslationService s = NyanslateFabric.service();
-        nyanslate$backdrop("title", g, font, text, x, y, width, color, s == null ? null : s::translateTitle);
+        if (!HookGuard.enter("GuiScoreboard.title")) return;
+        try {
+            TranslationService s = NyanslateFabric.service();
+            nyanslate$backdrop("title", g, font, text, x, y, width, color, s == null ? null : s::translateTitle);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.title", guardError);
+        }
     }
 
     @Redirect(
@@ -197,8 +223,13 @@ public abstract class GuiScoreboardMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanslate$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {
-        TranslationService s = NyanslateFabric.service();
-        nyanslate$backdrop("actionBar", g, font, text, x, y, width, color, s == null ? null : s::translateActionBar);
+        if (!HookGuard.enter("GuiScoreboard.actionBar")) return;
+        try {
+            TranslationService s = NyanslateFabric.service();
+            nyanslate$backdrop("actionBar", g, font, text, x, y, width, color, s == null ? null : s::translateActionBar);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiScoreboard.actionBar", guardError);
+        }
     }
 
     /** Centred backdrop draw shared by held name / title / subtitle / action bar; re-centres the

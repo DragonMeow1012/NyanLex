@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.config.DisplayMode;
 import com.dragonmeow.nyanslate.fabric.FabricTextStyle;
 import com.dragonmeow.nyanslate.fabric.NyanslateFabric;
@@ -28,25 +29,36 @@ public abstract class BookPageMixin {
 
     @Inject(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;IIF)V", at = @At("HEAD"), require = 0)
     private void nyanslate$resplit(PoseStack pose, int mouseX, int mouseY, float partial, CallbackInfo ci) {
-        TranslationService service = NyanslateFabric.service();
-        if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) cachedPage = -1;
+        if (!HookGuard.enter("BookPage.resplit")) return;
+        try {
+            TranslationService service = NyanslateFabric.service();
+            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) cachedPage = -1;
+        } catch (Throwable guardError) {
+            HookGuard.fail("BookPage.resplit", guardError);
+        }
     }
 
     @Redirect(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;IIF)V", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/gui/Font;split(Lnet/minecraft/network/chat/FormattedText;I)Ljava/util/List;"), require = 0)
     private List<FormattedCharSequence> nyanslate$page(Font font, FormattedText text, int width) {
-        TranslationService service = NyanslateFabric.service();
-        if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY && text != null) {
-            Component source = preserveStyles(text);
-            service.warmBookBatch(FabricTextStyle.paragraphRequests(source));
-            Component translated = FabricTextStyle.renderTranslatedParagraphPage(source, service::translateBook, font);
-            if (translated != null) {
-                Component shown = service.bookMode() == DisplayMode.BOTH
-                        ? source.copy().append(new net.minecraft.network.chat.TextComponent("\n")).append(translated) : translated;
-                return font.split(shown, width);
+        if (!HookGuard.enter("BookPage.page")) return font.split(text, width);
+        try {
+            TranslationService service = NyanslateFabric.service();
+            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY && text != null) {
+                Component source = preserveStyles(text);
+                service.warmBookBatch(FabricTextStyle.paragraphRequests(source));
+                Component translated = FabricTextStyle.renderTranslatedParagraphPage(source, service::translateBook, font);
+                if (translated != null) {
+                    Component shown = service.bookMode() == DisplayMode.BOTH
+                            ? source.copy().append(new net.minecraft.network.chat.TextComponent("\n")).append(translated) : translated;
+                    return font.split(shown, width);
+                }
             }
+            return font.split(text, width);
+        } catch (Throwable guardError) {
+            HookGuard.fail("BookPage.page", guardError);
+            return font.split(text, width);
         }
-        return font.split(text, width);
     }
 
     private static Component preserveStyles(FormattedText text) {

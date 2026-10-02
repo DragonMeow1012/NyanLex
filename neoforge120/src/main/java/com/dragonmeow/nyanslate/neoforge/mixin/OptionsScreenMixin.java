@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.neoforge.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.neoforge.NyanslateNeoForge;
 import com.dragonmeow.nyanslate.neoforge.TranslationConfigScreen;
 
@@ -26,11 +27,16 @@ public abstract class OptionsScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("TAIL"))
     private void nyanslate$addToggle(CallbackInfo ci) {
-        if (NyanslateNeoForge.service() == null) return;
-        Button button = Button.builder(
-                Component.translatable("screen.nyanslate.options"),
-                b -> this.minecraft.setScreen(new TranslationConfigScreen((OptionsScreen) (Object) this))
-        ).bounds(6, 6, 110, 20).build();
-        this.addRenderableWidget(button);
+        if (!HookGuard.enter("OptionsScreen.addToggle")) return;
+        try {
+            if (NyanslateNeoForge.service() == null) return;
+            Button button = Button.builder(
+                    Component.translatable("screen.nyanslate.options"),
+                    b -> this.minecraft.setScreen(new TranslationConfigScreen((OptionsScreen) (Object) this))
+            ).bounds(6, 6, 110, 20).build();
+            this.addRenderableWidget(button);
+        } catch (Throwable guardError) {
+            HookGuard.fail("OptionsScreen.addToggle", guardError);
+        }
     }
 }

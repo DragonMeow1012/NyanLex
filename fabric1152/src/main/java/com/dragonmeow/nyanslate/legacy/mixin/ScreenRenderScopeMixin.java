@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.legacy.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.legacy.LegacyTranslatorMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -19,8 +20,13 @@ public abstract class ScreenRenderScopeMixin {
             require = 1)
     private void nyanslate$beforeScreenRender(float tickDelta, long startTime, boolean tick,
                                                  CallbackInfo ci) {
-        Minecraft minecraft = Minecraft.getInstance();
-        LegacyTranslatorMod.beginScreenRender(minecraft == null ? null : minecraft.screen);
+        HookGuard.enterSticky("ScreenRenderScope.beforeScreenRender");
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            LegacyTranslatorMod.beginScreenRender(minecraft == null ? null : minecraft.screen);
+        } catch (Throwable guardError) {
+            HookGuard.fail("ScreenRenderScope.beforeScreenRender", guardError);
+        }
     }
 
     @Inject(
@@ -32,6 +38,11 @@ public abstract class ScreenRenderScopeMixin {
             require = 1)
     private void nyanslate$afterScreenRender(float tickDelta, long startTime, boolean tick,
                                                 CallbackInfo ci) {
-        LegacyTranslatorMod.endScreenRender();
+        HookGuard.enterSticky("ScreenRenderScope.afterScreenRender");
+        try {
+            LegacyTranslatorMod.endScreenRender();
+        } catch (Throwable guardError) {
+            HookGuard.fail("ScreenRenderScope.afterScreenRender", guardError);
+        }
     }
 }

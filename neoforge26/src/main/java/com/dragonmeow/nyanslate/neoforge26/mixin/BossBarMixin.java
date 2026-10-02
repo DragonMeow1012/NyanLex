@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.neoforge26.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.neoforge26.Neo26TextStyle;
 import com.dragonmeow.nyanslate.neoforge26.NyanslateNeoForge26;
 import com.dragonmeow.nyanslate.service.TranslationService;
@@ -29,29 +30,34 @@ public abstract class BossBarMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)V"),
             require = 0)
     private void nyanslate$bossBar(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int color) {
-        TranslationService service = NyanslateNeoForge26.service();
-        if (service != null && text != null) {
-            Component translated = Neo26TextStyle.renderTranslated("bossBar", text, service::translateBossBar);
-            if (translated != null) {
-                int center = x + font.width(text) / 2; // original name's centre
-                List<Component> lines = Neo26TextStyle.splitLines(translated);
-                if (lines.size() <= 1) {
-                    com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(
-                            () -> g.text(font, translated, center - font.width(translated) / 2, y, color));
+        if (!HookGuard.enter("BossBar.bossBar")) return;
+        try {
+            TranslationService service = NyanslateNeoForge26.service();
+            if (service != null && text != null) {
+                Component translated = Neo26TextStyle.renderTranslated("bossBar", text, service::translateBossBar);
+                if (translated != null) {
+                    int center = x + font.width(text) / 2; // original name's centre
+                    List<Component> lines = Neo26TextStyle.splitLines(translated);
+                    if (lines.size() <= 1) {
+                        com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(
+                                () -> g.text(font, translated, center - font.width(translated) / 2, y, color));
+                        return;
+                    }
+                    // 原文＋翻譯: stack the lines upward above the bar (原文 on top, 譯文 at the baseline).
+                    int n = lines.size();
+                    for (int k = 0; k < n; k++) {
+                        Component line = lines.get(k);
+                        int ly = y - (n - 1 - k) * Neo26TextStyle.STACK_LINE_GAP;
+                        com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(
+                                () -> g.text(font, line, center - font.width(line) / 2, ly, color));
+                    }
                     return;
                 }
-                // 原文＋翻譯: stack the lines upward above the bar (原文 on top, 譯文 at the baseline).
-                int n = lines.size();
-                for (int k = 0; k < n; k++) {
-                    Component line = lines.get(k);
-                    int ly = y - (n - 1 - k) * Neo26TextStyle.STACK_LINE_GAP;
-                    com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(
-                            () -> g.text(font, line, center - font.width(line) / 2, ly, color));
-                }
-                return;
             }
+            com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(
+                    () -> g.text(font, text, x, y, color));
+        } catch (Throwable guardError) {
+            HookGuard.fail("BossBar.bossBar", guardError);
         }
-        com.dragonmeow.nyanslate.translate.InternalRenderGuard.run(
-                () -> g.text(font, text, x, y, color));
     }
 }

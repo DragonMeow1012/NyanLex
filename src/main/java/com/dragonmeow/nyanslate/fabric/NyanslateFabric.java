@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.cache.DynamicNamespacedStore;
 import com.dragonmeow.nyanslate.cache.LanguageFileStore;
 import com.dragonmeow.nyanslate.cache.NamespacedStore;
@@ -1076,6 +1077,7 @@ public final class NyanslateFabric implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        NyanslateHooks.register(LOGGER::info, LOGGER::warn);
         configPath = FabricLoader.getInstance().getConfigDir().resolve(MOD_ID + ".json");
         LegacyDataMigration.migrate(configPath.getParent(), LOGGER::info);
         config = TranslatorConfig.load(configPath);
@@ -1269,34 +1271,34 @@ public final class NyanslateFabric implements ClientModInitializer {
     }
 
     private void registerEvents() {
-        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
-            if (overlay) return handleOverlayMessage(message);
-            return !translateAndInject(message, null);
-        });
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> HookGuard.call("event.allowGame",
+                () -> overlay ? handleOverlayMessage(message) : !translateAndInject(message, null),
+                () -> true));
         ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-                !translateAndInject(message, params));
+                HookGuard.call("event.allowChat", () -> !translateAndInject(message, params), () -> true));
 
         ResourceLocation tooltipPhase = ResourceLocation.tryParse(MOD_ID + ":tooltip_translation");
         ItemTooltipCallback.EVENT.addPhaseOrdering(Event.DEFAULT_PHASE, tooltipPhase);
         ItemTooltipCallback.EVENT.register(tooltipPhase,
-                (stack, context, type, lines) -> onItemTooltip(stack, lines));
+                (stack, context, type, lines) -> HookGuard.run("event.itemTooltip", () -> onItemTooltip(stack, lines)));
 
-        ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
+        ClientTickEvents.END_CLIENT_TICK.register(
+                tickClient -> HookGuard.run("event.clientTick", () -> onClientTick(tickClient)));
 
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
             ScreenKeyboardEvents.afterKeyPress(screen).register(
-                    (scr, key, scancode, mods) -> onScreenKey(scr, key, scancode));
-            ScreenEvents.beforeRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> {
-                SCREEN_RENDER_STACK.get().push(scr);
-            });
-            ScreenEvents.afterRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> {
+                    (scr, key, scancode, mods) ->
+                            HookGuard.run("event.screenKey", () -> onScreenKey(scr, key, scancode)));
+            ScreenEvents.beforeRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> HookGuard.runSticky("event.screenBeforeRender",
+                    () -> SCREEN_RENDER_STACK.get().push(scr)));
+            ScreenEvents.afterRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> HookGuard.runSticky("event.screenAfterRender", () -> {
                 finishScreenCapture(scr);
                 java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen> stack =
                         SCREEN_RENDER_STACK.get();
                 if (!stack.isEmpty() && stack.peek() == scr) stack.pop();
                 else stack.removeFirstOccurrence(scr);
                 if (stack.isEmpty()) SCREEN_RENDER_STACK.remove();
-            });
+            }));
         });
     }
 

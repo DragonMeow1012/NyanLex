@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric.NyanslateFabric;
 import com.dragonmeow.nyanslate.translate.InternalRenderGuard;
 import com.dragonmeow.nyanslate.translate.TranslationDebugLog;
@@ -21,11 +22,16 @@ import java.util.List;
 public abstract class DebugHudMixin {
     @Inject(method = "render", at = @At("TAIL"), require = 0)
     private void nyanslate$debug(GuiGraphics graphics, DeltaTracker tracker, CallbackInfo ci) {
-        var config = NyanslateFabric.config();
-        var log = NyanslateFabric.debugLog();
-        Minecraft mc = Minecraft.getInstance();
-        if (config == null || !config.debugTranslationOverlay || log == null || mc.font == null) return;
-        InternalRenderGuard.run(() -> draw(graphics, mc.font, log.snapshot(8)));
+        if (!HookGuard.enter("DebugHud.debug")) return;
+        try {
+            var config = NyanslateFabric.config();
+            var log = NyanslateFabric.debugLog();
+            Minecraft mc = Minecraft.getInstance();
+            if (config == null || !config.debugTranslationOverlay || log == null || mc.font == null) return;
+            InternalRenderGuard.run(() -> draw(graphics, mc.font, log.snapshot(8)));
+        } catch (Throwable guardError) {
+            HookGuard.fail("DebugHud.debug", guardError);
+        }
     }
 
     private static void draw(GuiGraphics graphics, Font font, List<TranslationDebugLog.Entry> entries) {
@@ -38,7 +44,7 @@ public abstract class DebugHudMixin {
         String tokenLine = "TOKENS total " + tokens.totalTokens()
                 + " | in " + tokens.inputTokens() + " (cached " + tokens.cachedInputTokens() + ")"
                 + " | out " + tokens.outputTokens() + " (reason " + tokens.reasoningOutputTokens() + ")"
-                + " | req " + tokens.requests();
+                + " | req " + tokens.requests() + " | " + com.dragonmeow.nyanslate.translate.HookHealth.shortSummary();
         graphics.drawString(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);
 
         int row = y + 22;

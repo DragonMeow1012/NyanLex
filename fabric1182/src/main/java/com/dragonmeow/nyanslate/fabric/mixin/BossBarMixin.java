@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric.FabricTextStyle;
 import com.dragonmeow.nyanslate.fabric.NyanslateFabric;
 import com.dragonmeow.nyanslate.service.TranslationService;
@@ -17,19 +18,25 @@ public abstract class BossBarMixin {
     @Redirect(method = "render", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/gui/Font;drawShadow(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/network/chat/Component;FFI)I"), require = 0)
     private int nyanslate$boss(Font font, PoseStack pose, Component text, float x, float y, int color) {
-        TranslationService service = NyanslateFabric.service();
-        Component translated = service == null || text == null ? null
-                : FabricTextStyle.renderTranslated("bossBar", text, service::translateBossBar);
-        if (translated == null) return InternalRenderGuard.call(() -> font.drawShadow(pose, text, x, y, color));
-        float center = x + font.width(text) / 2f;
-        java.util.List<Component> lines = FabricTextStyle.splitLines(translated);
-        int ret = 0;
-        for (int i = 0; i < lines.size(); i++) {
-            Component line = lines.get(i);
-            float ly = y - (lines.size() - 1 - i) * FabricTextStyle.STACK_LINE_GAP;
-            ret = InternalRenderGuard.call(() -> font.drawShadow(pose, line,
-                    center - font.width(line) / 2f, ly, color));
+        if (!HookGuard.enter("BossBar.boss")) return font.drawShadow(pose, text, x, y, color);
+        try {
+            TranslationService service = NyanslateFabric.service();
+            Component translated = service == null || text == null ? null
+                    : FabricTextStyle.renderTranslated("bossBar", text, service::translateBossBar);
+            if (translated == null) return InternalRenderGuard.call(() -> font.drawShadow(pose, text, x, y, color));
+            float center = x + font.width(text) / 2f;
+            java.util.List<Component> lines = FabricTextStyle.splitLines(translated);
+            int ret = 0;
+            for (int i = 0; i < lines.size(); i++) {
+                Component line = lines.get(i);
+                float ly = y - (lines.size() - 1 - i) * FabricTextStyle.STACK_LINE_GAP;
+                ret = InternalRenderGuard.call(() -> font.drawShadow(pose, line,
+                        center - font.width(line) / 2f, ly, color));
+            }
+            return ret;
+        } catch (Throwable guardError) {
+            HookGuard.fail("BossBar.boss", guardError);
+            return font.drawShadow(pose, text, x, y, color);
         }
-        return ret;
     }
 }

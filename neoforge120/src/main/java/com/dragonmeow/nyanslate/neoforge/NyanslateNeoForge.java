@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.neoforge;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.cache.DynamicNamespacedStore;
 import com.dragonmeow.nyanslate.cache.LanguageFileStore;
 import com.dragonmeow.nyanslate.cache.NamespacedStore;
@@ -942,6 +943,7 @@ public final class NyanslateNeoForge {
     }
 
     public NyanslateNeoForge() {
+        NyanslateHooks.register(LOGGER::info, LOGGER::warn);
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         configPath = FMLPaths.CONFIGDIR.get().resolve(MOD_ID + ".json");
         LegacyDataMigration.migrate(configPath.getParent(), LOGGER::info);
@@ -1149,12 +1151,17 @@ public final class NyanslateNeoForge {
 
     @SubscribeEvent
     public void onRenderNameTag(net.minecraftforge.client.event.RenderNameTagEvent event) {
-        if (service == null) return;
-        Component current = event.getContent();
-        if (current == null) return;
-        // Entity path (R7 guard): TAB-listed real players keep their original tag.
-        Component translated = nameTag(event.getEntity(), current);
-        if (translated != null && translated != current) event.setContent(translated);
+        if (!HookGuard.enter("event.onRenderNameTag")) return;
+        try {
+            if (service == null) return;
+            Component current = event.getContent();
+            if (current == null) return;
+            // Entity path (R7 guard): TAB-listed real players keep their original tag.
+            Component translated = nameTag(event.getEntity(), current);
+            if (translated != null && translated != current) event.setContent(translated);
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onRenderNameTag", guardError);
+        }
     }
 
     /**
@@ -1291,113 +1298,118 @@ public final class NyanslateNeoForge {
 
     @SubscribeEvent
     public void onClientChat(ClientChatReceivedEvent event) {
-        if (service == null) return;
-        observeChatDeliveryContext(Minecraft.getInstance());
-        if (event instanceof ClientChatReceivedEvent.System sys && sys.isOverlay()) {
-            if (handleOverlayMessage(event.getMessage())) event.setCanceled(true);
-            return;
-        }
-        DisplayMode mode = service.chatMode();
-        if (mode == DisplayMode.ORIGINAL_ONLY) return;
-        Component message = NeoTextStyle.resolveLegacyCodes(event.getMessage());
-        if (message == null) return;
-        List<Component> hardLines = NeoTextStyle.splitStyledLines(message);
-        if (hardLines.size() > 1) {
-            boolean isSystem = event instanceof ClientChatReceivedEvent.System;
-            boolean canceled;
-            if (activeBlock != null
-                    || (isSystem && NeoTextStyle.isSeparatorText(hardLines.get(0).getString()))) {
-                List<Component> remainder = new ArrayList<>();
-                for (Component line : hardLines) {
-                    if (!handleAnnouncementBlock(line, isSystem, mode, line.getString())) {
-                        remainder.add(line);
+        if (!HookGuard.enter("event.onClientChat")) return;
+        try {
+            if (service == null) return;
+            observeChatDeliveryContext(Minecraft.getInstance());
+            if (event instanceof ClientChatReceivedEvent.System sys && sys.isOverlay()) {
+                if (handleOverlayMessage(event.getMessage())) event.setCanceled(true);
+                return;
+            }
+            DisplayMode mode = service.chatMode();
+            if (mode == DisplayMode.ORIGINAL_ONLY) return;
+            Component message = NeoTextStyle.resolveLegacyCodes(event.getMessage());
+            if (message == null) return;
+            List<Component> hardLines = NeoTextStyle.splitStyledLines(message);
+            if (hardLines.size() > 1) {
+                boolean isSystem = event instanceof ClientChatReceivedEvent.System;
+                boolean canceled;
+                if (activeBlock != null
+                        || (isSystem && NeoTextStyle.isSeparatorText(hardLines.get(0).getString()))) {
+                    List<Component> remainder = new ArrayList<>();
+                    for (Component line : hardLines) {
+                        if (!handleAnnouncementBlock(line, isSystem, mode, line.getString())) {
+                            remainder.add(line);
+                        }
+                    }
+                    canceled = true;
+                    if (!remainder.isEmpty()) {
+                        translateHardLineMessage(NeoTextStyle.joinStyledLines(remainder), mode, remainder);
+                    }
+                } else {
+                    canceled = translateHardLineMessage(message, mode, hardLines);
+                }
+                if (canceled) event.setCanceled(true);
+                return;
+            }
+            String full = message.getString();
+            if (handleAnnouncementBlock(message, event instanceof ClientChatReceivedEvent.System, mode, full)) {
+                event.setCanceled(true);
+                return;
+            }
+            boolean framedByServer = trackServerFrame(full);
+
+            // Translate only the content after the rank/name separator (» etc.); keep the prefix.
+            int contentStart = com.dragonmeow.nyanslate.translate.ChatSegmenter.contentStart(full);
+            boolean hasPrefix = contentStart > 0 && contentStart < full.length();
+            String content = hasPrefix ? full.substring(contentStart) : full;
+            if (!service.wantsChatTranslation(content)) {
+                // Untranslatable line (e.g. the "-----" frame of a Hypixel announcement): if
+                // translatable lines are still queued ahead of it, it must WAIT IN LINE as a
+                // ready pass-through — otherwise the frame prints before its framed content.
+                if (chatDelivery.isQueueEmpty()) return;
+                event.setCanceled(true);
+                Component reinjected = message;
+                if (NeoTextStyle.isSeparatorText(full)) {
+                    // Compact-chat mods merge identical frame lines and delete the earlier one;
+                    // alternate an invisible trailing space so the two frames never compare equal.
+                    separatorSalt = (separatorSalt + 1) & 3;
+                    if (separatorSalt > 0) {
+                        reinjected = message.copy().append(Component.literal(" ".repeat(separatorSalt)));
                     }
                 }
-                canceled = true;
-                if (!remainder.isEmpty()) {
-                    translateHardLineMessage(NeoTextStyle.joinStyledLines(remainder), mode, remainder);
-                }
-            } else {
-                canceled = translateHardLineMessage(message, mode, hardLines);
+                PendingChat passThrough = queueChat(reinjected);
+                passThrough.mode = DisplayMode.ORIGINAL_ONLY;
+                chatDelivery.markReady(passThrough);
+                Minecraft mc = Minecraft.getInstance();
+                if (mc != null && mc.gui != null) flushReadyChats(mc);
+                return;
             }
-            if (canceled) event.setCanceled(true);
-            return;
-        }
-        String full = message.getString();
-        if (handleAnnouncementBlock(message, event instanceof ClientChatReceivedEvent.System, mode, full)) {
-            event.setCanceled(true);
-            return;
-        }
-        boolean framedByServer = trackServerFrame(full);
 
-        // Translate only the content after the rank/name separator (» etc.); keep the prefix.
-        int contentStart = com.dragonmeow.nyanslate.translate.ChatSegmenter.contentStart(full);
-        boolean hasPrefix = contentStart > 0 && contentStart < full.length();
-        String content = hasPrefix ? full.substring(contentStart) : full;
-        if (!service.wantsChatTranslation(content)) {
-            // Untranslatable line (e.g. the "-----" frame of a Hypixel announcement): if
-            // translatable lines are still queued ahead of it, it must WAIT IN LINE as a
-            // ready pass-through — otherwise the frame prints before its framed content.
-            if (chatDelivery.isQueueEmpty()) return;
+            final int cs = contentStart;
+            final boolean prefix = hasPrefix;
+            // Cancel the vanilla line; we re-inject the (translated) line once ready, falling
+            // back to the original if it can't be translated so nothing is ever lost.
             event.setCanceled(true);
-            Component reinjected = message;
-            if (NeoTextStyle.isSeparatorText(full)) {
-                // Compact-chat mods merge identical frame lines and delete the earlier one;
-                // alternate an invisible trailing space so the two frames never compare equal.
-                separatorSalt = (separatorSalt + 1) & 3;
-                if (separatorSalt > 0) {
-                    reinjected = message.copy().append(Component.literal(" ".repeat(separatorSalt)));
-                }
+
+            // Colour ONLY from the message content (after any rank/name prefix), so the prefix's
+            // colours are never smeared onto the translation.
+            PendingChat pending = queueChat(message);
+            pending.mode = mode;
+            pending.framedByServer = framedByServer;
+            pending.configureRecovery(1, config.aiChat);
+
+            NeoTextStyle.MarkedChat marked = NeoTextStyle.markChatContent(message, cs);
+            if (marked.marked()) {
+                // Word-level colour preservation: wrap each style run in an invisible ⟦CS#⟧
+                // marker, translate the WHOLE line in one request (better grammar, fewer
+                // requests than per-segment), then map every marker region back to its style
+                // — a red word stays red on its translated word. Click/hover ride along on
+                // the segment styles.
+                service.translateChatAsyncDetailed(marked.text(), result -> {
+                    String translated = result.text();
+                        completeChat(pending.id, pending.epoch, mode, translated == null ? null : () -> {
+                            Font font = Minecraft.getInstance().font;
+                            var core = NeoTextStyle.markedChat(message, cs, translated, marked);
+                            if (prefix) {
+                                return Component.empty()
+                                        .append(NeoTextStyle.takePrefix(message, cs))
+                                        .append(core);
+                            }
+                            return core; // core keeps the original's leading whitespace: starts aligned
+                        }, 0, result.finalResult());
+                });
+                return;
             }
-            PendingChat passThrough = queueChat(reinjected);
-            passThrough.mode = DisplayMode.ORIGINAL_ONLY;
-            chatDelivery.markReady(passThrough);
-            Minecraft mc = Minecraft.getInstance();
-            if (mc != null && mc.gui != null) flushReadyChats(mc);
-            return;
-        }
-
-        final int cs = contentStart;
-        final boolean prefix = hasPrefix;
-        // Cancel the vanilla line; we re-inject the (translated) line once ready, falling
-        // back to the original if it can't be translated so nothing is ever lost.
-        event.setCanceled(true);
-
-        // Colour ONLY from the message content (after any rank/name prefix), so the prefix's
-        // colours are never smeared onto the translation.
-        PendingChat pending = queueChat(message);
-        pending.mode = mode;
-        pending.framedByServer = framedByServer;
-        pending.configureRecovery(1, config.aiChat);
-
-        NeoTextStyle.MarkedChat marked = NeoTextStyle.markChatContent(message, cs);
-        if (marked.marked()) {
-            // Word-level colour preservation: wrap each style run in an invisible ⟦CS#⟧
-            // marker, translate the WHOLE line in one request (better grammar, fewer
-            // requests than per-segment), then map every marker region back to its style
-            // — a red word stays red on its translated word. Click/hover ride along on
-            // the segment styles.
-            service.translateChatAsyncDetailed(marked.text(), result -> {
+            service.translateChatAsyncDetailed(content, result -> {
                 String translated = result.text();
-                    completeChat(pending.id, pending.epoch, mode, translated == null ? null : () -> {
-                        Font font = Minecraft.getInstance().font;
-                        var core = NeoTextStyle.markedChat(message, cs, translated, marked);
-                        if (prefix) {
-                            return Component.empty()
-                                    .append(NeoTextStyle.takePrefix(message, cs))
-                                    .append(core);
-                        }
-                        return core; // core keeps the original's leading whitespace: starts aligned
-                    }, 0, result.finalResult());
+                    completeChat(pending.id, pending.epoch, mode, translated == null ? null
+                            : () -> chatLine(Minecraft.getInstance().font, message, prefix, cs, translated),
+                            0, result.finalResult());
             });
-            return;
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onClientChat", guardError);
         }
-        service.translateChatAsyncDetailed(content, result -> {
-            String translated = result.text();
-                completeChat(pending.id, pending.epoch, mode, translated == null ? null
-                        : () -> chatLine(Minecraft.getInstance().font, message, prefix, cs, translated),
-                        0, result.finalResult());
-        });
     }
 
     private boolean translateHardLineMessage(Component original, DisplayMode mode,
@@ -1736,111 +1748,116 @@ public final class NyanslateNeoForge {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onItemTooltip(ItemTooltipEvent event) {
-        if (service == null) return;
-        if (tooltipProbeDepth.get() > 0) return;
-        Minecraft tooltipClient = Minecraft.getInstance();
-        if (event.getEntity() == null || tooltipClient == null
-                || !tooltipClient.isSameThread()
-                || !renderingCurrentScreen(tooltipClient)) return;
-        if (TOOLTIP_CAPTURE.active(tooltipClient.screen)) {
-            for (String source : tooltipParagraphPlan(event.getItemStack(), event.getToolTip(), NeoTextStyle::paragraphRequestText).sources()) {
-                TOOLTIP_CAPTURE.record(tooltipClient.screen, source);
-            }
-            return;
-        }
-        DisplayMode mode = service.tooltipMode();
-        if (mode == DisplayMode.ORIGINAL_ONLY) return;
-        List<Component> lines = event.getToolTip();
-        if (lines.isEmpty()) return;
-
-        int n = lines.size();
-        ItemStack stack = event.getItemStack();
-        TooltipParagraphPlan plan = tooltipParagraphPlan(
-                stack, lines, NeoTextStyle::paragraphRequestText);
-        lastTooltipStack = stack;
-        lastTooltipParagraphSources = plan.sources();
-        lastTooltipScreen = tooltipClient.screen;
-        lastTooltipAtMs = System.currentTimeMillis();
-        registerItemEntity(stack);
-        service.warmTooltipBatch(plan.sources());
-        boolean[] paragraphReady = tooltipParagraphReadiness(lines, plan);
-        if (stack != null && !stack.isEmpty()) {
-            service.reconcileItemNameWithTooltip(
-                    stack.getHoverName().getString(), plan.plainSources());
-        }
-
-        Font font = Minecraft.getInstance().font;
-        List<Component> out = new ArrayList<>(n);
-        boolean completeBothBlock = mode == DisplayMode.BOTH
-                && tooltipTranslationRegionReady(lines, plan, paragraphReady);
-        List<Component> appended = completeBothBlock ? new ArrayList<>() : null;
-        boolean anyTranslated = false;
-        int maxLen = 0;
-        boolean originalEndsWithSeparator = false;
-        for (int i = 0; i < n; ) {
-            int end = plan.groupEnd()[i];
-            Component line = lines.get(i);
-            if (line == null) {
-                out.add(line); // keep the list shape other mods may rely on
-                if (appended != null) appended.add(Component.empty());
-                i = end + 1;
-                continue;
-            }
-            if (mode == DisplayMode.BOTH) {
-                for (int k = i; k <= end; k++) {
-                    String text = lines.get(k) == null ? "" : lines.get(k).getString();
-                    maxLen = Math.max(maxLen, text.length());
-                    if (!text.isBlank()) originalEndsWithSeparator = NeoTextStyle.isSeparatorText(text);
+        if (!HookGuard.enter("event.onItemTooltip")) return;
+        try {
+            if (service == null) return;
+            if (tooltipProbeDepth.get() > 0) return;
+            Minecraft tooltipClient = Minecraft.getInstance();
+            if (event.getEntity() == null || tooltipClient == null
+                    || !tooltipClient.isSameThread()
+                    || !renderingCurrentScreen(tooltipClient)) return;
+            if (TOOLTIP_CAPTURE.active(tooltipClient.screen)) {
+                for (String source : tooltipParagraphPlan(event.getItemStack(), event.getToolTip(), NeoTextStyle::paragraphRequestText).sources()) {
+                    TOOLTIP_CAPTURE.record(tooltipClient.screen, source);
                 }
+                return;
             }
-            if (!paragraphReady[i]) {
-                out.addAll(lines.subList(i, end + 1));
-                i = end + 1;
-                continue;
+            DisplayMode mode = service.tooltipMode();
+            if (mode == DisplayMode.ORIGINAL_ONLY) return;
+            List<Component> lines = event.getToolTip();
+            if (lines.isEmpty()) return;
+
+            int n = lines.size();
+            ItemStack stack = event.getItemStack();
+            TooltipParagraphPlan plan = tooltipParagraphPlan(
+                    stack, lines, NeoTextStyle::paragraphRequestText);
+            lastTooltipStack = stack;
+            lastTooltipParagraphSources = plan.sources();
+            lastTooltipScreen = tooltipClient.screen;
+            lastTooltipAtMs = System.currentTimeMillis();
+            registerItemEntity(stack);
+            service.warmTooltipBatch(plan.sources());
+            boolean[] paragraphReady = tooltipParagraphReadiness(lines, plan);
+            if (stack != null && !stack.isEmpty()) {
+                service.reconcileItemNameWithTooltip(
+                        stack.getHoverName().getString(), plan.plainSources());
             }
-            List<Component> group = new ArrayList<>(lines.subList(i, end + 1));
-            if (end > i) {
-                List<Component> translated = NeoTextStyle.renderTranslatedParagraph(group, service::translateItemLine, font);
-                if (translated == null) out.addAll(group);
-                else if (mode == DisplayMode.BOTH) {
-                    out.addAll(group);
+
+            Font font = Minecraft.getInstance().font;
+            List<Component> out = new ArrayList<>(n);
+            boolean completeBothBlock = mode == DisplayMode.BOTH
+                    && tooltipTranslationRegionReady(lines, plan, paragraphReady);
+            List<Component> appended = completeBothBlock ? new ArrayList<>() : null;
+            boolean anyTranslated = false;
+            int maxLen = 0;
+            boolean originalEndsWithSeparator = false;
+            for (int i = 0; i < n; ) {
+                int end = plan.groupEnd()[i];
+                Component line = lines.get(i);
+                if (line == null) {
+                    out.add(line); // keep the list shape other mods may rely on
+                    if (appended != null) appended.add(Component.empty());
+                    i = end + 1;
+                    continue;
+                }
+                if (mode == DisplayMode.BOTH) {
+                    for (int k = i; k <= end; k++) {
+                        String text = lines.get(k) == null ? "" : lines.get(k).getString();
+                        maxLen = Math.max(maxLen, text.length());
+                        if (!text.isBlank()) originalEndsWithSeparator = NeoTextStyle.isSeparatorText(text);
+                    }
+                }
+                if (!paragraphReady[i]) {
+                    out.addAll(lines.subList(i, end + 1));
+                    i = end + 1;
+                    continue;
+                }
+                List<Component> group = new ArrayList<>(lines.subList(i, end + 1));
+                if (end > i) {
+                    List<Component> translated = NeoTextStyle.renderTranslatedParagraph(group, service::translateItemLine, font);
+                    if (translated == null) out.addAll(group);
+                    else if (mode == DisplayMode.BOTH) {
+                        out.addAll(group);
+                        if (appended != null) {
+                            anyTranslated = true;
+                            appended.addAll(translated);
+                            for (Component t : translated) maxLen = Math.max(maxLen, t.getString().length());
+                        }
+                    } else out.addAll(translated);
+                    if (mode == DisplayMode.BOTH && appended != null && translated == null) {
+                        appendTooltipShape(appended, group);
+                    }
+                    i = end + 1;
+                    continue;
+                }
+                Component translated = NeoTextStyle.renderTranslated("tooltip", line, service::translateItemLine);
+                if (translated == null) {
+                    out.add(line);
+                    if (appended != null) appendTooltipShape(appended, group);
+                } else if (mode == DisplayMode.BOTH) {
+                    out.add(line);
                     if (appended != null) {
                         anyTranslated = true;
-                        appended.addAll(translated);
-                        for (Component t : translated) maxLen = Math.max(maxLen, t.getString().length());
+                        appended.add(translated);
+                        maxLen = Math.max(maxLen, translated.getString().length());
                     }
-                } else out.addAll(translated);
-                if (mode == DisplayMode.BOTH && appended != null && translated == null) {
-                    appendTooltipShape(appended, group);
+                } else {
+                    out.add(translated);
                 }
                 i = end + 1;
-                continue;
             }
-            Component translated = NeoTextStyle.renderTranslated("tooltip", line, service::translateItemLine);
-            if (translated == null) {
-                out.add(line);
-                if (appended != null) appendTooltipShape(appended, group);
-            } else if (mode == DisplayMode.BOTH) {
-                out.add(line);
-                if (appended != null) {
-                    anyTranslated = true;
-                    appended.add(translated);
-                    maxLen = Math.max(maxLen, translated.getString().length());
+            if (appended != null && anyTranslated) {
+                if (!originalEndsWithSeparator) {
+                    out.add(NeoTextStyle.separatorLine(maxLen));   // top divider
                 }
-            } else {
-                out.add(translated);
+                out.addAll(appended);
+                out.add(NeoTextStyle.separatorLine(maxLen));   // bottom divider
             }
-            i = end + 1;
+            lines.clear();
+            lines.addAll(out);
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onItemTooltip", guardError);
         }
-        if (appended != null && anyTranslated) {
-            if (!originalEndsWithSeparator) {
-                out.add(NeoTextStyle.separatorLine(maxLen));   // top divider
-            }
-            out.addAll(appended);
-            out.add(NeoTextStyle.separatorLine(maxLen));   // bottom divider
-        }
-        lines.clear();
-        lines.addAll(out);
     }
 
     private boolean[] tooltipParagraphReadiness(
@@ -1939,83 +1956,103 @@ public final class NyanslateNeoForge {
 
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        maybeStartHubStartupCheck(Minecraft.getInstance());
-        maybeMigrateKeybinds(Minecraft.getInstance());
-        // Recover if a cancelled/failed render did not deliver the matching Post event.
-        SCREEN_RENDER_STACK.remove();
-        refreshScannedScreen();
-        if (modeKey != null) {
-            while (modeKey.consumeClick()) {
-                Minecraft mc = Minecraft.getInstance();
-                if (mc != null) mc.setScreen(new TranslationConfigScreen(mc.screen));
+        if (!HookGuard.enter("event.onClientTick")) return;
+        try {
+            if (event.phase != TickEvent.Phase.END) return;
+            maybeStartHubStartupCheck(Minecraft.getInstance());
+            maybeMigrateKeybinds(Minecraft.getInstance());
+            // Recover if a cancelled/failed render did not deliver the matching Post event.
+            SCREEN_RENDER_STACK.remove();
+            refreshScannedScreen();
+            if (modeKey != null) {
+                while (modeKey.consumeClick()) {
+                    Minecraft mc = Minecraft.getInstance();
+                    if (mc != null) mc.setScreen(new TranslationConfigScreen(mc.screen));
+                }
             }
-        }
-        if (retranslateKey != null && service != null) {
-            // In-world (no screen open): re-translate the held item. The container-screen
-            // case is handled by onScreenKeyPressed (key binds don't tick while a screen is open).
-            while (retranslateKey.consumeClick()) {
-                Minecraft mc = Minecraft.getInstance();
-                if (ScreenTextInput.isTyping(mc == null ? null : mc.screen)) continue;
-                if (mc != null && mc.player != null) retranslateItem(mc.player.getMainHandItem());
+            if (retranslateKey != null && service != null) {
+                // In-world (no screen open): re-translate the held item. The container-screen
+                // case is handled by onScreenKeyPressed (key binds don't tick while a screen is open).
+                while (retranslateKey.consumeClick()) {
+                    Minecraft mc = Minecraft.getInstance();
+                    if (ScreenTextInput.isTyping(mc == null ? null : mc.screen)) continue;
+                    if (mc != null && mc.player != null) retranslateItem(mc.player.getMainHandItem());
+                }
             }
-        }
-        if (toggleKey != null && service != null) {
-            while (toggleKey.consumeClick()) {
-                Minecraft mc = Minecraft.getInstance();
-                if (ScreenTextInput.isTyping(mc == null ? null : mc.screen)) continue;
-                flipShowOriginal();
+            if (toggleKey != null && service != null) {
+                while (toggleKey.consumeClick()) {
+                    Minecraft mc = Minecraft.getInstance();
+                    if (ScreenTextInput.isTyping(mc == null ? null : mc.screen)) continue;
+                    flipShowOriginal();
+                }
             }
+            syncGameLanguage(Minecraft.getInstance());
+            observeChatDeliveryContext(Minecraft.getInstance());
+            // Flush the coalesced per-frame translation buffer once per tick: a screen full of
+            // text becomes ONE batched request rather than dozens (fewer AI / Google requests).
+            refreshOnlineNames(Minecraft.getInstance());
+            if (service != null) service.flushBatches();
+            expireStaleBlock();
+            flushStaleChats(Minecraft.getInstance());
+            warmVisibleHudItems(Minecraft.getInstance());
+            // R12 (user clarification of R10): the OPEN container is "the current page" — its
+            // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
+            // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
+            warmOpenContainerItems(Minecraft.getInstance());
+            warmLoadoutItems(Minecraft.getInstance());
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onClientTick", guardError);
         }
-        syncGameLanguage(Minecraft.getInstance());
-        observeChatDeliveryContext(Minecraft.getInstance());
-        // Flush the coalesced per-frame translation buffer once per tick: a screen full of
-        // text becomes ONE batched request rather than dozens (fewer AI / Google requests).
-        refreshOnlineNames(Minecraft.getInstance());
-        if (service != null) service.flushBatches();
-        expireStaleBlock();
-        flushStaleChats(Minecraft.getInstance());
-        warmVisibleHudItems(Minecraft.getInstance());
-        // R12 (user clarification of R10): the OPEN container is "the current page" — its
-        // slots pre-translate; queued batches are kept even if the screen closes ("排隊項
-        // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
-        warmOpenContainerItems(Minecraft.getInstance());
-        warmLoadoutItems(Minecraft.getInstance());
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onScreenRenderPre(net.minecraftforge.client.event.ScreenEvent.Render.Pre event) {
-        SCREEN_RENDER_STACK.get().push(event.getScreen());
+        HookGuard.enterSticky("event.onScreenRenderPre");
+        try {
+            SCREEN_RENDER_STACK.get().push(event.getScreen());
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onScreenRenderPre", guardError);
+        }
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onScreenRenderPost(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {
-        finishScreenCapture(event.getScreen());
-        java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen> stack =
-                SCREEN_RENDER_STACK.get();
-        if (!stack.isEmpty() && stack.peek() == event.getScreen()) stack.pop();
-        else stack.removeFirstOccurrence(event.getScreen());
-        if (stack.isEmpty()) SCREEN_RENDER_STACK.remove();
+        HookGuard.enterSticky("event.onScreenRenderPost");
+        try {
+            finishScreenCapture(event.getScreen());
+            java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen> stack =
+                    SCREEN_RENDER_STACK.get();
+            if (!stack.isEmpty() && stack.peek() == event.getScreen()) stack.pop();
+            else stack.removeFirstOccurrence(event.getScreen());
+            if (stack.isEmpty()) SCREEN_RENDER_STACK.remove();
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onScreenRenderPost", guardError);
+        }
     }
 
     @SubscribeEvent
     public void onScreenKeyPressed(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre event) {
-        if (service == null) return;
-        // Keys typed into a text input (chat, signs, books, search and settings boxes) are
-        // text, not hotkeys.
-        if (ScreenTextInput.isTyping(event.getScreen())) return;
-        // Key binds don't tick while a screen is showing, so handle our screen hotkeys here.
-        if (toggleKey != null && toggleKey.matches(event.getKeyCode(), event.getScanCode())) {
-            flipShowOriginal();
-            return;
-        }
-        if (retranslateKey != null && retranslateKey.matches(event.getKeyCode(), event.getScanCode())) {
-            retranslatePointedItem(event.getScreen());
-            return;
-        }
-        if (screenScanKey != null && screenScanKey.matches(event.getKeyCode(), event.getScanCode())) {
-            // Translate every button/option of the open screen (e.g. a quest book).
-            scanAndTranslateScreen(event.getScreen());
+        if (!HookGuard.enter("event.onScreenKeyPressed")) return;
+        try {
+            if (service == null) return;
+            // Keys typed into a text input (chat, signs, books, search and settings boxes) are
+            // text, not hotkeys.
+            if (ScreenTextInput.isTyping(event.getScreen())) return;
+            // Key binds don't tick while a screen is showing, so handle our screen hotkeys here.
+            if (toggleKey != null && toggleKey.matches(event.getKeyCode(), event.getScanCode())) {
+                flipShowOriginal();
+                return;
+            }
+            if (retranslateKey != null && retranslateKey.matches(event.getKeyCode(), event.getScanCode())) {
+                retranslatePointedItem(event.getScreen());
+                return;
+            }
+            if (screenScanKey != null && screenScanKey.matches(event.getKeyCode(), event.getScanCode())) {
+                // Translate every button/option of the open screen (e.g. a quest book).
+                scanAndTranslateScreen(event.getScreen());
+            }
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onScreenKeyPressed", guardError);
         }
     }
 

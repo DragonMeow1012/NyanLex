@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.neoforge26.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.neoforge26.NyanslateNeoForge26;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -28,13 +29,25 @@ public abstract class GuiGraphicsTextMixin {
             method = "text(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private String nyanslate$screenTextString(String text) {
-        return NyanslateNeoForge26.screenText(text);
+        if (!HookGuard.enter("GuiGraphicsText.screenTextString")) return text;
+        try {
+            return NyanslateNeoForge26.screenText(text);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiGraphicsText.screenTextString", guardError);
+            return text;
+        }
     }
 
     @ModifyVariable(
             method = "text(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private Component nyanslate$screenTextComponent(Component text) {
-        return NyanslateNeoForge26.screenText(text);
+        if (!HookGuard.enter("GuiGraphicsText.screenTextComponent")) return text;
+        try {
+            return NyanslateNeoForge26.screenText(text);
+        } catch (Throwable guardError) {
+            HookGuard.fail("GuiGraphicsText.screenTextComponent", guardError);
+            return text;
+        }
     }
 }

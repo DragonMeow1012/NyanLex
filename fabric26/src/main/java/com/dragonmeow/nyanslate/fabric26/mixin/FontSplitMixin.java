@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanslate.fabric26.mixin;
 
+import com.dragonmeow.nyanslate.translate.HookGuard;
 import com.dragonmeow.nyanslate.fabric26.NyanslateFabric26;
 
 import net.minecraft.client.gui.Font;
@@ -26,6 +27,12 @@ public abstract class FontSplitMixin {
             method = "split(Lnet/minecraft/network/chat/FormattedText;I)Ljava/util/List;",
             at = @At("HEAD"), argsOnly = true, require = 0)
     private FormattedText nyanslate$translateBeforeWrap(FormattedText text) {
-        return NyanslateFabric26.screenText(text);
+        if (!HookGuard.enter("FontSplit.translateBeforeWrap")) return text;
+        try {
+            return NyanslateFabric26.screenText(text);
+        } catch (Throwable guardError) {
+            HookGuard.fail("FontSplit.translateBeforeWrap", guardError);
+            return text;
+        }
     }
 }
