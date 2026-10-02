@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
  * Real-cache export/import round-trip replay for the GitHub AI translation-hub pipeline
  * (hub core + {@link HubExportTool} + {@link ChatLineClassifier}): exercises the exact
  * same export the author runs for the first hub publish ({@code --server hypixel.net
- * --drop-chat}) against a COPY of a real player's AI cache, writes a temporary repository,
+ * (chat excluded by default)}) against a COPY of a real player's AI cache, writes a temporary repository,
  * imports it back through the production {@link HubDownloader}/{@link HubLocalCache}
  * classes with an inline fake {@link HttpTransport}, and checks the import is byte-for-byte
  * faithful to what was exported. It also prints an aggregate content-type audit and saves
@@ -162,7 +162,7 @@ public final class HubExportImportReplay {
     }
 
     private int execute() throws Exception {
-        // ---- 1. classify() once (with --drop-chat semantics): corpus audit + samples ----
+        // ---- 1. classify() once (chat dropped, the default): corpus audit + samples ----
         List<HubExportTool.ClassifiedRow> withDropChat = HubExportTool.classify(work, LANG, true);
         auditContentTypes(withDropChat);
         collectSamples(withDropChat);
@@ -178,7 +178,7 @@ public final class HubExportImportReplay {
         try (PrintStream captured = new PrintStream(exportLog, true, "UTF-8")) {
             exportResult = HubExportTool.run(new String[] {
                     "--cache-dir", work.toString(), "--lang", LANG, "--server", SERVER_HOST,
-                    "--out", repo.toString(), "--merge-index", "--drop-chat",
+                    "--out", repo.toString(), "--merge-index",
             }, captured);
         }
         System.out.print(exportLog.toString("UTF-8"));

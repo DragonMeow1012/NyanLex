@@ -60,7 +60,10 @@ import java.util.stream.Stream;
  *   --out &lt;dir&gt;         repository root to write into (the translation-hub/ directory
  *                        itself: HubPaths' relative paths resolve under it directly)
  *   --merge-index        also update &lt;out&gt;/index.json with this file's new stats
- *   --drop-chat          run {@link ChatLineClassifier} and skip rows it calls chat
+ *   --include-chat       publish chat-shaped rows too. OFF by default: chat is other players'
+ *                        messages and must not go into the public repository, so
+ *                        {@link ChatLineClassifier} runs and its rows are skipped unless this
+ *                        flag is given. (--drop-chat is still accepted and is now the default.)
  *   --max-rows &lt;n&gt;       optional, 1..{@value #MAX_ROWS}: when the kept-row count still
  *                        exceeds it, deterministically truncate to the first {@code n} rows
  *                        sorted by key (never a silent/implicit truncation — the caller
@@ -86,7 +89,7 @@ import java.util.stream.Stream;
  * every {@code ⟦n⟧} slot in the row by position — see that class's javadoc); only when
  * conversion itself fails (the exact name text cannot be located in the value, or a raw
  * name is somehow still present afterward) is the row rejected, regardless of
- * {@code --drop-chat}. Real data found this matters: a legacy cache entry written before a
+ * chat dropping (the default). Real data found this matters: a legacy cache entry written before a
  * given frame existed (or before {@code NameMasker} covered its shape) can carry an
  * unmasked name — e.g. an old Auction House "Seller: &lt;name&gt;" tooltip row — that
  * current masking would otherwise catch. (2026-10-01: originally this row was discarded
@@ -145,7 +148,7 @@ public final class HubExportTool {
         public static Options parse(String[] args) throws UsageException {
             String cacheDir = null, lang = null, server = null, modpack = null, mod = null, outDir = null;
             String maxRowsText = null;
-            boolean mergeIndex = false, dropChat = false;
+            boolean mergeIndex = false, dropChat = true;
             int i = 0;
             while (i < args.length) {
                 String arg = args[i];
@@ -158,6 +161,7 @@ public final class HubExportTool {
                     case "--out": outDir = value(args, ++i, arg); break;
                     case "--merge-index": mergeIndex = true; break;
                     case "--drop-chat": dropChat = true; break;
+                    case "--include-chat": dropChat = false; break;
                     case "--max-rows": maxRowsText = value(args, ++i, arg); break;
                     default: throw new UsageException("Unknown argument: " + arg);
                 }
@@ -230,7 +234,7 @@ public final class HubExportTool {
      *  that truncation left out. {@code rejectedUnmaskedName} counts rows whose raw-name
      *  gate ({@link UnmaskedNameConverter}) FAILED to convert (the exact name text could
      *  not be located in the value, or a raw name was somehow still present after
-     *  conversion) — this gate runs regardless of {@code --drop-chat}.
+     *  conversion) — this gate runs regardless of chat dropping.
      *  {@code nameConversionSucceeded} counts rows where the gate instead found and
      *  successfully masked a raw name in place (these still flow through every normal
      *  downstream check — validation, foreign-url, chat — on their CONVERTED text, so a

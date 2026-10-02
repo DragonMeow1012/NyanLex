@@ -77,7 +77,8 @@ processResources {
 // Author-only: export validated AI-cache rows into translation-hub/ repository files.
 // See com.dragonmeow.nyanlex.hub.tool.HubExportTool for the full flag reference. Example:
 //   gradle hubExport -PcacheDir="C:\Users\me\AppData\Roaming\.minecraft\config" -Plang=zh-TW \
-//           -Pserver=hypixel.net -Pout=translation-hub -PmergeIndex -PdropChat
+//           -Pserver=hypixel.net -Pout=translation-hub -PmergeIndex
+//   Chat rows are excluded by default; add -PincludeChat only to deliberately publish chat.
 tasks.register('hubExport', JavaExec) {
     group = 'translation hub'
     description = 'Author-only: export validated AI-cache rows into translation-hub/ repository files.'
@@ -93,7 +94,7 @@ tasks.register('hubExport', JavaExec) {
         if (project.hasProperty('mod')) cliArgs += ['--mod', project.property('mod').toString()]
         if (project.hasProperty('out')) cliArgs += ['--out', project.property('out').toString()]
         if (project.hasProperty('mergeIndex')) cliArgs += ['--merge-index']
-        if (project.hasProperty('dropChat')) cliArgs += ['--drop-chat']
+        if (project.hasProperty('includeChat')) cliArgs += ['--include-chat']
         if (project.hasProperty('maxRows')) cliArgs += ['--max-rows', project.property('maxRows').toString()]
         args = cliArgs
     }
