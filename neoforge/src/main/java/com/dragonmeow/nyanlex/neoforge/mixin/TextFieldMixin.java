@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  *
  * <p>The whole Component is translated at {@code setText} <em>before</em> it is wrapped, so the
  * description is one coherent translation that the widget then wraps normally (styling intact).
- * Gated by {@code screenTextMode} via {@link NyanLexFabric#screenText(Component)}.</p>
+ * Gated by {@code screenTextMode} via {@link NyanLexNeoForge#screenText(Component)}.</p>
  */
 @Pseudo
 @Mixin(targets = TextFieldMixin.TARGET)

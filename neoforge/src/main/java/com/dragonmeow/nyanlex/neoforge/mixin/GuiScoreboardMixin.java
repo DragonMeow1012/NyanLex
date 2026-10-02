@@ -206,6 +206,7 @@ public abstract class GuiScoreboardMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)I"),
             require = 0)
     private int nyanlex$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {
+        if (NyanLexNeoForge.isOwnFeedback(text)) return g.drawStringWithBackdrop(font, text, x, y, width, color);
         if (!HookGuard.enter("GuiScoreboard.actionBar")) return g.drawStringWithBackdrop(font, text, x, y, width, color);
         try {
             TranslationService s = NyanLexNeoForge.service();
