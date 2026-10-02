@@ -18,7 +18,7 @@ import java.util.Locale;
 /**
  * "全物品預熱" scan-and-confirm screen. It never sends anything itself: it dry-runs the
  * item registry (a few tooltips per tick) to count items, cached items and the estimated
- * requests/tokens, shows the cost/429/Hypixel warning and only then lets the player
+ * requests/tokens, shows the cost/429 warning and only then lets the player
  * start the background run ({@link ItemWarmupProgressScreen}). Under machine translation
  * it only explains why the feature is unavailable.
  */
