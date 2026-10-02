@@ -10,11 +10,11 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * Declarative description of the six settings pages (一般／顯示／AI／請求／倉庫／進階).
+ * Declarative description of the six settings pages (一般／顯示／翻譯服務／翻譯包／我的翻譯／進階).
  * Every entry names its lang keys, its type and how it reads/writes
  * {@link TranslatorConfig}; the Minecraft glue only renders the table. Inverted storage
- * ({@code disableGoogleFallbackForAi}, {@code hubStartupPromptDisabled}) and the master
- * switch semantics live here, so every glue shows the same "on = allowed" wording.
+ * ({@code disableGoogleFallbackForAi}) and the master switch semantics live here, so every
+ * glue shows the same "on = allowed" wording. Each setting id appears on exactly one page.
  */
 public final class SettingsCatalog {
 
@@ -32,15 +32,10 @@ public final class SettingsCatalog {
     /** Lang keys used by the screen frame itself (not tied to one entry). */
     public static final String KEY_TITLE = "nyanlex.settings.frame_title";
     public static final String KEY_HELP_BUTTON = "nyanlex.settings.help_button";
-    public static final String KEY_HELP_BUTTON_TIP = "nyanlex.settings.help_button.tip";
-    public static final String KEY_DEFAULT_TIP = "nyanlex.settings.default_tip";
-    public static final String KEY_TIP_PREFIX = "nyanlex.settings.tip_prefix";
     public static final String KEY_NEEDS_AI = "nyanlex.settings.needs_ai";
     public static final String KEY_CONFIRM_YES = "nyanlex.settings.confirm.yes";
     public static final String KEY_CLEAR_CACHE_CONFIRM_TITLE = "nyanlex.settings.clear_cache.confirm.title";
     public static final String KEY_CLEAR_CACHE_CONFIRM_MESSAGE = "nyanlex.settings.clear_cache.confirm.message";
-    public static final String KEY_CLEAR_HUB_CONFIRM_TITLE = "nyanlex.settings.clear_hub.confirm.title";
-    public static final String KEY_CLEAR_HUB_CONFIRM_MESSAGE = "nyanlex.settings.clear_hub.confirm.message";
 
     /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value). */
     public static final int[] COOLDOWN_STEPS = {0, 1000, 2000, 4000, 6000, 8000, 10000};
@@ -48,6 +43,11 @@ public final class SettingsCatalog {
     public static final int[] BATCH_WINDOW_STEPS = {0, 1000, 2000, 3000, 5000, 8000, 10000};
 
     private static final Map<SettingsPage, List<SettingsRow>> ROWS = build();
+
+    /** Display-page entries that are not a per-surface row (the do-not-translate list). */
+    private static final List<SettingEntry> DISPLAY_EXTRAS = List.of(
+            sub(SettingsPage.DISPLAY, "dnt", SettingAction.OPEN_DO_NOT_TRANSLATE, null)
+                    .withKeywords("dnt", "do not translate", "glossary", "詞彙", "词汇"));
 
     private SettingsCatalog() {}
 
@@ -60,15 +60,12 @@ public final class SettingsCatalog {
     public static List<SettingEntry> entries(SettingsPage page) {
         List<SettingEntry> out = new ArrayList<>();
         for (SettingsRow row : ROWS.get(page)) out.addAll(row.entries());
+        if (page == SettingsPage.DISPLAY) out.addAll(DISPLAY_EXTRAS);
         return out;
     }
 
-    /** Rows for a one-column layout: every entry on its own row. */
-    public static List<SettingsRow> singleColumnRows(SettingsPage page) {
-        List<SettingsRow> out = new ArrayList<>();
-        for (SettingEntry entry : entries(page)) out.add(new SettingsRow(entry));
-        return out;
-    }
+    /** The display-page entries that sit below the per-surface rows. */
+    public static List<SettingEntry> displayExtras() { return DISPLAY_EXTRAS; }
 
     public static List<SettingEntry> allEntries() {
         List<SettingEntry> out = new ArrayList<>();
@@ -111,13 +108,10 @@ public final class SettingsCatalog {
     /** Every lang key the catalog and the screen frame rely on (for the lang-file test). */
     public static List<String> allLangKeys() {
         List<String> keys = new ArrayList<>(List.of(
-                KEY_TITLE, KEY_HELP_BUTTON, KEY_HELP_BUTTON_TIP, KEY_DEFAULT_TIP,
-                KEY_TIP_PREFIX, KEY_NEEDS_AI, KEY_CONFIRM_YES,
+                KEY_TITLE, KEY_HELP_BUTTON, KEY_NEEDS_AI, KEY_CONFIRM_YES,
                 KEY_CLEAR_CACHE_CONFIRM_TITLE, KEY_CLEAR_CACHE_CONFIRM_MESSAGE,
-                KEY_CLEAR_HUB_CONFIRM_TITLE, KEY_CLEAR_HUB_CONFIRM_MESSAGE,
                 STATE_ON, STATE_OFF, STATE_ORIGINAL, STATE_BOTH, STATE_TRANSLATION, STATE_MACHINE,
                 STATE_AI, STATE_ORDERED, STATE_READY_FIRST, UNIT_SECONDS));
-        for (SettingsPage page : SettingsPage.values()) keys.add(page.tabKey());
         for (SettingEntry entry : allEntries()) {
             if (!keys.contains(entry.labelKey())) keys.add(entry.labelKey());
             if (!keys.contains(entry.tipKey())) keys.add(entry.tipKey());
@@ -131,14 +125,18 @@ public final class SettingsCatalog {
         Map<SettingsPage, List<SettingsRow>> map = new EnumMap<>(SettingsPage.class);
 
         map.put(SettingsPage.GENERAL, pairs(List.of(
+                action(SettingsPage.GENERAL, "quick", SettingAction.OPEN_QUICK_SETUP)
+                        .withKeywords("setup", "wizard", "first run", "懶人包", "首次", "问卷", "問卷"),
                 toggle(SettingsPage.GENERAL, "master", c -> c.translationRequestsEnabled,
                         c -> onOff(c.translationRequestsEnabled),
                         c -> c.translationRequestsEnabled = !c.translationRequestsEnabled,
                         SettingEntry.SideEffect.CLEAR_PENDING)
-                        .withKeywords("master", "master switch", "總開關", "总开关", "privacy", "隱私", "隐私"),
+                        .withKeywords("online", "master", "master switch", "總開關", "总开关", "privacy",
+                                "隱私", "隐私", "送出", "請求", "请求", "request"),
                 sub(SettingsPage.GENERAL, "language", SettingAction.OPEN_LANGUAGE,
                         SettingsCatalog::languageState),
-                sub(SettingsPage.GENERAL, "keybind", SettingAction.OPEN_KEYBINDS, null))));
+                sub(SettingsPage.GENERAL, "keybind", SettingAction.OPEN_KEYBINDS, null)
+                        .withKeywords("key", "hotkey", "shortcut", "按鍵", "按键"))));
 
         List<SettingsRow> display = new ArrayList<>();
         display.add(surface("chat", c -> c.chatMode, (c, m) -> c.chatMode = m,
@@ -161,53 +159,52 @@ public final class SettingsCatalog {
                 c -> c.aiScreenText, (c, v) -> c.aiScreenText = v));
         map.put(SettingsPage.DISPLAY, List.copyOf(display));
 
-        map.put(SettingsPage.AI, pairs(List.of(
-                sub(SettingsPage.AI, "ai", SettingAction.OPEN_AI, null),
+        map.put(SettingsPage.SERVICE, pairs(List.of(
+                sub(SettingsPage.SERVICE, "ai", SettingAction.OPEN_AI, null)
+                        .withKeywords("api", "key", "gemini", "openai", "deepseek", "chatgpt", "codex", "金鑰", "金钥"),
                 // Stored inverted (disableGoogleFallbackForAi); shown as "on = fallback allowed".
-                toggle(SettingsPage.AI, "ai_fallback", c -> !c.disableGoogleFallbackForAi,
+                toggle(SettingsPage.SERVICE, "ai_fallback", c -> !c.disableGoogleFallbackForAi,
                         c -> onOff(!c.disableGoogleFallbackForAi),
                         c -> c.disableGoogleFallbackForAi = !c.disableGoogleFallbackForAi,
                         SettingEntry.SideEffect.NONE))));
 
-        map.put(SettingsPage.REQUESTS, pairs(List.of(
-                cycle(SettingsPage.REQUESTS, "cooldown",
+        map.put(SettingsPage.PACK, pairs(List.of(
+                action(SettingsPage.PACK, "download", SettingAction.HUB_DOWNLOAD)
+                        .withKeywords("hub", "repository", "repo", "download", "倉庫", "仓库", "翻譯檔", "翻译文件",
+                                "社群", "community"))));
+
+        map.put(SettingsPage.MINE, pairs(List.of(
+                action(SettingsPage.MINE, "warmup", SettingAction.OPEN_ITEM_WARMUP)
+                        .withKeywords("warm", "warmup", "preload", "item", "預熱", "预热", "全物品"),
+                toggle(SettingsPage.MINE, "warmup_hud", c -> c.itemWarmupHud,
+                        c -> onOff(c.itemWarmupHud),
+                        c -> c.itemWarmupHud = !c.itemWarmupHud,
+                        SettingEntry.SideEffect.NONE)
+                        .withKeywords("progress", "hud", "corner", "預熱", "预热"),
+                action(SettingsPage.MINE, "export", SettingAction.EXPORT_TRANSLATIONS)
+                        .withKeywords("backup", "備份", "备份", "翻譯檔", "翻译文件"),
+                action(SettingsPage.MINE, "import", SettingAction.IMPORT_TRANSLATIONS)
+                        .withKeywords("restore", "翻譯檔", "翻译文件"),
+                action(SettingsPage.MINE, "clear_cache", SettingAction.CLEAR_CACHE)
+                        .withKeywords("cache", "快取", "缓存", "clear"))));
+
+        map.put(SettingsPage.ADVANCED, pairs(List.of(
+                cycle(SettingsPage.ADVANCED, "cooldown",
                         c -> millisState(c.requestCooldownMs),
                         c -> c.requestCooldownMs = nextStep(COOLDOWN_STEPS, c.requestCooldownMs))
                         .withSlider(new SettingEntry.Slider(COOLDOWN_STEPS,
                                 c -> c.requestCooldownMs, (c, v) -> c.requestCooldownMs = v))
-                        .withKeywords("cooldown", "429", "rate limit", "delay"),
-                cycle(SettingsPage.REQUESTS, "batch",
+                        .withKeywords("cooldown", "429", "rate limit", "delay", "請求", "请求"),
+                cycle(SettingsPage.ADVANCED, "batch",
                         c -> millisState(c.batchWindowMs),
                         c -> c.batchWindowMs = nextStep(BATCH_WINDOW_STEPS, c.batchWindowMs))
                         .withSlider(new SettingEntry.Slider(BATCH_WINDOW_STEPS,
                                 c -> c.batchWindowMs, (c, v) -> c.batchWindowMs = v))
-                        .withKeywords("batch", "window"),
-                toggle(SettingsPage.REQUESTS, "chat_delivery", c -> c.deliverChatTranslationsInOrder,
+                        .withKeywords("batch", "window", "請求", "请求"),
+                toggle(SettingsPage.ADVANCED, "chat_delivery", c -> c.deliverChatTranslationsInOrder,
                         c -> StateText.of(c.deliverChatTranslationsInOrder ? STATE_ORDERED : STATE_READY_FIRST),
                         c -> c.deliverChatTranslationsInOrder = !c.deliverChatTranslationsInOrder,
                         SettingEntry.SideEffect.NONE),
-                sub(SettingsPage.REQUESTS, "dnt", SettingAction.OPEN_DO_NOT_TRANSLATE, null),
-                action(SettingsPage.REQUESTS, "warmup", SettingAction.OPEN_ITEM_WARMUP)
-                        .withKeywords("warm", "warmup", "preload", "item"),
-                toggle(SettingsPage.REQUESTS, "warmup_hud", c -> c.itemWarmupHud,
-                        c -> onOff(c.itemWarmupHud),
-                        c -> c.itemWarmupHud = !c.itemWarmupHud,
-                        SettingEntry.SideEffect.NONE))));
-
-        map.put(SettingsPage.HUB, pairs(List.of(
-                // Stored inverted (hubStartupPromptDisabled); shown as "on = check at startup".
-                toggle(SettingsPage.HUB, "startup", c -> !c.hubStartupPromptDisabled,
-                        c -> onOff(!c.hubStartupPromptDisabled),
-                        c -> c.hubStartupPromptDisabled = !c.hubStartupPromptDisabled,
-                        SettingEntry.SideEffect.NONE),
-                action(SettingsPage.HUB, "download", SettingAction.HUB_DOWNLOAD),
-                action(SettingsPage.HUB, "open_repo", SettingAction.HUB_OPEN_REPO),
-                action(SettingsPage.HUB, "clear_hub", SettingAction.HUB_CLEAR))));
-
-        map.put(SettingsPage.ADVANCED, pairs(List.of(
-                action(SettingsPage.ADVANCED, "export", SettingAction.EXPORT_TRANSLATIONS),
-                action(SettingsPage.ADVANCED, "import", SettingAction.IMPORT_TRANSLATIONS),
-                action(SettingsPage.ADVANCED, "clear_cache", SettingAction.CLEAR_CACHE),
                 toggle(SettingsPage.ADVANCED, "debug", c -> c.debugTranslationOverlay,
                         c -> onOff(c.debugTranslationOverlay),
                         c -> c.debugTranslationOverlay = !c.debugTranslationOverlay,

@@ -306,6 +306,10 @@ public abstract class HudMixin {
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)V"),
             require = 0)
     private void nyanlex$actionBar(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int width, int color) {
+        if (NyanLexFabric26.isOwnFeedback(text)) {
+            com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
+            return;
+        }
         if (!HookGuard.enter("Hud.actionBar")) {
             com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));
             return;

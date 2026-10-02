@@ -158,13 +158,11 @@ public final class TranslatorConfig {
     public boolean settingsIntroSeen = false;
 
     /**
-     * When {@code true}, the loader skips the once-per-launch startup check (fetching
-     * {@code index.json} to see whether any installed mod has a hub translation) and
-     * makes no network call at all until the player explicitly presses the hub download
-     * button. Default {@code false} (the startup check runs once per launch unless the
-     * player opts out, e.g. via "不再顯示" on the prompt or a settings toggle).
+     * Legacy: the startup check for translation packs no longer exists. A config file that
+     * still carries this key is read without error and the value is ignored; it is never
+     * written back ({@code transient}). Kept only so older loader glue keeps compiling.
      */
-    public boolean hubStartupPromptDisabled = false;
+    public transient boolean hubStartupPromptDisabled = false;
 
     /** All-item warm-up (AI engine only, off by default). */
     public boolean itemWarmupEnabled = false;

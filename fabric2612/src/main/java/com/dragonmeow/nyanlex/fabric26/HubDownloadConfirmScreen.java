@@ -68,7 +68,7 @@ public final class HubDownloadConfirmScreen extends Screen {
         if (plan.isEmpty()) {
             int w = Math.min(200, this.width - 40);
             this.addRenderableWidget(Button.builder(
-                    Component.translatable("screen.nyanlex.hub.confirm.back"),
+                    Component.translatable("screen.nyanlex.hub.confirm.cancel"),
                     b -> onClose()).bounds(centerX - w / 2, bottomY, w, 20).build());
             return;
         }
@@ -85,13 +85,13 @@ public final class HubDownloadConfirmScreen extends Screen {
                 .bounds(Math.min(this.width - 74, centerX + 110), bottomY - 24, 70, 20).build());
 
         boolean hasDownload = !plan.downloadable().isEmpty();
+        this.addRenderableWidget(Button.builder(
+                Component.translatable("screen.nyanlex.hub.confirm.cancel"),
+                b -> onClose()).bounds(centerX - 125, bottomY, 120, 20).build());
         Button downloadButton = this.addRenderableWidget(Button.builder(
                 Component.translatable("screen.nyanlex.hub.confirm.download"),
-                b -> onDownload()).bounds(centerX - 125, bottomY, 120, 20).build());
+                b -> onDownload()).bounds(centerX + 5, bottomY, 120, 20).build());
         downloadButton.active = hasDownload;
-        this.addRenderableWidget(Button.builder(
-                Component.translatable("screen.nyanlex.hub.confirm.back"),
-                b -> onClose()).bounds(centerX + 5, bottomY, 120, 20).build());
         updatePageButtons();
     }
 

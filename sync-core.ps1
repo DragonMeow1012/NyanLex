@@ -4,10 +4,13 @@
 # src\main\java\com\dragonmeow\nyanlex\{cache,config,service,style,translate}.
 #
 #   powershell -ExecutionPolicy Bypass -File .\sync-core.ps1
+#   powershell -ExecutionPolicy Bypass -File .\sync-core.ps1 -Check   # report drift only, change nothing
 #
 # Per-tree glue packages (fabric / fabric26 / neoforge) are never touched.
 # Fabric 1.17.1 shares this core through the explicit Java 16/Gson compatibility
 # rules below. The separate Java 8 ports remain manual ports.
+
+param([switch]$Check)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -16,6 +19,12 @@ $trees = 'fabric1182', 'fabric1194', 'fabric120', 'fabric12111',
     'fabric2612', 'fabric26', 'neoforge', 'neoforge120', 'neoforge26'
 
 $copied = 0
+
+# Copies a file, or, with -Check, only reports that it would have been copied.
+function Put-File {
+    param([string]$Source, [string]$Destination)
+    if (-not $Check) { Copy-Item -Force $Source $Destination }
+}
 foreach ($tree in $trees) {
     foreach ($pkg in $corePackages) {
         $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\$pkg"
@@ -28,7 +37,7 @@ foreach ($tree in $trees) {
             $dst = Join-Path $dstDir $f.Name
             if (-not (Test-Path $dst) -or
                 (Get-FileHash $f.FullName -Algorithm MD5).Hash -ne (Get-FileHash $dst -Algorithm MD5).Hash) {
-                Copy-Item -Force $f.FullName $dst
+                Put-File $f.FullName $dst
                 Write-Output "sync: $tree\$pkg\$($f.Name)"
                 $copied++
             }
@@ -112,7 +121,7 @@ foreach ($pkg in $corePackages) {
             $null
         }
         if ($null -eq $existing -or $existing -cne $content) {
-            [System.IO.File]::WriteAllText($dst, $content, $utf8NoBom)
+            if (-not $Check) { [System.IO.File]::WriteAllText($dst, $content, $utf8NoBom) }
             Write-Output "sync: fabric1171\$relative"
             $copied++
         }
@@ -140,6 +149,10 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     # SettingsCatalogTest reads the nyanlex.settings.* lang keys, which only the root and
     # fabric2612 trees ship (they are the only ones with the tabbed settings screen).
     if ($f.Name -in 'SettingsCatalogTest.java', 'SettingsModelTest.java', 'SettingsPanelTest.java') { continue }
+    # The questionnaire, the manual, the shared dialog card, the lang-file guard and the no-chat-message
+    # check belong to the new screens and sources of the root and fabric2612 trees.
+    if ($f.Name -in 'DialogPanelTest.java', 'QuickSetupPanelTest.java', 'ManualPanelTest.java',
+            'LangFilesTest.java', 'NoChatMessagesTest.java') { continue }
     $relative = $f.FullName.Substring($testSrcDir.Length + 1)
     # hub.tool is an author-only sub-package (HubExportTool/ChatLineClassifier/
     # UnmaskedNameConverter) this script deliberately never mirrors into any tree's
@@ -150,7 +163,7 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
     if (-not (Test-Path $dst) -or
         (Get-FileHash $f.FullName -Algorithm MD5).Hash -ne (Get-FileHash $dst -Algorithm MD5).Hash) {
-        Copy-Item -Force $f.FullName $dst
+        Put-File $f.FullName $dst
         Write-Output "sync: fabric12111\test\$relative"
         $copied++
     }
@@ -164,9 +177,14 @@ foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122
         $sharedSource = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\translate\$sharedName"
         $sharedFile = Join-Path $sharedDestination $sharedName
         if (-not (Test-Path $sharedFile) -or (Get-FileHash $sharedSource).Hash -ne (Get-FileHash $sharedFile).Hash) {
-            Copy-Item -Force $sharedSource $sharedFile
+            Put-File $sharedSource $sharedFile
             $copied++
         }
     }
 }
-Write-Output "done: $copied file(s) synced"
+if ($Check) {
+    Write-Output "check: $copied file(s) drifted"
+    if ($copied -gt 0) { exit 1 }
+} else {
+    Write-Output "done: $copied file(s) synced"
+}

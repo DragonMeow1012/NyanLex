@@ -2,8 +2,9 @@ package com.dragonmeow.nyanlex.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
-/** The texts and buttons of the first-start card and of the consent box (no Minecraft types). */
+/** The texts and buttons of the on-the-spot consent box and the names of the services text goes to (no Minecraft types). */
 public final class DialogContent {
 
     /** Localized text, {@code %s} filled from {@code args}. */
@@ -14,42 +15,52 @@ public final class DialogContent {
     public static final int CONSENT_CANCEL = 0;
     public static final int CONSENT_START = 1;
 
-    public static final int FIRST_LATER = 10;
-    public static final int FIRST_MACHINE = 11;
-    public static final int FIRST_AI = 12;
-    public static final int FIRST_CHANGE = 13;
-    public static final int FIRST_HUB = 14;
-    public static final int FIRST_PRIVACY = 15;
-
-    private static final int C_WARN = 0xFFFFD75E;
-    private static final int C_MUTED = 0xFFA4A9B8;
-    private static final int C_GOOD = 0xFF7FE08F;
-
     private DialogContent() {}
 
     /** Every lang key the dialogs use (for the lang-file test). */
     public static List<String> allLangKeys() {
         return List.of("nyanlex.ui.consent.title", "nyanlex.ui.consent.item", "nyanlex.ui.consent.screen",
-                "nyanlex.ui.consent.warmup", "nyanlex.ui.consent.unofficial", "nyanlex.ui.consent.stop",
-                "nyanlex.ui.consent.start", "nyanlex.ui.consent.cancel", "nyanlex.ui.engine.ai",
-                "nyanlex.ui.first.title", "nyanlex.ui.first.change", "nyanlex.ui.first.consent",
-                "nyanlex.ui.first.machine", "nyanlex.ui.first.ai", "nyanlex.ui.first.later",
-                "nyanlex.ui.first.hub", "nyanlex.ui.first.hub_btn", "nyanlex.ui.first.privacy",
+                "nyanlex.ui.consent.warmup", "nyanlex.ui.consent.stop",
+                "nyanlex.ui.consent.start", "nyanlex.ui.consent.cancel",
+                "nyanlex.ui.engine.ai", "nyanlex.ui.engine.codex", "nyanlex.ui.engine.custom",
                 "nyanlex.ui.privacy.status.on", "nyanlex.ui.privacy.status.off",
                 "message.nyanlex.tooltip_hint_start", "screen.nyanlex.provider.google",
                 "config.nyanlex.language.follow",
-                "nyanlex.settings.language");
+                "nyanlex.settings.language",
+                "nyanlex.narrate.choice", "nyanlex.narrate.chosen", "nyanlex.narrate.disabled");
     }
 
-    /** "Google 翻譯（非官方端點）" / "AI（model）": the service one surface sends to. */
+    /** The narrator phrases of every card-style dialog, from the lang files. */
+    public static DialogPanel.Narration narration(Lang lang) {
+        return new DialogPanel.Narration(lang.get("nyanlex.narrate.button", "%s"), lang.get("nyanlex.narrate.choice", "%s"),
+                lang.get("nyanlex.narrate.chosen", "%s"), lang.get("nyanlex.narrate.button", "%s"),
+                lang.get("nyanlex.narrate.disabled", "%s"));
+    }
+
+    /** "Google 翻譯（非官方端點）", "Gemini" ... or "ChatGPT（使用你的 Codex 額度）": the service one surface sends to. */
     public static String engineName(TranslatorConfig cfg, boolean ai, Lang lang) {
-        if (ai) return lang.get("nyanlex.ui.engine.ai", cfg.aiModel == null ? "" : cfg.aiModel);
+        if (ai) {
+            if (cfg.aiUseCodex) return lang.get("nyanlex.ui.engine.codex");
+            return lang.get("nyanlex.ui.engine.ai", aiProviderName(cfg, lang));
+        }
         MachineTranslationProvider provider = MachineTranslationProvider.fromId(cfg.machineTranslationProvider);
         // The Google label itself says "unofficial endpoint"; official APIs say "official API".
         return lang.get("screen.nyanlex.provider." + provider.id());
     }
 
-    /** Engine summary of all surfaces for the status row: one name, or AI and machine together. */
+    /** The AI service by its endpoint: Gemini, OpenAI, DeepSeek, or the host of a custom endpoint. */
+    public static String aiProviderName(TranslatorConfig cfg, Lang lang) {
+        String url = cfg.aiBaseUrl == null ? "" : cfg.aiBaseUrl.toLowerCase(Locale.ROOT);
+        if (url.contains("generativelanguage.googleapis.com")) return "Gemini";
+        if (url.contains("api.openai.com")) return "OpenAI";
+        if (url.contains("api.deepseek.com")) return "DeepSeek";
+        String host = url.replaceFirst("^[a-z]+://", "");
+        int cut = host.indexOf('/');
+        if (cut >= 0) host = host.substring(0, cut);
+        return host.isBlank() ? lang.get("nyanlex.ui.engine.custom") : host;
+    }
+
+    /** Service summary of all surfaces for the status row: one name, or AI and machine together. */
     public static String engineSummary(TranslatorConfig cfg, Lang lang) {
         boolean any = cfg.aiChat || cfg.aiTooltip || cfg.aiScoreboard || cfg.aiName || cfg.aiBossBar
                 || cfg.aiTitle || cfg.aiActionBar || cfg.aiBook || cfg.aiScreenText;
@@ -60,14 +71,14 @@ public final class DialogContent {
         return engineName(cfg, true, lang) + " / " + engineName(cfg, false, lang);
     }
 
-    /** "線上翻譯：開（Google）" or "線上翻譯：關，不會送出任何文字". */
+    /** "開：送往 Google 翻譯（非官方端點）" or "關：不會送出任何文字". */
     public static String onlineStatus(TranslatorConfig cfg, Lang lang) {
         return cfg.translationRequestsEnabled
                 ? lang.get("nyanlex.ui.privacy.status.on", engineSummary(cfg, lang))
                 : lang.get("nyanlex.ui.privacy.status.off");
     }
 
-    /** The on-the-spot box for a manual action while 線上翻譯 is off. */
+    /** The on-the-spot box for a manual action while 線上翻譯 is off: [取消] left, [開始翻譯] right, nothing focused. */
     public static DialogPanel.Content consent(ConsentGate.Kind kind, TranslatorConfig cfg, Lang lang) {
         String body;
         switch (kind) {
@@ -77,41 +88,10 @@ public final class DialogContent {
         }
         List<DialogPanel.Block> blocks = new ArrayList<>();
         blocks.add(new DialogPanel.Text(body, 0));
-        blocks.add(new DialogPanel.Text(lang.get("nyanlex.ui.consent.stop"), C_MUTED));
-        blocks.add(new DialogPanel.Row(List.of(
-                new DialogPanel.Btn(CONSENT_START, lang.get("nyanlex.ui.consent.start"), false),
-                new DialogPanel.Btn(CONSENT_CANCEL, lang.get("nyanlex.ui.consent.cancel"), false))));
-        return new DialogPanel.Content(lang.get("nyanlex.ui.consent.title"), blocks, CONSENT_CANCEL);
-    }
-
-    /**
-     * The first-start card. {@code hubCount} &lt;= 0 means no repository translations were found
-     * (or the check has not finished); {@code hubSize} is the preformatted total size.
-     */
-    public static DialogPanel.Content firstRun(TranslatorConfig cfg, int hubCount, String hubSize, Lang lang) {
-        String langState = cfg.followGameLanguage
-                ? lang.get("config.nyanlex.language.follow", cfg.targetLang) : cfg.targetLang;
-        List<DialogPanel.Block> blocks = new ArrayList<>();
-        blocks.add(new DialogPanel.Text(lang.get("nyanlex.settings.language", langState), 0));
-        blocks.add(new DialogPanel.Row(List.of(
-                new DialogPanel.Btn(FIRST_CHANGE, lang.get("nyanlex.ui.first.change"), false))));
-        blocks.add(new DialogPanel.Text(lang.get("nyanlex.ui.first.consent"), C_WARN));
-        blocks.add(new DialogPanel.Row(List.of(
-                new DialogPanel.Btn(FIRST_MACHINE, lang.get("nyanlex.ui.first.machine"), true),
-                new DialogPanel.Btn(FIRST_AI, lang.get("nyanlex.ui.first.ai"), false),
-                new DialogPanel.Btn(FIRST_LATER, lang.get("nyanlex.ui.first.later"), false))));
-        if (hubCount > 0) {
-            blocks.add(new DialogPanel.Text(lang.get("nyanlex.ui.first.hub", hubCount, hubSize), C_GOOD));
-            blocks.add(new DialogPanel.Row(List.of(
-                    new DialogPanel.Btn(FIRST_HUB, lang.get("nyanlex.ui.first.hub_btn"), false))));
-        }
-        blocks.add(new DialogPanel.Row(List.of(
-                new DialogPanel.Btn(FIRST_PRIVACY, lang.get("nyanlex.ui.first.privacy"), false))));
-        return new DialogPanel.Content(lang.get("nyanlex.ui.first.title"), blocks, FIRST_LATER);
-    }
-
-    /** True while the first-start card is due: never answered and 線上翻譯 still off. */
-    public static boolean firstRunDue(TranslatorConfig cfg) {
-        return cfg != null && !cfg.firstRunDone && !cfg.translationRequestsEnabled;
+        blocks.add(new DialogPanel.Text(lang.get("nyanlex.ui.consent.stop"), 0xFFA4A9B8));
+        return new DialogPanel.Content(lang.get("nyanlex.ui.consent.title"), blocks,
+                DialogPanel.Footer.of(new DialogPanel.Btn(CONSENT_CANCEL, lang.get("nyanlex.ui.consent.cancel")),
+                        new DialogPanel.Btn(CONSENT_START, lang.get("nyanlex.ui.consent.start"), true)),
+                CONSENT_CANCEL);
     }
 }

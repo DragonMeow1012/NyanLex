@@ -42,7 +42,7 @@ public final class HubDownloader {
      * launcher instance metadata — see
      * {@code design-hub-download.md} "啟動提示" 2026-10-01, "模組包在啟動時也可識別").
      * Returns an empty plan WITHOUT any network call when {@code disabled} is
-     * {@code true} (the player's own opt-out, {@code TranslatorConfig#hubStartupPromptDisabled}).
+     * {@code true} (the caller opted out of the check).
      */
     public HubPlan planStartupMods(boolean disabled, ModpackIdentity modpack, List<String> loadedModIds,
             String language, HubDownloadState state) throws IOException {

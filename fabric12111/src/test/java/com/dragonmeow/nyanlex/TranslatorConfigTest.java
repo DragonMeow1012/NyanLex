@@ -209,15 +209,15 @@ class TranslatorConfigTest {
 
     @Test
     void firstRunCardIsDueOnceForAFreshInstallOnly() {
-        assertTrue(com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(new TranslatorConfig()), "fresh install");
+        assertTrue(com.dragonmeow.nyanlex.config.QuickSetupPanel.firstStartDue(new TranslatorConfig()), "fresh install");
         // an existing user whose config already translates (key missing or true) never sees it
         TranslatorConfig old = TranslatorConfig.fromReader(new StringReader("{ \"targetLang\": \"zh-TW\" }"));
         assertTrue(old.translationRequestsEnabled);
         assertTrue(old.firstRunDone);
-        assertFalse(com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(old));
+        assertFalse(com.dragonmeow.nyanlex.config.QuickSetupPanel.firstStartDue(old));
         TranslatorConfig stored = TranslatorConfig.fromReader(new StringReader(
                 "{ \"translationRequestsEnabled\": true, \"chatMode\": \"BOTH\" }"));
-        assertFalse(com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(stored));
+        assertFalse(com.dragonmeow.nyanlex.config.QuickSetupPanel.firstStartDue(stored));
         // after any answer it is gone for good, also across a save and reload
         TranslatorConfig answered = new TranslatorConfig();
         answered.firstRunDone = true;
@@ -226,7 +226,7 @@ class TranslatorConfigTest {
         TranslatorConfig reloaded = TranslatorConfig.fromReader(new StringReader(out.toString()));
         assertTrue(reloaded.firstRunDone);
         assertFalse(reloaded.translationRequestsEnabled, "answering 'not now' keeps online translation off");
-        assertFalse(com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(reloaded));
+        assertFalse(com.dragonmeow.nyanlex.config.QuickSetupPanel.firstStartDue(reloaded));
         // a stored 'screenTextMode' of an existing config is kept
         assertEquals(DisplayMode.ORIGINAL_ONLY, TranslatorConfig.fromReader(new StringReader(
                 "{ \"screenTextMode\": \"ORIGINAL_ONLY\", \"translationRequestsEnabled\": false,"

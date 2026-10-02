@@ -8,5 +8,7 @@ public enum WarmupCommand {
     RESUME,
     STOP,
     /** Open the full progress screen. */
-    OPEN_PROGRESS
+    OPEN_PROGRESS,
+    /** The items are not on AI: take the player to 翻譯服務 (handled by the panel itself). */
+    OPEN_SERVICE
 }

@@ -18,22 +18,52 @@ public final class TranslationFileDialog {
     public interface Importer { int merge(TranslationFile file) throws Exception; }
     private TranslationFileDialog() { }
 
-    /** What an export or import ended with, as data, so each loader can word it in the player's language. */
-    public record Outcome(Kind kind, int count, int files, int totalFiles, int failedFiles, String first, String last) {
+    /**
+     * What an export or import ended with, as data, so each loader can word it in the player's language.
+     * (A plain class, not a record: this file is shared with the Java 8 loader trees.)
+     */
+    public static final class Outcome {
         public enum Kind { BUSY, EXPORTED, IMPORTED, FAILED }
+
+        private final Kind kind;
+        private final int count;
+        private final int files;
+        private final int totalFiles;
+        private final int failedFiles;
+        private final String first;
+        private final String last;
+
+        public Outcome(Kind kind, int count, int files, int totalFiles, int failedFiles, String first, String last) {
+            this.kind = kind;
+            this.count = count;
+            this.files = files;
+            this.totalFiles = totalFiles;
+            this.failedFiles = failedFiles;
+            this.first = first;
+            this.last = last;
+        }
+
+        public Kind kind() { return kind; }
+        public int count() { return count; }
+        public int files() { return files; }
+        public int totalFiles() { return totalFiles; }
+        public int failedFiles() { return failedFiles; }
+        public String first() { return first; }
+        public String last() { return last; }
 
         /** The English sentence (older loader glue shows this one as it is). */
         public String english() {
-            return switch (kind) {
-                case BUSY -> "A translation file operation is already running.";
-                case EXPORTED -> "Exported " + files + " translation file(s): " + first
-                        + (files > 1 ? " ... " + last : "");
-                case IMPORTED -> "Imported " + count + " translations from " + files + "/" + totalFiles
+            if (kind == Kind.BUSY) return "A translation file operation is already running.";
+            if (kind == Kind.EXPORTED) {
+                return "Exported " + files + " translation file(s): " + first + (files > 1 ? " ... " + last : "");
+            }
+            if (kind == Kind.IMPORTED) {
+                return "Imported " + count + " translations from " + files + "/" + totalFiles
                         + " files (existing translations kept)."
                         + (failedFiles == 0 ? "" : " Failed files: " + failedFiles
                         + ". Successful files remain imported. " + first);
-                case FAILED -> "Translation file: " + (first == null || first.isEmpty() ? "operation failed" : first);
-            };
+            }
+            return "Translation file: " + (first == null || first.isEmpty() ? "operation failed" : first);
         }
     }
 

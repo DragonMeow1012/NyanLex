@@ -14,7 +14,8 @@ import net.minecraft.network.chat.Component;
  * off. It is drawn on top of whatever screen is open and swallows mouse and keyboard input, so a
  * chest or server menu is never replaced, closed or sent a close packet; only when no screen is
  * open (R in the world) a bare {@link ConsentScreen} carries it. Nothing is sent unless the
- * player presses 開始翻譯; Enter does nothing and Escape cancels.
+ * player presses 開始翻譯. Nothing is focused when it opens: Tab and Shift+Tab move a frame, Enter or
+ * Space press the framed button, and Escape cancels.
  */
 final class ConsentOverlay {
     private static final ConsentGate GATE =
@@ -40,6 +41,7 @@ final class ConsentOverlay {
         if (mc == null) return;
         if (GATE.request(kind, action)) return;
         panel = new DialogPanel(mc.font::width);
+        panel.setNarration(DialogContent.narration(LANG));
         panel.set(DialogContent.consent(kind, NyanLexFabric26.config(), LANG));
         Screen current = mc.screen;
         if (current == null) {
@@ -70,9 +72,17 @@ final class ConsentOverlay {
         return true;
     }
 
-    static boolean keyPressed(Screen screen, int key) {
+    static boolean keyPressed(Screen screen, int key, int modifiers) {
         if (!covers(screen)) return false;
-        handle(panel.keyPressed(key));
+        handle(panel.keyPressed(key, (modifiers & org.lwjgl.glfw.GLFW.GLFW_MOD_SHIFT) != 0));
+        if (panel != null && panel.consumeNarrationRequest()) screen.triggerImmediateNarration(true);
+        return true;
+    }
+
+    /** Wheel over the box: it never reaches the screen underneath. */
+    static boolean mouseScrolled(Screen screen, double x, double y, double dy) {
+        if (!covers(screen)) return false;
+        panel.mouseScrolled((int) x, (int) y, dy);
         return true;
     }
 

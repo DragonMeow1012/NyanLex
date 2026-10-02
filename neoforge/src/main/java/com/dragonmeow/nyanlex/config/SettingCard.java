@@ -6,8 +6,6 @@ public final class SettingCard {
     public enum Kind {
         /** On/off switch. */
         TOGGLE,
-        /** Drop-down list of named values. */
-        DROPDOWN,
         /** Slider over discrete steps. */
         SLIDER,
         /** Button that opens a screen or runs an action. */
@@ -20,8 +18,8 @@ public final class SettingCard {
         INFO,
         /** One display surface: the mode cycle button and the engine (機翻／AI) button on the right. */
         SURFACE,
-        /** A highlighted text-only notice (the privacy card on 一般). */
-        NOTICE,
+        /** The one 線上翻譯 card on 一般: the switch with its status line and the 隱私說明 button. */
+        MASTER,
         /** The "全部項目" row: the same two buttons as a surface row, acting on every surface at once. */
         ALL
     }

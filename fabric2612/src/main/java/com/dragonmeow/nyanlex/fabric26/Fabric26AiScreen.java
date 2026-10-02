@@ -111,12 +111,12 @@ public final class Fabric26AiScreen extends Screen {
         int modelY = openAiPanel ? 126 : 112;
         int keysY = openAiPanel ? 158 : 154;
         int testY = openAiPanel ? 180 : 182;
-        this.baseUrlBox = new EditBox(this.font, x, baseY, FIELD_W, 20, Component.literal("Base URL"));
+        this.baseUrlBox = new EditBox(this.font, x, baseY, FIELD_W, 20, Component.translatable("screen.nyanlex.ai.endpoint"));
         this.baseUrlBox.setMaxLength(256);
         this.baseUrlBox.setValue(cfg.aiBaseUrl == null ? "" : cfg.aiBaseUrl);
         this.addRenderableWidget(this.baseUrlBox);
 
-        this.modelBox = new EditBox(this.font, x, modelY, FIELD_W, 20, Component.literal("Model"));
+        this.modelBox = new EditBox(this.font, x, modelY, FIELD_W, 20, Component.translatable("screen.nyanlex.ai.model"));
         this.modelBox.setMaxLength(128);
         this.modelBox.setValue(cfg.aiModel == null ? "" : cfg.aiModel);
         this.addRenderableWidget(this.modelBox);
@@ -471,13 +471,14 @@ public final class Fabric26AiScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        graphics.centeredText(this.font, this.title, this.width / 2, 10, 0xFFFFFFFF);
+        graphics.centeredText(this.font, this.title, this.width / 2, 4, 0xFFFFFFFF);
 
         TranslatorConfig cfg = NyanLexFabric26.config();
+        drawKeyNotice(graphics, cfg);
         if (cfg.aiUseCodex) {
             drawCodexAccount(graphics);
             if (this.status.isBlank()) graphics.centeredText(this.font, Component.translatable(
-                    "screen.nyanlex.ai.codex.independent_hint"), this.width / 2, 198, 0xFF909090);
+                    "screen.nyanlex.ai.codex.quota_notice"), this.width / 2, 198, 0xFFA4A9B8);
         } else {
             int x = this.width / 2 - FIELD_W / 2;
             boolean openAiPanel = isOpenAiProvider(cfg);
@@ -495,6 +496,21 @@ public final class Fabric26AiScreen extends Screen {
             graphics.centeredText(this.font, Component.literal(this.status),
                     this.width / 2, 198, 0xFFFFD080);
         }
+    }
+
+    /** The always-visible line: where the API keys live and that they never leave this computer. */
+    private void drawKeyNotice(GuiGraphicsExtractor graphics, TranslatorConfig cfg) {
+        int left = Math.max(4, this.width / 2 - FIELD_W / 2);
+        int right = this.width / 2 + FIELD_W / 2;
+        // the signed-in account sits at the top right while the ChatGPT login is selected
+        if (cfg.aiUseCodex) right = Math.min(right, this.width - 104);
+        String base = Component.translatable("screen.nyanlex.ai.key_notice", "").getString();
+        int room = Math.max(40, right - left - this.font.width(base));
+        java.nio.file.Path file = NyanLexFabric26.configFilePath();
+        String path = com.dragonmeow.nyanlex.config.UiText.fitMiddle(
+                file == null ? "" : file.toAbsolutePath().toString(), room, this.font::width);
+        graphics.text(this.font, Component.translatable("screen.nyanlex.ai.key_notice", path),
+                left, 17, 0xFFA4A9B8, false);
     }
 
     private void drawCodexAccount(GuiGraphicsExtractor graphics) {

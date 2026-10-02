@@ -5,6 +5,7 @@ import com.dragonmeow.nyanlex.config.FileOpener;
 import com.dragonmeow.nyanlex.config.SettingAction;
 import com.dragonmeow.nyanlex.config.SettingEntry;
 import com.dragonmeow.nyanlex.config.SettingsCatalog;
+import com.dragonmeow.nyanlex.config.SettingsModel;
 import com.dragonmeow.nyanlex.config.SettingsPanel;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.config.UiCanvas;
@@ -19,7 +20,8 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.util.Util;
-import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.narration.NarratedElementType;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
@@ -205,15 +207,15 @@ public final class Fabric26ConfigScreen extends Screen {
 
     private void run(SettingAction action) {
         switch (action) {
+            case OPEN_QUICK_SETUP -> open(new QuickSetupScreen(this));
             case OPEN_LANGUAGE -> open(new Fabric26LanguageScreen(this));
             case OPEN_KEYBINDS -> open(new Fabric26KeybindScreen(this));
             case OPEN_MANUAL -> open(new Fabric26ManualScreen(this));
+            case OPEN_PRIVACY -> open(new Fabric26ManualScreen(this, SettingsModel.MANUAL_PRIVACY_SECTION - 1));
             case OPEN_AI -> open(new Fabric26AiScreen(this));
             case OPEN_DO_NOT_TRANSLATE -> open(new Fabric26RequestsScreen(this));
             case OPEN_ITEM_WARMUP -> NyanLexFabric26.openItemWarmupScreen(this);
             case HUB_DOWNLOAD -> NyanLexFabric26.startHubIdentifyAndPlan(this);
-            case HUB_OPEN_REPO -> confirmOpenRepo();
-            case HUB_CLEAR -> confirmClearHub();
             case EXPORT_TRANSLATIONS -> NyanLexFabric26.translationFile(false);
             case IMPORT_TRANSLATIONS -> NyanLexFabric26.translationFile(true);
             case CLEAR_CACHE -> confirmClearCache();
@@ -222,11 +224,8 @@ public final class Fabric26ConfigScreen extends Screen {
 
     private void confirm(Component title, Component message, Runnable onYes) {
         if (this.minecraft == null) return;
-        this.minecraft.setScreenAndShow(new ConfirmScreen(yes -> {
-            if (yes) onYes.run();
-            if (this.minecraft != null) this.minecraft.setScreenAndShow(this);
-        }, title, message, Component.translatable(SettingsCatalog.KEY_CONFIRM_YES),
-                Component.translatable("gui.cancel")));
+        this.minecraft.setScreenAndShow(new ConfirmDialogScreen(this, title, message,
+                Component.translatable(SettingsCatalog.KEY_CONFIRM_YES), onYes));
     }
 
     private void confirmClearCache() {
@@ -237,33 +236,6 @@ public final class Fabric26ConfigScreen extends Screen {
                     Fabric26TextStyle.clearRenderMemo();
                     setStatus(Component.translatable("config.nyanlex.cache.cleared"));
                 });
-    }
-
-    private void confirmClearHub() {
-        int count = NyanLexFabric26.hubLocalCache().size();
-        confirm(Component.translatable(SettingsCatalog.KEY_CLEAR_HUB_CONFIRM_TITLE),
-                Component.translatable(SettingsCatalog.KEY_CLEAR_HUB_CONFIRM_MESSAGE, count), () -> {
-                    int removed = NyanLexFabric26.hubLocalCache().size();
-                    String language = NyanLexFabric26.hubLocalCache().language();
-                    NyanLexFabric26.hubLocalCache().clearAll();
-                    // Also drop this language's sha256 throttling ledger, or the next
-                    // identify/download pass would report "already up to date".
-                    NyanLexFabric26.hubDownloadState().forgetLanguage(language);
-                    Component done = Component.translatable("message.nyanlex.hub.cleared", removed);
-                    NyanLexFabric26.postHubStatus(done.getString());
-                    setStatus(done);
-                });
-    }
-
-    private void confirmOpenRepo() {
-        if (this.minecraft == null) return;
-        this.minecraft.setScreenAndShow(new ConfirmScreen(yes -> {
-            if (yes) Util.getPlatform().openUri(Fabric26HubScreen.HUB_URL);
-            if (this.minecraft != null) this.minecraft.setScreenAndShow(this);
-        }, Component.translatable("screen.nyanlex.hub.open_repo.title"),
-                Component.translatable("screen.nyanlex.hub.open_repo.message"),
-                Component.translatable("screen.nyanlex.hub.open_repo.confirm"),
-                Component.translatable("gui.cancel")));
     }
 
     private void setStatus(Component message) {
@@ -301,8 +273,16 @@ public final class Fabric26ConfigScreen extends Screen {
     public boolean keyPressed(KeyEvent event) {
         boolean ctrl = (event.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
         boolean shift = (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
-        if (panel.keyPressed(event.key(), ctrl, shift)) return true;
+        if (panel.keyPressed(event.key(), ctrl, shift)) {
+            if (panel.consumeNarrationRequest()) this.triggerImmediateNarration(true);
+            return true;
+        }
         return super.keyPressed(event);
+    }
+
+    @Override
+    protected void updateNarratedWidget(NarrationElementOutput output) {
+        output.add(NarratedElementType.TITLE, Component.literal(panel.narration()));
     }
 
     @Override

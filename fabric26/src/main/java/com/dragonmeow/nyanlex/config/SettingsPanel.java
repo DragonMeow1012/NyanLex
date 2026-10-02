@@ -14,7 +14,9 @@ import java.util.function.Function;
  * The card-style settings screen, drawn and driven without any Minecraft type: a category
  * sidebar, a search box that filters every category, and a scrolling list of setting
  * cards (title, description shown in full, one control on the right) with collapsible
- * groups. The loader glue forwards input and supplies a {@link UiCanvas} and a {@link UiHost}.
+ * groups. Tab and Shift+Tab walk every control, Enter or Space presses the focused one, and
+ * {@link #narration()} describes it for the narrator. The loader glue forwards input and
+ * supplies a {@link UiCanvas} and a {@link UiHost}.
  */
 public final class SettingsPanel {
 
@@ -34,10 +36,15 @@ public final class SettingsPanel {
     /** The category the next settings screen of this session opens on. */
     public static void rememberCategory(SettingsCategory category) { SESSION.category = category; }
 
+    /** Same, for a remembered id: ids of removed categories map to their new home. */
+    public static void rememberCategory(String id) { SESSION.category = SettingsCategory.fromId(id); }
+
     // ------------------------------------------------------------------ keys (GLFW values)
 
     public static final int KEY_ESCAPE = 256;
     public static final int KEY_ENTER = 257;
+    public static final int KEY_TAB = 258;
+    public static final int KEY_SPACE = 32;
     public static final int KEY_BACKSPACE = 259;
     public static final int KEY_DELETE = 261;
     public static final int KEY_RIGHT = 262;
@@ -51,6 +58,7 @@ public final class SettingsPanel {
     private static final int KEY_A = 65;
     private static final int KEY_F = 70;
     private static final int KEY_V = 86;
+    private static final int KEY_KP_ENTER = 335;
     private static final int KEY_SLASH = 47;
 
     // ------------------------------------------------------------------ colors
@@ -79,7 +87,6 @@ public final class SettingsPanel {
     static final int C_WARN = 0xFFFFD75E;
     static final int C_GOOD = 0xFF7FE08F;
     static final int C_TRACK = 0xFF2A2E3C;
-    static final int C_NOTICE = 0xC03A3118;
 
     // ------------------------------------------------------------------ metrics
 
@@ -123,12 +130,14 @@ public final class SettingsPanel {
     private boolean searchFocused;
 
     private List<Row> rows = new ArrayList<>();
+    private final List<FocusItem> focusItems = new ArrayList<>();
+    private String focusKey;
+    private boolean narrationRequested;
     private int contentH;
     private boolean dirty = true;
     private Map<SettingsCategory, Integer> searchCounts = new EnumMap<>(SettingsCategory.class);
 
     private String tooltipText;
-    private String openDropdownId;
     private String dragSliderId;
     private boolean ignoreSlash;
     private boolean dragScrollbar;
@@ -186,8 +195,6 @@ public final class SettingsPanel {
 
     public boolean narrowLayout() { return narrow; }
 
-    public boolean dropdownOpen() { return openDropdownId != null; }
-
     // ------------------------------------------------------------------ layout
 
     public void resize(int width, int height) {
@@ -211,7 +218,6 @@ public final class SettingsPanel {
         listW = cw;
         listH = py + ph - INNER - listY;
         dirty = true;
-        openDropdownId = null;
     }
 
     private void ensureLayout() {
@@ -263,6 +269,7 @@ public final class SettingsPanel {
         }
         contentH = Math.max(0, y - CARD_GAP);
         clampScroll();
+        buildFocus();
     }
 
     /** FILE cards only exist where the glue can tell the paths. */
@@ -287,13 +294,18 @@ public final class SettingsPanel {
         measureControl(r);
         boolean hasCtrl = r.ctrlW > 0;
         int textColW = inner - r.ctrlW - 8;
-        r.stacked = card.kind() == SettingCard.Kind.WARMUP || card.kind() == SettingCard.Kind.NOTICE
+        r.stacked = card.kind() == SettingCard.Kind.WARMUP || card.kind() == SettingCard.Kind.MASTER
                 || (hasCtrl && textColW < 112);
         if (r.multiW != null && r.stacked && r.ctrlW > inner) shrinkMulti(r, inner);
-        if (card.kind() == SettingCard.Kind.NOTICE && r.ctrlW > inner) r.ctrlW = inner;
+        if (card.kind() == SettingCard.Kind.MASTER) r.ctrlW = inner;
         int textW = r.stacked || !hasCtrl ? inner : textColW;
         String desc = card.kind() == SettingCard.Kind.INFO && card.id().equals("about_info")
                 ? aboutText(card) : SettingsModel.description(card, lang);
+        SettingEntry entry = card.entry();
+        if (entry != null && entry.type() == SettingEntry.Type.SUBSCREEN && entry.hasState()) {
+            // a screen-opening card shows what is set right now ("目前：跟隨遊戲（繁體中文）")
+            desc = desc + "\n" + host.text(SettingsModel.KEY_CURRENT, resolve(entry.state(host.config())));
+        }
         r.desc = UiText.wrap(desc, textW, host::textWidth);
         if (card.kind() == SettingCard.Kind.FILE) {
             r.file = fileEntry(card);
@@ -336,14 +348,6 @@ public final class SettingsPanel {
                 String st = toggleStateText(card.entry(), cfg);
                 if (st != null) r.ctrlW += host.textWidth(st) + 6;
             }
-            case DROPDOWN -> {
-                int w = 0;
-                for (StateText label : card.entry().options().labels()) {
-                    w = Math.max(w, host.textWidth(resolve(label)));
-                }
-                r.ctrlW = Math.max(52, Math.min(96, w + 24));
-                r.ctrlH = 14;
-            }
             case SLIDER -> {
                 r.ctrlW = 104;
                 r.ctrlH = LINE_H + 2 + 8;
@@ -356,9 +360,9 @@ public final class SettingsPanel {
                 r.ctrlW = Math.max(46, Math.min(112, host.textWidth(host.text(SettingsModel.KEY_BTN_OPEN)) + 14));
                 r.ctrlH = 14;
             }
-            case NOTICE -> {
-                r.ctrlW = 24 + 6 + host.textWidth(noticeSwitchText(card.entry(), cfg));
-                r.ctrlH = 12;
+            case MASTER -> {
+                r.ctrlW = 24 + 6 + host.textWidth(masterStatus(cfg));
+                r.ctrlH = 14;
             }
             case SURFACE, ALL -> {
                 r.multiW = multiWidths();
@@ -374,8 +378,8 @@ public final class SettingsPanel {
 
     static final int MULTI_GAP = 4;
 
-    /** The privacy card's status row: "線上翻譯：開（引擎）" / "線上翻譯：關，不會送出任何文字". */
-    private String noticeSwitchText(SettingEntry entry, TranslatorConfig cfg) {
+    /** The 線上翻譯 card's status line: "開：Google 翻譯（非官方端點）" / "關：不會送出任何文字". */
+    private String masterStatus(TranslatorConfig cfg) {
         return DialogContent.onlineStatus(cfg, host::text);
     }
 
@@ -438,19 +442,21 @@ public final class SettingsPanel {
     private String buttonText(SettingEntry entry) {
         String override = host.buttonLabel(entry);
         if (override != null) return override;
-        StateText st = entry.state(host.config());
-        if (st != null) return resolve(st);
         SettingAction action = entry.action();
+        StateText st = entry.state(host.config());
+        if (st != null && action != SettingAction.OPEN_LANGUAGE) return resolve(st);
         if (action != null) {
             switch (action) {
+                case OPEN_QUICK_SETUP:
+                    return host.text(SettingsModel.KEY_BTN_START);
+                case OPEN_LANGUAGE:
+                    return host.text(SettingsModel.KEY_BTN_CHANGE);
                 case OPEN_DO_NOT_TRANSLATE:
                     return host.text(SettingsModel.KEY_BTN_EDIT);
                 case OPEN_MANUAL:
                     return host.text(SettingsModel.KEY_BTN_OPEN);
                 case HUB_DOWNLOAD:
                     return host.text(SettingsModel.KEY_BTN_DETECT);
-                case HUB_OPEN_REPO:
-                    return host.text(SettingsModel.KEY_BTN_OPEN);
                 case EXPORT_TRANSLATIONS:
                     return host.text(SettingsModel.KEY_BTN_EXPORT);
                 case IMPORT_TRANSLATIONS:
@@ -486,7 +492,6 @@ public final class SettingsPanel {
     private void scrollBy(int delta) {
         state.scroll.put(state.category, scroll() + delta);
         clampScroll();
-        openDropdownId = null;
     }
 
     private boolean needsScrollbar() { return maxScroll() > 0; }
@@ -574,8 +579,8 @@ public final class SettingsPanel {
             c.fill(sx, thumbY(), SCROLLBAR_W, thumbH(), dragScrollbar ? 0xFFFFFFFF : 0xFFA0A4B0);
         }
 
-        if (openDropdownId != null) drawDropdownPopup(c, mx, my);
-        if (tooltipText != null && openDropdownId == null) drawTooltip(c, tooltipText, mx, my);
+        drawFocusRing(c);
+        if (tooltipText != null) drawTooltip(c, tooltipText, mx, my);
     }
 
     private void drawSidebar(UiCanvas c, int mx, int my, boolean searching) {
@@ -709,11 +714,9 @@ public final class SettingsPanel {
         int cardX = listX + r.indent;
         int cardW = cardWidth(r.indent);
         int y = rowScreenY(r);
-        boolean hover = in(mx, my, cardX, y, cardW, r.h) && in(mx, my, listX, listY, listW, listH)
-                && openDropdownId == null;
-        boolean notice = card.kind() == SettingCard.Kind.NOTICE;
-        rrect(c, cardX, y, cardW, r.h, notice ? C_NOTICE : hover ? C_CARD_HOVER : C_CARD);
-        border(c, cardX, y, cardW, r.h, notice ? C_WARN : C_CARD_EDGE);
+        boolean hover = in(mx, my, cardX, y, cardW, r.h) && in(mx, my, listX, listY, listW, listH);
+        rrect(c, cardX, y, cardW, r.h, hover ? C_CARD_HOVER : C_CARD);
+        border(c, cardX, y, cardW, r.h, C_CARD_EDGE);
         if (r.indent > 0) c.fill(listX + 2, y - 1, 1, r.h + CARD_GAP, C_PANEL_EDGE);
 
         int tx = cardX + CARD_PAD;
@@ -734,7 +737,7 @@ public final class SettingsPanel {
                 boolean pathLine = li == r.pathLine;
                 c.text(line, tx, ty, pathLine ? C_CRUMB : C_DESC);
                 if (pathLine && r.fullPath != null && in(mx, my, tx, ty - 1, textMaxW, LINE_H + 1)
-                        && in(mx, my, listX, listY, listW, listH) && openDropdownId == null) {
+                        && in(mx, my, listX, listY, listW, listH)) {
                     tooltipText = r.fullPath;
                 }
                 ty += LINE_H;
@@ -742,11 +745,10 @@ public final class SettingsPanel {
         }
         switch (card.kind()) {
             case TOGGLE -> drawToggle(c, r, mx, my);
-            case DROPDOWN -> drawDropdownBox(c, r, mx, my);
             case SLIDER -> drawSlider(c, r, mx, my);
             case BUTTON -> drawButton(c, r, mx, my);
             case FILE -> drawFileButton(c, r, mx, my);
-            case NOTICE -> drawNoticeSwitch(c, r, mx, my);
+            case MASTER -> drawMaster(c, r, mx, my);
             case SURFACE -> drawSurface(c, r, mx, my);
             case ALL -> drawAll(c, r, mx, my);
             case WARMUP -> drawWarmup(c, r, ty, mx, my);
@@ -757,10 +759,6 @@ public final class SettingsPanel {
 
     private void drawTitle(UiCanvas c, Row r, int x, int y, int maxW) {
         String title = UiText.fit(r.title, maxW, host::textWidth);
-        if (r.card.kind() == SettingCard.Kind.NOTICE) {
-            c.text(title, x, y, C_WARN);
-            return;
-        }
         String[] words = SettingsModel.tokens(query.toString());
         String lower = title.toLowerCase(java.util.Locale.ROOT);
         int ms = -1;
@@ -803,58 +801,9 @@ public final class SettingsPanel {
         c.fill(kx, sy + 2, 8, 8, enabled ? C_KNOB : 0xFF8A8D98);
     }
 
-    private void drawDropdownBox(UiCanvas c, Row r, int mx, int my) {
-        SettingEntry e = r.card.entry();
-        int[] rc = controlRect(r);
-        boolean open = r.card.id().equals(openDropdownId);
-        boolean hover = in(mx, my, rc[0], rc[1], rc[2], rc[3]);
-        rrect(c, rc[0], rc[1], rc[2], rc[3], open || hover ? C_BUTTON_HOVER : C_BUTTON);
-        border(c, rc[0], rc[1], rc[2], rc[3], open ? C_ACCENT : 0xFF4A5170);
-        SettingEntry.Options opts = e.options();
-        int idx = Math.max(0, Math.min(opts.labels().size() - 1, opts.index().applyAsInt(host.config())));
-        String label = UiText.fit(resolve(opts.labels().get(idx)), rc[2] - 22, host::textWidth);
-        c.text(label, rc[0] + 6, rc[1] + 3, C_TITLE);
-        int ax = rc[0] + rc[2] - 11;
-        int ay = rc[1] + 5;
-        c.fill(ax, ay, 7, 1, C_TITLE);
-        c.fill(ax + 1, ay + 1, 5, 1, C_TITLE);
-        c.fill(ax + 2, ay + 2, 3, 1, C_TITLE);
-        c.fill(ax + 3, ay + 3, 1, 1, C_TITLE);
-    }
-
-    private int[] dropdownPopupRect(Row r) {
-        int[] rc = controlRect(r);
-        int n = r.card.entry().options().labels().size();
-        int h = n * 14 + 2;
-        int w = rc[2];
-        int y = rc[1] + rc[3] + 1;
-        if (y + h > screenH - 2) y = rc[1] - h - 1;
-        return new int[] {rc[0], y, w, h};
-    }
-
     private Row rowById(String id) {
         for (Row r : rows) if (r.card != null && r.card.id().equals(id)) return r;
         return null;
-    }
-
-    private void drawDropdownPopup(UiCanvas c, int mx, int my) {
-        Row r = rowById(openDropdownId);
-        if (r == null || !rowVisible(r)) {
-            openDropdownId = null;
-            return;
-        }
-        SettingEntry.Options opts = r.card.entry().options();
-        int[] pr = dropdownPopupRect(r);
-        rrect(c, pr[0], pr[1], pr[2], pr[3], 0xFF161A24);
-        border(c, pr[0], pr[1], pr[2], pr[3], C_ACCENT);
-        int current = opts.index().applyAsInt(host.config());
-        for (int i = 0; i < opts.labels().size(); i++) {
-            int oy = pr[1] + 1 + i * 14;
-            boolean hover = in(mx, my, pr[0] + 1, oy, pr[2] - 2, 14);
-            if (hover) c.fill(pr[0] + 1, oy, pr[2] - 2, 14, 0xFF34405E);
-            String label = UiText.fit(resolve(opts.labels().get(i)), pr[2] - 16, host::textWidth);
-            c.text(label, pr[0] + 8, oy + 3, i == current ? C_MATCH : C_TITLE);
-        }
     }
 
     private int sliderIndex(SettingEntry e) {
@@ -901,15 +850,35 @@ public final class SettingsPanel {
         c.text(label, rc[0] + (rc[2] - host.textWidth(label)) / 2, rc[1] + 3, enabled ? C_TITLE : C_DISABLED_TEXT);
     }
 
-    private void drawNoticeSwitch(UiCanvas c, Row r, int mx, int my) {
+    /** The privacy button of the 線上翻譯 card, at the right end of its control row. */
+    private int[] masterPrivacyRect(Row r) {
+        int[] rc = controlRect(r);
+        int w = Math.max(58, Math.min(112, host.textWidth(host.text(SettingsModel.KEY_BTN_PRIVACY)) + 14));
+        return new int[] {rc[0] + rc[2] - w, rc[1], w, 14};
+    }
+
+    /** The clickable switch-and-status part of the 線上翻譯 card's control row. */
+    private int[] masterSwitchRect(Row r) {
+        int[] rc = controlRect(r);
+        int[] btn = masterPrivacyRect(r);
+        return new int[] {rc[0], rc[1], Math.max(24, btn[0] - 6 - rc[0]), 14};
+    }
+
+    private void drawMaster(UiCanvas c, Row r, int mx, int my) {
         SettingEntry e = r.card.entry();
         TranslatorConfig cfg = host.config();
         boolean on = e.isOn(cfg);
         int[] rc = controlRect(r);
-        rrect(c, rc[0], rc[1], 24, 12, on ? C_ON : C_OFF);
-        c.fill(on ? rc[0] + 14 : rc[0] + 2, rc[1] + 2, 8, 8, C_KNOB);
-        String caption = UiText.fit(noticeSwitchText(e, cfg), Math.max(20, rc[2] - 30), host::textWidth);
-        c.text(caption, rc[0] + 30, rc[1] + 2, on ? C_GOOD : C_DESC);
+        int[] btn = masterPrivacyRect(r);
+        rrect(c, rc[0], rc[1] + 1, 24, 12, on ? C_ON : C_OFF);
+        c.fill(on ? rc[0] + 14 : rc[0] + 2, rc[1] + 3, 8, 8, C_KNOB);
+        int captionW = Math.max(20, btn[0] - 8 - (rc[0] + 30));
+        String caption = UiText.fit(masterStatus(cfg), captionW, host::textWidth);
+        c.text(caption, rc[0] + 30, rc[1] + 3, on ? C_GOOD : C_DESC);
+        boolean hover = in(mx, my, btn[0], btn[1], btn[2], btn[3]);
+        rrect(c, btn[0], btn[1], btn[2], btn[3], hover ? C_BUTTON_HOVER : C_BUTTON);
+        String label = UiText.fit(host.text(SettingsModel.KEY_BTN_PRIVACY), btn[2] - 8, host::textWidth);
+        c.text(label, btn[0] + (btn[2] - host.textWidth(label)) / 2, btn[1] + 3, C_TITLE);
     }
 
     private static final int C_AI = 0xFF2E5E9E;
@@ -1001,6 +970,11 @@ public final class SettingsPanel {
 
     private record WarmButton(String label, WarmupCommand command, boolean enabled, boolean danger) {}
 
+    /** Cannot run because the items are not on AI: the button leads to 翻譯服務 instead of being a dead end. */
+    private boolean warmupNeedsAi(WarmupStatus st) {
+        return !st.active() && !st.available();
+    }
+
     private List<WarmButton> warmButtons(WarmupStatus st) {
         List<WarmButton> out = new ArrayList<>();
         if (st.active()) {
@@ -1012,8 +986,10 @@ public final class SettingsPanel {
             }
             out.add(new WarmButton(host.text("screen.nyanlex.warmup.stop"), WarmupCommand.STOP, true, true));
             out.add(new WarmButton(host.text(SettingsModel.KEY_WARMUP_DETAILS), WarmupCommand.OPEN_PROGRESS, true, false));
+        } else if (warmupNeedsAi(st)) {
+            out.add(new WarmButton(host.text(SettingsModel.KEY_BTN_USE_AI), WarmupCommand.OPEN_SERVICE, true, false));
         } else {
-            out.add(new WarmButton(host.text(SettingsModel.KEY_WARMUP_START), WarmupCommand.START, st.available(), false));
+            out.add(new WarmButton(host.text(SettingsModel.KEY_WARMUP_START), WarmupCommand.START, true, false));
         }
         return out;
     }
@@ -1111,22 +1087,7 @@ public final class SettingsPanel {
     public boolean mouseClicked(int mx, int my, int button) {
         ensureLayout();
         if (button != 0) return in(mx, my, px, py, pw, ph);
-        if (openDropdownId != null) {
-            Row r = rowById(openDropdownId);
-            if (r != null && rowVisible(r)) {
-                int[] pr = dropdownPopupRect(r);
-                if (in(mx, my, pr[0], pr[1], pr[2], pr[3])) {
-                    int i = (my - pr[1] - 1) / 14;
-                    SettingEntry.Options opts = r.card.entry().options();
-                    if (i >= 0 && i < opts.labels().size()) {
-                        opts.select().accept(host.config(), i);
-                        changed();
-                    }
-                }
-            }
-            openDropdownId = null;
-            return true;
-        }
+        focusKey = null; // a mouse click moves attention to the pointer, not to the old keyboard focus
         if (!in(mx, my, px, py, pw, ph)) {
             searchFocused = false;
             return false;
@@ -1140,8 +1101,7 @@ public final class SettingsPanel {
         searchFocused = false;
         if (in(mx, my, cx + searchW + 4, cy, HELP_W, SEARCH_H)) {
             host.playClick();
-            selectCategory(SettingsCategory.ABOUT); // returning from the manual lands on 關於
-            host.runAction(SettingAction.OPEN_MANUAL);
+            host.runAction(SettingAction.OPEN_MANUAL); // the category and search stay as they are
             return true;
         }
         // sidebar
@@ -1191,8 +1151,8 @@ public final class SettingsPanel {
     private void selectCategory(SettingsCategory cat) {
         query.setLength(0);
         caret = 0;
+        searchFocused = false;
         state.category = cat;
-        openDropdownId = null;
         dirty = true;
     }
 
@@ -1208,17 +1168,15 @@ public final class SettingsPanel {
                 host.sideEffect(e.sideEffect());
                 changed();
             }
-            case NOTICE -> {
-                // only the switch reacts; the text is just text
-                if (in(mx, my, rc[0], rc[1] - 1, rc[2], rc[3] + 2) && host.beforeToggle(e)) {
+            case MASTER -> {
+                int[] privacy = masterPrivacyRect(r);
+                int[] sw = masterSwitchRect(r);
+                if (in(mx, my, privacy[0], privacy[1], privacy[2], privacy[3])) {
+                    host.runAction(SettingAction.OPEN_PRIVACY);
+                } else if (in(mx, my, sw[0], sw[1] - 1, sw[2], sw[3] + 2) && host.beforeToggle(e)) {
                     e.press(host.config());
                     host.sideEffect(e.sideEffect());
                     changed();
-                }
-            }
-            case DROPDOWN -> {
-                if (in(mx, my, rc[0] - 2, rc[1] - 2, rc[2] + 4, rc[3] + 4)) {
-                    openDropdownId = card.id();
                 }
             }
             case SLIDER -> {
@@ -1263,12 +1221,20 @@ public final class SettingsPanel {
                 for (int i = 0; i < buttons.size(); i++) {
                     int[] b = rects[i];
                     if (buttons.get(i).enabled() && in(mx, my, b[0], b[1], b[2], b[3])) {
-                        host.warmupCommand(buttons.get(i).command());
+                        runWarmButton(buttons.get(i));
                         return;
                     }
                 }
             }
             default -> { }
+        }
+    }
+
+    private void runWarmButton(WarmButton button) {
+        if (button.command() == WarmupCommand.OPEN_SERVICE) {
+            selectCategory(SettingsCategory.SERVICE);
+        } else {
+            host.warmupCommand(button.command());
         }
     }
 
@@ -1379,6 +1345,10 @@ public final class SettingsPanel {
                     searchFocused = false;
                     return true;
                 }
+                case KEY_TAB -> {
+                    moveFocus(shift ? -1 : 1);
+                    return true;
+                }
                 case KEY_BACKSPACE -> {
                     if (caret > 0) {
                         query.deleteCharAt(caret - 1);
@@ -1434,10 +1404,26 @@ public final class SettingsPanel {
             return true; // swallow everything else while typing
         }
         if (key == KEY_ESCAPE) return escape();
+        if (key == KEY_TAB) {
+            moveFocus(shift ? -1 : 1);
+            return true;
+        }
+        FocusItem focused = focusedItem();
+        if (focused != null) {
+            if (key == KEY_ENTER || key == KEY_KP_ENTER || key == KEY_SPACE) {
+                activate(focused);
+                return true;
+            }
+            if ((key == KEY_LEFT || key == KEY_RIGHT) && adjustSlider(focused, key == KEY_RIGHT ? 1 : -1)) {
+                return true;
+            }
+        }
         if ((ctrl && key == KEY_F) || key == KEY_SLASH) {
             ignoreSlash = key == KEY_SLASH; // the matching char event must not land in the box
+            focusKey = "search";
             searchFocused = true;
             caret = query.length();
+            narrationRequested = true;
             return true;
         }
         return scrollKey(key);
@@ -1459,14 +1445,10 @@ public final class SettingsPanel {
     }
 
     /**
-     * Escape: closes an open drop-down, then clears the search, then unfocuses it.
+     * Escape: clears the search, then unfocuses it.
      * @return false when nothing was left to dismiss (the screen should close).
      */
     public boolean escape() {
-        if (openDropdownId != null) {
-            openDropdownId = null;
-            return true;
-        }
         if (query.length() > 0) {
             query.setLength(0);
             caret = 0;
@@ -1482,7 +1464,6 @@ public final class SettingsPanel {
 
     private void queryChanged() {
         state.scroll.put(state.category, 0);
-        openDropdownId = null;
         dirty = true;
     }
 
@@ -1507,6 +1488,274 @@ public final class SettingsPanel {
     public void toggleGroup(String id) {
         if (!state.expanded.remove(id)) state.expanded.add(id);
         dirty = true;
+    }
+
+    // ------------------------------------------------------------------ keyboard focus
+
+    private static final int F_CAT = 0;
+    private static final int F_SEARCH = 1;
+    private static final int F_HELP = 2;
+    private static final int F_HEADER = 3;
+    private static final int F_CTRL = 4;
+    private static final int F_DONE = 5;
+
+    /** One thing Tab can land on: a category, the search box, "?", a group header, one control of a card, Done. */
+    private record FocusItem(String key, int type, Row row, int sub, SettingsCategory cat) {}
+
+    private int controlCount(Row r) {
+        return switch (r.card.kind()) {
+            case TOGGLE, SLIDER, BUTTON, FILE -> 1;
+            case MASTER, SURFACE, ALL -> 2;
+            case WARMUP -> warmButtons(host.warmupStatus()).size();
+            default -> 0;
+        };
+    }
+
+    private void buildFocus() {
+        focusItems.clear();
+        for (SettingsCategory cat : SettingsModel.categories()) {
+            focusItems.add(new FocusItem("cat:" + cat.id(), F_CAT, null, 0, cat));
+        }
+        focusItems.add(new FocusItem("search", F_SEARCH, null, 0, null));
+        focusItems.add(new FocusItem("help", F_HELP, null, 0, null));
+        for (Row r : rows) {
+            if (r.header()) {
+                focusItems.add(new FocusItem("hdr:" + r.group.id(), F_HEADER, r, 0, null));
+            } else {
+                int n = controlCount(r);
+                for (int i = 0; i < n; i++) {
+                    focusItems.add(new FocusItem("card:" + r.card.id() + "#" + i, F_CTRL, r, i, null));
+                }
+            }
+        }
+        focusItems.add(new FocusItem("done", F_DONE, null, 0, null));
+        if (focusKey != null && focusItem(focusKey) == null) focusKey = null;
+    }
+
+    private FocusItem focusItem(String key) {
+        for (FocusItem item : focusItems) if (item.key().equals(key)) return item;
+        return null;
+    }
+
+    private FocusItem focusedItem() {
+        return focusKey == null ? null : focusItem(focusKey);
+    }
+
+    /** True when a control has keyboard focus (the frame is drawn around it). */
+    public boolean hasFocus() { ensureLayout(); return focusedItem() != null; }
+
+    /** Key of the focused control, or null (for tests and glue). */
+    public String focusedKey() { ensureLayout(); return focusKey; }
+
+    /** Tab / Shift+Tab: next or previous control; from "nothing focused" Tab lands on the first one. */
+    public void moveFocus(int dir) {
+        ensureLayout();
+        if (focusItems.isEmpty()) return;
+        int index = -1;
+        for (int i = 0; i < focusItems.size(); i++) {
+            if (focusItems.get(i).key().equals(focusKey)) {
+                index = i;
+                break;
+            }
+        }
+        int n = focusItems.size();
+        int next = index < 0 ? (dir > 0 ? 0 : n - 1) : (index + dir + n) % n;
+        FocusItem item = focusItems.get(next);
+        focusKey = item.key();
+        searchFocused = item.type() == F_SEARCH;
+        if (searchFocused) caret = query.length();
+        scrollIntoView(item);
+        narrationRequested = true;
+    }
+
+    private void scrollIntoView(FocusItem item) {
+        if (item.row() == null) return;
+        Row r = item.row();
+        int top = r.y;
+        int bottom = r.y + r.h;
+        int cur = scroll();
+        if (top < cur) state.scroll.put(state.category, top);
+        else if (bottom > cur + listH) state.scroll.put(state.category, bottom - listH);
+        clampScroll();
+    }
+
+    /** Screen rectangle of a focus item, or null when it is scrolled out of the list. */
+    private int[] focusRect(FocusItem item) {
+        switch (item.type()) {
+            case F_CAT -> {
+                return categoryBounds(item.cat().ordinal());
+            }
+            case F_SEARCH -> {
+                return new int[] {cx, cy, searchW, SEARCH_H};
+            }
+            case F_HELP -> {
+                return new int[] {cx + searchW + 4, cy, HELP_W, SEARCH_H};
+            }
+            case F_DONE -> {
+                return doneBounds();
+            }
+            default -> { }
+        }
+        Row r = item.row();
+        if (!rowVisible(r)) return null;
+        if (item.type() == F_HEADER) return new int[] {listX, rowScreenY(r), cardWidth(0), r.h};
+        switch (r.card.kind()) {
+            case MASTER -> {
+                return item.sub() == 0 ? masterSwitchRect(r) : masterPrivacyRect(r);
+            }
+            case SURFACE, ALL -> {
+                return multiRects(r)[item.sub()];
+            }
+            case WARMUP -> {
+                List<WarmButton> buttons = warmButtons(host.warmupStatus());
+                if (item.sub() >= buttons.size()) return null;
+                return warmButtonRects(r, warmButtonY(r), buttons)[item.sub()];
+            }
+            case SLIDER -> {
+                int[] rc = controlRect(r);
+                return new int[] {rc[0] - 2, rc[1] - 2, rc[2] + 4, rc[3] + 4};
+            }
+            default -> {
+                return controlRect(r);
+            }
+        }
+    }
+
+    private void drawFocusRing(UiCanvas c) {
+        FocusItem item = focusedItem();
+        if (item == null || item.type() == F_SEARCH) return; // the search box shows its own accent border
+        int[] rc = focusRect(item);
+        if (rc == null) return;
+        boolean inList = item.type() == F_HEADER || item.type() == F_CTRL;
+        if (inList) c.pushClip(listX, listY, listW, listH);
+        border(c, rc[0] - 1, rc[1] - 1, rc[2] + 2, rc[3] + 2, C_ACCENT);
+        c.fill(rc[0] - 1, rc[1] - 1, 1, 1, C_ACCENT);
+        c.fill(rc[0] + rc[2], rc[1] - 1, 1, 1, C_ACCENT);
+        c.fill(rc[0] - 1, rc[1] + rc[3], 1, 1, C_ACCENT);
+        c.fill(rc[0] + rc[2], rc[1] + rc[3], 1, 1, C_ACCENT);
+        if (inList) c.popClip();
+    }
+
+    /** Enter or Space on the focused control: the same effect as clicking its centre. */
+    private void activate(FocusItem item) {
+        host.playClick();
+        switch (item.type()) {
+            case F_CAT -> {
+                selectCategory(item.cat());
+                focusKey = item.key();
+            }
+            case F_SEARCH -> {
+                searchFocused = true;
+                caret = query.length();
+            }
+            case F_HELP -> host.runAction(SettingAction.OPEN_MANUAL);
+            case F_DONE -> host.close();
+            case F_HEADER -> {
+                toggleGroup(item.row().group.id());
+            }
+            default -> {
+                Row r = item.row();
+                if (r.card.kind() == SettingCard.Kind.SLIDER) {
+                    SettingEntry e = r.card.entry();
+                    e.press(host.config());
+                    changed();
+                    return;
+                }
+                int[] rc = focusRect(item);
+                if (rc != null) clickCard(r, rc[0] + rc[2] / 2, rc[1] + rc[3] / 2);
+            }
+        }
+        narrationRequested = true;
+    }
+
+    private boolean adjustSlider(FocusItem item, int dir) {
+        if (item.type() != F_CTRL || item.row().card.kind() != SettingCard.Kind.SLIDER) return false;
+        SettingEntry.Slider s = item.row().card.entry().slider();
+        int idx = Math.max(0, Math.min(s.steps().length - 1, sliderIndex(item.row().card.entry()) + dir));
+        s.set().accept(host.config(), s.steps()[idx]);
+        changed();
+        narrationRequested = true;
+        return true;
+    }
+
+    /** One short phrase for the narrator: what is focused, what it is, and its current value. */
+    public String narration() {
+        ensureLayout();
+        FocusItem item = focusedItem();
+        if (item == null) return host.text(SettingsModel.KEY_SIDEBAR_TITLE);
+        switch (item.type()) {
+            case F_CAT -> {
+                return host.text(SettingsModel.KEY_NARRATE_CATEGORY, host.text(item.cat().nameKey()));
+            }
+            case F_SEARCH -> {
+                return host.text(SettingsModel.KEY_NARRATE_SEARCH);
+            }
+            case F_HELP -> {
+                return host.text(SettingsModel.KEY_NARRATE_BUTTON, host.text(SettingsModel.KEY_MANUAL_TITLE));
+            }
+            case F_DONE -> {
+                return host.text(SettingsModel.KEY_NARRATE_BUTTON, host.text("gui.done"));
+            }
+            case F_HEADER -> {
+                return host.text(SettingsModel.KEY_NARRATE_GROUP, item.row().title,
+                        host.text(state.expanded.contains(item.row().group.id())
+                                ? SettingsModel.KEY_NARRATE_OPEN : SettingsModel.KEY_NARRATE_CLOSED));
+            }
+            default -> { }
+        }
+        Row r = item.row();
+        SettingCard card = r.card;
+        TranslatorConfig cfg = host.config();
+        String title = r.title;
+        switch (card.kind()) {
+            case TOGGLE -> {
+                return host.text(SettingsModel.KEY_NARRATE_SWITCH, title,
+                        host.text(card.entry().isOn(cfg) ? SettingsCatalog.STATE_ON : SettingsCatalog.STATE_OFF));
+            }
+            case MASTER -> {
+                return item.sub() == 0
+                        ? host.text(SettingsModel.KEY_NARRATE_SWITCH, title, masterStatus(cfg))
+                        : host.text(SettingsModel.KEY_NARRATE_BUTTON, host.text(SettingsModel.KEY_BTN_PRIVACY));
+            }
+            case SLIDER -> {
+                return host.text(SettingsModel.KEY_NARRATE_SLIDER, title, resolve(card.entry().state(cfg)));
+            }
+            case SURFACE -> {
+                return item.sub() == 0
+                        ? host.text(SettingsModel.KEY_NARRATE_VALUE, title, resolve(card.entry().state(cfg)))
+                        : host.text(SettingsModel.KEY_NARRATE_VALUE,
+                                host.text(SettingsModel.KEY_ALL_COL_ENGINE) + " " + title,
+                                resolve(card.engineEntry().state(cfg)));
+            }
+            case ALL -> {
+                DisplayMode common = SettingsCatalog.commonMode(cfg);
+                Boolean ai = SettingsCatalog.commonEngine(cfg);
+                if (item.sub() == 0) {
+                    return host.text(SettingsModel.KEY_NARRATE_VALUE,
+                            host.text(SettingsModel.KEY_ALL_COL_MODE) + " " + title,
+                            common == null ? host.text(SettingsModel.KEY_ALL_MIXED) : resolve(SettingsCatalog.modeState(common)));
+                }
+                return host.text(SettingsModel.KEY_NARRATE_VALUE,
+                        host.text(SettingsModel.KEY_ALL_COL_ENGINE) + " " + title,
+                        ai == null ? host.text(SettingsModel.KEY_ALL_MIXED) : resolve(SettingsCatalog.engineState(ai)));
+            }
+            case WARMUP -> {
+                List<WarmButton> buttons = warmButtons(host.warmupStatus());
+                String label = item.sub() < buttons.size() ? buttons.get(item.sub()).label() : title;
+                return host.text(SettingsModel.KEY_NARRATE_BUTTON, title + " " + label);
+            }
+            default -> {
+                String label = card.entry() == null ? host.text(SettingsModel.KEY_BTN_OPEN) : buttonText(card.entry());
+                return host.text(SettingsModel.KEY_NARRATE_BUTTON, title + " " + label);
+            }
+        }
+    }
+
+    /** True once after focus moved or a focused control was pressed: the glue should ask the narrator to speak {@link #narration()}. */
+    public boolean consumeNarrationRequest() {
+        boolean was = narrationRequested;
+        narrationRequested = false;
+        return was;
     }
 
     // ------------------------------------------------------------------ test hooks
@@ -1569,6 +1818,13 @@ public final class SettingsPanel {
             if (r.header() && r.group.id().equals(groupId)) return new int[] {listX, rowScreenY(r), cardWidth(0), r.h};
         }
         return null;
+    }
+
+    /** Rectangle of the {@code sub}-th keyboard-focusable control of a card, or null. */
+    int[] focusBounds(String cardId, int sub) {
+        ensureLayout();
+        FocusItem item = focusItem("card:" + cardId + "#" + sub);
+        return item == null ? null : focusRect(item);
     }
 
     int rowCount() { ensureLayout(); return rows.size(); }

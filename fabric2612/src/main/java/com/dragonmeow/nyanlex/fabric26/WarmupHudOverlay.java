@@ -18,18 +18,19 @@ final class WarmupHudOverlay {
     static void render(GuiGraphicsExtractor g) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.screen != null) return;
-        draw(g);
+        draw(g, false);
     }
 
     /** Title screen, menus and every other screen: the warm-up keeps running behind them, so show it there too. */
     static void renderOnScreen(net.minecraft.client.gui.screens.Screen screen, GuiGraphicsExtractor g) {
         // the settings and warm-up screens show the progress themselves
         if (screen instanceof Fabric26ConfigScreen || screen instanceof ItemWarmupConfirmScreen
-                || screen instanceof ItemWarmupProgressScreen || screen instanceof FirstRunScreen) return;
-        draw(g);
+                || screen instanceof ItemWarmupProgressScreen || screen instanceof QuickSetupScreen) return;
+        draw(g, true);
     }
 
-    private static void draw(GuiGraphicsExtractor g) {
+    /** In the world the readout sits at the top left; on a menu screen it moves to the top right, clear of the buttons there. */
+    private static void draw(GuiGraphicsExtractor g, boolean onMenu) {
         TranslatorConfig cfg = NyanLexFabric26.config();
         Minecraft mc = Minecraft.getInstance();
         if (cfg == null || mc == null || mc.options.hideGui) return;
@@ -40,7 +41,7 @@ final class WarmupHudOverlay {
         Font font = mc.font;
         int textW = font.width(view.text());
         int w = Math.max(72, textW + 10);
-        int x = 4;
+        int x = onMenu ? g.guiWidth() - w - 4 : 4;
         int y = 4;
         g.fill(x, y, x + w, y + 20, 0xA0000000);
         g.fill(x, y, x + w, y + 1, view.color());
