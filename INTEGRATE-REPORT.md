@@ -50,7 +50,13 @@ Tests: `service/LiveE2eFindingsTest` (11, real `OpenAiTranslator` + inline fake 
 Estimated failure rate (inference from the offline analysis table, not a re-run): the analysis found heavy units fail 10.4% vs 0.5% for the rest, PB-free 0.5% vs PB>=4 30%, 20+ CS pairs 6/7, unit-leading icon 8.8% vs 1.3%. The four shapes above leave the heavy class, so the share of failing first sends should fall from 2.4% to roughly 1% (the analysis' own estimate for "A+B+C" was 0.8-1.2%); the F4 shape and truly long multi-PB units are not improved.
 
 ## 4. Verification
-RESULTS_PLACEHOLDER
+- Root `gradle test --offline` (gradle 8.10, JDK 21): **1332 tests, 0 failures, 2 skipped** (baseline 1255 at the settings-UI branch + the later branches/fixes).
+- `fabric12111` (gradle 9.5.0): 1223 tests, 0 failures (mirrored suite; `SettingsCatalogTest` is no longer mirrored there because it reads `nyanslate.settings.*` lang keys that only root/fabric2612 ship: fix in `sync-core.ps1`, it had been failing since the settings-UI merge).
+- `sync-core.ps1`: second run `done: 0 file(s) synced` (0 drift); `verification/sync-legacy-forge-core.ps1 -Check`: `SYNC_FORGE_CORE_OK files=20 changed=0`.
+- `python verification/hook-guards.py check`: OK (after `apply`, see caveat below).
+- **`compileJava` on all 18 targets: rc=0**: root, fabric1144, fabric1152, fabric1165, fabric1171, fabric1182, fabric1194, fabric120, neoforge120 (gradle 8.13, online), neoforge, fabric12111 (gradle 9.5.0), fabric2612, fabric26, neoforge26, fabric263, neoforge263, forge1122, forge1132 (wrappers + temurin 8). Driver script and per-target logs: scratchpad `compile_all.sh`, `clog2/`.
+- Jar `fabric2612/build/libs/nyanslate-1.0.0-Fabric-26.1.2.jar` (gradle 9.5.0 `build`, JDK 25): SHA-256 `89145032051d61c406a96a819e76cd927bcec2ea35e1c03f30f7ae62ab452740`; 450 entries, `<old-id>` occurrences 0 (names and contents); `git grep -i <old-id>` on the tree: 0.
+- No real game launch.
 
 ## 5. Not done / caveats
 - R2 (see above); pure-token colour-pair removal; lead icon after a row break; no real game launch (all UI/hook changes are compile + unit tested only).
