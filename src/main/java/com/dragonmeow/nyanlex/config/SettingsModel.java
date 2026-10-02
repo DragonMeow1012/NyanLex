@@ -208,6 +208,7 @@ public final class SettingsModel {
                 KEY_FILES_GROUP, KEY_FILES_GROUP_DESC,
                 KEY_PROVIDER_FIXED, KEY_PROVIDER_FIXED_DESC));
         keys.addAll(DialogContent.allLangKeys());
+        keys.addAll(QuickSetupPanel.allLangKeys());
         for (int i = 1; i <= MANUAL_SECTIONS; i++) {
             keys.add(manualTitleKey(i));
             keys.add(manualBodyKey(i));

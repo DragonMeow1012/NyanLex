@@ -105,9 +105,10 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static HubDownloadState hubDownloadState;
     private static HubDownloader hubDownloader;
     private static final HubDownloadJob hubDownloadJob = new HubDownloadJob();
-    private static boolean firstRunTried;
-    private static volatile HubPlan firstRunHubPlan;
-    private static volatile int firstRunModCount;
+    private static boolean firstStartTried;
+    private static volatile com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState packState =
+            com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.IDLE;
+    private static volatile HubPlan packPlan;
     private static volatile boolean keybindMigrationChecked;
 
     private static KeyMapping modeKey;
@@ -799,51 +800,89 @@ public final class NyanLexFabric implements ClientModInitializer {
     }
 
 
-/** Once per launch, the first time the title screen appears: a silent,
-     *  index.json-only check for mod translations the player doesn't have yet. */
-    /** The newest repository plan found for the first-start card (null until the check finishes or when nothing is new). */
-    public static HubPlan firstRunHubPlan() {
-        return firstRunHubPlan;
+    // ---- translation packs found for the installed mods (快速設定 and 翻譯包)
+
+    /** State of the background pack check started by the questionnaire. */
+    public static com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState packState() {
+        return packState;
     }
 
-    public static int firstRunModCount() {
-        return firstRunModCount;
+    /** The mods that have a pack worth downloading, as one text line each, with the total size. */
+    public static com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo packInfo() {
+        HubPlan plan = packPlan;
+        if (plan == null) return new com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo(0, "", List.of());
+        List<String> lines = new ArrayList<>();
+        for (var item : plan.downloadable()) {
+            lines.add(item.label() + "\u3000" + HubDownloadConfirmScreen.formatBytes(item.bytes()));
+        }
+        return new com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo(lines.size(),
+                HubDownloadConfirmScreen.formatBytes(plan.totalDownloadBytes()), lines);
     }
 
-    /** An AI key has been entered (the first-start card waits for this before turning online translation on). */
+    /**
+     * Looks, in the background, for translation packs for the installed mods. This only reads the
+     * public pack index (a plain GET); no player text and no list of mods is sent anywhere.
+     */
+    public static void startPackDetection() {
+        if (hubDownloader == null || config == null
+                || packState == com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.DETECTING) return;
+        packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.DETECTING;
+        packPlan = null;
+        runHubBackground(() -> {
+            try {
+                List<String> modIds = loadedModIds();
+                Optional<ModpackIdentity> modpack = ModpackDetector.detect(hubCandidateRoots(), modIds, null);
+                HubPlan plan = hubDownloader.planStartupMods(false, modpack.orElse(null), modIds,
+                        config.targetLang, hubDownloadState);
+                if (plan.downloadable().isEmpty()) {
+                    packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.NONE;
+                } else {
+                    packPlan = plan;
+                    packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.FOUND;
+                }
+            } catch (IOException | RuntimeException e) {
+                packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.FAILED;
+            }
+        });
+    }
+
+    /** Downloads the packs found by {@link #startPackDetection()} in the background. */
+    public static void startPackDownload() {
+        HubPlan plan = packPlan;
+        if (plan == null || hubDownloader == null || hubDownloadJob.isRunning()) return;
+        hubDownloadJob.start(plan, hubDownloader, hubLocalCache, hubDownloadState, hubExecutor());
+    }
+
+    public static boolean packDownloading() {
+        return hubDownloadJob.isRunning();
+    }
+
+    /** An API key is entered, or a ChatGPT login is signed in: either one makes the AI service usable. */
     public static boolean aiConfigured() {
-        if (config == null || config.aiApiKeys == null) return false;
+        if (config == null) return false;
+        if (config.aiUseCodex) {
+            return codexClient != null && codexClient.isSignedInCached();
+        }
+        if (config.aiApiKeys == null) return false;
         for (String key : config.aiApiKeys) if (key != null && !key.isBlank()) return true;
         return false;
     }
 
+    /** The settings file (holds the API keys), for the AI settings notice. */
+    public static Path configFilePath() {
+        return configPath;
+    }
+
     /**
-     * Once, on the title screen of a fresh install: the first-start card. It replaces the
-     * separate repository popup of this launch (the card carries the repository line itself).
+     * Once, on the title screen of a fresh install: the 快速設定 questionnaire. It is the only
+     * window that ever opens by itself, and only on the first start.
      */
     private void maybeStartFirstRun(Minecraft mc) {
-        if (firstRunTried || mc == null || config == null || mc.getOverlay() != null) return;
+        if (firstStartTried || mc == null || config == null || mc.getOverlay() != null) return;
         if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
-        if (!com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(config)) {
-            firstRunTried = true;
-            return;
-        }
-        firstRunTried = true;
-        if (hubDownloader != null) {
-            runHubBackground(() -> {
-                try {
-                    List<String> modIds = loadedModIds();
-                    Optional<ModpackIdentity> modpack = ModpackDetector.detect(hubCandidateRoots(), modIds, null);
-                    HubPlan plan = hubDownloader.planStartupMods(false, modpack.orElse(null), modIds,
-                            config.targetLang, hubDownloadState);
-                    firstRunModCount = modIds.size();
-                    if (!plan.downloadable().isEmpty()) firstRunHubPlan = plan;
-                } catch (IOException | RuntimeException ignored) {
-                    // best-effort: the card simply has no repository line
-                }
-            });
-        }
-        mc.setScreen(new FirstRunScreen(mc.screen));
+        firstStartTried = true;
+        if (!com.dragonmeow.nyanlex.config.QuickSetupPanel.firstStartDue(config)) return;
+        mc.setScreen(new QuickSetupScreen(mc.screen));
     }
 
     public static CodexAppServerClient codexClient() {
@@ -1489,9 +1528,9 @@ public final class NyanLexFabric implements ClientModInitializer {
             ScreenMouseEvents.allowMouseClick(screen).register(
                     (scr, mx, my, button) -> !ConsentOverlay.mouseClicked(scr, mx, my, button));
             ScreenMouseEvents.allowMouseRelease(screen).register((scr, mx, my, button) -> !ConsentOverlay.covers(scr));
-            ScreenMouseEvents.allowMouseScroll(screen).register((scr, mx, my, h2, v2) -> !ConsentOverlay.covers(scr));
+            ScreenMouseEvents.allowMouseScroll(screen).register((scr, mx, my, h2, v2) -> !ConsentOverlay.mouseScrolled(scr, mx, my, v2));
             ScreenKeyboardEvents.allowKeyPress(screen).register(
-                    (scr, key, scancode, mods) -> !ConsentOverlay.keyPressed(scr, key));
+                    (scr, key, scancode, mods) -> !ConsentOverlay.keyPressed(scr, key, mods));
             ScreenKeyboardEvents.allowKeyRelease(screen).register((scr, key, scancode, mods) -> !ConsentOverlay.covers(scr));
             ScreenEvents.afterRender(screen).register((scr, graphics, mouseX, mouseY, delta) -> HookGuard.run("event.warmupHud", () -> {
                 WarmupHudOverlay.renderOnScreen(scr, graphics);

@@ -13,13 +13,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** First-start card, consent box and the gate behind them (inline fakes only). */
+/** The shared card, the consent box and the gate behind it (inline fakes only). */
 class DialogPanelTest {
 
-    private static DialogContent.Lang lang(String code) {
+    static DialogContent.Lang lang(String code) {
         JsonObject json;
         try (InputStream in = DialogPanelTest.class.getResourceAsStream("/assets/nyanlex/lang/" + code + ".json")) {
             assertNotNull(in);
@@ -34,7 +36,7 @@ class DialogPanelTest {
         };
     }
 
-    private static int width(String s) {
+    static int width(String s) {
         int w = 0;
         for (char ch : s.toCharArray()) w += ch >= 0x2E00 ? 9 : 6;
         return w;
@@ -49,20 +51,20 @@ class DialogPanelTest {
     }
 
     private static final String[] LANGS = {"zh_tw", "zh_hk", "zh_cn", "en_us"};
-    private static final int[][] SIZES = {{320, 240}, {427, 240}, {320, 240}, {640, 360}};
+    private static final int[][] SIZES = {{320, 240}, {427, 240}, {256, 240}, {640, 360}};
 
     private static List<DialogPanel.Content> allDialogs(String code) {
         DialogContent.Lang l = lang(code);
         TranslatorConfig cfg = new TranslatorConfig();
         List<DialogPanel.Content> out = new ArrayList<>();
         for (ConsentGate.Kind kind : ConsentGate.Kind.values()) out.add(DialogContent.consent(kind, cfg, l));
-        out.add(DialogContent.firstRun(cfg, 0, "", l));
-        out.add(DialogContent.firstRun(cfg, 12, "3.4 MB", l));
+        cfg.aiUseCodex = true;
+        for (ConsentGate.Kind kind : ConsentGate.Kind.values()) out.add(DialogContent.consent(kind, cfg, l));
         return out;
     }
 
     @Test
-    void everyDialogFitsEverySizeInEveryLanguageWithNoOverlap() {
+    void everyConsentBoxFitsEverySizeInEveryLanguageWithEqualFooterButtons() {
         for (String code : LANGS) {
             for (DialogPanel.Content content : allDialogs(code)) {
                 for (int[] size : SIZES) {
@@ -73,23 +75,18 @@ class DialogPanelTest {
                     int[] box = p.boxRect();
                     assertTrue(box[0] >= 0 && box[1] >= 0 && box[0] + box[2] <= size[0] && box[1] + box[3] <= size[1],
                             label + " box inside the screen: " + java.util.Arrays.toString(box));
-                    List<int[]> rects = new ArrayList<>();
-                    for (DialogPanel.Block b : content.blocks()) {
-                        if (b instanceof DialogPanel.Row r) {
-                            for (DialogPanel.Btn btn : r.buttons()) {
-                                int[] rc = p.buttonRect(btn.id());
-                                assertNotNull(rc, label + " " + btn.label());
-                                assertTrue(rc[0] >= box[0] && rc[0] + rc[2] <= box[0] + box[2]
-                                        && rc[1] >= box[1] && rc[1] + rc[3] <= box[1] + box[3], label + " button inside box");
-                                for (int[] other : rects) {
-                                    boolean overlap = rc[0] < other[0] + other[2] && other[0] < rc[0] + rc[2]
-                                            && rc[1] < other[1] + other[3] && other[1] < rc[1] + rc[3];
-                                    assertFalse(overlap, label + " buttons overlap");
-                                }
-                                rects.add(rc);
-                            }
-                        }
+                    int[] cancel = p.buttonRect(DialogContent.CONSENT_CANCEL);
+                    int[] start = p.buttonRect(DialogContent.CONSENT_START);
+                    assertNotNull(cancel, label);
+                    assertNotNull(start, label);
+                    assertEquals(cancel[2], start[2], label + " 取消 and 開始翻譯 are the same width");
+                    assertTrue(cancel[0] < start[0], label + " 取消 on the left, the main action on the right");
+                    assertEquals(cancel[1], start[1], label + " one row");
+                    for (int[] rc : List.of(cancel, start)) {
+                        assertTrue(rc[0] >= box[0] && rc[0] + rc[2] <= box[0] + box[2]
+                                && rc[1] >= box[1] && rc[1] + rc[3] <= box[1] + box[3], label + " button inside box");
                     }
+                    assertTrue(cancel[0] + cancel[2] <= start[0], label + " buttons do not overlap");
                     Rec c = new Rec();
                     p.render(c, -1, -1);
                     assertFalse(c.texts.isEmpty());
@@ -99,15 +96,16 @@ class DialogPanelTest {
     }
 
     @Test
-    void nothingIsFocusedEnterDoesNothingAndEscapeCancels() {
+    void nothingIsFocusedEnterDoesNothingEscapeCancelsAndTabWalksTheButtons() {
         for (String code : LANGS) {
             DialogPanel consent = new DialogPanel(DialogPanelTest::width);
             consent.set(DialogContent.consent(ConsentGate.Kind.ITEM, new TranslatorConfig(), lang(code)));
             consent.resize(320, 240);
-            assertEquals(DialogPanel.NONE, consent.keyPressed(257), "Enter must not start anything");
-            assertEquals(DialogPanel.NONE, consent.keyPressed(335), "keypad Enter either");
-            assertEquals(DialogPanel.NONE, consent.keyPressed(32), "space either");
-            assertEquals(DialogContent.CONSENT_CANCEL, consent.keyPressed(SettingsPanel.KEY_ESCAPE));
+            assertEquals(-1, consent.focusIndex(), code + ": no default focus");
+            assertEquals(DialogPanel.NONE, consent.keyPressed(257, false), "Enter must not start anything");
+            assertEquals(DialogPanel.NONE, consent.keyPressed(335, false), "keypad Enter either");
+            assertEquals(DialogPanel.NONE, consent.keyPressed(32, false), "space either");
+            assertEquals(DialogContent.CONSENT_CANCEL, consent.keyPressed(SettingsPanel.KEY_ESCAPE, false));
             assertEquals(DialogPanel.NONE, consent.mouseClicked(0, 0, 0), "a click outside any button chooses nothing");
             int[] start = consent.buttonRect(DialogContent.CONSENT_START);
             int[] cancel = consent.buttonRect(DialogContent.CONSENT_CANCEL);
@@ -115,12 +113,30 @@ class DialogPanelTest {
             assertEquals(DialogContent.CONSENT_CANCEL, consent.mouseClicked(cancel[0] + 3, cancel[1] + 3, 0));
             assertEquals(DialogPanel.NONE, consent.mouseClicked(start[0] + 3, start[1] + 3, 1), "right click does nothing");
 
-            DialogPanel first = new DialogPanel(DialogPanelTest::width);
-            first.set(DialogContent.firstRun(new TranslatorConfig(), 3, "1 MB", lang(code)));
-            first.resize(320, 240);
-            assertEquals(DialogPanel.NONE, first.keyPressed(257));
-            assertEquals(DialogContent.FIRST_LATER, first.keyPressed(SettingsPanel.KEY_ESCAPE), "Esc = not now");
+            // Tab walks 取消 then 開始翻譯; Enter or Space presses the framed one
+            consent.keyPressed(SettingsPanel.KEY_TAB, false);
+            assertEquals(DialogContent.CONSENT_CANCEL, consent.keyPressed(257, false), "the first stop is the safe button");
+            consent.keyPressed(SettingsPanel.KEY_TAB, false);
+            assertEquals(DialogContent.CONSENT_START, consent.keyPressed(32, false));
+            consent.keyPressed(SettingsPanel.KEY_TAB, true);
+            assertEquals(DialogContent.CONSENT_CANCEL, consent.keyPressed(257, false), "Shift+Tab goes back");
         }
+    }
+
+    @Test
+    void theNarratorDescribesTheFocusedButtonAndTheTitleWhenNothingIsFocused() {
+        DialogPanel p = new DialogPanel(DialogPanelTest::width);
+        p.setNarration(DialogContent.narration(lang("zh_tw")));
+        p.set(DialogContent.consent(ConsentGate.Kind.ITEM, new TranslatorConfig(), lang("zh_tw")));
+        p.resize(320, 240);
+        assertEquals("要開始線上翻譯嗎？", p.narration());
+        assertFalse(p.consumeNarrationRequest());
+        p.moveFocus(1);
+        assertEquals("取消，按鈕", p.narration());
+        assertTrue(p.consumeNarrationRequest(), "moving the focus asks the narrator to speak");
+        assertFalse(p.consumeNarrationRequest());
+        p.moveFocus(1);
+        assertEquals("開始翻譯，按鈕", p.narration());
     }
 
     private static int countOf(String text, String needle) {
@@ -130,13 +146,10 @@ class DialogPanelTest {
     }
 
     @Test
-    void consentNamesTheEngineAndMarksGoogleAsUnofficial() {
+    void consentNamesTheServiceTheTextGoesTo() {
         TranslatorConfig cfg = new TranslatorConfig();
-        cfg.aiModel = "gemini-test";
         DialogContent.Lang tw = lang("zh_tw");
-        assertTrue(DialogContent.engineName(cfg, false, tw).contains("Google"));
-        assertTrue(DialogContent.engineName(cfg, false, tw).contains("非官方端點"));
-        assertEquals("AI（gemini-test）", DialogContent.engineName(cfg, true, tw));
+        assertEquals("Google 翻譯（非官方端點）", DialogContent.engineName(cfg, false, tw));
         assertEquals(1, countOf(DialogContent.engineName(cfg, false, tw), "非官方端點"), "marked once, not twice");
         for (String old : new String[] {"deepl_api", "microsoft_api", "youdao"}) {
             // a stale id from an old config still resolves to the one Google label
@@ -144,18 +157,93 @@ class DialogPanelTest {
             assertEquals(1, countOf(DialogContent.engineName(cfg, false, tw), "非官方端點"), old);
         }
         cfg.machineTranslationProvider = "google";
+        assertEquals("AI 服務（Gemini）", DialogContent.engineName(cfg, true, tw));
+        cfg.aiBaseUrl = "https://api.openai.com/v1";
+        assertEquals("AI 服務（OpenAI）", DialogContent.engineName(cfg, true, tw));
+        cfg.aiBaseUrl = "https://api.deepseek.com";
+        assertEquals("AI 服務（DeepSeek）", DialogContent.engineName(cfg, true, tw));
+        cfg.aiBaseUrl = "http://127.0.0.1:11434/v1";
+        assertEquals("AI 服務（127.0.0.1:11434）", DialogContent.engineName(cfg, true, tw));
+        cfg.aiUseCodex = true;
+        assertEquals("ChatGPT（使用你的 Codex 額度）", DialogContent.engineName(cfg, true, tw));
+        cfg.aiUseCodex = false;
+        cfg.aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
 
         DialogPanel p = new DialogPanel(DialogPanelTest::width);
         p.resize(427, 240);
         p.set(DialogContent.consent(ConsentGate.Kind.ITEM, cfg, tw));
-        assertTrue(String.join("", p.shownTexts()).contains("這個物品的文字會送到"));
+        assertTrue(String.join("", p.shownTexts()).contains("這個物品的文字會送到 Google 翻譯（非官方端點）"));
         p.set(DialogContent.consent(ConsentGate.Kind.SCREEN, cfg, tw));
         assertTrue(String.join("", p.shownTexts()).contains("這個畫面的文字會送到"));
-        cfg.aiModel = "m";
         p.set(DialogContent.consent(ConsentGate.Kind.WARMUP, cfg, tw));
         String warm = String.join("", p.shownTexts());
-        assertTrue(warm.contains("所有物品的名稱與說明會送到") && warm.contains("AI（m）"), warm);
-        assertTrue(warm.contains("你可以隨時在設定關閉"));
+        assertTrue(warm.contains("所有物品的名稱和說明會送到 AI 服務（Gemini）"), warm);
+        assertTrue(warm.contains("按下「開始翻譯」會開啟線上翻譯，之後隨時可以在設定裡關閉"), "the grey line says what the button does");
+    }
+
+    @Test
+    void theLayoutIsComputedOncePerPageNotPerFrame() {
+        DialogPanel p = new DialogPanel(DialogPanelTest::width);
+        p.set(DialogContent.consent(ConsentGate.Kind.ITEM, new TranslatorConfig(), lang("zh_tw")));
+        p.resize(427, 240);
+        int before = p.layoutCount();
+        Rec c = new Rec();
+        for (int i = 0; i < 20; i++) p.render(c, i, i);
+        assertEquals(before, p.layoutCount(), "rendering never lays out again");
+        p.resize(320, 240);
+        assertEquals(before + 1, p.layoutCount(), "a resize does");
+    }
+
+    @Test
+    void tallContentScrollsAndTheFocusedItemIsScrolledIntoView() {
+        List<DialogPanel.Block> blocks = new ArrayList<>();
+        blocks.add(new DialogPanel.Text("題目", 0));
+        for (int i = 0; i < 6; i++) {
+            blocks.add(new DialogPanel.Choice(10 + i, "選項 " + i, "這是一段說明文字，用來讓每個選項有兩行以上的高度，確保內容比畫面高。", false));
+        }
+        DialogPanel.Content content = new DialogPanel.Content("標題", 3, 1, blocks,
+                DialogPanel.Footer.of(new DialogPanel.Btn(1, "上一步"), new DialogPanel.Btn(2, "下一步", true)), 1);
+        DialogPanel p = new DialogPanel(DialogPanelTest::width);
+        p.set(content);
+        p.resize(320, 240);
+        int[] box = p.boxRect();
+        assertTrue(box[1] + box[3] <= 240, "the box never grows past the screen");
+        assertTrue(p.contentHeight() > p.viewRect()[3], "content is taller than its window");
+        assertEquals(0, p.scrollOffset());
+        for (int i = 0; i < 7; i++) p.moveFocus(1);
+        assertTrue(p.scrollOffset() > 0, "tabbing to the last option scrolls it into view");
+        int[] last = p.buttonRect(15);
+        assertTrue(last[1] >= p.viewRect()[1] && last[1] + last[3] <= p.viewRect()[1] + p.viewRect()[3]);
+        p.mouseScrolled(100, 100, 1);
+        p.mouseScrolled(100, 100, 1);
+        p.mouseScrolled(100, 100, 1);
+        assertTrue(p.scrollOffset() >= 0);
+        // the footer stays reachable at any scroll position
+        int[] next = p.buttonRect(2);
+        assertEquals(2, p.mouseClicked(next[0] + 2, next[1] + 2, 0));
+    }
+
+    @Test
+    void choicesAreEquallyTallAndAListScrollsInsideItself() {
+        List<DialogPanel.Block> blocks = new ArrayList<>();
+        blocks.add(new DialogPanel.Choice(10, "甲", "短。", true));
+        blocks.add(new DialogPanel.Choice(11, "乙", "這一段說明比較長，會佔用比較多行。這一段說明比較長，會佔用比較多行。這一段說明比較長，會佔用比較多行。", false));
+        blocks.add(new DialogPanel.ListBox(List.of("a", "b", "c", "d", "e", "f", "g", "h"), 3));
+        DialogPanel p = new DialogPanel(DialogPanelTest::width);
+        p.set(new DialogPanel.Content("標題", blocks, DialogPanel.Footer.of(null, new DialogPanel.Btn(2, "好")), 2));
+        p.resize(427, 360);
+        int[] a = p.buttonRect(10);
+        int[] b = p.buttonRect(11);
+        assertEquals(a[3], b[3], "all options of a page are one size");
+        assertEquals(a[2], b[2]);
+        assertTrue(b[1] >= a[1] + a[3], "stacked without overlap");
+        Rec c = new Rec();
+        p.render(c, -1, -1);
+        assertTrue(c.texts.contains("a") && c.texts.contains("c") && !c.texts.contains("f"), "only three lines show");
+        p.mouseScrolled(p.viewRect()[0] + 10, b[1] + b[3] + 20, -1);
+        Rec after = new Rec();
+        p.render(after, -1, -1);
+        assertTrue(after.texts.contains("d") && !after.texts.contains("a"), "the wheel over the list scrolls the list: " + after.texts);
     }
 
     @Test
@@ -172,7 +260,7 @@ class DialogPanelTest {
         gate.confirm();
         assertEquals(1, sent.get(), "the asked action is completed once");
         assertTrue(cfg.translationRequestsEnabled);
-        assertTrue(cfg.firstRunDone, "answering the box also settles the first-start card");
+        assertTrue(cfg.firstRunDone, "answering the box also settles the first-start questionnaire");
         assertTrue(saves.get() >= 1);
         gate.confirm();
         assertEquals(1, sent.get(), "a second confirm has nothing parked");
@@ -198,27 +286,5 @@ class DialogPanelTest {
         assertEquals(0, sent.get());
         assertFalse(again.translationRequestsEnabled);
         assertFalse(g2.hasPending());
-    }
-
-    @Test
-    void firstRunCardShowsTheRepositoryLineOnlyWhenPacksWereFound() {
-        DialogContent.Lang tw = lang("zh_tw");
-        TranslatorConfig cfg = new TranslatorConfig();
-        DialogPanel p = new DialogPanel(DialogPanelTest::width);
-        p.resize(427, 240);
-        p.set(DialogContent.firstRun(cfg, 0, "", tw));
-        assertNull(p.buttonRect(DialogContent.FIRST_HUB));
-        assertNotNull(p.buttonRect(DialogContent.FIRST_MACHINE));
-        assertNotNull(p.buttonRect(DialogContent.FIRST_AI));
-        assertNotNull(p.buttonRect(DialogContent.FIRST_LATER));
-        assertNotNull(p.buttonRect(DialogContent.FIRST_CHANGE));
-        assertNotNull(p.buttonRect(DialogContent.FIRST_PRIVACY));
-        p.set(DialogContent.firstRun(cfg, 12, "3.4 MB", tw));
-        assertNotNull(p.buttonRect(DialogContent.FIRST_HUB));
-        assertTrue(String.join("", p.shownTexts()).contains("倉庫有 12 個模組的翻譯包（共 3.4 MB）"));
-    }
-
-    private static void assertNull(Object o) {
-        org.junit.jupiter.api.Assertions.assertNull(o);
     }
 }

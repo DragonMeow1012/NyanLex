@@ -204,7 +204,7 @@ public final class TranslationConfigScreen extends Screen {
         switch (action) {
             case OPEN_LANGUAGE -> open(new TranslationLanguageScreen(this));
             case OPEN_KEYBINDS -> open(new TranslationKeybindScreen(this));
-            case OPEN_QUICK_SETUP -> open(new FirstRunScreen(this));
+            case OPEN_QUICK_SETUP -> open(new QuickSetupScreen(this));
             case OPEN_MANUAL -> open(new TranslationManualScreen(this));
             case OPEN_PRIVACY -> open(new TranslationManualScreen(this));
             case OPEN_AI -> open(new AiConfigScreen(this));

@@ -25,7 +25,7 @@ final class WarmupHudOverlay {
     static void renderOnScreen(net.minecraft.client.gui.screens.Screen screen, GuiGraphics g) {
         // the settings and warm-up screens show the progress themselves
         if (screen instanceof TranslationConfigScreen || screen instanceof ItemWarmupConfirmScreen
-                || screen instanceof ItemWarmupProgressScreen || screen instanceof FirstRunScreen) return;
+                || screen instanceof ItemWarmupProgressScreen || screen instanceof QuickSetupScreen) return;
         draw(g);
     }
 
