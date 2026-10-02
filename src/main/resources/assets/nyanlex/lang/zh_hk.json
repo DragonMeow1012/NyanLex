@@ -69,9 +69,9 @@
   "screen.nyanlex.ai.hint.providers": "OpenAI 與 DeepSeek 使用各自標準的 OpenAI 相容端點。",
   "screen.nyanlex.ai.hint.enable": "加入金鑰後，在翻譯設定中將任何區域切換為 AI。未填金鑰時會退回機器翻譯。",
   "screen.nyanlex.options": "翻譯設定...",
-  "message.nyanlex.show_original": "正在顯示原文（翻譯已暫停）",
+  "message.nyanlex.show_original": "正在顯示原文，翻譯已暫停",
   "message.nyanlex.show_translation": "正在顯示譯文",
-  "message.nyanlex.screen_scan": "正在翻譯畫面文字... %s 項",
+  "message.nyanlex.screen_scan": "正在翻譯畫面上的 %s 段文字…",
   "message.nyanlex.retranslate": "正在翻譯：%s",
   "message.nyanlex.tooltip_hint": "按 [%s] 翻譯",
   "message.nyanlex.tooltip_hint_pending": "翻譯中…",
@@ -459,5 +459,10 @@
   "screen.nyanlex.ai.codex.quota_notice": "使用 ChatGPT 登入時，翻譯會使用你帳號的 Codex 額度。",
   "nyanlex.manual.setup_btn": "字太多不想看？讓設定小精靈幫你搞定",
   "nyanlex.manual.chapters": "章節",
-  "nyanlex.narrate.chapter": "%s，章節"
+  "nyanlex.narrate.chapter": "%s，章節",
+  "message.nyanlex.file.busy": "已經有一項匯出或匯入正在進行，請稍候。",
+  "message.nyanlex.file.exported": "已匯出 %s 個檔案：%s",
+  "message.nyanlex.file.imported": "已匯入 %s 筆翻譯（%s／%s 個檔案）。你已存的翻譯不會被覆蓋。",
+  "message.nyanlex.file.imported_failed": "已匯入 %s 筆翻譯（成功 %s／%s 個檔案），其中 %s 個檔案失敗：%s",
+  "message.nyanlex.file.failed": "匯出或匯入失敗：%s"
 }

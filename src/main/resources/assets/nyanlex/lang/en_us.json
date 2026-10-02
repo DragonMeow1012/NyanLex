@@ -106,9 +106,9 @@
   "screen.nyanlex.ai.hint.providers": "OpenAI and DeepSeek use their standard OpenAI-compatible endpoints.",
   "screen.nyanlex.ai.hint.enable": "After adding a key, select AI for any surface in Translation Settings. Empty keys fall back to machine translation.",
   "screen.nyanlex.options": "Translation Settings...",
-  "message.nyanlex.show_original": "Showing original text (translation paused)",
+  "message.nyanlex.show_original": "Showing the original text; translation is paused",
   "message.nyanlex.show_translation": "Showing translations",
-  "message.nyanlex.screen_scan": "Translating screen text... %s items",
+  "message.nyanlex.screen_scan": "Translating %s pieces of text on this screen...",
   "message.nyanlex.retranslate": "Translating: %s",
   "message.nyanlex.tooltip_hint": "Press [%s] to translate",
   "message.nyanlex.tooltip_hint_pending": "Translating...",
@@ -494,5 +494,10 @@
   "screen.nyanlex.ai.codex.quota_notice": "Signing in with ChatGPT means translations use your account's Codex quota.",
   "nyanlex.manual.setup_btn": "Too much to read? Let the setup helper do it for you",
   "nyanlex.manual.chapters": "Chapters",
-  "nyanlex.narrate.chapter": "%s, chapter"
+  "nyanlex.narrate.chapter": "%s, chapter",
+  "message.nyanlex.file.busy": "An export or import is already running. Please wait.",
+  "message.nyanlex.file.exported": "Exported %s file(s): %s",
+  "message.nyanlex.file.imported": "Imported %s translations (%s of %s files). Your saved translations were not overwritten.",
+  "message.nyanlex.file.imported_failed": "Imported %s translations (%s of %s files); %s file(s) failed: %s",
+  "message.nyanlex.file.failed": "Export or import failed: %s"
 }

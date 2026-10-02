@@ -49,13 +49,13 @@ public final class ItemWarmupConfirmScreen extends Screen {
     protected void init() {
         int centerX = this.width / 2;
         int y = this.height - 28;
+        this.addRenderableWidget(Button.builder(
+                Component.translatable("gui.cancel"), b -> onClose())
+                .bounds(centerX - 125, y, 120, 20).build());
         startButton = this.addRenderableWidget(Button.builder(
                 Component.translatable("screen.nyanlex.warmup.start"), b -> onStart())
-                .bounds(centerX - 125, y, 120, 20).build());
-        startButton.active = false;
-        this.addRenderableWidget(Button.builder(
-                Component.translatable("screen.nyanlex.warmup.back"), b -> onClose())
                 .bounds(centerX + 5, y, 120, 20).build());
+        startButton.active = false;
         if (eligibleEngine() && scanner == null) {
             scanner = new ItemWarmupScanner(new FabricItemWarmupSource(),
                     new FabricItemWarmupSource.Backend(() -> false));

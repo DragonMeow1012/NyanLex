@@ -111,12 +111,12 @@ public final class AiConfigScreen extends Screen {
         int modelY = openAiPanel ? 126 : 112;
         int keysY = openAiPanel ? 158 : 154;
         int testY = openAiPanel ? 180 : 182;
-        this.baseUrlBox = new EditBox(this.font, x, baseY, FIELD_W, 20, Component.literal("Base URL"));
+        this.baseUrlBox = new EditBox(this.font, x, baseY, FIELD_W, 20, Component.translatable("screen.nyanlex.ai.endpoint"));
         this.baseUrlBox.setMaxLength(256);
         this.baseUrlBox.setValue(cfg.aiBaseUrl == null ? "" : cfg.aiBaseUrl);
         this.addRenderableWidget(this.baseUrlBox);
 
-        this.modelBox = new EditBox(this.font, x, modelY, FIELD_W, 20, Component.literal("Model"));
+        this.modelBox = new EditBox(this.font, x, modelY, FIELD_W, 20, Component.translatable("screen.nyanlex.ai.model"));
         this.modelBox.setMaxLength(128);
         this.modelBox.setValue(cfg.aiModel == null ? "" : cfg.aiModel);
         this.addRenderableWidget(this.modelBox);

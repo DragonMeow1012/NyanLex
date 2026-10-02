@@ -796,4 +796,155 @@ class SettingsPanelTest {
         click(p, p.cardBounds("warmup_hud"));
         assertFalse(host.cfg.itemWarmupHud);
     }
+
+    // ------------------------------------------------------------------ keyboard
+
+    private static void tab(SettingsPanel p, int times, boolean shift) {
+        for (int i = 0; i < times; i++) assertTrue(p.keyPressed(SettingsPanel.KEY_TAB, false, shift));
+    }
+
+    @Test
+    void nothingHasKeyboardFocusUntilTabAndTabWalksCategoriesSearchHelpCardsAndDone() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 480, 270);
+        assertFalse(p.hasFocus(), "no default focus");
+        tab(p, 1, false);
+        assertEquals("cat:general", p.focusedKey(), "the first stop is the first category");
+        tab(p, 6, false);
+        assertEquals("cat:about", p.focusedKey());
+        tab(p, 1, false);
+        assertEquals("search", p.focusedKey());
+        assertTrue(p.isTyping(), "landing on the search box lets you type");
+        tab(p, 1, false);
+        assertEquals("help", p.focusedKey());
+        assertFalse(p.isTyping(), "Tab leaves the search box");
+        tab(p, 1, false);
+        assertEquals("card:quick#0", p.focusedKey(), "then the cards in reading order");
+        tab(p, 1, true);
+        assertEquals("help", p.focusedKey(), "Shift+Tab goes back");
+        // all the way round: the last stop is 完成, then it wraps to the first category
+        for (int i = 0; i < 200 && !"done".equals(p.focusedKey()); i++) tab(p, 1, false);
+        assertEquals("done", p.focusedKey());
+        tab(p, 1, false);
+        assertEquals("cat:general", p.focusedKey());
+    }
+
+    @Test
+    void enterAndSpacePressTheFocusedControlLikeAClick() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 480, 270);
+        // Tab to the online translation switch: categories(7) + search + help + quick + switch
+        tab(p, 7 + 1 + 1 + 1 + 1, false);
+        assertEquals("card:master#0", p.focusedKey());
+        assertFalse(host.cfg.translationRequestsEnabled);
+        assertTrue(p.keyPressed(SettingsPanel.KEY_ENTER, false, false));
+        assertTrue(host.cfg.translationRequestsEnabled, "Enter flips the switch");
+        assertTrue(p.keyPressed(SettingsPanel.KEY_SPACE, false, false));
+        assertFalse(host.cfg.translationRequestsEnabled, "and so does Space");
+        assertEquals(List.of(SettingEntry.SideEffect.CLEAR_PENDING, SettingEntry.SideEffect.CLEAR_PENDING), host.effects);
+        tab(p, 1, false); // the privacy button
+        assertEquals("card:master#1", p.focusedKey());
+        assertTrue(p.keyPressed(SettingsPanel.KEY_ENTER, false, false));
+        assertEquals(List.of(SettingAction.OPEN_PRIVACY), host.actions);
+        tab(p, 1, false); // 快速設定 is before; the language button comes next
+        assertEquals("card:language#0", p.focusedKey());
+        assertTrue(p.keyPressed(SettingsPanel.KEY_ENTER, false, false));
+        assertEquals(List.of(SettingAction.OPEN_PRIVACY, SettingAction.OPEN_LANGUAGE), host.actions);
+    }
+
+    @Test
+    void focusedCategoriesAndDoneWorkFromTheKeyboardAndAMouseClickDropsTheFocus() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 427, 240);
+        tab(p, 4, false); // 一般, 顯示, 翻譯服務, 翻譯包
+        assertEquals("cat:pack", p.focusedKey());
+        p.keyPressed(SettingsPanel.KEY_ENTER, false, false);
+        assertEquals(SettingsCategory.PACK, p.category());
+        assertEquals("cat:pack", p.focusedKey(), "the frame stays on the category that was opened");
+        click(p, p.categoryBounds(0));
+        assertFalse(p.hasFocus(), "clicking with the mouse drops the keyboard focus");
+        tab(p, 1, true);
+        assertEquals("done", p.focusedKey(), "Shift+Tab from nothing starts at the end");
+        p.keyPressed(SettingsPanel.KEY_SPACE, false, false);
+        assertTrue(host.closed);
+    }
+
+    @Test
+    void focusScrollsTheFocusedCardIntoViewAndSlidersTakeLeftAndRight() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 427, 240);
+        p.setCategory(SettingsCategory.ADVANCED);
+        for (int i = 0; i < 12 && !"card:cooldown#0".equals(p.focusedKey()); i++) tab(p, 1, false);
+        for (int i = 0; i < 60 && !"card:cooldown#0".equals(p.focusedKey()); i++) tab(p, 1, false);
+        assertEquals("card:cooldown#0", p.focusedKey());
+        int before = host.cfg.requestCooldownMs;
+        p.keyPressed(SettingsPanel.KEY_RIGHT, false, false);
+        assertTrue(host.cfg.requestCooldownMs > before || before == 10000, "Right moves the slider one step up");
+        p.keyPressed(SettingsPanel.KEY_LEFT, false, false);
+        p.keyPressed(SettingsPanel.KEY_LEFT, false, false);
+        assertTrue(host.cfg.requestCooldownMs < before, "Left moves it down");
+        // a card far down the list is scrolled into the window when it gets the focus
+        p.setCategory(SettingsCategory.DISPLAY);
+        for (int i = 0; i < 200 && !"card:dnt#0".equals(p.focusedKey()); i++) tab(p, 1, false);
+        assertEquals("card:dnt#0", p.focusedKey());
+        int[] r = p.focusBounds("dnt", 0);
+        int[] list = p.listRect();
+        assertTrue(r[1] >= list[1] && r[1] + r[3] <= list[1] + list[3], "the focused control is inside the list window");
+    }
+
+    @Test
+    void theNarratorDescribesTheFocusedControlWithItsValue() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 480, 270);
+        assertEquals("翻譯設定", p.narration(), "nothing focused: the screen's name");
+        tab(p, 1, false);
+        assertEquals("一般，分類", p.narration());
+        assertTrue(p.consumeNarrationRequest());
+        assertFalse(p.consumeNarrationRequest());
+        tab(p, 7, false);
+        assertEquals("搜尋設定，輸入欄", p.narration());
+        tab(p, 2, false);
+        assertEquals("快速設定 開始，按鈕", p.narration());
+        tab(p, 1, false);
+        assertEquals("線上翻譯，開關，關：不會送出任何文字", p.narration());
+        p.setCategory(SettingsCategory.DISPLAY);
+        tab(p, 1, false); // from the focused control of 一般 the walk continues in the new list
+        p.moveFocus(1);
+        assertFalse(p.narration().isBlank());
+        for (SettingsCategory c : SettingsCategory.values()) {
+            p.setCategory(c);
+            p.moveFocus(-1);
+            for (int i = 0; i < 80; i++) {
+                assertFalse(p.narration().isBlank(), c + " " + p.focusedKey());
+                assertFalse(p.narration().contains("nyanlex."), "no raw lang key in: " + p.narration());
+                p.moveFocus(1);
+            }
+        }
+    }
+
+    @Test
+    void theFocusFrameIsDrawnInTheAccentBlueAroundTheFocusedControl() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 480, 270);
+        tab(p, 7 + 1 + 1 + 1 + 1, false);
+        int[] r = p.focusBounds("master", 0);
+        java.util.List<int[]> blue = new ArrayList<>();
+        UiCanvas canvas = new UiCanvas() {
+            @Override public void fill(int x, int y, int w, int h, int argb) {
+                if (argb == SettingsPanel.C_ACCENT && (w == 1 || h == 1)) blue.add(new int[] {x, y, w, h});
+            }
+            @Override public void text(String text, int x, int y, int argb) { }
+            @Override public void pushClip(int x, int y, int w, int h) { }
+            @Override public void popClip() { }
+        };
+        p.render(canvas, -1, -1);
+        boolean top = false;
+        boolean left = false;
+        for (int[] b : blue) {
+            if (b[1] == r[1] - 1 && b[0] <= r[0] && b[0] + b[2] >= r[0] + r[2] - 1 && b[3] == 1) top = true;
+            if (b[0] == r[0] - 1 && b[1] <= r[1] && b[1] + b[3] >= r[1] + r[3] - 1 && b[2] == 1) left = true;
+        }
+        assertTrue(top && left, "a one pixel accent-blue frame surrounds the switch");
+    }
+
 }

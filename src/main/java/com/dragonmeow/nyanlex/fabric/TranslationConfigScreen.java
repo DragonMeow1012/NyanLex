@@ -17,7 +17,8 @@ import com.dragonmeow.nyanlex.hub.HubDownloadJob;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.narration.NarratedElementType;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
@@ -220,11 +221,8 @@ public final class TranslationConfigScreen extends Screen {
 
     private void confirm(Component title, Component message, Runnable onYes) {
         if (this.minecraft == null) return;
-        this.minecraft.setScreen(new ConfirmScreen(yes -> {
-            if (yes) onYes.run();
-            if (this.minecraft != null) this.minecraft.setScreen(this);
-        }, title, message, Component.translatable(SettingsCatalog.KEY_CONFIRM_YES),
-                Component.translatable("gui.cancel")));
+        this.minecraft.setScreen(new ConfirmDialogScreen(this, title, message,
+                Component.translatable(SettingsCatalog.KEY_CONFIRM_YES), onYes));
     }
 
     private void confirmClearCache() {
@@ -272,8 +270,16 @@ public final class TranslationConfigScreen extends Screen {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         boolean ctrl = (modifiers & GLFW.GLFW_MOD_CONTROL) != 0;
         boolean shift = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0;
-        if (panel.keyPressed(keyCode, ctrl, shift)) return true;
+        if (panel.keyPressed(keyCode, ctrl, shift)) {
+            if (panel.consumeNarrationRequest()) this.triggerImmediateNarration(true);
+            return true;
+        }
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    protected void updateNarratedWidget(NarrationElementOutput output) {
+        output.add(NarratedElementType.TITLE, Component.literal(panel.narration()));
     }
 
     @Override

@@ -287,4 +287,44 @@ class DialogPanelTest {
         assertFalse(again.translationRequestsEnabled);
         assertFalse(g2.hasPending());
     }
+
+    /** What the overlay does with the box and the gate: cancel sends nothing; start completes the asked action once. */
+    private static void answer(DialogPanel panel, ConsentGate gate, int id) {
+        if (id == DialogContent.CONSENT_START) gate.confirm();
+        else if (id == DialogContent.CONSENT_CANCEL) gate.cancel();
+    }
+
+    @Test
+    void cancellingTheBoxSendsNothingAndStartingItRunsTheAskedActionExactlyOnce() {
+        for (String code : LANGS) {
+            for (ConsentGate.Kind kind : ConsentGate.Kind.values()) {
+                TranslatorConfig cfg = new TranslatorConfig();
+                ConsentGate gate = new ConsentGate(() -> cfg, () -> { });
+                AtomicInteger requests = new AtomicInteger();
+                assertFalse(gate.request(kind, requests::incrementAndGet));
+                DialogPanel p = new DialogPanel(DialogPanelTest::width);
+                p.set(DialogContent.consent(kind, cfg, lang(code)));
+                p.resize(320, 240);
+                // Escape cancels: no request, the switch stays off
+                answer(p, gate, p.keyPressed(SettingsPanel.KEY_ESCAPE, false));
+                assertEquals(0, requests.get(), code + " " + kind + ": cancel sends nothing");
+                assertFalse(cfg.translationRequestsEnabled);
+                // asked again, this time Tab to 取消 then Enter: also nothing
+                assertFalse(gate.request(kind, requests::incrementAndGet));
+                p.set(DialogContent.consent(kind, cfg, lang(code)));
+                p.moveFocus(1);
+                answer(p, gate, p.keyPressed(SettingsPanel.KEY_ENTER, false));
+                assertEquals(0, requests.get());
+                // asked again: click 開始翻譯, then a second click on the same spot changes nothing more
+                assertFalse(gate.request(kind, requests::incrementAndGet));
+                p.set(DialogContent.consent(kind, cfg, lang(code)));
+                int[] start = p.buttonRect(DialogContent.CONSENT_START);
+                answer(p, gate, p.mouseClicked(start[0] + 2, start[1] + 2, 0));
+                answer(p, gate, p.mouseClicked(start[0] + 2, start[1] + 2, 0));
+                assertEquals(1, requests.get(), code + " " + kind + ": the asked action runs exactly once");
+                assertTrue(cfg.translationRequestsEnabled);
+            }
+        }
+    }
+
 }

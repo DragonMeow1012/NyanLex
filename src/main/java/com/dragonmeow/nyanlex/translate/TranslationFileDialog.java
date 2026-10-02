@@ -18,22 +18,52 @@ public final class TranslationFileDialog {
     public interface Importer { int merge(TranslationFile file) throws Exception; }
     private TranslationFileDialog() { }
 
+    /** What an export or import ended with, as data, so each loader can word it in the player's language. */
+    public record Outcome(Kind kind, int count, int files, int totalFiles, int failedFiles, String first, String last) {
+        public enum Kind { BUSY, EXPORTED, IMPORTED, FAILED }
+
+        /** The English sentence (older loader glue shows this one as it is). */
+        public String english() {
+            return switch (kind) {
+                case BUSY -> "A translation file operation is already running.";
+                case EXPORTED -> "Exported " + files + " translation file(s): " + first
+                        + (files > 1 ? " ... " + last : "");
+                case IMPORTED -> "Imported " + count + " translations from " + files + "/" + totalFiles
+                        + " files (existing translations kept)."
+                        + (failedFiles == 0 ? "" : " Failed files: " + failedFiles
+                        + ". Successful files remain imported. " + first);
+                case FAILED -> "Translation file: " + (first == null || first.isEmpty() ? "operation failed" : first);
+            };
+        }
+    }
+
     public static void open(boolean importing, Supplier<TranslationFile> exporter,
                             Importer importer, Consumer<String> result) {
-        if (!BUSY.compareAndSet(false, true)) { result.accept("A translation file operation is already running."); return; }
+        openOutcome(importing, exporter, importer, outcome -> result.accept(outcome.english()));
+    }
+
+    /** Same as {@link #open} but reports an {@link Outcome} instead of an English sentence. */
+    public static void openOutcome(boolean importing, Supplier<TranslationFile> exporter,
+                                   Importer importer, Consumer<Outcome> result) {
+        if (!BUSY.compareAndSet(false, true)) {
+            result.accept(new Outcome(Outcome.Kind.BUSY, 0, 0, 0, 0, null, null));
+            return;
+        }
         Thread worker = new Thread(() -> {
             try {
                 List<Path> selected = selectFiles(importing);
                 if (selected.isEmpty()) return;
                 if (importing) {
-                    result.accept(importFiles(selected, importer));
+                    result.accept(importOutcome(selected, importer));
                 } else {
                     List<Path> parts = exporter.get().writeParts(selected.get(0));
-                    result.accept("Exported " + parts.size() + " translation file(s): " + parts.get(0).getFileName()
-                            + (parts.size() > 1 ? " ... " + parts.get(parts.size() - 1).getFileName() : ""));
+                    result.accept(new Outcome(Outcome.Kind.EXPORTED, 0, parts.size(), parts.size(), 0,
+                            parts.get(0).getFileName().toString(),
+                            parts.get(parts.size() - 1).getFileName().toString()));
                 }
             } catch (Exception error) {
-                result.accept("Translation file: " + (error.getMessage() == null ? "operation failed" : error.getMessage()));
+                result.accept(new Outcome(Outcome.Kind.FAILED, 0, 0, 0, 0,
+                        error.getMessage() == null ? "" : error.getMessage(), null));
             } finally {
                 BUSY.set(false);
             }
@@ -43,6 +73,10 @@ public final class TranslationFileDialog {
     }
 
     static String importFiles(List<Path> selected, Importer importer) {
+        return importOutcome(selected, importer).english();
+    }
+
+    static Outcome importOutcome(List<Path> selected, Importer importer) {
         Set<Path> paths = new TreeSet<>();
         for (Path path : selected) paths.add(path.toAbsolutePath().normalize());
         long count = 0;
@@ -58,9 +92,7 @@ public final class TranslationFileDialog {
                         + (error.getMessage() == null ? "operation failed" : error.getMessage());
             }
         }
-        return "Imported " + count + " translations from " + imported + "/" + paths.size()
-                + " files (existing translations kept)."
-                + (failed == 0 ? "" : " Failed files: " + failed + ". Successful files remain imported. " + firstFailure);
+        return new Outcome(Outcome.Kind.IMPORTED, (int) count, imported, paths.size(), failed, firstFailure, null);
     }
 
     private static List<Path> selectFiles(boolean importing) throws Exception {
