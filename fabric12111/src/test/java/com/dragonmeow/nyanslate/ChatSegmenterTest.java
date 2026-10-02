@@ -4,6 +4,7 @@ import com.dragonmeow.nyanslate.translate.ChatSegmenter;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class ChatSegmenterTest {
 
@@ -46,5 +47,45 @@ class ChatSegmenterTest {
     void nullAndEmptySafe() {
         assertEquals(-1, ChatSegmenter.contentStart(null));
         assertEquals(-1, ChatSegmenter.contentStart(""));
+    }
+
+    private static String content(String s) {
+        int i = ChatSegmenter.contentStart(s);
+        return i < 0 ? null : s.substring(i);
+    }
+
+    @Test
+    void rankedAndChannelSpeakersAreSplit() {
+        assertEquals("hi", content("[MVP+] Name: hi"));
+        assertEquals("hi", content("[VIP] Name: hi"));
+        assertEquals("hi", content("Guild > [VIP] Name: hi"));
+        assertEquals("hi", content("Party > Alice: hi"));
+        assertEquals("hi", content("From [MVP+] Name: hi"));
+        assertEquals("hi", content("To Alice: hi"));
+        assertEquals("hi", content("<Steve> hi"));
+        assertEquals("hi", content("Steve: hi"));
+        assertEquals("hi", content("§a[VIP] §bName§r: hi"));
+        assertEquals("hi", content("[123✫] [MVP+] Name [Admin]: hi"));
+    }
+
+    @Test
+    void sentencesAndLabelsAreNotSplit() {
+        assertNull(content("Your quest 'X' is complete. Reward: 250 coins!"));
+        assertNull(content("Reward: 250 coins"));
+        assertNull(content("Tip: use /help"));
+        assertNull(content("You have 5 coins left: spend them wisely"));
+        assertNull(content("Cost: 100 coins"));
+        assertNull(content("Click here to open the shop: https://example.com"));
+    }
+
+    @Test
+    void serverSystemPrefixIsTreatedAsSpeaker() {
+        // Documented trade-off: a single bare word before ": " is indistinguishable from a name.
+        assertEquals("restarting in 5 min", content("Server: restarting in 5 min"));
+    }
+
+    @Test
+    void sameContentFromDifferentRankedSpeakersSharesContent() {
+        assertEquals(content("[MVP+] Alice: gg"), content("Guild > [VIP] Bob: gg"));
     }
 }

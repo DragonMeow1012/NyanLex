@@ -3168,6 +3168,13 @@ public final class TranslationCache {
                 || TextFilter.hasReshapedProtocolToken(translated)) {
             return "format/token lost";
         }
+        if (translated.equals(source) || translated.trim().equals(source == null ? "" : source.trim())) {
+            return "unchanged (echo)";
+        }
+        if (TextFilter.isPartialTransliteration(source, translated)
+                || TextFilter.hasUntranslatedAnchoredField(source, translated)) {
+            return "mixed-script (Latin residue in Chinese)";
+        }
         return "unknown";
     }
 
