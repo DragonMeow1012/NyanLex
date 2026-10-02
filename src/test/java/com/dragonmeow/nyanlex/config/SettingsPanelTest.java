@@ -68,6 +68,10 @@ class SettingsPanelTest {
         @Override public void sideEffect(SettingEntry.SideEffect effect) { effects.add(effect); }
         @Override public boolean beforeToggle(SettingEntry entry) { return allowToggle; }
         @Override public WarmupStatus warmupStatus() { return warm; }
+        int translated;
+        int pending;
+        @Override public int translatedCount() { return translated; }
+        @Override public int pendingCount() { return pending; }
         @Override public void warmupCommand(WarmupCommand c) { commands.add(c); }
         final List<FileLocations.Entry> opened = new ArrayList<>();
         @Override public List<FileLocations.Entry> fileLocations() {
@@ -202,6 +206,119 @@ class SettingsPanelTest {
             if (t.clip() == null && t.x() >= sb[0] && t.x() < sb[0] + sb[2] && t.y() >= sb[1] && t.y() < sb[1] + sb[3]) {
                 assertTrue(t.x() + t.w() <= sb[0] + sb[2], label + " sidebar text '" + t.s() + "'");
             }
+        }
+    }
+
+    /** The sidebar's drawn texts (those starting inside the sidebar rectangle and not clipped to the list). */
+    private static List<Text> sidebarTexts(SettingsPanel p, Rec c) {
+        int[] sb = p.sidebarRect();
+        List<Text> out = new ArrayList<>();
+        for (Text t : c.texts) {
+            if (t.clip() == null && t.x() >= sb[0] && t.x() < sb[0] + sb[2] && t.y() >= sb[1] && t.y() < sb[1] + sb[3]) out.add(t);
+        }
+        return out;
+    }
+
+    @Test
+    void sidebarCountersAreNeverCutOffAtTheCommonWidthsInAnyLanguage() {
+        int[][] counts = {{0, 0}, {12345, 6789}, {1234567, 987654}, {2147483647, 2147483647}};
+        int shownEnglish = 0;
+        for (int[] size : new int[][] {{320, 240}, {427, 240}, {320, 270}, {427, 270}, {480, 270}, {640, 360}}) {
+            for (String code : new String[] {"en_us", "zh_tw", "zh_cn", "zh_hk"}) {
+                for (int[] n : counts) {
+                    FakeHost host = new FakeHost();
+                    host.lang = code;
+                    host.translated = n[0];
+                    host.pending = n[1];
+                    SettingsPanel p = panel(host, size[0], size[1]);
+                    Rec c = new Rec();
+                    p.render(c, -1, -1);
+                    String label = code + " " + size[0] + "x" + size[1] + " " + n[0] + "/" + n[1];
+                    String drawn = sidebarTexts(p, c).stream().map(Text::s).collect(java.util.stream.Collectors.joining(" "))
+                            .replaceAll("\\s+", "");
+                    String done = host.text("config.nyanlex.progress.done", n[0]).replaceAll("\\s+", "");
+                    String pend = host.text(SettingsModel.KEY_STAT_PENDING, n[1]).replaceAll("\\s+", "");
+                    assertTrue(drawn.contains(done), label + " the translated counter is drawn whole: " + drawn);
+                    assertTrue(drawn.contains(pend), label + " the pending counter is drawn whole: " + drawn);
+                    if (code.equals("en_us")) shownEnglish++;
+                    int[] sb = p.sidebarRect();
+                    for (Text t : sidebarTexts(p, c)) {
+                        assertTrue(t.x() + t.w() <= sb[0] + sb[2], label + " inside the sidebar: " + t.s());
+                    }
+                }
+            }
+        }
+        assertEquals(6 * counts.length, shownEnglish);
+    }
+
+    @Test
+    void sidebarCountersWrapInEnglishAndStayOnOneLineInChinese() {
+        FakeHost en = new FakeHost();
+        en.lang = "en_us";
+        en.translated = 12345;
+        en.pending = 6789;
+        SettingsPanel pe = panel(en, 320, 240);
+        Rec ce = new Rec();
+        pe.render(ce, -1, -1);
+        List<String> lines = new ArrayList<>();
+        for (Text t : sidebarTexts(pe, ce)) lines.add(t.s());
+        assertTrue(lines.contains("Translated:") && lines.contains("12345"), "label and number on two lines: " + lines);
+        assertTrue(lines.contains("Pending:") && lines.contains("6789"), "label and number on two lines: " + lines);
+
+        FakeHost tw = new FakeHost();
+        tw.translated = 12345;
+        tw.pending = 6789;
+        SettingsPanel pt = panel(tw, 320, 240);
+        Rec ct = new Rec();
+        pt.render(ct, -1, -1);
+        List<String> twLines = new ArrayList<>();
+        for (Text t : sidebarTexts(pt, ct)) twLines.add(t.s());
+        assertTrue(twLines.contains(tw.text("config.nyanlex.progress.done", 12345)), "one line in Chinese: " + twLines);
+        assertTrue(twLines.contains(tw.text(SettingsModel.KEY_STAT_PENDING, 6789)), "one line in Chinese: " + twLines);
+    }
+
+    @Test
+    void sidebarCountersAreLeftOutRatherThanDrawnCutOffWhenTheWindowIsTooShort() {
+        for (int w : new int[] {320, 427}) {
+            for (int h = 120; h <= 400; h += 2) {
+                FakeHost host = new FakeHost();
+                host.lang = "en_us";
+                host.translated = 12345;
+                host.pending = 6789;
+                SettingsPanel p = panel(host, w, h);
+                Rec c = new Rec();
+                p.render(c, -1, -1);
+                String drawn = sidebarTexts(p, c).stream().map(Text::s).collect(java.util.stream.Collectors.joining(" "))
+                        .replaceAll("\\s+", "");
+                boolean any = drawn.contains("Translated") || drawn.contains("Pending");
+                if (any) {
+                    assertTrue(drawn.contains("Translated:12345") && drawn.contains("Pending:6789"),
+                            w + "x" + h + " the counters are whole or absent: " + drawn);
+                }
+            }
+        }
+    }
+
+    @Test
+    void runningWarmupCardSaysOneMinuteLeftNotOneMinutes() {
+        for (int eta : new int[] {1, 0, -1, 2}) {
+            FakeHost host = new FakeHost();
+            host.lang = "en_us";
+            host.warm = new WarmupStatus(true, ItemWarmupDriver.State.RUNNING, ItemWarmupDriver.PauseReason.NONE,
+                    872, 1332, 900, false, 800, 42, eta, false);
+            SettingsPanel p = panel(host, 427, 270);
+            p.setCategory(SettingsCategory.MINE);
+            int[] list = p.listRect();
+            for (int i = 0; i < 200 && p.cardBounds("warmup")[1] > list[1]; i++) {
+                p.keyPressed(SettingsPanel.KEY_DOWN, false, false);
+            }
+            Rec c = new Rec();
+            p.render(c, -1, -1);
+            String drawn = c.texts.stream().map(Text::s).collect(java.util.stream.Collectors.joining(" "))
+                    .replaceAll("\\s+", "");
+            String want = eta == 2 ? "about2minutesleft" : "about1minuteleft";
+            assertTrue(drawn.contains(want), "eta " + eta + ": " + drawn);
+            assertFalse(drawn.contains("1minutes"), "eta " + eta + " never reads 1 minutes: " + drawn);
         }
     }
 

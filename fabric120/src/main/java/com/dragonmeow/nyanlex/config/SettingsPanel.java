@@ -657,18 +657,38 @@ public final class SettingsPanel {
             }
             y += CAT_ROW_H;
         }
-        // Footer: translation counters (wide only) and the Done button.
+        // Footer: translation counters (wide only) and the Done button. A counter wider than the sidebar
+        // wraps onto a second line rather than being cut off; when the wrapped lines do not fit above the
+        // Done button the counters are left out, never drawn truncated.
         int doneY = sbY + sbH - DONE_H - 3;
-        if (!narrow && y + 2 * LINE_H + 6 <= doneY) {
-            String done = UiText.fit(host.text("config.nyanlex.progress.done", host.translatedCount()), sbW - 10, host::textWidth);
-            String pend = UiText.fit(host.text(SettingsModel.KEY_STAT_PENDING, host.pendingCount()), sbW - 10, host::textWidth);
-            c.text(done, sbX + 5, doneY - 2 * LINE_H - 3, C_GOOD);
-            c.text(pend, sbX + 5, doneY - LINE_H - 1, host.pendingCount() > 0 ? 0xFFFFD080 : 0xFF808590);
+        if (!narrow) {
+            List<String> doneLines = statLines(host.text("config.nyanlex.progress.done", host.translatedCount()));
+            List<String> pendLines = statLines(host.text(SettingsModel.KEY_STAT_PENDING, host.pendingCount()));
+            int pendTop = doneY - 1 - pendLines.size() * LINE_H;
+            int doneTop = pendTop - 2 - doneLines.size() * LINE_H;
+            if (doneTop >= y + 3) {
+                for (int i = 0; i < doneLines.size(); i++) {
+                    c.text(doneLines.get(i), sbX + 5, doneTop + i * LINE_H, C_GOOD);
+                }
+                int pendColor = host.pendingCount() > 0 ? 0xFFFFD080 : 0xFF808590;
+                for (int i = 0; i < pendLines.size(); i++) {
+                    c.text(pendLines.get(i), sbX + 5, pendTop + i * LINE_H, pendColor);
+                }
+            }
         }
         boolean hoverDone = in(mx, my, sbX + 3, doneY, sbW - 6, DONE_H);
         rrect(c, sbX + 3, doneY, sbW - 6, DONE_H, hoverDone ? C_BUTTON_HOVER : C_BUTTON);
         String label = narrow ? host.text(SettingsModel.KEY_DONE_SHORT) : host.text("gui.done");
         c.text(label, sbX + 3 + (sbW - 6 - host.textWidth(label)) / 2, doneY + 4, C_TITLE);
+    }
+
+    /** A sidebar counter wrapped to the sidebar's inner width (a single over-wide word is still clipped by fit). */
+    private List<String> statLines(String text) {
+        List<String> lines = new ArrayList<>();
+        for (String line : UiText.wrap(text, sbW - 10, host::textWidth)) {
+            lines.add(UiText.fit(line, sbW - 10, host::textWidth));
+        }
+        return lines;
     }
 
     private void drawSearch(UiCanvas c, int mx, int my) {
@@ -1049,8 +1069,9 @@ public final class SettingsPanel {
         switch (st.state()) {
             case RUNNING:
                 if (st.hasSpeed()) {
-                    return host.text("screen.nyanlex.warmup.state.running.speed",
-                            st.itemsPerMinute(), Math.max(1, st.etaMinutes()));
+                    int minutesLeft = Math.max(1, st.etaMinutes());
+                    return host.text(WarmupSpeedText.stateKey(st.itemsPerMinute(), minutesLeft),
+                            st.itemsPerMinute(), minutesLeft);
                 }
                 return host.text("screen.nyanlex.warmup.state.running");
             case PAUSED:

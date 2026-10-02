@@ -92,7 +92,8 @@ public final class ItemWarmupProgressScreen extends Screen {
                 || p.state() == ItemWarmupDriver.State.PAUSED;
         if (active) {
             Component speed = p.itemsPerMinute() > 0
-                    ? new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.warmup.progress.speed",
+                    ? new net.minecraft.network.chat.TranslatableComponent(com.dragonmeow.nyanlex.config.WarmupSpeedText.progressKey(
+                                    p.itemsPerMinute(), Math.max(1, p.etaMinutes())),
                             p.itemsPerMinute(), Math.max(1, p.etaMinutes()))
                     : new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.warmup.progress.speed.unknown");
             GuiComponent.drawCenteredString(g, this.font, speed, centerX, barY + 56, 0xFFE0E0E0);

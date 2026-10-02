@@ -385,9 +385,15 @@
   "screen.nyanlex.warmup.warn.5": "When you sign in with ChatGPT, pre-translation uses your Codex quota and sends one batch at a time, so it is slower.",
   "screen.nyanlex.warmup.progress.skips": "Skipped: %s already saved, %s already in the target language",
   "screen.nyanlex.warmup.progress.speed": "About %s items per minute, about %s minutes left",
+  "screen.nyanlex.warmup.progress.speed.minute_one": "About %s items per minute, about %s minute left",
+  "screen.nyanlex.warmup.progress.speed.item_one": "About %s item per minute, about %s minutes left",
+  "screen.nyanlex.warmup.progress.speed.item_one_minute_one": "About %s item per minute, about %s minute left",
   "screen.nyanlex.warmup.progress.speed.unknown": "Measuring speed...",
   "screen.nyanlex.warmup.progress.inflight": "Batches in flight: %s (up to %s right now)",
   "screen.nyanlex.warmup.progress.yield": "Chat or tooltip translation is working; pre-translation steps aside",
   "screen.nyanlex.warmup.state.running.speed": "Running, about %s items per minute, about %s minutes left",
+  "screen.nyanlex.warmup.state.running.speed.minute_one": "Running, about %s items per minute, about %s minute left",
+  "screen.nyanlex.warmup.state.running.speed.item_one": "Running, about %s item per minute, about %s minutes left",
+  "screen.nyanlex.warmup.state.running.speed.item_one_minute_one": "Running, about %s item per minute, about %s minute left",
   "nyanlex.ui.hud.running_rate": "Pre-translating: scanned %s / %s, about %s per minute"
 }

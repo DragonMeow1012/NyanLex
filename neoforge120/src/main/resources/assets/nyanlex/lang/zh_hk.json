@@ -385,9 +385,15 @@
   "screen.nyanlex.warmup.warn.5": "使用 ChatGPT 登入時，預先翻譯會消耗你的 Codex 額度，而且一次只送出一批，所以速度比較慢。",
   "screen.nyanlex.warmup.progress.skips": "略過：已存好 %s 個，已是目標語言 %s 個",
   "screen.nyanlex.warmup.progress.speed": "每分鐘約 %s 個，預估剩餘約 %s 分鐘",
+  "screen.nyanlex.warmup.progress.speed.minute_one": "每分鐘約 %s 個，預估剩餘約 %s 分鐘",
+  "screen.nyanlex.warmup.progress.speed.item_one": "每分鐘約 %s 個，預估剩餘約 %s 分鐘",
+  "screen.nyanlex.warmup.progress.speed.item_one_minute_one": "每分鐘約 %s 個，預估剩餘約 %s 分鐘",
   "screen.nyanlex.warmup.progress.speed.unknown": "速度計算中…",
   "screen.nyanlex.warmup.progress.inflight": "同時進行中的批次：%s（目前最多 %s）",
   "screen.nyanlex.warmup.progress.yield": "聊天或提示框翻譯進行中，預先翻譯先讓路",
   "screen.nyanlex.warmup.state.running.speed": "執行中，每分鐘約 %s 個，剩餘約 %s 分鐘",
+  "screen.nyanlex.warmup.state.running.speed.minute_one": "執行中，每分鐘約 %s 個，剩餘約 %s 分鐘",
+  "screen.nyanlex.warmup.state.running.speed.item_one": "執行中，每分鐘約 %s 個，剩餘約 %s 分鐘",
+  "screen.nyanlex.warmup.state.running.speed.item_one_minute_one": "執行中，每分鐘約 %s 個，剩餘約 %s 分鐘",
   "nyanlex.ui.hud.running_rate": "預先翻譯：已掃描 %s / %s，每分鐘約 %s 個"
 }
