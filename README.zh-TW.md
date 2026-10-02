@@ -14,7 +14,7 @@ NyanLex Translator是純客戶端即時翻譯模組。它只翻譯畫面上需�
 - 開啟後，會送出你設定為要翻譯的文字（物品說明、介面等）。若開啟聊天翻譯，聊天內容也會送出，**包含私訊**。
 - 文字會送到你所選的翻譯服務：
   - **機器翻譯（Google，免金鑰）**使用**非官方**網頁端點，可能隨時被限流或失效。
-  - **AI 引擎**（OpenAI 相容端點，或 ChatGPT／Codex 登入）同樣需自備金鑰或登入，只會送到你自己設定的服務。
+  - **AI 引擎**（OpenAI 相容服務，例如 Gemini、OpenAI、DeepSeek，或 ChatGPT／Codex 登入）同樣需自備金鑰或登入，只會送到你自己設定的服務。用 ChatGPT 登入時，會使用你帳號的 Codex 額度。
 - **API 金鑰只存在本機的設定檔裡**，只會送給你選擇的服務商；設定畫面會遮罩，且不會寫入日誌或偵錯檔。
 - 從舊版升級的使用者沿用原本的設定：原本就在翻譯的，線上翻譯維持開啟。
 - **GitHub 翻譯倉庫只能手動下載**，會向 GitHub 抓公開檔案（`index.json` 與你確認的檔案），不會上傳任何東西。
@@ -30,7 +30,7 @@ NyanLex Translator是純客戶端即時翻譯模組。它只翻譯畫面上需�
 
 - 翻譯聊天、物品名稱、提示框、記分板、名牌、Boss Bar、標題、Action Bar、書本與模組介面。
 - 每個顯示區域可選原文、譯文或原文＋譯文。
-- 支援 Google 機器翻譯（非官方端點）與 OpenAI 相容 API。
+- 支援 Google 機器翻譯（非官方端點），以及 Gemini、OpenAI、DeepSeek、OpenRouter、Ollama、LM Studio 等 OpenAI 相容 API。
 - 所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設使用 `gpt-5.6-terra`／`medium`。
 - 非同步批次、優先佇列、磁碟快取與失敗退避，避免畫面卡頓及重複請求。
 - 玩家名只依 TAB 名單遮罩；物品名稱不再因 `with Chest` 等普通文字被誤判。
@@ -123,7 +123,7 @@ Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
 | 來源 | API Key | 說明 |
 | --- | --- | --- |
 | Google | 不需要 | 唯一的機器翻譯來源，為**非官方端點**，可能隨時被限制或失效。 |
-| OpenAI 相容 API | 視服務而定 | 可設定 Base URL、模型、API Key、詞彙表與 GT 回退。 |
+| OpenAI 相容 API | 視服務而定；本機服務可留空 | 可用 Gemini、OpenAI、DeepSeek（設定畫面有預設按鈕），或任何 OpenAI 相容服務，例如 OpenRouter、Ollama、LM Studio 與自架服務。可設定 Base URL、模型、多把輪替使用的 API Key 與詞彙表，並可選擇 AI 失敗時要不要用機翻（Google）補上。金鑰留空時，不會送出 `Authorization` 標頭。 |
 | ChatGPT／Codex | 使用 ChatGPT 登入 | 所有表列版本均支援；需先安裝 Codex CLI，可選模型、推理強度並查看 token。 |
 
 ## 快捷鍵

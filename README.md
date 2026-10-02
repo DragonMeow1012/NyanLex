@@ -14,7 +14,7 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 - Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
 - The text goes to the translation service you choose:
   - **Machine translation (Google, no key)** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.
-  - **AI engines** (OpenAI-compatible endpoints, or ChatGPT/Codex sign-in) also need your own key or sign-in, and go only to the service you configure.
+  - **AI engines** (an OpenAI-compatible service such as Gemini, OpenAI or DeepSeek, or ChatGPT/Codex sign-in) also need your own key or sign-in, and go only to the service you configure. Signing in with ChatGPT uses your account's Codex quota.
 - **API keys are stored only in the config file on your machine**, are sent only to the provider you chose, are masked in the settings screen, and are never written to logs or debug dumps.
 - Users upgrading from an earlier version keep their existing settings: if you were already translating, online translation stays on.
 - **The GitHub translation hub is manual download only.** It fetches public files from GitHub (`index.json` plus the files you confirm) and never uploads anything.
@@ -30,7 +30,7 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 
 - Translates chat, item names, tooltips, scoreboards, name tags, boss bars, titles, action bars, books, and mod screens.
 - Each surface can show original text, translated text, or both.
-- Supports Google machine translation (unofficial endpoint) and OpenAI-compatible APIs.
+- Supports Google machine translation (unofficial endpoint) and OpenAI-compatible APIs such as Gemini, OpenAI, DeepSeek, OpenRouter, Ollama and LM Studio.
 - Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-5.6-terra` / `medium`.
 - Async batching, priority queues, disk caches, and failure backoff reduce stalls and duplicate requests.
 - Player names are masked only from the TAB list; ordinary item text such as `with Chest` is no longer guessed as a player name.
@@ -111,7 +111,7 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 | Source | API key | Notes |
 | --- | --- | --- |
 | Google | Not required | The only machine translation source. **Unofficial endpoint** that may be limited or stop working at any time. |
-| OpenAI-compatible API | Depends on service | Configurable Base URL, model, API key, glossary, and GT fallback. |
+| OpenAI-compatible API | Depends on service; may be left empty for a local server | Works with Gemini, OpenAI and DeepSeek (preset buttons), or any OpenAI-compatible service such as OpenRouter, Ollama, LM Studio or one you host yourself. You can set the Base URL, the model, several API keys that are used in rotation, and a glossary, and choose whether machine translation (Google) fills in when the AI fails. When the key is left empty, no `Authorization` header is sent. |
 | ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, effort, and token controls. |
 
 ## Sharing translations
