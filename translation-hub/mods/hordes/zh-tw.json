@@ -1,0 +1,7 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-2.1-only","rows":6,"entries":{
+"00b4d8d48ab57b835c39a6ce6d8ac03ce1d25ad1da1fcbaa31b4693651b963e7":"已清除所有現有的屍潮世界資料"
+,"047503230cbfb685149cd27d00c835c8cbed147fddea9fb5a6c6903e1eb5df4f":"感染治療方式"
+,"668fa88280d5c88f944c7cec3e48e72b7f47810983e7b9aace633ae97ee28f22":"提供給 /spawnHordeWave 的參數數量錯誤"
+,"b75d7f87d5ff889eae51991d1c6f5ac12ef62a02d7ab62cad219b6563e525e46":"提供給 /startHordeEvent 的參數數量錯誤"
+,"ce6f86e71846a3a82f6cb626ea0eb12dcce43c20e76bbb4fe2a818202ca1bcdd":"已停止進行中的屍潮事件"
+,"dedd6a31d88820af4f2da1dfacc724b4d5328030ddfb763ebf6f568af79d1a46":"已成功召喚屍潮波次；"}}

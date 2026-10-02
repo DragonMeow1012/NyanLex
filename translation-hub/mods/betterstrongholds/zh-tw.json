@@ -1,0 +1,9 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":8,"entries":{
+"03cb8679667073c15ba1eb84e94dbf4806e93c60eb98cdbbb1c2c49ff2d20492":"啟用結構毀損"
+,"17c802260bb85e16aaccfea0c605e00a6c9243cd56085ed1dc7ae1253bd313a8":"允許要塞被小型麵條洞穴輕微破壞。"
+,"54b316135c61606fd814659b9538230aa8711ab3acfe7b53ddf53ab5e59705e8":"一般設定。"
+,"a3ef21db316dc3a3521a4e1636d269664f705eadfee09f2d9261ad37636277d5":"每個終界傳送門框架方塊生成時已填入終界之眼的機率。"
+,"aeb8941281c1aeff369cd6cca69a19754ef2af290e576c09bedabe6f1804acf5":"傳送門框架已填滿機率"
+,"d30ed099e1f105b47b1a8a521a9c00cd98575ad8e0b86d9ca9b81a9b7b62725b":"請注意，它們不會受到大型洞窟影響。"
+,"de322f87b5f5957b54dc467054983c18cbd04a213066155347d00d04b34215e2":"一般設定"
+,"effbd4771b9c8018dae19e897ec25ccfd4faa2c800de3f7dedef21043a10bc45":"請改用 /locate structure betterstrongholds:stronghold！"}}

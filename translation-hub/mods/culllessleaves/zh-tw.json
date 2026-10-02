@@ -1,0 +1,7 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-only","rows":6,"entries":{
+"0598d76c797b92cafabe411a9ff22e99d6952c3cd37813e3c4affe82bf569d31":"剔除樹葉"
+,"92c1cdfdf4cb9cf6fcca962f206de36fd5d60db1178bc9461052f8de703a0e06":"已啟用"
+,"ec38755514da2ef95b1b10fe3dea12cf45fa7cce827fa2d2291ba367624c723b":"在剔除葉片內部之前的葉片層數。 ⟦PB0⟧ 1 = 最快但外觀最差。 ⟦PB1⟧ 2 = 推薦。 ⟦PB2⟧ 4 = 最慢但外觀最好。"
+,"f1dbc33978a95b952b19bfc0da8f928e8e3958930810988de2f6e4bd8b27ce01":"深度"
+,"fd50839646089a0336463403423632b973936f31122ab39c6c89772876376522":"樹葉剔除深度"
+,"ffc2ba6f5099361749d4132aad7cc7a9b3489d07f1609d99a5a5ddfcd1069ef4":"啟用 Cull Less Leaves 模組。"}}

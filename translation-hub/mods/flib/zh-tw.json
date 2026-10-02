@@ -1,0 +1,4 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":3,"entries":{
+"2a40e4bae36ad06056c2fb44ac39050662cb3df2a5b257a69417bcd5bcb34ba6":"這是來自核心模組 FutureLibrary 的指令。此模組具備許多 Java 功能以支援其他模組，並提供子指令以支援整合包等專案"
+,"583de8f67a6d6ac30a47966c1993a92b4bd95bd3a754023fb0dda75178095540":"使用其他子指令需要 OP 權限"
+,"7ab8177f998f2d51ba95de4043dcc862c0f370a9ae6749b75e2700f5567f7650":"設定檔位於 "}}

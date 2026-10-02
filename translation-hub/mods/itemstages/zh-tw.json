@@ -1,0 +1,8 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-2.1-only","rows":7,"entries":{
+"03321542b3ffba8b65ace6b399fc1c2e27e410ddd04282fdb8485e93217e0650":"- 此物品會在 JEI 中隱藏。"
+,"0f2511d51504eb57643d4aec5c8dbbf94fb8c5ce3b5ef2d9945f78ba49e780da":"- 此物品無法對方塊或實體使用。"
+,"6d1164c9acb78f4b15b72cb93b6aa1b1734230627f0aa1844eb52cc5178c4c2f":"- 此物品無法被撿起。"
+,"956c907b95162bc774632efde162387e29a6211027f36a2def51676ff29c956a":"陌生物品"
+,"9ec1a86a3bedb7c0874326888cfed72dda296d70e447c0ac788022f449f62bf5":"- 此物品會從物品欄中被丟出。"
+,"c65f71849c7e386c4d1ccdde12b249bd48c233d83b9a9c4aff7e1c4f5951d18c":"- 此物品無法作為武器使用。"
+,"c966fdc0ea65f74c4b2fec8e1d9a37283be38a8972ee367494bd9f68a1f92bbc":"不那麼陌生的物品"}}

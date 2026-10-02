@@ -1,0 +1,11 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","rows":10,"entries":{
+"115e888093c667e4b9b3abba66707e2b12b53214928249395a0d05f8c498902d":"遇到空值項目時傾印資料"
+,"440469a3d242963d0fd602dfa4a9c22ac1ba88f68ff058499f135285898dd1d9":"在提示中顯示口袋欄位"
+,"518418be04df43ec96214dd37d8fe1a72f970852b4194ba563840d2c973b85db":"新增一個模擬 Curio 欄位的口袋欄位"
+,"5d7ea33672214b157086ae9c863d54bba0375bc7f06ed28fec75f94d63afb151":"需要將 Trinkets 欄位重新導向至一般配件欄位類型時很有用"
+,"64e3b4995fc19878b7e79fafb0594a559895233db831c824dcfa7bf6fd313845":"Accessories 相容性設定"
+,"9e2d026caf760df3dbf301475bd7cec0c1051d94297935eadfaebc12646e4978":"當 Trinkets 內部因空值發生錯誤，且此行為導致當機時很有用"
+,"aca6b554c063dfe86a3a62bf7ab6e9ca11e6abe2132b0732d33f61ee31ad9940":"欄位 ID 重新導向"
+,"b0017f6a676e4dc48081b72b83884065c419b6643f8fc9914e795d310beb58b1":"新增口袋欄位"
+,"b95a702346e5de5d97212fcd1bd2ad7796a64e6c9011051c9344b9585eb4d032":"若該欄位並非隱含適用，則在提示中顯示口袋欄位"
+,"c13c5a5f8381d294e340df65150efcb14655fd4038395488d184b96e9ce333da":"口袋"}}

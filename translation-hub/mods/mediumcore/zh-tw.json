@@ -1,0 +1,3 @@
+{"schema":2,"format":"hub-hash-v1","hash":"sha256","language":"zh-tw","license":"LGPL-3.0-or-later","rows":2,"entries":{
+"b039b1e68a852346795a2d89b0321ec077a255a196ce682982721e7282912e51":"半極限模式"
+,"b7c4d2d38cf745f3d84c54f757645419099e54e23d45b1cdebe2f4f74fd18084":"生存模式，每失去一條生命，最大生命值就會減少。"}}
