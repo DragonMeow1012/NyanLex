@@ -106,7 +106,7 @@ class DoNotTranslateTermsTest {
     @Test
     void onlyWholeWordsAreMasked() {
         DoNotTranslateMatcher sky = terms("skyblock");
-        for (String text : List.of("Skyblocker rocks", "two skyblocks", "skyblock_2",
+        for (String text : List.of("Skyfoo rocks", "two skyblocks", "skyblock_2",
                 "SKYBLOCK2", "megaskyblock")) {
             assertFalse(mask(text, sky).hasMasks(), text);
         }

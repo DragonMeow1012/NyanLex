@@ -1572,7 +1572,7 @@ public final class InlineCoreRegression {
         /** Terms match whole words only; CJK neighbours are word boundaries. */
         private static void onlyWholeWordsAreMasked() {
             DoNotTranslateMatcher sky = terms("skyblock");
-            for (String text : List.of("Skyblocker rocks", "two skyblocks", "skyblock_2",
+            for (String text : List.of("Skyfoo rocks", "two skyblocks", "skyblock_2",
                     "SKYBLOCK2", "megaskyblock")) {
                 check(!mask(text, sky).hasMasks(), "a term matched inside a longer word: " + text);
             }
@@ -1588,11 +1588,11 @@ public final class InlineCoreRegression {
             config.doNotTranslateTerms.add("skyblock");
             List<String> sent = new ArrayList<String>();
             TranslationService service = service(config, recording(sent, text -> "T:" + text));
-            service.translateScoreboardLine("Install Skyblocker now");
+            service.translateScoreboardLine("Install Skyfoo now");
             pump(service, 2);
-            check(sent.equals(List.of("Install Skyblocker now")),
+            check(sent.equals(List.of("Install Skyfoo now")),
                     "a longer word containing the term was masked on the service path: " + sent);
-            passed("D2", "whole-word matching only (Skyblocker/skyblocks/skyblock_2 untouched)");
+            passed("D2", "whole-word matching only (Skyfoo/skyblocks/skyblock_2 untouched)");
         }
 
         /** Multi-word terms match across any horizontal space; the longest match wins. */

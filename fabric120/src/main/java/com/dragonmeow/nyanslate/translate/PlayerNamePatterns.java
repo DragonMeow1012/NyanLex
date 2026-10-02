@@ -15,8 +15,8 @@ import java.util.regex.Pattern;
 
 /**
  * Versioned, static table of STRONG sentence frames that carry a player name the TAB
- * list does not know about: auction sellers/buyers/bidders, lobby arrivals, SkyHanni
- * leaderboard rivals, auction notices and party events. {@link NameMasker#mask} merges
+ * list does not know about: auction sellers/buyers/bidders, lobby arrivals, leaderboard
+ * rivals, auction notices and party events. {@link NameMasker#mask} merges
  * the spans found here with TAB names and do-not-translate terms in ONE pass, so every
  * seller of the same auction tooltip shares one cache key ({@code Seller: ⟦MT1⟧ ⟦0⟧}).
  *
@@ -133,11 +133,11 @@ public final class PlayerNamePatterns {
             new Frame("lobby.join", words("joined the lobby"), words(" joined the lobby!"),
                     LINE_START + "(?:>>> )?" + rank("n") + name("n") + " joined the lobby!(?: <<<)?"
                             + LINE_END, "n"),
-            // "[SkyHanni] You passed Name in the Nether Wart Collection Leaderboard!".
-            new Frame("skyhanni.passed", words("You passed"), words("You passed "),
+            // "[Mod] You passed Name in the Nether Wart Collection Leaderboard!".
+            new Frame("leaderboard.passed", words("You passed"), words("You passed "),
                     "(?<![A-Za-z0-9_])You passed " + name("n") + " in the ", "n"),
-            // SkyHanni leaderboard HUD row: "1,234 behind Name" / "1,234 behind Name [#12]".
-            new Frame("skyhanni.behind", words("behind"), words(" behind "),
+            // leaderboard HUD row: "1,234 behind Name" / "1,234 behind Name [#12]".
+            new Frame("leaderboard.behind", words("behind"), words(" behind "),
                     LINE_START + NUM + " behind " + name("n") + "(?: \\[#" + NUM + "\\])?"
                             + LINE_END, "n"),
             // "Item sold to [MVP+] Name for a marvelous 1,000 coins, gg!" (name may end the line).

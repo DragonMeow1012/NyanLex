@@ -179,7 +179,7 @@ public final class TranslatorConfig {
     /** Upper bound of items submitted per game launch (cached items do not count). */
     public int itemWarmupMaxItemsPerSession = 3000;
 
-    // Chat is always non-blocking: the original is shown immediately
+    // Chat is always non-blocking (non-blocking): the original is shown immediately
     // and the translation is appended asynchronously when ready — never hard-waits.
 
     /** HTTP request/connect timeout in milliseconds. */

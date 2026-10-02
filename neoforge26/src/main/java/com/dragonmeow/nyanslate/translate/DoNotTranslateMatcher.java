@@ -21,7 +21,7 @@ import java.util.regex.Matcher;
  *   <li>Case-insensitive; the ORIGINAL spelling found in the text is what gets restored.</li>
  *   <li>Whole words: when a term starts (ends) with an ASCII letter, digit or {@code _},
  *       the neighbouring character before (after) the match must not be one of those,
- *       so {@code skyblock} never matches inside {@code Skyblocker} or {@code skyblocks}.
+ *       so {@code skyblock} never matches inside {@code Skyfoo} or {@code skyblocks}.
  *       A position right after a literal {@code §x} format code counts as a word start.
  *       Terms that start/end with any other character (for example CJK) need no boundary.</li>
  *   <li>Words of a multi-word term match across one or more horizontal whitespace

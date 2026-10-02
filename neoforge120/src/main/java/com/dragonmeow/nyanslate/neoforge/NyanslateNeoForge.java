@@ -2274,7 +2274,7 @@ public final class NyanslateNeoForge {
             Slot slot = accessor.nyanslate$hoveredSlot();
             if (slot != null && slot.hasItem()) target = slot.getItem();
         }
-        // JEI/FTB/custom widgets may show a tooltip without a vanilla Slot. Accept only
+        // recipe-viewer/custom widgets may show a tooltip without a vanilla Slot. Accept only
         // a fresh tooltip snapshot from the exact screen currently receiving the key.
         if ((target == null || target.isEmpty()) && lastTooltipScreen == screen
                 && System.currentTimeMillis() - lastTooltipAtMs <= 1_500L) {

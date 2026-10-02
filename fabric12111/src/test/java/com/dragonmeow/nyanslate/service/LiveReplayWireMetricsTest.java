@@ -119,7 +119,7 @@ class LiveReplayWireMetricsTest {
     }
 
     private static void row(String label, String oldWire, List<String> newWires) {
-        String neu = newWires.size() == 1 ? newWires.get(0) : String.join(" || ", newWires);
+        String fresh = newWires.size() == 1 ? newWires.get(0) : String.join(" || ", newWires);
         int newPb = newWires.stream().mapToInt(LiveReplayWireMetricsTest::pb).sum();
         int newCs = newWires.stream().mapToInt(LiveReplayWireMetricsTest::csPairs).sum();
         int newLen = newWires.stream().mapToInt(String::length).sum();
@@ -127,7 +127,7 @@ class LiveReplayWireMetricsTest {
                 + " cs=" + csPairs(oldWire) + " leadMt=" + leadingMt(oldWire)
                 + "|new units=" + newWires.size() + " len=" + newLen + " pb=" + newPb + " cs=" + newCs
                 + " leadMt=" + newWires.stream().anyMatch(LiveReplayWireMetricsTest::leadingMt));
-        System.out.println("REPLAY-NEW|" + label + "|" + neu);
+        System.out.println("REPLAY-NEW|" + label + "|" + fresh);
     }
 
     @Test

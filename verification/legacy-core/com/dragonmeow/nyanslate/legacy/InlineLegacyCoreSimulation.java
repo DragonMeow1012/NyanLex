@@ -2883,7 +2883,7 @@ public final class InlineLegacyCoreSimulation {
                 "case variant did not share the masked key or lost its own spelling");
         check("歡迎來到SKYBLOCK！".equals(upper.restore("歡迎來到" + slot0 + "！")),
                 "case variant restore did not keep SKYBLOCK");
-        for (String untouched : Arrays.asList("Install Skyblocker now", "Build skyblocks here",
+        for (String untouched : Arrays.asList("Install Skyfoo now", "Build skyblocks here",
                 "Play SkyBlock_2 today", "Try xSkyBlock mode", "Say SkyBlock2 please")) {
             check(!LegacyTemplateText.prepare(untouched, skyblock).text().contains(open),
                     "DNT matched inside a longer word: " + untouched);

@@ -914,7 +914,7 @@ public final class NyanslateNeoForge {
     }
 
     /** Apply cached item translations at the final visible-tooltip draw boundary used by
-     * JEI and custom catalogues. These UIs may populate ItemTooltipEvent once and cache its
+     * recipe viewers and custom catalogues. These UIs may populate ItemTooltipEvent once and cache its
      * English components, so translating only that earlier event never updates the screen. */
     public static List<Component> visibleTooltip(List<Component> lines) {
         TranslationService s = service;
@@ -2366,7 +2366,7 @@ public final class NyanslateNeoForge {
             Slot slot = accessor.nyanslate$hoveredSlot();
             if (slot != null && slot.hasItem()) target = slot.getItem();
         }
-        // JEI/FTB/custom widgets may render an item tooltip without owning a vanilla
+        // recipe-viewer/custom widgets may render an item tooltip without owning a vanilla
         // Slot. Use only a fresh snapshot from this exact screen, never a stale item
         // from a screen the player has already closed.
         if ((target == null || target.isEmpty()) && lastTooltipScreen == screen

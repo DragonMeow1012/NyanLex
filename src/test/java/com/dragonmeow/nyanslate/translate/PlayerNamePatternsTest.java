@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * P1.2 strong-frame player-name detection. Every input is an inline string shaped like
- * the real Hypixel/SkyHanni text (names anonymised); no cache file or network is read.
+ * the real Hypixel text (names anonymised); no cache file or network is read.
  */
 class PlayerNamePatternsTest {
 
@@ -45,7 +45,7 @@ class PlayerNamePatternsTest {
         assertEquals(List.of("Lobby_Guy"), names("[MVP+] Lobby_Guy joined the lobby!"));
         assertEquals(List.of("GoldGuy"), names(">>> [MVP++] GoldGuy joined the lobby! <<<"));
         assertEquals(List.of("zLimm"),
-                names("[SkyHanni] You passed zLimm in the Nether Wart Collection Leaderboard!"));
+                names("[Mod] You passed zLimm in the Nether Wart Collection Leaderboard!"));
         assertEquals(List.of("Flixy1"), names("1,234 behind Flixy1"));
         assertEquals(List.of("Flixy1"), names("12.5k behind Flixy1 [#12]"));
         assertEquals(List.of("D1fre"), names("Item sold to [MVP+] D1fre for a marvelous 5,000 coins, gg!"));
@@ -70,9 +70,9 @@ class PlayerNamePatternsTest {
         assertEquals("names-v1", PlayerNamePatterns.VERSION);
         assertEquals(List.of("ah.field"), frameIds("Seller: [MVP+] Seller_42"));
         assertEquals(List.of("lobby.join"), frameIds("[MVP+] Lobby_Guy joined the lobby!"));
-        assertEquals(List.of("skyhanni.passed"),
+        assertEquals(List.of("leaderboard.passed"),
                 frameIds("You passed zLimm in the Nether Wart Collection Leaderboard!"));
-        assertEquals(List.of("skyhanni.behind"), frameIds("1,234 behind Flixy1"));
+        assertEquals(List.of("leaderboard.behind"), frameIds("1,234 behind Flixy1"));
     }
 
     @Test
