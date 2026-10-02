@@ -11,7 +11,7 @@
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$corePackages = 'cache', 'config', 'hub', 'service', 'style', 'translate'
+$corePackages = 'cache', 'config', 'hub', 'service', 'style', 'translate', 'warmup'
 $trees = 'fabric1182', 'fabric1194', 'fabric120', 'fabric12111',
     'fabric2612', 'fabric26', 'neoforge', 'neoforge120', 'neoforge26'
 

@@ -158,6 +158,18 @@ public final class TranslatorConfig {
      */
     public boolean hubStartupPromptDisabled = false;
 
+    /** All-item warm-up (AI engine only, off by default). */
+    public boolean itemWarmupEnabled = false;
+
+    /** The player has seen and accepted the cost/429 warning of the item warm-up. */
+    public boolean itemWarmupWarningAcknowledged = false;
+
+    /** Minimum pause between two warm-up chunks, in milliseconds. */
+    public int itemWarmupChunkDelayMs = 3000;
+
+    /** Upper bound of items submitted per game launch (cached items do not count). */
+    public int itemWarmupMaxItemsPerSession = 3000;
+
     // Chat is always non-blocking: the original is shown immediately
     // and the translation is appended asynchronously when ready — never hard-waits.
 
@@ -265,6 +277,8 @@ public final class TranslatorConfig {
         doNotTranslateTerms = normalizedTerms(doNotTranslateTerms);
         termOverrides = normalizedTermOverrides(termOverrides);
         if (httpTimeoutMs <= 0) httpTimeoutMs = 4000;
+        if (itemWarmupChunkDelayMs < 500) itemWarmupChunkDelayMs = 500;
+        if (itemWarmupMaxItemsPerSession < 0) itemWarmupMaxItemsPerSession = 0;
         if (pacingDefaultsVersion < PACING_DEFAULTS_VERSION) {
             if (requestCooldownMs == LEGACY_REQUEST_COOLDOWN_MS) requestCooldownMs = 10000;
             pacingDefaultsVersion = PACING_DEFAULTS_VERSION;

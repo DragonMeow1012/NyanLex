@@ -489,6 +489,86 @@ public final class NyanslateFabric26 implements ClientModInitializer {
         return hubDownloadJob;
     }
 
+    // ---- All-item warm-up (AI engine only; see com.dragonmeow.nyanslate.warmup) ----
+
+    private static volatile java.util.function.BooleanSupplier aiRateLimitedProbe = () -> false;
+    private static com.dragonmeow.nyanslate.warmup.ItemWarmupDriver itemWarmupDriver;
+    private static int warmupWorldTicks;
+    private static boolean warmupAutoResumeTried;
+
+    /** The single per-launch warm-up driver (also keeps the per-launch item budget). */
+    public static synchronized com.dragonmeow.nyanslate.warmup.ItemWarmupDriver itemWarmupDriver() {
+        if (itemWarmupDriver == null) {
+            itemWarmupDriver = new com.dragonmeow.nyanslate.warmup.ItemWarmupDriver(
+                    new Fabric26ItemWarmupSource(),
+                    new Fabric26ItemWarmupSource.Backend(() -> aiRateLimitedProbe.getAsBoolean()),
+                    NyanslateFabric26::config, System::currentTimeMillis);
+        }
+        return itemWarmupDriver;
+    }
+
+    /**
+     * Public entry point for the settings UI ("全物品預熱…"): opens the progress screen
+     * when a run is active, otherwise the scan-and-confirm screen (which explains why
+     * it cannot run under machine translation).
+     */
+    public static void openItemWarmupScreen(net.minecraft.client.gui.screens.Screen parent) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        var state = itemWarmupDriver().state();
+        if (state == com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.State.RUNNING
+                || state == com.dragonmeow.nyanslate.warmup.ItemWarmupDriver.State.PAUSED) {
+            mc.setScreenAndShow(new ItemWarmupProgressScreen(parent));
+        } else {
+            mc.setScreenAndShow(new ItemWarmupConfirmScreen(parent));
+        }
+    }
+
+    /** Build one item's tooltip translation units exactly as the hover path would. */
+    static com.dragonmeow.nyanslate.warmup.ItemWarmupTarget itemWarmupTarget(Item item, Minecraft mc) {
+        Identifier id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
+        String itemId = id == null ? "" : id.toString();
+        String namespace = id == null ? "" : id.getNamespace();
+        ItemStack stack = item.getDefaultInstance();
+        if (stack.isEmpty()) {
+            return new com.dragonmeow.nyanslate.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+        }
+        List<Component> lines;
+        int depth = tooltipProbeDepth.get();
+        tooltipProbeDepth.set(depth + 1);
+        try {
+            lines = stack.getTooltipLines(Item.TooltipContext.of(mc.level), mc.player,
+                    TooltipFlag.Default.NORMAL);
+        } catch (RuntimeException | LinkageError e) {
+            return new com.dragonmeow.nyanslate.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+        } finally {
+            if (depth == 0) tooltipProbeDepth.remove();
+            else tooltipProbeDepth.set(depth);
+        }
+        if (lines == null || lines.isEmpty()) {
+            return new com.dragonmeow.nyanslate.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+        }
+        TooltipParagraphPlan plan = tooltipParagraphPlan(
+                stack, lines, Fabric26TextStyle::paragraphRequestText);
+        return new com.dragonmeow.nyanslate.warmup.ItemWarmupTarget(itemId, namespace, plan.sources());
+    }
+
+    /** Per client tick: drive the warm-up, and resume it once per launch if the player opted in. */
+    private static void tickItemWarmup(Minecraft mc) {
+        if (config == null || service == null) return;
+        var driver = itemWarmupDriver();
+        if (mc != null && mc.player != null && mc.level != null) {
+            if (!warmupAutoResumeTried && config.itemWarmupEnabled
+                    && config.itemWarmupWarningAcknowledged && ++warmupWorldTicks >= 400) {
+                warmupAutoResumeTried = true;
+                driver.start();
+            }
+        } else {
+            warmupWorldTicks = 0;
+        }
+        driver.tick();
+    }
+
     /** Spawns background hub work (identify/plan/download) as a daemon thread; also
      *  usable directly as the {@link Executor} {@link HubDownloadJob#start} wants. */
     public static Executor hubExecutor() {
@@ -1052,6 +1132,7 @@ public final class NyanslateFabric26 implements ClientModInitializer {
         codexAi.setExchangeDumpSink(exchangeDump);
         SwitchingAiTranslator ai = new SwitchingAiTranslator(
                 apiAi, codexAi, () -> config.aiUseCodex);
+        aiRateLimitedProbe = ai::isRateLimited;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             CodexAppServerClient client = codexClient;
             if (client != null) client.close();
@@ -1953,6 +2034,7 @@ public final class NyanslateFabric26 implements ClientModInitializer {
         syncGameLanguage(mc);
         observeChatDeliveryContext(mc);
         refreshOnlineNames(mc);
+        tickItemWarmup(mc);
         if (service != null) service.flushBatches();
         expireStaleBlock();
         flushStaleChats(mc);
