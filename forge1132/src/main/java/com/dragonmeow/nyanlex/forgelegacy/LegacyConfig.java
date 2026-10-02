@@ -10,10 +10,14 @@ final class LegacyConfig {
     boolean showOriginal = true;
     boolean deliverChatTranslationsInOrder = true;
     /**
-     * Master request switch. False keeps showing cached translations but never sends a new
-     * translation request. Volatile: worker and retry threads re-check the live value.
+     * Online translation (master request switch). False keeps showing cached translations but
+     * never sends a new translation request. Off for a new install; an older config file that
+     * has no such field keeps behaving as before (see {@link #applyUpgradeDefaults}).
+     * Volatile: worker and retry threads re-check the live value.
      */
-    volatile boolean translationRequestsEnabled = true;
+    volatile boolean translationRequestsEnabled = false;
+    /** True once the quick setup was finished or dismissed (or the config predates it). */
+    boolean firstRunDone = false;
     /** Whole-word, case-insensitive terms kept verbatim (masked before cache keys and requests). */
     java.util.List<String> doNotTranslateTerms = new java.util.ArrayList<String>();
     String targetLang = "zh-TW";
@@ -37,6 +41,38 @@ final class LegacyConfig {
     int batchWindowMs = 5000;
     int failureBackoffMs = 10000;
     boolean debugTranslationOverlay = false;
+
+    /** Which service the next translation request would go to (see {@link #serviceKind}). */
+    static final int SERVICE_GOOGLE = 0;
+    static final int SERVICE_AI = 1;
+    static final int SERVICE_CODEX = 2;
+
+    int serviceKind() {
+        if (!aiEnabled) return SERVICE_GOOGLE;
+        return aiUseCodex ? SERVICE_CODEX : SERVICE_AI;
+    }
+
+    /** Host part of the AI endpoint, for showing where text would be sent. */
+    String aiHost() {
+        String url = aiBaseUrl == null ? "" : aiBaseUrl.trim();
+        int scheme = url.indexOf("://");
+        if (scheme >= 0) url = url.substring(scheme + 3);
+        int end = url.length();
+        for (int i = 0; i < url.length(); i++) {
+            char c = url.charAt(i);
+            if (c == '/' || c == '?' || c == '#' || c == ':') { end = i; break; }
+        }
+        return url.substring(0, end);
+    }
+
+    /** An API key or a ChatGPT (Codex) login is enough to use the AI service. */
+    boolean aiConfigured() {
+        if (aiUseCodex) return true;
+        if (aiApiKeys != null) for (String key : aiApiKeys) if (key != null && !key.trim().isEmpty()) return true;
+        if (aiKeysByEndpoint != null)
+            for (String key : aiKeysByEndpoint.values()) if (key != null && !key.trim().isEmpty()) return true;
+        return false;
+    }
 
     static String normalizeMachineProvider(String value) {
         return "google";
@@ -63,6 +99,20 @@ final class LegacyConfig {
         while (start < end && Character.isWhitespace(term.charAt(start))) start++;
         while (end > start && Character.isWhitespace(term.charAt(end - 1))) end--;
         return term.substring(start, end);
+    }
+
+    /**
+     * Upgrade rules for a config file that already exists on disk. A file written before the
+     * online-translation default changed has no "translationRequestsEnabled" field: that player
+     * had translation requests on, so keep them on. A file without "firstRunDone" belongs to an
+     * existing install, which must not get the first-run quick setup popped at it.
+     */
+    static LegacyConfig applyUpgradeDefaults(LegacyConfig loaded, boolean hadRequestsField,
+                                             boolean hadFirstRunField) {
+        if (loaded == null) return null;
+        if (!hadRequestsField) loaded.translationRequestsEnabled = true;
+        if (!hadFirstRunField) loaded.firstRunDone = true;
+        return loaded;
     }
 
     static LegacyConfig normalizeLoaded(LegacyConfig loaded) {
@@ -100,6 +150,7 @@ final class LegacyConfig {
         copy.showOriginal = showOriginal;
         copy.deliverChatTranslationsInOrder = deliverChatTranslationsInOrder;
         copy.translationRequestsEnabled = translationRequestsEnabled;
+        copy.firstRunDone = firstRunDone;
         copy.doNotTranslateTerms = doNotTranslateTerms == null
                 ? new java.util.ArrayList<String>()
                 : new java.util.ArrayList<String>(doNotTranslateTerms);

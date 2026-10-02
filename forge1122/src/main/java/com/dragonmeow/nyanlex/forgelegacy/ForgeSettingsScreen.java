@@ -1,104 +1,105 @@
 package com.dragonmeow.nyanlex.forgelegacy;
-import net.minecraft.client.gui.GuiButton;
+
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
-import java.io.IOException;
-final class ForgeSettingsScreen extends GuiScreen{
+
+import java.util.List;
+
+/**
+ * Translation settings: an index of six categories, each opening a short page of settings. The
+ * rows come from {@link LegacyUiModel}; this class only reacts to what is clicked.
+ */
+final class ForgeSettingsScreen extends ForgeFormScreen {
+    private static final int HELP = 900;
     private final GuiScreen parent;
-    ForgeSettingsScreen(GuiScreen p){
-        parent=p;
+    private int category = -1;
+
+    ForgeSettingsScreen(GuiScreen p) {
+        parent = p;
     }
-    @Override public void initGui(){
-        LegacyConfig c=NyanLexForge.config();
-        int x=width/2-155;
-        // Prominent (but non-blocking) entry point to the help screen, top-left corner.
-        addButton(new GuiButton(16,6,4,70,14,"§e"+I18n.format("config.nyanlex.help.open")));
-        addButton(new GuiButton(1,x,30,310,20,c.followGameLanguage?"Language: Game ("+NyanLexForge.currentTarget()+")":"Language: "+c.targetLang));
-        addButton(new GuiButton(2,x,50,152,20,c.enabled?"Translator: ON":"Translator: OFF"));
-        addButton(new GuiButton(14,x+158,50,152,20,I18n.format("config.nyanlex.requests.open")));
-        addButton(new GuiButton(3,x,70,310,20,c.showOriginal?"Original + Translation":"Translation Only"));
-        addButton(new GuiButton(4,x,90,152,20,"Engine: "+(c.aiEnabled?"AI":"Machine")));
-        addButton(new GuiButton(5,x+158,90,152,20,machineFallbackLabel(c)));
-        addButton(new GuiButton(6,x,110,310,20,I18n.format("screen.nyanlex.ai.title")));
-        // Request cooldown + batch window merged into one submenu (was two half-width cyclers).
-        addButton(new GuiButton(7,x,130,310,20,I18n.format("config.nyanlex.request_cooldown.open")));
-        GuiButton machine=new GuiButton(9,x,150,152,20,"Machine: Google (unofficial)");
-        machine.enabled=false; // Google is the only machine source
-        addButton(machine);
-        addButton(new GuiButton(10,x+158,150,152,20,"Debug HUD: "+(c.debugTranslationOverlay?"ON":"OFF")));
-        addButton(new GuiButton(11,x,170,310,20,chatDeliveryLabel(c)));
-        addButton(new GuiButton(15,x,height-46,310,20,requestsToggleLabel(c)));
-        addButton(new GuiButton(12,x,height-22,100,20,I18n.format("config.nyanlex.translations.export")));
-        addButton(new GuiButton(13,x+105,height-22,100,20,I18n.format("config.nyanlex.translations.import")));
-        addButton(new GuiButton(0,x+210,height-22,100,20,I18n.format("gui.done")));
+
+    @Override protected List<LegacyUiModel.Row> rows() {
+        LegacyConfig cfg = NyanLexForge.config();
+        if (category < 0) return LegacyUiModel.indexRows(TEXT);
+        return LegacyUiModel.categoryRows(category, cfg, TEXT, languageLabel(cfg), NyanLexForge.version());
     }
-    @Override protected void actionPerformed(GuiButton b)throws IOException{
-        LegacyConfig c=NyanLexForge.config();
-        if(b.id==0){
-            NyanLexForge.save();
-            mc.displayGuiScreen(parent);
-            return;
-        }
-        if(b.id==12 || b.id==13){ NyanLexForge.translationFile(b.id==13); return; }
-        if(b.id==16){
+
+    @Override protected String heading() {
+        return category < 0 ? I18n.format("screen.nyanlex.config.title")
+                : TEXT.get(LegacyUiModel.CATEGORY_KEYS[category]);
+    }
+
+    @Override public void initGui() {
+        super.initGui();
+        addButton(new net.minecraft.client.gui.GuiButton(HELP, 6, 4, 70, 14,
+                "§e" + TEXT.get("config.nyanlex.help.open")));
+    }
+
+    private static String languageLabel(LegacyConfig c) {
+        return TEXT.get("config.nyanlex.language", c.followGameLanguage
+                ? TEXT.get("config.nyanlex.language.follow", NyanLexForge.currentTarget())
+                : c.targetLang);
+    }
+
+    @Override protected void onAction(int action) {
+        LegacyConfig c = NyanLexForge.config();
+        if (action == HELP) {
             mc.displayGuiScreen(new ForgeHelpScreen(this));
             return;
         }
-        if(b.id==1){
-            if(c.followGameLanguage){
-                c.followGameLanguage=false;
-                c.targetLang="zh-TW";
-            } else if("zh-TW".equals(c.targetLang))c.targetLang="en";
-            else c.followGameLanguage=true;
-        }
-        if(b.id==2)c.enabled=!c.enabled;
-        if(b.id==3)c.showOriginal=!c.showOriginal;
-        if(b.id==4)c.aiEnabled=!c.aiEnabled;
-        if(b.id==5)c.disableGoogleFallbackForAi=!c.disableGoogleFallbackForAi;
-        if(b.id==6){
-            mc.displayGuiScreen(new ForgeAiConfigScreen(this));
+        if (action >= LegacyUiModel.A_CATEGORY && action < LegacyUiModel.A_CATEGORY + LegacyUiModel.CATEGORY_COUNT) {
+            category = action - LegacyUiModel.A_CATEGORY;
+            refresh();
             return;
         }
-        if(b.id==14){
-            mc.displayGuiScreen(new ForgeRequestsScreen(this));
+        if (LegacyUiModel.perform(action, c)) {
+            if (action == LegacyUiModel.A_DEBUG && !c.debugTranslationOverlay) NyanLexForge.TRANSLATOR.clearDebug();
+            NyanLexForge.save();
+            refresh();
             return;
         }
-        if(b.id==7){
-            mc.displayGuiScreen(new ForgeCooldownScreen(this));
-            return;
+        switch (action) {
+            case LegacyUiModel.A_DONE: onEscape(); break;
+            case LegacyUiModel.A_QUICK_SETUP: mc.displayGuiScreen(new ForgeSetupScreen(this, true)); break;
+            case LegacyUiModel.A_HELP: mc.displayGuiScreen(new ForgeHelpScreen(this)); break;
+            case LegacyUiModel.A_LANGUAGE:
+                if (c.followGameLanguage) {
+                    c.followGameLanguage = false;
+                    c.targetLang = "zh-TW";
+                } else if ("zh-TW".equals(c.targetLang)) c.targetLang = "en";
+                else c.followGameLanguage = true;
+                NyanLexForge.save();
+                refresh();
+                break;
+            case LegacyUiModel.A_KEYS:
+                mc.displayGuiScreen(new net.minecraft.client.gui.GuiControls(this, mc.gameSettings));
+                break;
+            case LegacyUiModel.A_TERMS: mc.displayGuiScreen(new ForgeRequestsScreen(this)); break;
+            case LegacyUiModel.A_AI: mc.displayGuiScreen(new ForgeAiConfigScreen(this)); break;
+            case LegacyUiModel.A_COOLDOWN: mc.displayGuiScreen(new ForgeCooldownScreen(this)); break;
+            case LegacyUiModel.A_EXPORT: NyanLexForge.translationFile(false); break;
+            case LegacyUiModel.A_IMPORT: NyanLexForge.translationFile(true); break;
+            case LegacyUiModel.A_GITHUB: NyanLexForge.openLink(this, LegacyUiModel.GITHUB_URL); break;
+            default: break;
         }
-        if(b.id==10){
-            c.debugTranslationOverlay=!c.debugTranslationOverlay;
-            if(!c.debugTranslationOverlay)NyanLexForge.TRANSLATOR.clearDebug();
-        }
-        if(b.id==11)c.deliverChatTranslationsInOrder=!c.deliverChatTranslationsInOrder;
-        if(b.id==15)c.translationRequestsEnabled=!c.translationRequestsEnabled;
-        buttonList.clear();
-        initGui();
     }
-    static int next(int c,int[] a){
-        for(int v:a)if(v>c)return v;
+
+    static int next(int c, int[] a) {
+        for (int v : a) if (v > c) return v;
         return 0;
     }
-    /** Same field as before; label text now explains the effect instead of naming "GT". */
-    private static String machineFallbackLabel(LegacyConfig c){
-        return I18n.format("config.nyanlex.ai.machine_fallback",c.disableGoogleFallbackForAi?"OFF":"ON");
+
+    @Override protected void onEscape() {
+        NyanLexForge.save();
+        if (category >= 0) {
+            category = -1;
+            refresh();
+        } else {
+            mc.displayGuiScreen(parent);
+        }
     }
-    private static String chatDeliveryLabel(LegacyConfig c){
-        String mode=I18n.format(c.deliverChatTranslationsInOrder
-                ?"config.nyanlex.chat_delivery.ordered"
-                :"config.nyanlex.chat_delivery.ready_first");
-        return I18n.format("config.nyanlex.chat_delivery",mode);
-    }
-    private static String requestsToggleLabel(LegacyConfig c){
-        return I18n.format("screen.nyanlex.requests.toggle",c.translationRequestsEnabled?"OFF":"ON");
-    }
-    @Override public void drawScreen(int x,int y,float d){
-        drawDefaultBackground();
-        drawCenteredString(fontRenderer,"NyanLex",width/2,16,0xFFFFFF);
-        super.drawScreen(x,y,d);
-    }
-    @Override public void onGuiClosed(){
+
+    @Override public void onGuiClosed() {
         NyanLexForge.save();
     }
 }

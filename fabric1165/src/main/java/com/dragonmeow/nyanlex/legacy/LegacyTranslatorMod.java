@@ -52,6 +52,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     private static KeyMapping screenScanKey;
     private static KeyMapping itemRetranslateKey;
     private boolean keybindMigrationChecked;
+    private boolean firstRunChecked;
     private static final com.dragonmeow.nyanlex.translate.ScreenTranslationCapture SCREEN_CAPTURE =
             new com.dragonmeow.nyanlex.translate.ScreenTranslationCapture();
     private final LegacyChatDeliveryQueue<PendingChat> pendingChats =
@@ -125,6 +126,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         TRANSLATOR.loadSharedTranslations(configDir, currentTarget(Minecraft.getInstance()), config);
         ClientTickEvents.END_CLIENT_TICK.register(client -> HookGuard.run("event.clientTick", () -> {
             instance.maybeMigrateKeybinds(client);
+            instance.maybeShowFirstRun(client);
             syncLanguage(client);
             SCREEN_CAPTURE.cancelUnless(client.screen);
             instance.syncChatSession(client);
@@ -143,6 +145,20 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         }));
         ItemTooltipCallback.EVENT.register((stack, context, lines) ->
                 HookGuard.run("event.itemTooltip", () -> translateTooltip(stack, lines)));
+    }
+
+    /** First launch only: the quick setup opens once over the title screen. */
+    private void maybeShowFirstRun(Minecraft mc) {
+        if (firstRunChecked || mc == null || config == null) return;
+        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
+        firstRunChecked = true;
+        if (config.firstRunDone) return;
+        if (config.translationRequestsEnabled) {
+            config.firstRunDone = true;
+            saveConfig();
+            return;
+        }
+        mc.setScreen(new LegacySetupScreen(mc.screen, false));
     }
 
     /** Once per launch, the first time the title screen appears: carry any saved
@@ -360,6 +376,15 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
             }
         }
         instance.updatePointedTooltip(sources, target);
+        if (!config.translationRequestsEnabled) {
+            // Online translation is off: the only useful thing a key press can do is ask to start it.
+            if (missing && itemRetranslateKey != null) {
+                lines.add(new TextComponent("§7" + new TranslatableComponent(
+                        "screen.nyanlex.tooltip.start_hint",
+                        itemRetranslateKey.getTranslatedKeyMessage()).getString()));
+            }
+            return;
+        }
         if (ai) return;
         // Hint/status row (machine engine only): never itself a translation candidate.
         if (instance.pointedTooltipTranslating) {
@@ -407,8 +432,22 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
      * only job is "I don't like this result, try again"). Machine engine: missing lines only,
      * or a forced full retranslate if every line is already cached (unchanged from round 3).
      */
-    private void handleRetranslateItemKey(Minecraft client) {
+    private void handleRetranslateItemKey(final Minecraft client) {
         if (config == null || !config.enabled) return;
+        if (!config.translationRequestsEnabled) {
+            boolean pointed = !pointedTooltipSources.isEmpty() && pointedTooltipTarget != null;
+            if (!pointed && !(client.screen == null && client.player != null)) return;
+            final java.util.List<String> sources = new java.util.ArrayList<String>(pointedTooltipSources);
+            final String target = pointedTooltipTarget;
+            LegacyConsentScreen.open(client, false, new Runnable() {
+                @Override public void run() {
+                    pointedTooltipSources = sources;
+                    pointedTooltipTarget = target;
+                    handleRetranslateItemKey(client);
+                }
+            });
+            return;
+        }
         if (!pointedTooltipSources.isEmpty() && pointedTooltipTarget != null) {
             retranslatePointedTooltip();
             return;
@@ -523,6 +562,44 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         finally { INTERNAL_CHAT.set(previous); }
     }
 
+    static final int KEY_ITEM = 0;
+    static final int KEY_SCREEN = 1;
+    static final int KEY_SETTINGS = 2;
+
+    /** Name of a hotkey as the player has it bound (for the quick setup and hints). */
+    static String keyLabel(int which) {
+        KeyMapping key = which == KEY_ITEM ? itemRetranslateKey
+                : which == KEY_SCREEN ? screenScanKey
+                : instance == null ? null : instance.settingsKey;
+        if (key == null) return "?";
+        String name = key.getTranslatedKeyMessage().getString();
+        return name.length() == 1 ? name.toUpperCase(java.util.Locale.ROOT) : name;
+    }
+
+    static String version() {
+        try {
+            return FabricLoader.getInstance().getModContainer("nyanlex").get()
+                    .getMetadata().getVersion().getFriendlyString();
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    /** Opens a web link after the player confirmed it. */
+    static void openLink(final Screen parent, final String url) {
+        final Minecraft mc = Minecraft.getInstance();
+        mc.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(yes -> {
+            if (yes) net.minecraft.Util.getPlatform().openUri(url);
+            mc.setScreen(parent);
+        }, url, true));
+    }
+
+    /** The "Translation settings..." button on the Options screen. */
+    public static void openSettings(Screen parent) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null && config != null) mc.setScreen(new LegacySettingsScreen(parent));
+    }
+
     static LegacyConfig config() { return config; }
     static LegacyCodexClient codexClient() { return codexClient; }
     static LegacySessionTokenUsage.Snapshot tokenUsageSnapshot() {
@@ -635,9 +712,20 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
                 || screenScanKey == null || !screenScanKey.matches(key, scanCode)
                 || LegacyTextInput.focused(mc.screen)
                 || !screenTranslationAllowed(mc.screen)) return false;
+        if (!config.translationRequestsEnabled) {
+            LegacyConsentScreen.open(mc, true, new Runnable() {
+                @Override public void run() { beginScreenCapture(Minecraft.getInstance()); }
+            });
+            return true;
+        }
+        beginScreenCapture(mc);
+        return true;
+    }
+
+    private static void beginScreenCapture(Minecraft mc) {
+        if (mc == null || mc.screen == null || !screenTranslationAllowed(mc.screen)) return;
         SCREEN_CAPTURE.begin(mc.screen);
         SCREEN_CAPTURE.record(mc.screen, mc.screen.getTitle().getString());
-        return true;
     }
 
     private static boolean captureScreenText(String source) {
@@ -648,6 +736,22 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return true;
     }
 
+    /** Result messages of the mod: the action bar in game, a toast on menu screens - never the chat. */
+    static void notifyUser(final String message) {
+        final Minecraft mc = Minecraft.getInstance();
+        mc.execute(new Runnable() {
+            @Override public void run() {
+                if (mc.level != null && mc.screen == null && mc.gui != null) {
+                    mc.gui.setOverlayMessage(new TextComponent(message), false);
+                } else {
+                    net.minecraft.client.gui.components.toasts.SystemToast.addOrUpdate(mc.getToasts(),
+                            net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds.WORLD_BACKUP,
+                            new TextComponent("NyanLex Translator"), new TextComponent(message));
+                }
+            }
+        });
+    }
+
     static void translationFile(boolean importing) {
         Minecraft mc = Minecraft.getInstance();
         final String target = currentTarget(mc);
@@ -655,7 +759,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         com.dragonmeow.nyanlex.translate.TranslationFileDialog.open(importing,
                 () -> TRANSLATOR.exportTranslations(target, snapshot),
                 file -> TRANSLATOR.importTranslations(file, target, snapshot),
-                message -> mc.execute(() -> mc.gui.getChat().addMessage(new TextComponent(message))));
+                message -> notifyUser(message));
     }
 
     public static boolean beginInternalRender() {
@@ -736,17 +840,27 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
             try {
                 Reader reader = Files.newBufferedReader(configPath);
                 LegacyConfig loaded;
+                boolean hadRequests = false;
+                boolean hadFirstRun = false;
                 try {
-                    loaded = GSON.fromJson(reader, LegacyConfig.class);
+                    com.google.gson.JsonElement tree = new com.google.gson.JsonParser().parse(reader);
+                    if (tree != null && tree.isJsonObject()) {
+                        hadRequests = tree.getAsJsonObject().has("translationRequestsEnabled");
+                        hadFirstRun = tree.getAsJsonObject().has("firstRunDone");
+                    }
+                    loaded = GSON.fromJson(tree, LegacyConfig.class);
                 } finally { reader.close(); }
-                loaded = LegacyConfig.normalizeLoaded(loaded);
+                loaded = LegacyConfig.applyUpgradeDefaults(LegacyConfig.normalizeLoaded(loaded),
+                        hadRequests, hadFirstRun);
                 if (loaded != null) {
                     saveConfig(loaded);
                     return loaded;
                 }
             } catch (Exception ignored) {}
         }
-        return new LegacyConfig();
+        LegacyConfig created = new LegacyConfig();
+        if (!Files.isRegularFile(configPath)) saveConfig(created);
+        return created;
     }
 
     private static void syncLanguage(Minecraft minecraft) {

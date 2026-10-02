@@ -24,12 +24,13 @@ final class ForgeHelpScreen extends GuiScreen{
         lines=fontRenderer.listFormattedStringToWidth(I18n.format("screen.nyanlex.help.body"),contentW);
         navY=height-52;
         int doneY=height-26;
-        topY=30;
+        topY=50;
         int available=Math.max(LINE_H,navY-8-topY);
         linesPerPage=Math.max(1,available/LINE_H);
         totalPages=Math.max(1,(int)Math.ceil(lines.size()/(double)linesPerPage));
         if(page>=totalPages)page=totalPages-1;
         if(page<0)page=0;
+        addButton(new GuiButton(3,contentX,26,contentW,18,I18n.format("screen.nyanlex.help.quick")));
         addButton(new GuiButton(1,contentX,navY,40,20,"<"));
         addButton(new GuiButton(2,contentX+contentW-40,navY,40,20,">"));
         int doneW=Math.min(200,contentW);
@@ -38,6 +39,10 @@ final class ForgeHelpScreen extends GuiScreen{
     @Override protected void actionPerformed(GuiButton b)throws IOException{
         if(b.id==0){
             mc.displayGuiScreen(parent);
+            return;
+        }
+        if(b.id==3){
+            mc.displayGuiScreen(new ForgeSetupScreen(this,true));
             return;
         }
         if(b.id==1&&page>0)page--;
