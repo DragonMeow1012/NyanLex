@@ -1,8 +1,11 @@
 package com.dragonmeow.nyanlex.hub.tool;
 
 import com.dragonmeow.nyanlex.cache.FileStore;
+import com.dragonmeow.nyanlex.hub.HubFile;
 import com.dragonmeow.nyanlex.hub.HubIndex;
-import com.dragonmeow.nyanlex.translate.TranslationFile;
+import com.dragonmeow.nyanlex.hub.HubKeyHash;
+import com.dragonmeow.nyanlex.hub.HubLocalCache;
+import com.dragonmeow.nyanlex.hub.HubSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -214,10 +217,10 @@ class HubExportToolTest {
         assertEquals(written, result.writtenFile());
         assertTrue(Files.isRegularFile(written));
 
-        TranslationFile file = TranslationFile.read(written);
-        assertEquals("鑽石劍", file.ai.get("Diamond Sword"));
-        assertEquals("終界珍珠", file.ai.get("Ender Pearl"));
-        assertEquals("zh-tw", file.language);
+        HubFile file = HubFile.read(Files.readString(written));
+        assertEquals("鑽石劍", file.entries().get(HubKeyHash.of("Diamond Sword")));
+        assertEquals("終界珍珠", file.entries().get(HubKeyHash.of("Ender Pearl")));
+        assertEquals("zh-tw", file.language());
 
         Path indexFile = out.resolve("index.json");
         assertTrue(Files.isRegularFile(indexFile));
@@ -306,11 +309,11 @@ class HubExportToolTest {
         assertEquals(0, result.exitCode());
         assertEquals(2, result.stats().exportedRows());
         assertEquals(1, result.stats().truncated());
-        TranslationFile file = TranslationFile.read(result.writtenFile());
+        HubFile file = HubFile.read(Files.readString(result.writtenFile()));
         // Sorted by key: "Row A" and "Row B" survive, "Row C" is the one left out.
-        assertTrue(file.ai.containsKey("Row A"));
-        assertTrue(file.ai.containsKey("Row B"));
-        assertFalse(file.ai.containsKey("Row C"));
+        assertTrue(file.entries().containsKey(HubKeyHash.of("Row A")));
+        assertTrue(file.entries().containsKey(HubKeyHash.of("Row B")));
+        assertFalse(file.entries().containsKey(HubKeyHash.of("Row C")));
     }
 
     @Test
@@ -367,7 +370,91 @@ class HubExportToolTest {
         assertEquals(1, result.stats().duplicateKeyGroups());
         assertEquals(2, result.stats().duplicateRowsDropped());
         assertEquals(3, result.stats().nameConversionSucceeded());
-        TranslationFile file = TranslationFile.read(result.writtenFile());
-        assertEquals("賣家：⟦0⟧ 常見翻譯", file.ai.get("Seller: ⟦0⟧"));
+        HubFile file = HubFile.read(Files.readString(result.writtenFile()));
+        assertEquals("賣家：⟦0⟧ 常見翻譯", file.entries().get(HubKeyHash.of("Seller: ⟦0⟧")));
+    }
+
+    // ------------------------------------------------------------------ schema 2 (hashed)
+
+    @Test
+    void exportedFileContainsNoSourceTextAndSortsByHash(@TempDir Path cacheDir, @TempDir Path out)
+            throws IOException, HubExportTool.UsageException {
+        Map<String, String> rows = new LinkedHashMap<>();
+        rows.put("Legendary Zephyr Blade", "傳說西風之刃");
+        rows.put("Mystic Quartz Pickaxe", "神祕石英鎬");
+        rows.put("Frostbound Helmet", "霜縛頭盔");
+        seedCache(cacheDir, "zh-tw", rows, null);
+
+        HubExportTool.Result result = HubExportTool.run(new String[] {
+                "--cache-dir", cacheDir.toString(), "--lang", "zh-TW", "--server", "hypixel.net",
+                "--out", out.toString()
+        }, nullOut());
+
+        String text = Files.readString(result.writtenFile());
+        for (String source : rows.keySet()) {
+            assertFalse(text.contains(source), "source text leaked: " + source);
+            for (String word : source.split(" ")) assertFalse(text.contains(word), "source word leaked: " + word);
+        }
+        assertTrue(text.contains("\"schema\":2"));
+        HubFile file = HubFile.read(text);
+        List<String> hashes = new java.util.ArrayList<>(file.entries().keySet());
+        List<String> sorted = new java.util.ArrayList<>(hashes);
+        java.util.Collections.sort(sorted);
+        assertEquals(sorted, hashes);
+        assertEquals(3, hashes.size());
+    }
+
+    @Test
+    void sameContentFromDifferentRowsOrOrderHashesTheSame(@TempDir Path cacheA, @TempDir Path cacheB,
+            @TempDir Path outA, @TempDir Path outB) throws IOException, HubExportTool.UsageException {
+        // The key carries no item/position: the same masked content always lands on the same hash.
+        Map<String, String> a = new LinkedHashMap<>();
+        a.put("Seller: ⟦0⟧", "賣家：⟦0⟧");
+        a.put("Diamond Sword", "鑽石劍");
+        Map<String, String> b = new LinkedHashMap<>();
+        b.put("Diamond Sword", "鑽石劍");
+        b.put("Seller: ⟦0⟧", "賣家：⟦0⟧");
+        seedCache(cacheA, "zh-tw", a, null);
+        seedCache(cacheB, "zh-tw", b, null);
+        String[] common = {"--lang", "zh-TW", "--server", "hypixel.net"};
+        HubExportTool.Result ra = HubExportTool.run(concat(common, "--cache-dir", cacheA.toString(),
+                "--out", outA.toString()), nullOut());
+        HubExportTool.Result rb = HubExportTool.run(concat(common, "--cache-dir", cacheB.toString(),
+                "--out", outB.toString()), nullOut());
+
+        assertEquals(Files.readString(ra.writtenFile()), Files.readString(rb.writtenFile()));
+        assertEquals(64, HubKeyHash.of("Diamond Sword").length());
+        assertEquals(HubKeyHash.of("Diamond Sword"), HubKeyHash.of("Diamond Sword"));
+    }
+
+    @Test
+    void roundTripExportThenDownloadThenLookup(@TempDir Path cacheDir, @TempDir Path out, @TempDir Path local)
+            throws IOException, HubExportTool.UsageException {
+        Map<String, String> rows = new LinkedHashMap<>();
+        rows.put("Diamond Sword", "鑽石劍");
+        rows.put("Seller: ⟦0⟧", "賣家：⟦0⟧");
+        rows.put("Echo Line", "Echo Line"); // rejected at export
+        seedCache(cacheDir, "zh-tw", rows, null);
+        HubExportTool.Result result = HubExportTool.run(new String[] {
+                "--cache-dir", cacheDir.toString(), "--lang", "zh-TW", "--server", "hypixel.net",
+                "--out", out.toString()
+        }, nullOut());
+        assertEquals(2, result.stats().exportedRows());
+
+        HubFile downloaded = HubFile.read(Files.readString(result.writtenFile()));
+        HubLocalCache cache = new HubLocalCache(local, "zh-TW");
+        HubLocalCache.MergeResult merge = cache.mergeFromFile(downloaded, HubSource.server("hypixel.net"));
+
+        assertEquals(2, merge.added());
+        assertEquals("鑽石劍", cache.get("Diamond Sword"));
+        assertEquals("賣家：⟦0⟧", cache.get("Seller: ⟦0⟧"));
+        assertNull(cache.get("Echo Line"));
+    }
+
+    private static String[] concat(String[] base, String... more) {
+        String[] all = new String[base.length + more.length];
+        System.arraycopy(base, 0, all, 0, base.length);
+        System.arraycopy(more, 0, all, base.length, more.length);
+        return all;
     }
 }

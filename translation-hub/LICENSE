@@ -1,0 +1,23 @@
+Translation Hub data license
+============================
+
+This license applies ONLY to the data files inside the translation-hub/ directory
+(the per-source translation files and index.json). It does not apply to the program
+code anywhere else in this repository, which stays under the MIT License in the
+repository root LICENSE file.
+
+The translations stored here are community- and AI-generated translated text, licensed
+under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+license (CC BY-NC-SA 4.0):
+
+    https://creativecommons.org/licenses/by-nc-sa/4.0/
+    Legal code: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+
+This directory does not contain, and does not license, any original source text.
+Original text, names and trademarks remain the property of their respective owners
+(the game, server and mod authors). Nothing here is affiliated with, endorsed by or
+sponsored by Mojang, Microsoft, any server (for example Hypixel) or any mod author.
+
+Attribution: "Nyanlex Translation Hub contributors" with a link to this repository.
+
+Takedown: rights holders can open an issue, see translation-hub/README.md.

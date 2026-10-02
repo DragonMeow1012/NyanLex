@@ -29,8 +29,8 @@ class HubDownloadJobTest {
     }
 
     private static String translationFileJson(String key, String value) {
-        return "{\"schema\":1,\"format\":\"modern-template-v1\",\"language\":\"zh-tw\","
-                + "\"provider\":\"none\",\"machine\":{},\"ai\":{\"" + key + "\":\"" + value + "\"}}";
+        return "{\"schema\":2,\"format\":\"hub-hash-v1\",\"hash\":\"sha256\",\"language\":\"zh-tw\","
+                + "\"entries\":{\"" + HubKeyHash.of(key) + "\":\"" + value + "\"}}";
     }
 
     private static HttpTransport fakeTransport(Map<String, String> responses) {

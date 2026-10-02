@@ -3,7 +3,10 @@ package com.dragonmeow.nyanlex.hub.tool;
 import com.dragonmeow.nyanlex.cache.FileStore;
 import com.dragonmeow.nyanlex.cache.LanguageFileStore;
 import com.dragonmeow.nyanlex.cache.TranslationCache;
+import com.dragonmeow.nyanlex.hub.HubFile;
+import com.dragonmeow.nyanlex.hub.HubImportValidator;
 import com.dragonmeow.nyanlex.hub.HubIndex;
+import com.dragonmeow.nyanlex.hub.HubKeyHash;
 import com.dragonmeow.nyanlex.hub.HubPaths;
 import com.dragonmeow.nyanlex.hub.HubSlug;
 import com.dragonmeow.nyanlex.hub.HubSource;
@@ -13,7 +16,6 @@ import com.dragonmeow.nyanlex.translate.ParagraphModel;
 import com.dragonmeow.nyanlex.translate.PlayerNamePatterns;
 import com.dragonmeow.nyanlex.translate.TextFilter;
 import com.dragonmeow.nyanlex.translate.TooltipSegmentPlanner;
-import com.dragonmeow.nyanlex.translate.TranslationFile;
 import com.dragonmeow.nyanlex.translate.TranslationTemplate;
 
 import java.io.IOException;
@@ -93,10 +95,6 @@ import java.util.stream.Stream;
 public final class HubExportTool {
     static final int MAX_ROWS = HubPaths.MAX_FILE_ROWS;
     static final long MAX_BYTES = HubPaths.MAX_FILE_BYTES;
-    private static final String FORMAT = "modern-template-v1";
-    /** Non-empty placeholder: {@link TranslationFile#read(Reader)} rejects an empty
-     *  provider string, and a hub row is never tied to one specific AI/GT provider. */
-    private static final String PROVIDER_PLACEHOLDER = "none";
 
     private HubExportTool() {
     }
@@ -338,14 +336,19 @@ public final class HubExportTool {
             return new Result(1, stats, null);
         }
         stats = stats.withTruncation(kept.size(), truncated);
-        TranslationFile file = new TranslationFile(FORMAT, options.language, PROVIDER_PLACEHOLDER,
-                Map.of(), kept);
+        // Schema 2: the public file stores only sha256(key) -> translation. The source text
+        // (key) never leaves this method.
+        Map<String, String> hashed = new LinkedHashMap<>();
+        for (Map.Entry<String, String> row : kept.entrySet()) {
+            hashed.put(HubKeyHash.of(row.getKey()), row.getValue());
+        }
+        HubFile file = new HubFile(options.language, hashed);
         Path target = options.out.resolve(relativePath(options.source, options.language));
         Files.createDirectories(target.getParent());
         try {
-            file.write(target, true);
+            file.write(target);
         } catch (IOException writeFailure) {
-            // TranslationFile.write's OWN internal ceiling (a generic, mod-wide safety
+            // HubFile write ceiling (a generic, mod-wide safety
             // limit, unrelated to the hub) happens to be exactly the same 32 MiB as
             // HubPaths.MAX_FILE_BYTES as of 2026-10-01's second cap raise, so a genuinely
             // oversized export can throw HERE, before the post-write size check below ever
@@ -461,6 +464,12 @@ public final class HubExportTool {
         }
         if (TextFilter.hasForeignUrl(key, value)) {
             return new ClassifiedRow(key, value, Disposition.REJECTED_FOREIGN_URL, "foreign-url", nameConverted);
+        }
+        if (!HubImportValidator.acceptsOnMerge(value)) {
+            // The schema 2 file has no source text, so the downloader can only accept a
+            // value that carries no URL/domain at all and stays within the length bound.
+            return new ClassifiedRow(key, value, Disposition.REJECTED_FOREIGN_URL, "value-not-publishable",
+                    nameConverted);
         }
         ChatLineClassifier.Verdict verdict = ChatLineClassifier.classify(key);
         if (dropChat && verdict.chat()) {

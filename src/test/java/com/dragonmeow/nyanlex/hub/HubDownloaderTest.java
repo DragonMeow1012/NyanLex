@@ -34,11 +34,11 @@ class HubDownloaderTest {
         for (Map.Entry<String, String> row : rows.entrySet()) {
             if (!first) ai.append(',');
             first = false;
-            ai.append('"').append(row.getKey()).append("\":\"").append(row.getValue()).append('"');
+            ai.append('"').append(HubKeyHash.of(row.getKey())).append("\":\"").append(row.getValue()).append('"');
         }
         ai.append('}');
-        return "{\"schema\":1,\"format\":\"modern-template-v1\",\"language\":\"" + language
-                + "\",\"provider\":\"none\",\"machine\":{},\"ai\":" + ai + "}";
+        return "{\"schema\":2,\"format\":\"hub-hash-v1\",\"hash\":\"sha256\",\"language\":\"" + language
+                + "\",\"entries\":" + ai + "}";
     }
 
     private static HttpTransport recordingTransport(Map<String, String> responses, List<String> requested) {
