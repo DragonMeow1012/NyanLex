@@ -568,6 +568,37 @@ public final class TranslationCache {
         return getCachedFinal(source, false);
     }
 
+    /** Set while {@link #peekFinal} runs on this thread: lookups must start no request. */
+    private static final ThreadLocal<Boolean> PEEKING = new ThreadLocal<>();
+
+    /**
+     * Strictly read-only twin of {@link #getCachedFinal}: only this engine's own final
+     * wording (never a provisional stand-in, never a lower-tier read-through, never a
+     * kept-original/failure mark -- those read as {@code null}), and unlike an ordinary
+     * lookup it can never start a request: a provisional row it passes over is not
+     * scheduled for an upgrade attempt. A machine-translation surface uses it to prefer
+     * wording this (AI) cache already has without waking the AI engine.
+     *
+     * @param exactStyle {@code true} accepts only a wording that carries this exact
+     *                   colour topology (chat); {@code false} also accepts the
+     *                   colour-independent semantic row, marked as a style fallback.
+     */
+    public String peekFinal(String source, boolean exactStyle) {
+        if (source == null) return null;
+        Boolean outer = PEEKING.get();
+        PEEKING.set(Boolean.TRUE);
+        try {
+            String hit = getCachedFinal(source, exactStyle);
+            if (hit == null || hit.isEmpty()) return null;
+            String semantic = TextFilter.stripStyleFallback(hit);
+            if (semantic.equals(source) || semantic.strip().equals(source.strip())) return null;
+            return hit;
+        } finally {
+            if (outer == null) PEEKING.remove();
+            else PEEKING.set(outer);
+        }
+    }
+
     private String getCachedFinal(String source, boolean exactStyle) {
         // Final means this engine's own value, never a result merely read through from
         // its lower-priority sibling.
@@ -2549,6 +2580,7 @@ public final class TranslationCache {
     private boolean retryProvisional(String candidate) {
         // Cache-only mode: a provisional hit is simply displayed; no supplement starts.
         if (!requestsAllowed()) return false;
+        if (PEEKING.get() != null) return false; // peekFinal: read-only, never wakes the engine
         String semanticKey = provisionalSemanticKey(candidate);
         // Migrate any session/disk provisional bit written by an older pre-release raw
         // alias, then use only the canonical key for single-flight, attempts and backoff.

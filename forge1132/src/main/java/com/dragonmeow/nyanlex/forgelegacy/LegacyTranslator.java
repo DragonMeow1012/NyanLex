@@ -593,7 +593,9 @@ final class LegacyTranslator {
     String cached(String source, String target, boolean ai) {
         LegacyTemplateText.Prepared prepared = LegacyTemplateText.prepare(source);
         if (!prepared.hasTranslatableContent()) return source;
-        String hit = cache.get(cacheKey(prepared.text(), target, ai, "google", null));
+        // Machine engine: wording the AI engine already produced wins (see cached below).
+        String hit = ai ? null : cache.get(cacheKey(prepared.text(), target, true, "google", null));
+        if (hit == null) hit = cache.get(cacheKey(prepared.text(), target, ai, "google", null));
         return hit == null ? null : prepared.restore(hit);
     }
 
@@ -604,7 +606,11 @@ final class LegacyTranslator {
         if (!prepared.hasTranslatableContent()) return source;
         String provider = LegacyConfig.normalizeMachineProvider(
                 config.machineTranslationProvider);
-        String hit = cache.get(cacheKey(prepared.text(), target, ai, provider, config));
+        // Lookup order of the machine engine: the AI cache's wording first (a text the AI engine
+        // has already translated is shown whichever engine is selected), then the machine cache.
+        // The AI engine itself is unchanged: AI cache, then ask the AI.
+        String hit = ai ? null : cache.get(cacheKey(prepared.text(), target, true, provider, config));
+        if (hit == null) hit = cache.get(cacheKey(prepared.text(), target, ai, provider, config));
         return hit == null ? null : prepared.restore(hit);
     }
 
@@ -660,7 +666,10 @@ final class LegacyTranslator {
                 config.machineTranslationProvider);
         final String aiProfile = aiProfile(config);
         final String key = cacheKey(prepared.text(), target, ai, provider, config);
-        String hit = cache.get(key);
+        // Machine engine: a row the AI engine already holds answers first, sends no machine
+        // request and writes nothing under the machine key.
+        String hit = ai ? null : cache.get(cacheKey(prepared.text(), target, true, provider, config));
+        if (hit == null) hit = cache.get(key);
         if (hit != null) {
             accept(callback, prepared.restore(hit));
             return;
