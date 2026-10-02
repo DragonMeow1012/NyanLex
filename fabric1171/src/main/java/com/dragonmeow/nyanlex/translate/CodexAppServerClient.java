@@ -1412,6 +1412,30 @@ public final class CodexAppServerClient implements AutoCloseable {
         }
     }
 
+    /**
+     * Loads and links everything {@link #close()} can need. NeoForge closes the mod class loader
+     * before the JVM runs its shutdown hooks, and a class that was never touched before then
+     * (a nested class, or the target of a lambda that close() creates for the first time) can no
+     * longer be loaded: the "nyanlex-codex-shutdown" hook died with NoClassDefFoundError and the
+     * Codex child process was left behind. Call this once at start-up, on the thread that
+     * registers the hook, while the loader is still open.
+     */
+    public static void preloadForShutdown() {
+        try {
+            ClassLoader loader = CodexAppServerClient.class.getClassLoader();
+            for (Class<?> nested : CodexAppServerClient.class.getDeclaredClasses()) {
+                Class.forName(nested.getName(), true, loader);
+            }
+            // A throwaway client walks the same path as the real one (stop, fail everything,
+            // release the token baselines) so every lambda in it is linked now.
+            CodexAppServerClient probe = new CodexAppServerClient(Path.of("."), Path.of("."));
+            probe.setTokenUsage(new SessionTokenUsage());
+            probe.close();
+        } catch (Throwable ignored) {
+            // Best effort: the hook still works if everything it needs happens to be loaded.
+        }
+    }
+
     @Override
     public void close() {
         synchronized (lifecycleLock) {

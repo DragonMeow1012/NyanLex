@@ -1332,6 +1332,8 @@ public final class NyanLexNeoForge {
         SwitchingAiTranslator ai = new SwitchingAiTranslator(
                 apiAi, codexAi, () -> config.aiUseCodex);
         aiRateLimitedProbe = ai::isRateLimited;
+        // The hook below can run after the mod class loader is closed (NeoForge); load what it needs now.
+        CodexAppServerClient.preloadForShutdown();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             CodexAppServerClient client = codexClient;
             if (client != null) client.close();
