@@ -345,17 +345,46 @@ class LangPackBuilderTest {
     }
 
     @Test
-    void onlyLicensesThatAllowDerivativesAreAccepted() {
-        for (String ok : new String[] {"MIT", "Apache-2.0", "BSD-3-Clause", "MPL-2.0", "LGPL-3.0-only", "GPL-3.0-or-later",
-                "AGPL-3.0", "CC-BY-4.0", "CC-BY-SA-4.0", "CC-BY-NC-SA-4.0", "LicenseRef-Polyform-Shield-1.0.0",
-                "Unlicense", "CC0-1.0", "LGPL-2.1 AND MIT", "MIT OR LicenseRef-Custom"}) {
+    void onlyWhitelistedLicenseIdsAreAcceptedByExactComparison() {
+        for (String ok : new String[] {"MIT", "mit", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "MPL-2.0",
+                "LGPL-2.1", "LGPL-2.1-only", "LGPL-3.0-or-later", "GPL-2.0-only", "GPL-3.0-or-later", "GPL-3.0",
+                "CC-BY-4.0", "CC-BY-SA-4.0", "CC-BY-NC-4.0", "CC-BY-NC-SA-4.0", "CC-BY-ND-4.0", "CC-BY-NC-ND-4.0",
+                "Polyform-Shield-1.0.0", "LicenseRef-Polyform-Shield-1.0.0", "CC0-1.0", "Unlicense", "  MIT  "}) {
             assertTrue(LangPackBuilder.licenseAccepted(ok), ok);
         }
-        for (String refused : new String[] {null, "", "  ", "All Rights Reserved", "LicenseRef-All-Rights-Reserved",
-                "LicenseRef-Custom (Modrinth: Custom)", "LicenseRef-", "Some Mod License (LicenseRef-Some-Mod-License)",
-                "CC-BY-ND-4.0", "LGPL-2.1 AND LicenseRef-All-Rights-Reserved", "ARR"}) {
+        for (String refused : new String[] {null, "", "  ", "All Rights Reserved", "ARR", "LicenseRef-All-Rights-Reserved",
+                "LicenseRef-Custom (Modrinth: Custom)", "LicenseRef-", "LicenseRef-tr7zw-Protective-License",
+                "Some Mod License (LicenseRef-Some-Mod-License)", "Create Mod License (LicenseRef-Create-Mod-License)",
+                "AGPL-3.0", "AGPL-3.0-only", "AGPL-3.0-or-later", "LicenseRef-AGPL-3.0", "GPL", "Apache-1.1",
+                "MPL-1.1", "MIT License", "Custom", "limited", "permit", "CC-BY", "CC0", "BSD", "Polyform-Noncommercial-1.0.0",
+                "LicenseRef-Polyform-Noncommercial-1.0.0"}) {
             assertFalse(LangPackBuilder.licenseAccepted(refused), String.valueOf(refused));
         }
+    }
+
+    @Test
+    void spdxExpressionsAreParsedWithAndOrParenthesesAndAnyLetterCase() {
+        for (String ok : new String[] {"LGPL-2.1 AND CC-BY-NC-SA-4.0", "lgpl-2.1 and cc-by-nc-sa-4.0",
+                "LGPL-2.1 and CC-BY-NC-SA-4.0", "MIT OR LicenseRef-Custom", "mit or licenseref-custom",
+                "LicenseRef-Custom Or MIT", "(MIT OR Apache-2.0) AND BSD-3-Clause", "MIT AND (Apache-2.0 OR LicenseRef-Custom)",
+                "((MIT))", "GPL-2.0-only WITH Classpath-exception-2.0", "GPL-2.0+", "LGPL-2.1+ AND MIT",
+                "LicenseRef-Custom OR LicenseRef-Other OR MIT", "MIT AND MIT AND MIT"}) {
+            assertTrue(LangPackBuilder.licenseAccepted(ok), ok);
+        }
+        for (String refused : new String[] {"LGPL-2.1 AND LicenseRef-All-Rights-Reserved",
+                "lgpl-2.1 and licenseref-all-rights-reserved", "MIT AND AGPL-3.0", "mit and agpl-3.0-only",
+                "LicenseRef-Custom OR LicenseRef-Other", "licenseref-custom or all rights reserved",
+                "(MIT OR Apache-2.0) AND LicenseRef-Custom",
+                // AND binds tighter than OR: this is  LicenseRef-Custom  OR  (MIT AND AGPL-3.0)
+                "LicenseRef-Custom OR MIT AND AGPL-3.0",
+                // malformed expressions are refused rather than guessed at
+                "MIT AND", "AND MIT", "MIT OR OR MIT", "(MIT", "MIT)", "()", "MIT MIT", "MIT WITH", "MIT AND WITH",
+                "MIT; AGPL-3.0"}) {
+            assertFalse(LangPackBuilder.licenseAccepted(refused), refused);
+        }
+        // precedence the other way round: (A AND B) OR C
+        assertTrue(LangPackBuilder.licenseAccepted("MIT AND AGPL-3.0 OR Apache-2.0"));
+        assertTrue(LangPackBuilder.licenseAccepted("AGPL-3.0 OR MIT AND Apache-2.0"));
     }
 
     @Test

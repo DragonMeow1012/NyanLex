@@ -411,44 +411,119 @@ public final class LangPackBuilder {
 
     // ------------------------------------------------------------------ license policy
 
-    private static final String[] PERMISSIVE = {
-            "mit", "apache", "bsd", "mpl", "lgpl", "gpl", "cc-by", "cc by", "polyform-shield", "polyform shield",
-            "unlicense", "cc0"};
-
     /**
-     * Only licenses that expressly allow modification or derivative works are accepted: MIT, Apache,
-     * BSD, MPL, LGPL, GPL, the CC BY family (not its no-derivatives variants), Polyform Shield,
-     * Unlicense and CC0. All Rights Reserved, custom licenses ({@code LicenseRef-*} other than
-     * Polyform Shield), and unknown licenses are refused. An {@code A AND B} expression needs every part
-     * accepted, {@code A OR B} any part.
+     * The license gate: the {@code license} field of an input file is an SPDX expression, parsed with
+     * {@code AND}, {@code OR} (any letter case; {@code AND} binds tighter than {@code OR}), parentheses,
+     * {@code WITH <exception>} and a trailing {@code +}, and every license id in it is compared exactly
+     * (never as a substring) with the whitelist: MIT, Apache-2.0, BSD-*, MPL-2.0, LGPL-*, GPL-* (AGPL is
+     * not GPL-*), CC-BY-* (the NC, SA and ND variants too), Polyform-Shield, CC0-1.0 and Unlicense.
+     * {@code A AND B} needs both sides accepted, {@code A OR B} either.
+     *
+     * <p>Every {@code LicenseRef-*} is refused, All Rights Reserved and custom licenses included, with one
+     * exception: Modrinth reports Polyform Shield as {@code LicenseRef-Polyform-Shield-<version>}, which is
+     * the whitelisted license under its other spelling. Anything that is not a well-formed expression
+     * (a free-text license name, unbalanced parentheses, a dangling operator) is refused. For a dual-licensed
+     * project, the author's ruling goes into the file's {@code license} field as a plain SPDX expression
+     * such as {@code LGPL-2.1 AND CC-BY-NC-SA-4.0}; that string is then the decision.</p>
      */
     public static boolean licenseAccepted(String license) {
         if (license == null || license.isBlank()) return false;
-        String text = license.strip().toLowerCase(Locale.ROOT);
-        if (Pattern.compile("\\s+AND\\s+").matcher(license).find()) {
-            for (String part : Pattern.compile("\\s+AND\\s+").split(license.strip())) {
-                if (!licenseAccepted(part.replaceAll("[()]", ""))) return false;
+        List<String> tokens = new ArrayList<>();
+        Matcher token = Pattern.compile("[()]|[^\\s()]+").matcher(license);
+        while (token.find()) tokens.add(token.group());
+        return new SpdxExpression(tokens).accepted();
+    }
+
+    /** One license id against the whitelist (exact id, or the documented id family prefix). */
+    static boolean licenseIdAccepted(String id) {
+        String s = id.toLowerCase(Locale.ROOT);
+        if (s.endsWith("+")) s = s.substring(0, s.length() - 1); // "or later"
+        if (s.startsWith("licenseref-")) {
+            s = s.substring("licenseref-".length());
+            return isPolyformShield(s); // every other custom reference is refused
+        }
+        return s.equals("mit") || s.equals("apache-2.0") || s.startsWith("bsd-") || s.equals("mpl-2.0")
+                || s.startsWith("lgpl-") || s.startsWith("gpl-") || s.startsWith("cc-by-")
+                || isPolyformShield(s) || s.equals("cc0-1.0") || s.equals("unlicense");
+    }
+
+    private static boolean isPolyformShield(String lowerCaseId) {
+        return lowerCaseId.equals("polyform-shield") || lowerCaseId.startsWith("polyform-shield-");
+    }
+
+    /** Recursive-descent evaluation of an SPDX expression: {@code or := and (OR and)*}, {@code and := term (AND term)*}. */
+    private static final class SpdxExpression {
+        private final List<String> tokens;
+        private int pos;
+        private boolean malformed;
+
+        SpdxExpression(List<String> tokens) {
+            this.tokens = tokens;
+        }
+
+        boolean accepted() {
+            boolean value = or();
+            return !malformed && pos == tokens.size() && value;
+        }
+
+        private boolean or() {
+            boolean value = and();
+            while (!malformed && isWord("or")) {
+                pos++;
+                boolean next = and(); // always parse the right side, even when the left already decided
+                value = value || next;
             }
-            return true;
+            return value;
         }
-        if (Pattern.compile("\\s+OR\\s+").matcher(license).find()) {
-            for (String part : Pattern.compile("\\s+OR\\s+").split(license.strip())) {
-                if (licenseAccepted(part.replaceAll("[()]", ""))) return true;
+
+        private boolean and() {
+            boolean value = term();
+            while (!malformed && isWord("and")) {
+                pos++;
+                boolean next = term();
+                value = value && next;
             }
-            return false;
+            return value;
         }
-        if (text.contains("all rights reserved") || text.contains("all-rights-reserved")
-                || text.contains("custom") || text.equals("arr")) {
-            return false;
+
+        private boolean term() {
+            if (pos >= tokens.size()) {
+                malformed = true;
+                return false;
+            }
+            String token = tokens.get(pos);
+            if (token.equals("(")) {
+                pos++;
+                boolean inner = or();
+                if (pos < tokens.size() && tokens.get(pos).equals(")")) pos++;
+                else malformed = true;
+                return inner;
+            }
+            if (token.equals(")") || isOperator(token)) {
+                malformed = true;
+                return false;
+            }
+            pos++;
+            boolean ok = licenseIdAccepted(token);
+            if (isWord("with")) { // "GPL-2.0-only WITH <exception>": the exception only adds permissions
+                pos++;
+                if (pos >= tokens.size() || tokens.get(pos).equals("(") || tokens.get(pos).equals(")")
+                        || isOperator(tokens.get(pos))) {
+                    malformed = true;
+                    return false;
+                }
+                pos++;
+            }
+            return ok;
         }
-        if (text.contains("licenseref") && !text.contains("polyform-shield") && !text.contains("polyform shield")) {
-            return false;
+
+        private boolean isWord(String word) {
+            return pos < tokens.size() && tokens.get(pos).equalsIgnoreCase(word);
         }
-        if (text.matches(".*cc[- ]by.*-nd.*")) return false;
-        for (String allowed : PERMISSIVE) {
-            if (text.contains(allowed)) return true;
+
+        private static boolean isOperator(String token) {
+            return token.equalsIgnoreCase("and") || token.equalsIgnoreCase("or") || token.equalsIgnoreCase("with");
         }
-        return false;
     }
 
     static Input readInput(Path file) throws IOException {
