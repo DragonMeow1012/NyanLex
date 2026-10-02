@@ -1,6 +1,7 @@
 package com.dragonmeow.nyanlex.cache;
 
 import com.dragonmeow.nyanlex.translate.ChurnGuard;
+import com.dragonmeow.nyanlex.translate.DebugErrorLog;
 import com.dragonmeow.nyanlex.translate.RequestGate;
 import com.dragonmeow.nyanlex.translate.RequestPacer;
 import com.dragonmeow.nyanlex.translate.RequestsPausedException;
@@ -3395,7 +3396,7 @@ public final class TranslationCache {
             return "format/token lost";
         }
         if (translated.equals(source) || translated.trim().equals(source == null ? "" : source.trim())) {
-            return "unchanged (echo)";
+            return DebugErrorLog.UNCHANGED_ECHO_REASON;
         }
         if (TextFilter.isPartialTransliteration(source, translated)
                 || TextFilter.hasUntranslatedAnchoredField(source, translated)) {

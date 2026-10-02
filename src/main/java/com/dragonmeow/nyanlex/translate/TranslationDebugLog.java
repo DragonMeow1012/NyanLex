@@ -213,6 +213,8 @@ public final class TranslationDebugLog {
     /** 偵錯模式's error log: a request that failed is written there (nothing else is). */
     private static void reportFailure(Entry entry, Status status, String reason) {
         if (status != Status.FAILED && status != Status.RATE_LIMITED) return;
+        // A model that hands a name, code or abbreviation back unchanged is right, not broken.
+        if (DebugErrorLog.isBenignReason(reason)) return;
         DebugErrorLog.report(DebugErrorLog.typeForReason(reason), reason == null ? "unknown" : reason,
                 "engine", entry.engine, "request", Long.toString(entry.requestId),
                 "batch", Integer.toString(entry.batchSize), "text", entry.text == null ? "" : entry.text);

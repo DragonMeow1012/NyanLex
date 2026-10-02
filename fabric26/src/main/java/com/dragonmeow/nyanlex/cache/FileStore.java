@@ -8,6 +8,7 @@ import com.google.gson.JsonParser;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -277,7 +278,8 @@ public final class FileStore implements PersistentStore {
             boolean trimmedDuringLoad = false;
             Set<String> retainedSchema4Keys = null;
 
-            try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            boolean ioFailure = false;
+            try (BufferedReader reader = openLenient(file)) {
                 String headerLine = reader.readLine();
                 if (headerLine == null || headerLine.isBlank()) {
                     damaged = true;
@@ -349,8 +351,20 @@ public final class FileStore implements PersistentStore {
                         damaged = true;
                     }
                 }
-            } catch (IOException | RuntimeException exception) {
+            } catch (IOException exception) {
+                // Real I/O trouble (not bad content): what was read is only part of the file,
+                // so nothing may be rewritten from it. See the ioFailure branch below.
+                ioFailure = true;
                 damaged = true;
+            } catch (RuntimeException exception) {
+                damaged = true;
+            }
+
+            if (ioFailure) {
+                // Fail closed: keep the file exactly as it is and run memory-only this session,
+                // rather than compacting a partial read over the player's whole cache.
+                readOnly = true;
+                return;
             }
 
             if (schema == SCHEMA && retainedSchema4Keys != null
@@ -403,6 +417,19 @@ public final class FileStore implements PersistentStore {
         }
     }
 
+    /**
+     * UTF-8 reader that substitutes U+FFFD for bytes it cannot decode instead of throwing.
+     * A strict reader throws {@code MalformedInputException} at the first bad byte (a torn
+     * multi-byte character at the end of a log cut short by a crash, one byte damaged by a
+     * disk or an editor), which used to abort the whole load and have the damaged-file repair
+     * compact an EMPTY store over a cache of 100 000 rows. Now only the damaged row is
+     * affected; the repair still backs the file up first.
+     */
+    private static BufferedReader openLenient(Path file) throws IOException {
+        return new BufferedReader(new InputStreamReader(Files.newInputStream(file), StandardCharsets.UTF_8),
+                1 << 16);
+    }
+
     private static boolean applyOperation(JsonObject object, Map<String, String> target,
             Set<String> targetProvisional) {
         if (object == null || !object.has("key") || object.get("key").isJsonNull()) {
@@ -442,7 +469,7 @@ public final class FileStore implements PersistentStore {
 
     private boolean loadRetainedSchema4Values(Set<String> retainedKeys,
             Map<String, String> target, Set<String> targetProvisional) {
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        try (BufferedReader reader = openLenient(file)) {
             if (reader.readLine() == null) {
                 return false;
             }

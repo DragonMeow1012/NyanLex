@@ -242,7 +242,7 @@ public final class NyanLexForge {
         NyanLexHooks.register(null, null);
         instance = this;
         Path configDir = configFile.getAbsoluteFile().getParentFile().toPath();
-        LegacyDataMigration.migrate(configDir, null);
+        LegacyDataMigration.migrate(configDir, message -> System.out.println("[NyanLex] " + message));
         config = loadConfig();
         codexClient = new LegacyCodexClient(configDir.resolve("nyanlex-codex-home"), configDir.resolve("nyanlex-codex-workspace"));
         TRANSLATOR.setCodexClient(codexClient);

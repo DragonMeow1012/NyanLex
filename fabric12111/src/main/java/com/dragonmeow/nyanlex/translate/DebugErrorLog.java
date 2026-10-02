@@ -49,6 +49,12 @@ public final class DebugErrorLog {
     public static final String NETWORK = "network";
     public static final String EXCEPTION = "exception";
     public static final String HOOK = "hook";
+    /** Startup migration of files left by an earlier product name (see LegacyDataMigration). */
+    public static final String MIGRATION = "migration";
+    /** The failure reason for a model that handed the source text back unchanged. It is the
+     *  correct answer for a name, a code or an abbreviation, so it is not an error to report. */
+    public static final String UNCHANGED_ECHO_REASON = "unchanged (echo)";
+    private static final int MAX_EARLY_REPORTS = 20;
 
     private static final String MASK = "***";
     private static final int MIN_SECRET_LENGTH = 8;
@@ -64,6 +70,8 @@ public final class DebugErrorLog {
                     + "[^\\s\"'&,}\\]]{6,}");
 
     private static volatile DebugErrorLog current;
+    /** Reports made before the log was installed (the startup migration runs first). */
+    private static final List<Object[]> EARLY = new ArrayList<>();
 
     private final Path file;
     private final BooleanSupplier enabled;
@@ -91,9 +99,38 @@ public final class DebugErrorLog {
 
     // ------------------------------------------------------------------ the shared instance
 
-    /** The log the game runs with; {@link #report} goes to it. {@code null} removes it. */
+    /** The log the game runs with; {@link #report} goes to it. {@code null} removes it (and
+     *  forgets any {@link #reportEarly} report that was still waiting for a log). */
     public static void install(DebugErrorLog log) {
         current = log;
+        if (log == null) {
+            synchronized (EARLY) {
+                EARLY.clear();
+            }
+            return;
+        }
+        List<Object[]> waiting;
+        synchronized (EARLY) {
+            waiting = new ArrayList<>(EARLY);
+            EARLY.clear();
+        }
+        for (Object[] report : waiting) {
+            report((String) report[0], (String) report[1], (String[]) report[2]);
+        }
+    }
+
+    /** Like {@link #report}, but a report made before any log is installed is kept (up to a
+     *  few) and recorded when {@link #install} runs. For startup work that precedes the log. */
+    public static void reportEarly(String type, String message, String... contextPairs) {
+        if (current == null) {
+            synchronized (EARLY) {
+                if (current == null) {
+                    if (EARLY.size() < MAX_EARLY_REPORTS) EARLY.add(new Object[] {type, message, contextPairs});
+                    return;
+                }
+            }
+        }
+        report(type, message, contextPairs);
     }
 
     public static DebugErrorLog current() {
@@ -178,7 +215,7 @@ public final class DebugErrorLog {
                     }
                 }
             }
-            if (problem == null) return;
+            if (problem == null || isBenignReason(problem)) return;
             Map<String, String> context = new LinkedHashMap<>();
             context.put("request", requestBody);
             context.put("response", responseBody);
@@ -187,6 +224,11 @@ public final class DebugErrorLog {
             }
             record(typeForReason(problem), problem, context);
         };
+    }
+
+    /** A failure reason that is a normal outcome, not a fault: nothing to write to the error log. */
+    public static boolean isBenignReason(String reason) {
+        return reason != null && UNCHANGED_ECHO_REASON.equals(reason.strip());
     }
 
     /** The error type that goes with a failure reason from the translation engine. */

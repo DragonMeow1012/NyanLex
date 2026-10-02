@@ -105,7 +105,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         instance = this;
         configPath = FabricLoader.getInstance().getConfigDir().resolve("nyanlex-legacy.json");
         Path configDir = configPath.getParent();
-        LegacyDataMigration.migrate(configDir, null);
+        LegacyDataMigration.migrate(configDir, message -> System.out.println("[NyanLex] " + message));
         config = loadConfig();
         codexClient = new LegacyCodexClient(
                 configDir.resolve("nyanlex-codex-home"),

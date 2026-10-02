@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -21,6 +22,12 @@ class DebugErrorLogTest {
 
     @TempDir
     Path dir;
+
+    @BeforeEach
+    void start() {
+        // Drops any early report an earlier test class left waiting for a log.
+        DebugErrorLog.install(null);
+    }
 
     @AfterEach
     void uninstall() {
@@ -170,6 +177,67 @@ class DebugErrorLogTest {
         long off = trace.submitted("AI", List.of("Shield"));
         assertEquals(0L, off);
         trace.completed(off, TranslationDebugLog.Status.FAILED);
+        log.awaitIdleForTest();
+        assertFalse(Files.exists(file()));
+    }
+
+    @Test
+    void aReportMadeBeforeTheLogExistsIsRecordedWhenItIsInstalled() throws IOException {
+        DebugErrorLog.reportEarly(DebugErrorLog.MIGRATION, "legacy cache merge skipped", "file", "nyanslate-ai-cache-zh-tw.json");
+        AtomicBoolean on = new AtomicBoolean(true);
+        DebugErrorLog log = log(on, 1000);
+
+        DebugErrorLog.install(log);
+        log.awaitIdleForTest();
+
+        String text = Files.readString(file(), StandardCharsets.UTF_8);
+        assertTrue(text.contains("\"type\":\"migration\""), text);
+        assertTrue(text.contains("legacy cache merge skipped"), text);
+        assertTrue(text.contains("nyanslate-ai-cache-zh-tw.json"), text);
+    }
+
+    @Test
+    void anEarlyReportIsKeptOnlyUntilTheNextInstall() throws IOException {
+        DebugErrorLog.reportEarly(DebugErrorLog.MIGRATION, "first", "file", "a");
+        AtomicBoolean on = new AtomicBoolean(true);
+        DebugErrorLog first = log(on, 1000);
+        DebugErrorLog.install(first);
+        first.awaitIdleForTest();
+        DebugErrorLog.install(null);
+
+        DebugErrorLog second = new DebugErrorLog(dir.resolve("second.jsonl"), on::get, 1000, List::of);
+        DebugErrorLog.install(second);
+        second.awaitIdleForTest();
+        assertFalse(Files.exists(dir.resolve("second.jsonl")), "an early report is replayed once, not on every install");
+    }
+
+    @Test
+    void aModelThatEchoesTheSourceIsNotAnError() throws IOException {
+        AtomicBoolean on = new AtomicBoolean(true);
+        DebugErrorLog log = log(on, 1000);
+        DebugErrorLog.install(log);
+        TranslationDebugLog debug = new TranslationDebugLog(on::get);
+
+        long echoed = debug.submitted("AI", List.of("C418 - cat", "Hyperion"));
+        debug.completed(echoed, new TranslationDebugLog.Failure(TranslationDebugLog.Status.FAILED,
+                DebugErrorLog.UNCHANGED_ECHO_REASON));
+        log.awaitIdleForTest();
+        assertFalse(Files.exists(file()), "unchanged (echo) is the right answer for a name, so it is not logged");
+
+        long broken = debug.submitted("AI", List.of("Hello"));
+        debug.completed(broken, new TranslationDebugLog.Failure(TranslationDebugLog.Status.FAILED, "format/token lost"));
+        log.awaitIdleForTest();
+        List<String> lines = Files.readAllLines(file(), StandardCharsets.UTF_8);
+        assertEquals(1, lines.size());
+        assertTrue(lines.get(0).contains("format/token lost"));
+    }
+
+    @Test
+    void anEchoedUnitInAnExchangeIsNotLoggedEither() throws IOException {
+        AtomicBoolean on = new AtomicBoolean(true);
+        DebugErrorLog log = log(on, 1000);
+        log.exchangeSink().record("req", "resp", List.of("TNT"),
+                List.of(new TranslationResult("TNT", null, false, DebugErrorLog.UNCHANGED_ECHO_REASON)));
         log.awaitIdleForTest();
         assertFalse(Files.exists(file()));
     }
