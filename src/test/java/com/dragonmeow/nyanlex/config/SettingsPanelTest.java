@@ -800,6 +800,59 @@ class SettingsPanelTest {
     }
 
     @Test
+    void runningWarmupCardShowsTheWholeStateTextAndTheCountsBesideTheBarInEveryLanguageAndSize() {
+        int shown = 0;
+        for (int[] size : SIZES) {
+            for (String code : new String[] {"zh_tw", "en_us", "zh_cn"}) {
+                FakeHost host = new FakeHost();
+                host.lang = code;
+                host.warm = new WarmupStatus(true, ItemWarmupDriver.State.RUNNING, ItemWarmupDriver.PauseReason.NONE,
+                        872, 1332, 900, false, 800, 4224, 3, false);
+                SettingsPanel p = panel(host, size[0], size[1]);
+                p.setCategory(SettingsCategory.MINE);
+                // scroll until the card's top reaches the top of the list (or the end of the page)
+                int[] list = p.listRect();
+                for (int i = 0; i < 200 && p.cardBounds("warmup")[1] > list[1]; i++) {
+                    p.keyPressed(SettingsPanel.KEY_DOWN, false, false);
+                }
+                int[] card = p.cardBounds("warmup");
+                if (card[1] < list[1] || card[1] + card[3] > list[1] + list[3]) continue; // a window too small to show the whole card
+                shown++;
+                String label = code + " " + size[0] + "x" + size[1];
+                check(p, label, size);
+                Rec c = new Rec();
+                p.render(c, -1, -1);
+                String drawn = c.texts.stream().map(Text::s).collect(java.util.stream.Collectors.joining(" "))
+                        .replaceAll("\s+", "");
+                String state = host.text("screen.nyanlex.warmup.state.running.speed", 4224, 3).replaceAll("\s+", "");
+                assertTrue(drawn.contains(state), label + " the whole state text (time left included) is drawn: " + drawn);
+                assertTrue(c.texts.stream().anyMatch(t -> t.s().contains("872 / 1332 (65%)") || t.s().equals("65%")),
+                        label + " the counts are drawn");
+            }
+        }
+        assertTrue(shown >= 9, "the card was checked at several sizes: " + shown);
+    }
+
+    @Test
+    void warmupCardHeightDoesNotChangeWhileTheRunGoesOn() {
+        for (String code : new String[] {"zh_tw", "en_us"}) {
+            FakeHost host = new FakeHost();
+            host.lang = code;
+            SettingsPanel p = panel(host, 427, 240);
+            p.setCategory(SettingsCategory.MINE);
+            int idle = p.cardBounds("warmup")[3];
+            host.warm = new WarmupStatus(true, ItemWarmupDriver.State.RUNNING, ItemWarmupDriver.PauseReason.NONE,
+                    120, 400, 30, false, 20, 4224, 12, false);
+            p.invalidate();
+            assertEquals(idle, p.cardBounds("warmup")[3], code + ": the card is as tall running as idle");
+            host.warm = new WarmupStatus(true, ItemWarmupDriver.State.PAUSED, ItemWarmupDriver.PauseReason.RATE_LIMITED,
+                    120, 400, 30, false);
+            p.invalidate();
+            assertEquals(idle, p.cardBounds("warmup")[3], code + ": and as tall paused");
+        }
+    }
+
+    @Test
     void warmupHudToggleCardIsInMyTranslations() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 480, 270);

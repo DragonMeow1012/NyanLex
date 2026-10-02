@@ -169,6 +169,8 @@ public final class SettingsPanel {
         boolean stacked;
         int ctrlW;
         int ctrlH;
+        /** WARMUP card: lines reserved for the state text (the longest wording of any state, wrapped to the card). */
+        int statusLines = 1;
         /** SURFACE / ALL cards: width of each button (shrunk to fit when the card is stacked). */
         int[] multiW;
         /** FILE cards: index of the path line inside {@link #desc} (-1 otherwise) and the full path. */
@@ -320,7 +322,8 @@ public final class SettingsPanel {
         int head = CARD_PAD - 1 + (r.crumb != null ? LINE_H : 0) + LINE_H;
         int block = head + (r.desc.isEmpty() ? 0 : 2 + r.desc.size() * LINE_H) + CARD_PAD - 1;
         if (card.kind() == SettingCard.Kind.WARMUP) {
-            r.h = block - (CARD_PAD - 1) + 4 + LINE_H + 3 + 6 + 5 + 14 + CARD_PAD;
+            r.statusLines = warmStatusLines(inner);
+            r.h = block - (CARD_PAD - 1) + 4 + r.statusLines * LINE_H + 3 + 6 + 5 + 14 + CARD_PAD;
         } else if (r.stacked && hasCtrl) {
             r.h = block - (CARD_PAD - 1) + 4 + r.ctrlH + CARD_PAD;
             if (card.kind() == SettingCard.Kind.SLIDER) r.ctrlW = inner;
@@ -1062,26 +1065,57 @@ public final class SettingsPanel {
         }
     }
 
+    /**
+     * Lines the state text needs: the longest wording any state can show (with a wide speed and time
+     * figure), wrapped to the card. Reserving them up front keeps the card height from changing while
+     * the run goes on, and lets the whole sentence (the time left included) stay readable.
+     */
+    private int warmStatusLines(int inner) {
+        List<String> texts = new ArrayList<>();
+        texts.add(host.text("screen.nyanlex.warmup.state.running.speed", 9999, 999));
+        texts.add(host.text("screen.nyanlex.warmup.state.running"));
+        texts.add(host.text("screen.nyanlex.warmup.state.done"));
+        texts.add(host.text("screen.nyanlex.warmup.state.stopped"));
+        texts.add(host.text(SettingsModel.KEY_WARMUP_IDLE));
+        texts.add(host.text(SettingsCatalog.KEY_NEEDS_AI));
+        for (ItemWarmupDriver.PauseReason reason : ItemWarmupDriver.PauseReason.values()) {
+            texts.add(host.text("screen.nyanlex.warmup.reason." + reason.name().toLowerCase(java.util.Locale.ROOT)));
+        }
+        int lines = 1;
+        for (String text : texts) lines = Math.max(lines, UiText.wrap(text, inner, host::textWidth).size());
+        return Math.min(lines, 3);
+    }
+
     private void drawWarmup(UiCanvas c, Row r, int textBottomY, int mx, int my) {
         WarmupStatus st = host.warmupStatus();
         int cardX = listX + r.indent;
         int cardW = cardWidth(r.indent);
         int inner = cardW - 2 * CARD_PAD;
         int y = textBottomY + 4;
-        String status = UiText.fit(warmStatusText(st), inner - 70, host::textWidth);
         int color = st.state() == ItemWarmupDriver.State.DONE ? C_GOOD
                 : st.state() == ItemWarmupDriver.State.PAUSED ? C_WARN
                 : st.state() == ItemWarmupDriver.State.RUNNING ? C_ACCENT
                 : (!st.available() ? C_DISABLED_TEXT : C_DESC);
-        c.text(status, cardX + CARD_PAD, y, color);
+        // the state text owns its own line(s); the counts sit beside the bar, never over the text
+        List<String> status = UiText.wrap(warmStatusText(st), inner, host::textWidth);
+        if (status.size() > r.statusLines) {
+            String rest = String.join(" ", status.subList(r.statusLines - 1, status.size()));
+            status = new ArrayList<>(status.subList(0, r.statusLines - 1));
+            status.add(UiText.fit(rest, inner, host::textWidth));
+        }
+        for (int i = 0; i < status.size(); i++) c.text(status.get(i), cardX + CARD_PAD, y + i * LINE_H, color);
+        y += r.statusLines * LINE_H + 3;
+        int barW = inner;
         if (st.total() > 0 && (st.active() || st.state() == ItemWarmupDriver.State.DONE)) {
             String counts = st.scanned() + " / " + st.total() + " (" + st.percent() + "%)";
-            c.text(counts, cardX + cardW - CARD_PAD - host.textWidth(counts), y, C_TITLE);
+            if (inner - host.textWidth(counts) - 6 < 24) counts = st.percent() + "%";
+            int countsW = host.textWidth(counts);
+            c.text(counts, cardX + cardW - CARD_PAD - countsW, y - 2, C_TITLE);
+            barW = inner - countsW - 6;
         }
-        y += LINE_H + 3;
-        rrect(c, cardX + CARD_PAD, y, inner, 6, C_TRACK);
-        int fill = (int) (inner * st.fraction());
-        if (fill > 0) c.fill(cardX + CARD_PAD + 1, y + 1, Math.max(0, Math.min(inner - 2, fill - 1)), 4,
+        rrect(c, cardX + CARD_PAD, y, barW, 6, C_TRACK);
+        int fill = (int) (barW * st.fraction());
+        if (fill > 0) c.fill(cardX + CARD_PAD + 1, y + 1, Math.max(0, Math.min(barW - 2, fill - 1)), 4,
                 st.state() == ItemWarmupDriver.State.PAUSED ? C_WARN : C_ACCENT);
         List<WarmButton> buttons = warmButtons(st);
         int[][] rects = warmButtonRects(r, warmButtonY(r), buttons);
