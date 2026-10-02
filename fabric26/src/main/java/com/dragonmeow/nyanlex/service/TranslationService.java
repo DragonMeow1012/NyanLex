@@ -85,8 +85,8 @@ public final class TranslationService {
     /** Compiled form of {@code config.doNotTranslateTerms}, rebuilt when the list changes. */
     private volatile DoNotTranslateMatcher doNotTranslate = DoNotTranslateMatcher.EMPTY;
     private volatile Supplier<String> itemSourceLanguage = () -> null;
-    /** Repository ("GitHub AI translation hub") read-through, consulted only on an AI
-     *  cache miss (see {@link #lookup}); {@code null} = no hub wired in (default,
+    /** Repository ("GitHub AI translation hub") read-through, consulted on a cache miss of
+     *  either engine (see {@link #lookup}); {@code null} = no hub wired in (default,
      *  matches every pre-hub caller/test). Never throws into the render path. */
     private volatile java.util.function.Function<String, String> hubLookup;
     private final Set<String> invalidatedNameFailures = ConcurrentHashMap.newKeySet();
@@ -204,7 +204,7 @@ public final class TranslationService {
      * "send a request" decision — so a hub hit displays even under
      * manual item mode ({@link #isManualItemTranslation()}, 0 requests) exactly like an
      * ordinary cache hit.
-     * {@code null} (the default) disables the hub entirely; never affects the GT engine.
+     * {@code null} (the default) disables the hub entirely. Consulted for both engines.
      */
     public void setHubLookup(java.util.function.Function<String, String> lookup) {
         this.hubLookup = lookup;
@@ -1157,8 +1157,8 @@ public final class TranslationService {
         String cached = selected.getCached(key);
         if (cached != null) {
             forceFreshKeys.remove(key);
-        } else if (useAi) {
-            // Repository read-through, same as the generic lookup() path: a hub hit
+        } else {
+            // Repository read-through (any engine), same as the generic lookup() path: a hub hit
             // resolves this independent unit (an enchant name, a scroll/ability name, a
             // trade field or a stat row) immediately, 0 requests, BEFORE the caller ever
             // considers queuing it — segment-level cache keys hit the hub exactly like any
@@ -2245,8 +2245,8 @@ public final class TranslationService {
         String translated = selected.getCached(key);
         if (translated != null) {
             forceFreshKeys.remove(key);
-        } else if (useAi) {
-            // Repository read-through: checked BEFORE the "send a request" decision below,
+        } else {
+            // Repository read-through (any engine, requests on or off): checked BEFORE the "send a request" decision below,
             // so a hub hit displays immediately even when allowRequest is false (manual
             // item/screen mode) — exactly like an ordinary cache hit, 0 requests either way.
             // Skipped while an explicit R/P retranslate just invalidated THIS key — see

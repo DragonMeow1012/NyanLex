@@ -80,21 +80,87 @@ class HubCacheLookupTest {
         assertEquals(0, calls.get(), "a cache tier hit never also buys a fresh request");
     }
 
-    @Test
-    void hubLookupIsNotConsultedForTheGoogleTranslateEngine() {
-        AtomicInteger calls = new AtomicInteger();
-        TranslatorConfig cfg = TestConfigs.translating();
-        cfg.aiTooltip = false; // tooltip surface routed to the GT engine, not AI (also manual mode)
+    private static TranslationService service(TranslatorConfig cfg, AtomicInteger calls,
+                                              Map<String, String> hub) {
         TranslationCache gt = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
         TranslationCache ai = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
         TranslationService service = new TranslationService(cfg, gt, ai);
-        Map<String, String> hub = Map.of("Diamond Sword", "鑽石劍");
         service.setHubLookup(hub::get);
+        return service;
+    }
+
+    @Test
+    void machineTranslationEngineHubHitDisplaysWithZeroRequests() {
+        AtomicInteger calls = new AtomicInteger();
+        TranslatorConfig cfg = TestConfigs.translating();
+        cfg.aiTooltip = false; // machine-translation engine
+        TranslationService service = service(cfg, calls, Map.of("Diamond Sword", "鑽石劍"));
 
         TranslationDecision decision = service.translateItemLine("Diamond Sword");
+        service.flushBatches();
 
-        assertFalse(decision.changed(), "the hub only ever read-throughs the AI engine's miss, never GT's");
-        assertEquals(0, calls.get());
+        assertTrue(decision.changed());
+        assertEquals("鑽石劍", decision.translated());
+        assertEquals(0, calls.get(), "a hub hit beats sending a machine-translation request");
+    }
+
+    @Test
+    void hubHitDisplaysWithZeroRequestsWhileOnlineTranslationIsOff() {
+        for (boolean ai : new boolean[] {false, true}) {
+            AtomicInteger calls = new AtomicInteger();
+            TranslatorConfig cfg = TestConfigs.translating();
+            cfg.translationRequestsEnabled = false;
+            cfg.aiTooltip = ai;
+            TranslationService service = service(cfg, calls, Map.of("Diamond Sword", "鑽石劍"));
+
+            TranslationDecision decision = service.translateItemLine("Diamond Sword");
+            service.flushBatches();
+
+            assertTrue(decision.changed(), "ai=" + ai);
+            assertEquals("鑽石劍", decision.translated());
+            assertEquals(0, calls.get(), "ai=" + ai);
+        }
+    }
+
+    @Test
+    void hubIsNotConsultedWhenDisplayModeIsOriginalOnly() {
+        for (boolean ai : new boolean[] {false, true}) {
+            AtomicInteger calls = new AtomicInteger();
+            AtomicInteger hubCalls = new AtomicInteger();
+            TranslatorConfig cfg = TestConfigs.translating();
+            cfg.aiTooltip = ai;
+            cfg.tooltipMode = com.dragonmeow.nyanlex.config.DisplayMode.ORIGINAL_ONLY;
+            TranslationCache gt = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
+            TranslationCache aiCache = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
+            TranslationService service = new TranslationService(cfg, gt, aiCache);
+            service.setHubLookup(key -> {
+                hubCalls.incrementAndGet();
+                return "鑽石劍";
+            });
+
+            TranslationDecision decision = service.translateItemLine("Diamond Sword");
+
+            assertFalse(decision.changed(), "ai=" + ai);
+            assertEquals(0, hubCalls.get(), "ai=" + ai);
+            assertEquals(0, calls.get(), "ai=" + ai);
+        }
+    }
+
+    @Test
+    void machineTranslationHubMissStillSendsTheOrdinaryRequest() {
+        AtomicInteger calls = new AtomicInteger();
+        TranslatorConfig cfg = TestConfigs.translating();
+        cfg.aiTooltip = false;
+        TranslationService service = service(cfg, calls, Map.of());
+
+        service.translateItemLine("Diamond Sword");
+        service.requestItemLines(java.util.List.of("Diamond Sword"));
+        service.flushBatches();
+        service.flushBatches();
+        TranslationDecision after = service.translateItemLine("Diamond Sword");
+
+        assertTrue(after.changed(), "a hub miss must not block the request");
+        assertEquals(1, calls.get());
     }
 
     @Test
