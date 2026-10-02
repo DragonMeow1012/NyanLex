@@ -179,6 +179,10 @@ public abstract class GuiScoreboardMixin {
         if (!HookGuard.enter("GuiScoreboard.inlineHud")) return g.drawString(font, text, x, y, color);
         try {
             TranslationService service = NyanLexNeoForge.service();
+            if (NyanLexNeoForge.isOwnFeedback(text)) {
+                return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(
+                        () -> g.drawString(font, text, x, y, color));
+            }
             if (service != null && text == overlayMessageString) {
                 return nyanlex$drawTranslated("actionBar", service::translateActionBar, g, font, text, x, y, color);
             }

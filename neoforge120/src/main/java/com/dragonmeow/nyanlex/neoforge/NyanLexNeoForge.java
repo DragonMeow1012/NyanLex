@@ -30,7 +30,6 @@ import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.translate.AiSettings;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerTransport;
-import com.dragonmeow.nyanlex.translate.ExchangeDumpWriter;
 import com.dragonmeow.nyanlex.translate.OpenAiTranslator;
 import com.dragonmeow.nyanlex.translate.ParagraphModel;
 import com.dragonmeow.nyanlex.translate.RequestPacer;
@@ -103,7 +102,10 @@ public final class NyanLexNeoForge {
     private static HubDownloadState hubDownloadState;
     private static HubDownloader hubDownloader;
     private static final HubDownloadJob hubDownloadJob = new HubDownloadJob();
-    private static volatile boolean hubStartupChecked;
+    private static boolean firstStartTried;
+    private static volatile com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState packState =
+            com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.IDLE;
+    private static volatile HubPlan packPlan;
     private static volatile boolean keybindMigrationChecked;
 
     private static CodexAppServerClient codexClient;
@@ -437,11 +439,6 @@ public final class NyanLexNeoForge {
         return insideServerFrame;
     }
 
-    /** The "re-translate pointed item" key binding (rebindable from the 翻譯設定 screen). */
-    public static KeyMapping retranslateKeyMapping() {
-        return retranslateKey;
-    }
-
     /** Accessor for the Options-screen button Mixin. */
     public static TranslationService service() {
         return service;
@@ -450,6 +447,11 @@ public final class NyanLexNeoForge {
     /** Accessor for Mixins (e.g. the scoreboard toggle). */
     public static TranslatorConfig config() {
         return config;
+    }
+
+    /** The game's config directory (where every mod file lives). */
+    public static Path configDirectory() {
+        return configPath.getParent();
     }
 
     public static HubLocalCache hubLocalCache() {
@@ -468,6 +470,125 @@ public final class NyanLexNeoForge {
         return hubDownloadJob;
     }
 
+    // ---- All-item warm-up (AI engine only; see com.dragonmeow.nyanlex.warmup) ----
+
+    private static volatile java.util.function.BooleanSupplier aiRateLimitedProbe = () -> false;
+    private static com.dragonmeow.nyanlex.warmup.ItemWarmupDriver itemWarmupDriver;
+    private static int warmupWorldTicks;
+    private static boolean warmupAutoResumeTried;
+
+    /** The single per-launch warm-up driver (also keeps the per-launch item budget). */
+    public static synchronized com.dragonmeow.nyanlex.warmup.ItemWarmupDriver itemWarmupDriver() {
+        if (itemWarmupDriver == null) {
+            itemWarmupDriver = new com.dragonmeow.nyanlex.warmup.ItemWarmupDriver(
+                    new NeoItemWarmupSource(),
+                    new NeoItemWarmupSource.Backend(() -> aiRateLimitedProbe.getAsBoolean()),
+                    NyanLexNeoForge::config, System::currentTimeMillis);
+        }
+        return itemWarmupDriver;
+    }
+
+    /**
+     * Public entry point for the settings UI ("全物品預熱…"): opens the progress screen
+     * when a run is active, otherwise the scan-and-confirm screen (which explains why
+     * it cannot run under machine translation).
+     */
+    public static void openItemWarmupScreen(net.minecraft.client.gui.screens.Screen parent) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        var state = itemWarmupDriver().state();
+        if (state == com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.RUNNING
+                || state == com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.PAUSED) {
+            mc.setScreen(new ItemWarmupProgressScreen(parent));
+        } else {
+            mc.setScreen(new ItemWarmupConfirmScreen(parent));
+        }
+    }
+
+    /**
+     * Tooltip context for the warm-up: the live level's when a world is open, otherwise the
+     * registry-less {@code EMPTY} one so that the title screen can probe items too (the
+     * built-in registry lookup has unbound tags and makes every tooltip throw).
+     */
+    private static Object warmupTooltipContext(Minecraft mc) {
+        return null; // 1.20.1 has no tooltip context object; getTooltipLines takes the player only
+    }
+
+    /**
+     * Build one item's tooltip translation units exactly as the hover path would. Works without
+     * a world (player may be null); an item whose tooltip cannot be built (some mods need world
+     * data) comes back {@code failed} so the run can skip and count it.
+     */
+    static com.dragonmeow.nyanlex.warmup.ItemWarmupTarget itemWarmupTarget(Item item, Minecraft mc) {
+        net.minecraft.resources.ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
+        String itemId = id == null ? "" : id.toString();
+        String namespace = id == null ? "" : id.getNamespace();
+        int depth = tooltipProbeDepth.get();
+        tooltipProbeDepth.set(depth + 1);
+        try {
+            ItemStack stack = item.getDefaultInstance();
+            if (stack.isEmpty()) {
+                return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+            }
+            List<Component> lines = stack.getTooltipLines(mc.player, TooltipFlag.Default.NORMAL);
+            if (lines == null || lines.isEmpty()) {
+                return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, List.of());
+            }
+            TooltipParagraphPlan plan = tooltipParagraphPlan(
+                    stack, lines, NeoTextStyle::paragraphRequestText);
+            return new com.dragonmeow.nyanlex.warmup.ItemWarmupTarget(itemId, namespace, plan.sources());
+        } catch (RuntimeException | LinkageError e) {
+            return com.dragonmeow.nyanlex.warmup.ItemWarmupTarget.failed(itemId, namespace);
+        } finally {
+            if (depth == 0) tooltipProbeDepth.remove();
+            else tooltipProbeDepth.set(depth);
+        }
+    }
+
+    private static com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State warmupPrevState =
+            com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.IDLE;
+    private static volatile long warmupDoneAtMs = -1L;
+
+    /** Milliseconds since the warm-up last finished, or -1 when it has not finished this launch. */
+    public static long warmupMsSinceDone() {
+        long at = warmupDoneAtMs;
+        return at < 0 ? -1L : System.currentTimeMillis() - at;
+    }
+
+    /** Mod version for the settings "About" card. */
+    public static String modVersion() {
+        return net.minecraftforge.fml.ModList.get().getModContainerById(MOD_ID)
+                .map(c -> c.getModInfo().getVersion().toString()).orElse("");
+    }
+
+    /** Remembers state changes for the HUD ("done" timer) and tells the player when a paused run continues. */
+    private static void trackWarmupTransitions(com.dragonmeow.nyanlex.warmup.ItemWarmupDriver driver) {
+        var progress = driver.progress();
+        var state = progress.state();
+        if (state == com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.DONE
+                && warmupPrevState != com.dragonmeow.nyanlex.warmup.ItemWarmupDriver.State.DONE) {
+            warmupDoneAtMs = System.currentTimeMillis();
+        }
+        warmupPrevState = state;
+    }
+
+    /** Per client tick: drive the warm-up, and resume it once per launch if the player opted in. */
+    private static void tickItemWarmup(Minecraft mc) {
+        if (config == null || service == null) return;
+        var driver = itemWarmupDriver();
+        if (mc != null && mc.player != null && mc.level != null) {
+            if (!warmupAutoResumeTried && config.itemWarmupEnabled
+                    && config.itemWarmupWarningAcknowledged && ++warmupWorldTicks >= 400) {
+                warmupAutoResumeTried = true;
+                driver.start();
+            }
+        } else {
+            warmupWorldTicks = 0;
+        }
+        driver.tick();
+        trackWarmupTransitions(driver);
+    }
+
     /** Spawns background hub work (identify/plan/download) as a daemon thread; also
      *  usable directly as the {@link Executor} {@link HubDownloadJob#start} wants. */
     public static Executor hubExecutor() {
@@ -478,10 +599,6 @@ public final class NyanLexNeoForge {
         Thread thread = new Thread(task, MOD_ID + "-hub");
         thread.setDaemon(true);
         thread.start();
-    }
-
-    public static void postHubStatus(String msg) {
-        status(msg);
     }
 
     private static List<String> loadedModIds() {
@@ -525,6 +642,25 @@ public final class NyanLexNeoForge {
      * running, skips straight to {@link HubDownloadProgressScreen} instead -- this is
      * the "識別當前伺服器/MOD下載並匯入翻譯檔" button's click handler.
      */
+    private static final java.util.concurrent.atomic.AtomicBoolean HUB_PLANNING =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** True while a hub identify/plan pass runs in the background (settings UI disables its button). */
+    public static boolean hubPlanning() {
+        return HUB_PLANNING.get();
+    }
+
+    private static Runnable clearPlanningOnCrash(Runnable task) {
+        return () -> {
+            try {
+                task.run();
+            } catch (RuntimeException | Error e) {
+                HUB_PLANNING.set(false);
+                throw e;
+            }
+        };
+    }
+
     public static void startHubIdentifyAndPlan(net.minecraft.client.gui.screens.Screen hubScreen) {
         if (hubDownloader == null) return;
         if (hubDownloadJob.isRunning()) {
@@ -532,7 +668,8 @@ public final class NyanLexNeoForge {
             if (mc != null) mc.setScreen(new HubDownloadProgressScreen(hubScreen));
             return;
         }
-        runHubBackground(() -> {
+        if (!HUB_PLANNING.compareAndSet(false, true)) return; // a plan is already being built: ignore double clicks
+        runHubBackground(clearPlanningOnCrash(() -> {
             String host = null;
             String modpackLabel = null;
             List<String> modIds = loadedModIds();
@@ -559,17 +696,26 @@ public final class NyanLexNeoForge {
             final HubPlan finalPlan = plan;
             final String finalError = error;
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null) return;
+            if (mc == null) {
+                HUB_PLANNING.set(false);
+                return;
+            }
             mc.execute(() -> {
+                HUB_PLANNING.set(false);
                 if (finalPlan == null) {
-                    status(Component.translatable("screen.nyanlex.hub.progress.failed",
-                            finalError == null ? "" : finalError).getString());
+                    toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                            Component.translatable("message.nyanlex.hub.unreachable"));
+                    return;
+                }
+                if (!finalPlan.hasAnyContent()) {
+                    toast(Component.translatable("message.nyanlex.hub.toast_title"),
+                            Component.translatable("message.nyanlex.hub.no_packs"));
                     return;
                 }
                 mc.setScreen(new HubDownloadConfirmScreen(hubScreen, finalPlan, finalHost,
                         finalModpackLabel, finalModCount));
             });
-        });
+        }));
     }
 
     /** Fired on every {@link HubDownloadJob} state change; only terminal states matter
@@ -588,13 +734,13 @@ public final class NyanLexNeoForge {
             if (state == HubDownloadJob.State.DONE) {
                 var result = job.result();
                 if (result != null) {
-                    status(Component.translatable("message.nyanlex.hub.download_done",
-                            result.added()).getString());
+                    toast(Component.translatable("message.nyanlex.hub.download_done",
+                            result.added(), hubLocalCache.activeFile().toAbsolutePath().toString()));
                 }
             } else if (state == HubDownloadJob.State.FAILED) {
                 String reason = job.failureMessage();
-                status(Component.translatable("message.nyanlex.hub.download_failed",
-                        reason == null ? "" : reason).getString());
+                toast(Component.translatable("message.nyanlex.hub.download_failed",
+                        reason == null ? "" : reason));
             }
         });
     }
@@ -636,31 +782,89 @@ public final class NyanLexNeoForge {
     }
 
 
-/** Once per launch, the first time the title screen appears: a silent,
-     *  index.json-only check for mod translations the player doesn't have yet. */
-    private void maybeStartHubStartupCheck(Minecraft mc) {
-        if (hubStartupChecked || mc == null || mc.screen == null) return;
-        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
-        hubStartupChecked = true;
-        if (hubDownloader == null || config.hubStartupPromptDisabled) return;
+    // ---- translation packs found for the installed mods (快速設定 and 翻譯包)
+
+    /** State of the background pack check started by the questionnaire. */
+    public static com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState packState() {
+        return packState;
+    }
+
+    /** The mods that have a pack worth downloading, as one text line each, with the total size. */
+    public static com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo packInfo() {
+        HubPlan plan = packPlan;
+        if (plan == null) return new com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo(0, "", List.of());
+        List<String> lines = new ArrayList<>();
+        for (var item : plan.downloadable()) {
+            lines.add(item.label() + "\u3000" + HubDownloadConfirmScreen.formatBytes(item.bytes()));
+        }
+        return new com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo(lines.size(),
+                HubDownloadConfirmScreen.formatBytes(plan.totalDownloadBytes()), lines);
+    }
+
+    /**
+     * Looks, in the background, for translation packs for the installed mods. This only reads the
+     * public pack index (a plain GET); no player text and no list of mods is sent anywhere.
+     */
+    public static void startPackDetection() {
+        if (hubDownloader == null || config == null
+                || packState == com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.DETECTING) return;
+        packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.DETECTING;
+        packPlan = null;
         runHubBackground(() -> {
             try {
                 List<String> modIds = loadedModIds();
                 Optional<ModpackIdentity> modpack = ModpackDetector.detect(hubCandidateRoots(), modIds, null);
                 HubPlan plan = hubDownloader.planStartupMods(false, modpack.orElse(null), modIds,
                         config.targetLang, hubDownloadState);
-                if (plan.downloadable().isEmpty()) return;
-                Minecraft client = Minecraft.getInstance();
-                if (client == null) return;
-                client.execute(() -> {
-                    if (client.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
-                        client.setScreen(new HubStartupPromptScreen(client.screen, plan));
-                    }
-                });
-            } catch (IOException | RuntimeException ignored) {
-                // Startup check is best-effort and silent on failure.
+                if (plan.downloadable().isEmpty()) {
+                    packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.NONE;
+                } else {
+                    packPlan = plan;
+                    packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.FOUND;
+                }
+            } catch (IOException | RuntimeException e) {
+                packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.FAILED;
             }
         });
+    }
+
+    /** Downloads the packs found by {@link #startPackDetection()} in the background. */
+    public static void startPackDownload() {
+        HubPlan plan = packPlan;
+        if (plan == null || hubDownloader == null || hubDownloadJob.isRunning()) return;
+        hubDownloadJob.start(plan, hubDownloader, hubLocalCache, hubDownloadState, hubExecutor());
+    }
+
+    public static boolean packDownloading() {
+        return hubDownloadJob.isRunning();
+    }
+
+    /** An API key is entered, or a ChatGPT login is signed in: either one makes the AI service usable. */
+    public static boolean aiConfigured() {
+        if (config == null) return false;
+        if (config.aiUseCodex) {
+            return codexClient != null && codexClient.isSignedInCached();
+        }
+        if (config.aiApiKeys == null) return false;
+        for (String key : config.aiApiKeys) if (key != null && !key.isBlank()) return true;
+        return false;
+    }
+
+    /** The settings file (holds the API keys), for the AI settings notice. */
+    public static Path configFilePath() {
+        return configPath;
+    }
+
+    /**
+     * Once, on the title screen of a fresh install: the 快速設定 questionnaire. It is the only
+     * window that ever opens by itself, and only on the first start.
+     */
+    private void maybeStartFirstRun(Minecraft mc) {
+        if (firstStartTried || mc == null || config == null || mc.getOverlay() != null) return;
+        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
+        firstStartTried = true;
+        if (!com.dragonmeow.nyanlex.config.QuickSetupPanel.firstStartDue(config)) return;
+        mc.setScreen(new QuickSetupScreen(mc.screen));
     }
 
     public static CodexAppServerClient codexClient() {
@@ -671,8 +875,44 @@ public final class NyanLexNeoForge {
         return tokenUsage.snapshot();
     }
 
-    public static TranslationDebugLog debugLog() { return debugLog; }
-    public static void clearDebugLog() { if (debugLog != null) debugLog.clear(); }
+    public static TranslationDebugLog debugLog() {
+        return debugLog;
+    }
+
+    public static void clearDebugLog() {
+        if (debugLog != null) debugLog.clear();
+    }
+
+    public static KeyMapping modeKeyMapping() {
+        return modeKey;
+    }
+
+    public static KeyMapping retranslateKeyMapping() {
+        return retranslateKey;
+    }
+
+    public static KeyMapping screenScanKeyMapping() {
+        return screenScanKey;
+    }
+
+    public static KeyMapping toggleKeyMapping() {
+        return toggleKey;
+    }
+
+    public static void saveConfig() {
+        if (config != null && configPath != null) {
+            config.save(configPath);
+        }
+        NeoTextStyle.clearRenderMemo();
+    }
+
+    /** Forget pending quest widget requests so live quest text is requested again after the
+     *  request switch or the do-not-translate terms change. */
+    public static void clearQuestWidgetPending() {
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
+    }
+
+
 
     /**
      * Translate arbitrary GUI text drawn via {@code GuiGraphics} (custom mod screens such as
@@ -827,12 +1067,6 @@ public final class NyanLexNeoForge {
         return false;
     }
 
-    /**
-     * FormattedCharSequence overload: catches text that mod GUIs draw as already-laid-out
-     * ordered text (e.g. quest descriptions, wrapped/centred lines). The line is
-     * flattened to plain text, translated, and rebuilt. Component-originated text is already
-     * translated by {@link #screenText(Component)} upstream, so here it is Chinese and skipped.
-     */
     public static net.minecraft.util.FormattedCharSequence screenText(net.minecraft.util.FormattedCharSequence fcs) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return fcs;
         if (fcs != null && Minecraft.getInstance().screen != null
@@ -919,22 +1153,24 @@ public final class NyanLexNeoForge {
 
     /** Manual item mode only: a trailing grey italic hint line telling the player this
      *  tooltip has a line nothing has requested yet, and which key sends that request --
-     *  or that a prior key press is still in flight. See fabric NyanLexFabric.java. */
+     *  or that a prior key press is still in flight. See fabric NyanLexNeoForge.java. */
     private static Component translationHintLine(TranslationService s, List<String> requests) {
-        if (!s.isManualItemTranslation() || config == null || !config.translationRequestsEnabled) return null;
-        boolean pending = false;
+        if (config == null) return null;
+        // Online translation off: pressing the key asks to start it, so say that. Machine translation with
+        // online translation on: pressing the key translates what is still missing. Nothing else gets a hint
+        // (the AI service translates by itself, and a line already on its way gains nothing from a key press).
+        boolean requestsOff = !config.translationRequestsEnabled;
+        if (!requestsOff && !s.isManualItemTranslation()) return null;
         boolean missing = false;
         for (String request : requests) {
             if (request == null || request.isBlank()) continue;
-            if (s.isTooltipTranslationPending(request)) pending = true;
-            else if (!s.isTooltipTranslationReady(request)) missing = true;
+            if (!s.isTooltipTranslationPending(request) && !s.isTooltipTranslationReady(request)) missing = true;
         }
-        if (!pending && !missing) return null;
-        Component message = pending
-                ? Component.translatable("message.nyanlex.tooltip_hint_pending")
-                : Component.translatable("message.nyanlex.tooltip_hint",
-                        retranslateKey == null ? "R" : retranslateKey.getTranslatedKeyMessage().getString());
-        return message.copy().setStyle(net.minecraft.network.chat.Style.EMPTY
+        if (!missing) return null;
+        Component message = Component.translatable(requestsOff
+                        ? "message.nyanlex.tooltip_hint_start" : "message.nyanlex.tooltip_hint",
+                retranslateKey == null ? "R" : retranslateKey.getTranslatedKeyMessage().getString());
+        return message.copy().setStyle(Style.EMPTY
                 .withColor(net.minecraft.network.chat.TextColor.fromRgb(0xAAAAAA)).withItalic(true));
     }
 
@@ -952,21 +1188,6 @@ public final class NyanLexNeoForge {
                 && title.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents translatable
                 ? translatable.getKey() : null;
         return com.dragonmeow.nyanlex.translate.ScreenTranslationPolicy.allowsTranslation(key);
-    }
-
-    /** Persist config (used by the config screen). Also drops the render cache so a
-     *  surface turned off / mode switched takes effect immediately. */
-    public static void saveConfig() {
-        if (config != null && configPath != null) {
-            config.save(configPath);
-        }
-        NeoTextStyle.clearRenderMemo();
-    }
-
-    /** Forget pending quest widget requests so live quest text is requested again after the
-     *  request switch or the do-not-translate terms change. */
-    public static void clearQuestWidgetPending() {
-        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
     }
 
     public NyanLexNeoForge() {
@@ -1011,17 +1232,16 @@ public final class NyanLexNeoForge {
                 () -> new AiSettings("codex://app-server", config.codexModel,
                         java.util.Collections.emptyList(), config.aiGlossary),
                 RequestPacer.disabled());
-        // 2026-10-02: a bounded, rotating on-disk trace of real AI request/response
-        // bodies (never headers/keys) plus each exchange's per-unit verdicts, active only
-        // while the player has the debug overlay on -- lets a player who hits a
-        // translation failure send the files under nyanlex-debug/ for offline
-        // diagnosis. See ExchangeDumpWriter's class doc (root tree).
-        ExchangeDumpWriter exchangeDump = new ExchangeDumpWriter(
-                configPath.getParent().resolve("nyanlex-debug"),
-                () -> config != null && config.debugTranslationOverlay, 20,
+        // 偵錯模式: the one local error log (newest 1000 entries, API keys masked). It is written only
+        // when something goes wrong while the mode is on; nothing else is ever dumped.
+        com.dragonmeow.nyanlex.translate.DebugErrorLog errorLog = new com.dragonmeow.nyanlex.translate.DebugErrorLog(
+                configPath.getParent().resolve(com.dragonmeow.nyanlex.config.FileLocations.DEBUG_LOG_FILE),
+                () -> config != null && config.debugTranslationOverlay,
+                com.dragonmeow.nyanlex.translate.DebugErrorLog.DEFAULT_MAX_ENTRIES,
                 () -> config == null ? java.util.List.of() : config.secretValues());
-        apiAi.setExchangeDumpSink(exchangeDump);
-        codexAi.setExchangeDumpSink(exchangeDump);
+        com.dragonmeow.nyanlex.translate.DebugErrorLog.install(errorLog);
+        apiAi.setExchangeDumpSink(errorLog.exchangeSink());
+        codexAi.setExchangeDumpSink(errorLog.exchangeSink());
         SwitchingAiTranslator ai = new SwitchingAiTranslator(
                 apiAi, codexAi, () -> config.aiUseCodex);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -1067,14 +1287,6 @@ public final class NyanLexNeoForge {
         // the machine-translation engine is cache-only. See
         // TranslationService#isManualItemTranslation()/#isManualScreenTranslation().
         service.setInfoLog(LOGGER::info);
-        // 2026-10-02: per-segment tooltip trace, same gate/rotation discipline and dumpDir
-        // as exchangeDump above -- captures the ONE layer an HTTP exchange dump cannot see
-        // (which TooltipSegmentPlanner segment a row became, its LOCAL cache key, hit/
-        // pending/missing) so a future "why did this ONE row never translate" investigation
-        // reads it straight off disk. See TooltipTraceWriter's class doc.
-        service.setTooltipTraceWriter(new com.dragonmeow.nyanlex.translate.TooltipTraceWriter(
-                configPath.getParent().resolve("nyanlex-debug"),
-                () -> config != null && config.debugTranslationOverlay, 20));
         service.setTargetLangChangeListener(this::onTargetLanguageChanged);
         service.setBatchWindowMs(() -> config.batchWindowMs);
         service.setItemSourceLanguage(() -> {
@@ -1128,7 +1340,7 @@ public final class NyanLexNeoForge {
         boolean originalsNow = service.toggleShowOriginal();
         NeoTextStyle.clearRenderMemo();
         if (originalsNow) flushPendingChatOriginals();
-        status(Component.translatable(originalsNow ? "message.nyanlex.show_original" : "message.nyanlex.show_translation").getString());
+        feedback(Component.translatable(originalsNow ? "message.nyanlex.show_original" : "message.nyanlex.show_translation"));
     }
 
     /** When 跟隨遊戲 is on, keep the translation target language synced to Minecraft's own (繁/簡). */
@@ -1170,15 +1382,6 @@ public final class NyanLexNeoForge {
     /** Map Minecraft's language code (zh_cn / zh_tw / en_us …) to 繁/簡 target. */
     static String mapGameLang(String gameLang) {
         return com.dragonmeow.nyanlex.config.TranslationLanguages.fromMinecraftCode(gameLang);
-    }
-
-    /** The "translate current screen" key binding (rebindable from the 翻譯設定 screen). */
-    public static KeyMapping screenScanKeyMapping() {
-        return screenScanKey;
-    }
-
-    public static KeyMapping toggleKeyMapping() {
-        return toggleKey;
     }
 
     @SubscribeEvent
@@ -1993,7 +2196,8 @@ public final class NyanLexNeoForge {
         if (!HookGuard.enter("event.onClientTick")) return;
         try {
             if (event.phase != TickEvent.Phase.END) return;
-            maybeStartHubStartupCheck(Minecraft.getInstance());
+            ConsentOverlay.tick();
+            maybeStartFirstRun(Minecraft.getInstance());
             maybeMigrateKeybinds(Minecraft.getInstance());
             // Recover if a cancelled/failed render did not deliver the matching Post event.
             SCREEN_RENDER_STACK.remove();
@@ -2034,6 +2238,7 @@ public final class NyanLexNeoForge {
             // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
             warmOpenContainerItems(Minecraft.getInstance());
             warmLoadoutItems(Minecraft.getInstance());
+            tickItemWarmup(Minecraft.getInstance());
         } catch (Throwable guardError) {
             HookGuard.fail("event.onClientTick", guardError);
         }
@@ -2054,6 +2259,8 @@ public final class NyanLexNeoForge {
         HookGuard.enterSticky("event.onScreenRenderPost");
         try {
             finishScreenCapture(event.getScreen());
+            WarmupHudOverlay.renderOnScreen(event.getScreen(), event.getGuiGraphics());
+            ConsentOverlay.render(event.getScreen(), event.getGuiGraphics(), event.getMouseX(), event.getMouseY());
             java.util.ArrayDeque<net.minecraft.client.gui.screens.Screen> stack =
                     SCREEN_RENDER_STACK.get();
             if (!stack.isEmpty() && stack.peek() == event.getScreen()) stack.pop();
@@ -2062,6 +2269,65 @@ public final class NyanLexNeoForge {
         } catch (Throwable guardError) {
             HookGuard.fail("event.onScreenRenderPost", guardError);
         }
+    }
+
+    // The consent box (and nothing else) swallows input while it is up; it never closes the screen.
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onConsentMousePressed(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {
+        HookGuard.run("event.onConsentInput", () -> {
+            if (ConsentOverlay.mouseClicked(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getButton())) {
+                event.setCanceled(true);
+            }
+        });
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onConsentMouseReleased(net.minecraftforge.client.event.ScreenEvent.MouseButtonReleased.Pre event) {
+        HookGuard.run("event.onConsentInput", () -> {
+            if (ConsentOverlay.covers(event.getScreen())) event.setCanceled(true);
+        });
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onConsentMouseScrolled(net.minecraftforge.client.event.ScreenEvent.MouseScrolled.Pre event) {
+        HookGuard.run("event.onConsentInput", () -> {
+            if (ConsentOverlay.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDelta())) {
+                event.setCanceled(true);
+            }
+        });
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onConsentKeyPressed(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre event) {
+        HookGuard.run("event.onConsentInput", () -> {
+            if (ConsentOverlay.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers())) {
+                event.setCanceled(true);
+            }
+        });
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onConsentKeyReleased(net.minecraftforge.client.event.ScreenEvent.KeyReleased.Pre event) {
+        HookGuard.run("event.onConsentInput", () -> {
+            if (ConsentOverlay.covers(event.getScreen())) event.setCanceled(true);
+        });
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onConsentCharTyped(net.minecraftforge.client.event.ScreenEvent.CharacterTyped.Pre event) {
+        HookGuard.run("event.onConsentInput", () -> {
+            if (ConsentOverlay.covers(event.getScreen())) event.setCanceled(true);
+        });
+    }
+
+    /** In-world progress line of the all-item warm-up; menus draw theirs from onScreenRenderPost. */
+    @SubscribeEvent
+    public void onWarmupHud(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {
+        HookGuard.run("event.onWarmupHud", () -> {
+            if (event.getOverlay() == net.minecraftforge.client.gui.overlay.VanillaGuiOverlay.HOTBAR.type()) {
+                WarmupHudOverlay.render(event.getGuiGraphics());
+            }
+        });
     }
 
     @SubscribeEvent
@@ -2097,6 +2363,17 @@ public final class NyanLexNeoForge {
                 || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
                 || !screenTranslationAllowed(screen)) return;
         if (gateBlocksManual(service.isManualScreenTranslation())) return;
+        // 線上翻譯 off: ask on the spot; the scan then runs once for this very screen.
+        ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.SCREEN, () -> {
+            if (Minecraft.getInstance().screen == screen) scanAndTranslateScreenNow(screen);
+        });
+    }
+
+    private void scanAndTranslateScreenNow(net.minecraft.client.gui.screens.Screen screen) {
+        if (screen == null || service == null
+                || screen instanceof net.minecraft.client.gui.screens.ChatScreen
+                || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
+                || !screenTranslationAllowed(screen)) return;
         SCREEN_CAPTURE.begin(screen);
         TOOLTIP_CAPTURE.begin(screen);
         captureScreenText(screen.getTitle(), true);
@@ -2132,7 +2409,7 @@ public final class NyanLexNeoForge {
         NeoTextStyle.clearRenderMemo();
         synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
         screenRefreshRequested = screen;
-        status(Component.translatable("message.nyanlex.screen_scan", sources.size()).getString());
+        feedback(Component.translatable("message.nyanlex.screen_scan", sources.size()));
     }
 
     private static void refreshScannedScreen() {
@@ -2335,21 +2612,18 @@ public final class NyanLexNeoForge {
     private static void gateMessage(String key, int minutes) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
-        mc.execute(() -> {
-            net.minecraft.network.chat.Component message = net.minecraft.network.chat.Component.translatable(key, Integer.toString(minutes));
-            if (mc.level != null && mc.gui != null) {
-                mc.gui.setOverlayMessage(message, false);
-            } else {
-                net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToasts(),
-                        net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds.PERIODIC_NOTIFICATION,
-                        net.minecraft.network.chat.Component.literal("NyanLex Translator"), message);
-            }
-        });
+        mc.execute(() -> feedback(Component.translatable(key, Integer.toString(minutes))));
     }
 
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
         if (gateBlocksManual(service.isManualItemTranslation())) return;
+        // 線上翻譯 off: ask on the spot; the request then goes out once for this very item.
+        ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.ITEM, () -> retranslateItemNow(stack));
+    }
+
+    private void retranslateItemNow(ItemStack stack) {
+        if (stack == null || stack.isEmpty() || service == null) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
         List<String> sources = lastTooltipStack == stack ? lastTooltipParagraphSources : null;
@@ -2381,14 +2655,14 @@ public final class NyanLexNeoForge {
         // already-correct segment shared with another item is never thrown away); every
         // line already translated (AI cache, hub, legacy lazy conversion, or
         // segment-composed) -> invalidate and resend the whole tooltip. See root
-        // NyanLexFabric#retranslateItem / TranslationService#isTooltipFullyDisplayedTranslated.
+        // NyanLexNeoForge#retranslateItem / TranslationService#isTooltipFullyDisplayedTranslated.
         if (service.shouldFullyRetranslateOnKeyPress(requestList)) {
             service.retranslate(requestList);
         } else {
             service.requestItemLines(requestList);
         }
         NeoTextStyle.clearRenderMemo();
-        status(Component.translatable("message.nyanlex.retranslate", stack.getHoverName().getString()).getString());
+        feedback(Component.translatable("message.nyanlex.retranslate", stack.getHoverName().getString()));
     }
 
     /** Background AI connection test used by the AI settings screen; result delivered on the client thread. */
@@ -2418,7 +2692,7 @@ public final class NyanLexNeoForge {
 
     public static void testCodex(java.util.function.Consumer<String> onResult) {
         if (codexTransport == null || config == null) {
-            onResult.accept("Codex is not initialized");
+            onResult.accept(Component.translatable("message.nyanlex.not_initialized").getString());
             return;
         }
         Thread thread = new Thread(() -> {
@@ -2431,7 +2705,8 @@ public final class NyanLexNeoForge {
                 String translated = ai.translate("Hello, world", "zh-TW").translatedText();
                 result = "Hello, world -> " + translated;
             } catch (Exception error) {
-                result = "Codex: " + (error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+                result = Component.translatable("message.nyanlex.failed",
+                        error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage()).getString();
             }
             final String message = result;
             Minecraft client = Minecraft.getInstance();
@@ -2445,20 +2720,65 @@ public final class NyanLexNeoForge {
     public static void translationFile(boolean importing) {
         TranslationService currentService = service;
         if (currentService == null) return;
-        com.dragonmeow.nyanlex.translate.TranslationFileDialog.open(importing,
-                currentService::exportTranslations, currentService::importTranslations, message -> {
+        com.dragonmeow.nyanlex.translate.TranslationFileDialog.openOutcome(importing,
+                currentService::exportTranslations, currentService::importTranslations, outcome -> {
                     Minecraft client = Minecraft.getInstance();
                     if (client != null) client.execute(() -> {
-                        status(message);
+                        toast(fileOutcomeText(outcome));
                         refreshCurrentQuestScreen();
                     });
                 });
     }
 
-    private static void status(String msg) {
+    private static Component fileOutcomeText(com.dragonmeow.nyanlex.translate.TranslationFileDialog.Outcome outcome) {
+        return switch (outcome.kind()) {
+            case BUSY -> Component.translatable("message.nyanlex.file.busy");
+            case EXPORTED -> Component.translatable("message.nyanlex.file.exported", outcome.files(),
+                    outcome.files() > 1 ? outcome.first() + " … " + outcome.last() : outcome.first());
+            case IMPORTED -> outcome.failedFiles() == 0
+                    ? Component.translatable("message.nyanlex.file.imported", outcome.count(), outcome.files(),
+                            outcome.totalFiles())
+                    : Component.translatable("message.nyanlex.file.imported_failed", outcome.count(), outcome.files(),
+                            outcome.totalFiles(), outcome.failedFiles(), outcome.first());
+            case FAILED -> Component.translatable("message.nyanlex.file.failed",
+                    outcome.first() == null || outcome.first().isEmpty()
+                            ? Component.translatable("message.nyanlex.failed", "").getString() : outcome.first());
+        };
+    }
+
+    /** Style insertion that marks a component as the mod's own action bar line (never sent for translation). */
+    private static final String OWN_FEEDBACK_MARK = "nyanlex:feedback";
+
+    /** True for the lines {@link #feedback} puts in the action bar: the translator hooks must leave them alone. */
+    public static boolean isOwnFeedback(Component component) {
+        return component != null && OWN_FEEDBACK_MARK.equals(component.getStyle().getInsertion());
+    }
+
+    /**
+     * The result of R, P or G: one line in the action bar above the hotbar for a few seconds while a
+     * world is open, a system notification otherwise. The mod never writes into the chat.
+     */
+    private static void feedback(Component message) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc != null && mc.player != null) {
-            mc.gui.getChat().addMessage(Component.translatable("message.nyanlex.prefix", msg));
+        if (mc == null) return;
+        if (mc.level != null && mc.gui != null) {
+            mc.gui.setOverlayMessage(message.copy().withStyle(style -> style.withInsertion(OWN_FEEDBACK_MARK)), false);
+        } else {
+            toast(message);
         }
+    }
+
+    /** A system notification at the top right: what happened in a menu, or in the background. */
+    public static void toast(Component message) {
+        toast(Component.translatable("nyanlex.ui.about.title"), message);
+    }
+
+    /** A system notification with its own title. */
+    public static void toast(Component title, Component message) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToasts(),
+                net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds.PERIODIC_NOTIFICATION,
+                title, message));
     }
 }
