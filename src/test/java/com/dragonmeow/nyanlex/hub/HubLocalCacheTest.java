@@ -210,4 +210,54 @@ class HubLocalCacheTest {
         cache.setLanguage("zh-TW");
         assertEquals("鑽石劍", cache.get("Diamond Sword"), "switching back reloads the saved file");
     }
+
+    // ------------------------------------------------------------------ lookup memos
+
+    @Test
+    void aRepeatedMissIsRememberedButNeverOutlivesAChangeOfTheRows(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws java.io.IOException {
+        HubLocalCache cache = new HubLocalCache(dir, "zh-TW");
+        String key = "Teleports you to the hub";
+        assertNull(cache.get(key));
+        assertNull(cache.get(key), "the second ask is answered from the memo");
+
+        // The row arrives (a download merged it): the very next lookup must find it.
+        java.util.Map<String, String> rows = new java.util.LinkedHashMap<>();
+        rows.put(HubKeyHash.of(key), "傳送你到大廳");
+        HubFile file = new HubFile("zh-TW", rows);
+        HubLocalCache.MergeResult merged = cache.mergeFromFile(file, HubSource.mod("example"));
+        assertEquals(1, merged.added());
+        assertEquals("傳送你到大廳", cache.get(key), "a memoised miss never hides a newly added row");
+
+        // And a cleared source makes it a miss again, also immediately.
+        cache.clearSource(HubSource.mod("example"));
+        assertNull(cache.get(key));
+        cache.mergeFromFile(file, HubSource.mod("example"));
+        assertEquals("傳送你到大廳", cache.get(key));
+        cache.clearAll();
+        assertNull(cache.get(key));
+    }
+
+    @Test
+    void aLanguageSwitchDropsTheMemoOfMisses(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws java.io.IOException {
+        String key = "Open the chest";
+        java.util.Map<String, String> rows = new java.util.LinkedHashMap<>();
+        rows.put(HubKeyHash.of(key), "打開箱子");
+        HubLocalCache cache = new HubLocalCache(dir, "zh-TW");
+        cache.mergeFromFile(new HubFile("zh-TW", rows), HubSource.mod("example"));
+
+        cache.setLanguage("ja-JP");
+        assertNull(cache.get(key), "another language has no such row (and the miss is memoised)");
+        cache.setLanguage("zh-TW");
+        assertEquals("打開箱子", cache.get(key), "coming back finds the stored row, not the old miss");
+    }
+
+    @Test
+    void manyDifferentKeysStayWithinTheMemoBound(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) {
+        HubLocalCache cache = new HubLocalCache(dir, "zh-TW");
+        for (int i = 0; i < 20_000; i++) assertNull(cache.get("line number " + i));
+        assertNull(cache.get("line number 19999"));
+        assertNull(cache.get("line number 0"));
+    }
 }

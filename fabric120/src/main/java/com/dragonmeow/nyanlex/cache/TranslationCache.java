@@ -1118,7 +1118,7 @@ public final class TranslationCache {
      * do not share a token-protocol utility class today.
      */
     private static boolean hasOrphanCsMarker(String text) {
-        if (text == null) return false;
+        if (text == null || text.indexOf('\u27E6') < 0) return false;
         java.util.regex.Matcher matcher = CS_TOKEN.matcher(text);
         java.util.ArrayDeque<String> open = new java.util.ArrayDeque<>();
         while (matcher.find()) {
@@ -2480,11 +2480,12 @@ public final class TranslationCache {
     }
 
     private static String stripCsMarkers(String text) {
-        return text == null ? null : CS_MARKER.matcher(text).replaceAll("");
+        if (text == null) return null;
+        return text.indexOf('\u27E6') < 0 ? text : CS_MARKER.matcher(text).replaceAll("");
     }
 
     private static boolean hasCsMarkers(String text) {
-        return text != null && CS_MARKER.matcher(text).find();
+        return text != null && text.indexOf('\u27E6') >= 0 && CS_MARKER.matcher(text).find();
     }
 
     private static String styleProjectionKey(TranslationTemplate.Snapshot snapshot) {
@@ -2507,8 +2508,16 @@ public final class TranslationCache {
                 .equals(TemplateText.tightenCjkSpacing(stripStyle(second)));
     }
 
+    // Pure, and the lookup/request/warm paths each call it on the same lines every frame.
+    private static final com.dragonmeow.nyanlex.translate.LruMemo<String> STRIPPED_STYLE =
+            new com.dragonmeow.nyanlex.translate.LruMemo<>(4096);
+
     private static String stripStyle(String text) {
-        String withoutMarkers = stripCsMarkers(text == null ? "" : text);
+        return STRIPPED_STYLE.get(text == null ? "" : text, TranslationCache::stripStyleUncached);
+    }
+
+    private static String stripStyleUncached(String text) {
+        String withoutMarkers = stripCsMarkers(text);
         String withoutCodes = TextFilter.stripSectionCodes(withoutMarkers);
         return withoutCodes.strip();
     }

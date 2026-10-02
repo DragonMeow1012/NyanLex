@@ -40,6 +40,10 @@ public final class ChurnGuard {
 
     private static final Pattern ANY_TOKEN = Pattern.compile("⟦[^⟦⟧]*⟧");
 
+    // signatureOf/variantOf are pure and run for every missing line on every frame.
+    private static final LruMemo<String> SIGNATURES = new LruMemo<>(4096);
+    private static final LruMemo<String> VARIANTS = new LruMemo<>(4096);
+
     private final int variantThreshold;
     private final long windowMs;
     private final long cooldownMs;
@@ -119,6 +123,10 @@ public final class ChurnGuard {
      */
     public static String variantOf(String requestKey) {
         if (requestKey.indexOf("CS") < 0) return requestKey;
+        return VARIANTS.get(requestKey, ChurnGuard::computeVariant);
+    }
+
+    private static String computeVariant(String requestKey) {
         // Plain character scan instead of a regex: a key that stays churn-suppressed is
         // re-submitted every frame, so this runs on a per-frame path.
         StringBuilder out = null;
@@ -224,7 +232,11 @@ public final class ChurnGuard {
     /** A key's churn signature: {@code ⟦…⟧} tokens dropped, then only Unicode LETTERS
      *  (CJK included) kept, lower-cased — punctuation/digit/whitespace churn collapses. */
     public static String signatureOf(String key) {
-        String noTokens = ANY_TOKEN.matcher(key).replaceAll("");
+        return SIGNATURES.get(key, ChurnGuard::computeSignature);
+    }
+
+    private static String computeSignature(String key) {
+        String noTokens = key.indexOf('\u27E6') < 0 ? key : ANY_TOKEN.matcher(key).replaceAll("");
         StringBuilder sb = new StringBuilder(noTokens.length());
         for (int i = 0; i < noTokens.length(); ) {
             int cp = noTokens.codePointAt(i);

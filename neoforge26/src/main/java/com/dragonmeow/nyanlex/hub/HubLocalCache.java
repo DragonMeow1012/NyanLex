@@ -79,10 +79,32 @@ public final class HubLocalCache {
         }
     }
 
+    /** Bound of each lookup memo below; single-entry (LRU) eviction, never a whole-table clear. */
+    private static final int LOOKUP_MEMO_MAX = 4096;
+
     private final Path directory;
     private boolean dirty;
     private String language;
     private Map<String, Row> rows = new LinkedHashMap<>();
+    /**
+     * Render-frame lookups ask for the same few hundred keys every frame, and most of them are
+     * misses (a line nobody has translated yet). So the SHA-256 of a key is remembered, and so is
+     * "this key is not in the hub": a repeated miss costs one map probe instead of a digest.
+     * The negative memo is only valid for the current row set, so every change of the rows
+     * (a merge that adds rows, a cleared source, a language switch) drops it. Guarded by
+     * {@code this}, like {@link #rows}.
+     */
+    private final Map<String, String> hashMemo = lruMap();
+    private final Map<String, Boolean> missMemo = lruMap();
+
+    private static <V> Map<String, V> lruMap() {
+        return new LinkedHashMap<String, V>(256, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, V> eldest) {
+                return size() > LOOKUP_MEMO_MAX;
+            }
+        };
+    }
 
     public HubLocalCache(Path directory, String language) {
         this.directory = directory;
@@ -98,6 +120,7 @@ public final class HubLocalCache {
         language = next;
         dirty = false;
         rows = load();
+        missMemo.clear();
     }
 
     public String language() {
@@ -116,9 +139,17 @@ public final class HubLocalCache {
      */
     public synchronized String get(String key) {
         if (key == null) return null;
-        String hash = HubKeyHash.of(key);
+        if (missMemo.get(key) != null) return null;
+        String hash = hashMemo.get(key);
+        if (hash == null) {
+            hash = HubKeyHash.of(key);
+            hashMemo.put(key, hash);
+        }
         Row row = rows.get(hash);
-        if (row == null) return null;
+        if (row == null) {
+            missMemo.put(key, Boolean.TRUE);
+            return null;
+        }
         if (!row.verified) {
             if (!HubImportValidator.acceptsOnHit(key, row.value)) {
                 rows.remove(hash);
@@ -161,6 +192,7 @@ public final class HubLocalCache {
             rows.put(hash, new Row(value, encodedSource));
             added++;
         }
+        if (added > 0) missMemo.clear();
         if (added > 0 || dirty) persist();
         return new MergeResult(added, rejected, present, false);
     }
@@ -173,6 +205,7 @@ public final class HubLocalCache {
         int before = rows.size();
         rows.values().removeIf(row -> encoded.equals(row.source));
         int removed = before - rows.size();
+        if (removed > 0) missMemo.clear();
         if (removed > 0 || dirty) persist();
         return removed;
     }
@@ -180,6 +213,7 @@ public final class HubLocalCache {
     public synchronized void clearAll() {
         if (rows.isEmpty()) return;
         rows = new LinkedHashMap<>();
+        missMemo.clear();
         persist();
     }
 

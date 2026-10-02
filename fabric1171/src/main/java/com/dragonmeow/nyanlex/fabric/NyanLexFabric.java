@@ -1028,23 +1028,17 @@ public final class NyanLexFabric implements ClientModInitializer {
                 str, NyanLexFabric::screenText, NyanLexFabric::trimCallerIsTextInput);
     }
 
-    private static final StackWalker TRIM_CALLER_WALKER =
-            StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+    private static final com.dragonmeow.nyanlex.translate.TrimTranslation.TextInputGate TRIM_INPUT_GATE =
+            new com.dragonmeow.nyanlex.translate.TrimTranslation.TextInputGate();
 
     /** True when the trim was requested by a text input (edit box / multi-line field), whose
-     *  contents must never be replaced. Walked only once a translation already exists. */
+     *  contents must never be replaced. Cheap on the common screen with no text input at all;
+     *  the stack is walked only when the open screen owns one. */
     private static boolean trimCallerIsTextInput() {
-        Class<?> caller = TRIM_CALLER_WALKER.walk(frames -> frames
-                .map(StackWalker.StackFrame::getDeclaringClass)
-                .filter(c -> c != NyanLexFabric.class && c != net.minecraft.client.gui.Font.class)
-                .findFirst()).orElse(null);
-        for (Class<?> c = caller; c != null; c = c.getSuperclass()) {
-            String n = c.getName();
-            if (n.equals("net.minecraft.client.gui.components.EditBox")
-                    || n.equals("net.minecraft.client.gui.components.MultilineTextField")
-                    || n.equals("net.minecraft.client.gui.components.MultiLineEditBox")) return true;
-        }
-        return false;
+        net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().screen;
+        if (screen == null || !TRIM_INPUT_GATE.hasTextInput(screen, screen.children())) return false;
+        return com.dragonmeow.nyanlex.translate.TrimTranslation.callerIsTextInput(
+                c -> c == NyanLexFabric.class || c == net.minecraft.client.gui.Font.class);
     }
 
     public static net.minecraft.util.FormattedCharSequence screenText(net.minecraft.util.FormattedCharSequence fcs) {

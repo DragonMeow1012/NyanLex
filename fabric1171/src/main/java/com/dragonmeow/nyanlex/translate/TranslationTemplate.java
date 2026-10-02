@@ -73,7 +73,18 @@ public final class TranslationTemplate {
         return count >= LEAD_ICON_MIN_WORDS ? lead.end() : 0;
     }
 
+    // prepare() is a pure function of the string, and the render path calls it for the same few
+    // hundred lines every frame (several times per line: lookup, request, warm). Snapshot is
+    // an immutable record, so one shared instance per distinct string is safe. Bounded LRU with
+    // single-entry eviction, like TemplateText's own memo.
+    private static final LruMemo<Snapshot> PREPARE_MEMO = new LruMemo<>(4096);
+
     public Snapshot prepare(String source) {
+        if (source == null) return prepareUncached(null);
+        return PREPARE_MEMO.get(source, TranslationTemplate::prepareUncached);
+    }
+
+    private static Snapshot prepareUncached(String source) {
         String normalized = source == null ? "" : source.strip();
         List<String> gaps = new ArrayList<>();
         Matcher matcher = HORIZONTAL_GAP.matcher(normalized);

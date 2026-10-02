@@ -147,7 +147,7 @@ Legacy UI:
 
 `P` captures currently visible text, including a hovered tooltip; it does not scan off-screen content or activate while typing. With machine translation, items and mod-screen text translate on demand (see Features above), so `R`/`P` are how you get those translations; with AI they translate automatically and `R`/`P` force a fresh translation. Completion time depends on the translation service.
 
-If your keybinds look reset after upgrading: this release changes the mod id from `mctranslator` to `nyanlex`. The first launch automatically copies your old config file, translation caches, and any custom `options.txt` keybinds over to the new name (the old files are kept, not deleted), once.
+If your keybinds look reset after upgrading: this release changes the mod id from `mctranslator` to `nyanlex`. The first launch automatically copies your old config file, translation caches, and any custom `options.txt` keybinds over to the new name (the old files are kept, not deleted), once. If a translation cache already exists under the new name, the old one is merged into it instead (rows already in the new file win), also once, so a cache cleared or deleted afterwards does not come back.
 
 ## 1.0.0 highlights
 

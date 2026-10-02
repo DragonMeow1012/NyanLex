@@ -172,6 +172,9 @@ public final class TranslationService {
                 : null;
         if (google != null) google.setChurnGuard(guard);
         if (ai != null) ai.setChurnGuard(guard);
+        // Pay the one-time cost of the tooltip pipeline now, off the render thread, instead of
+        // on the first item the player points at.
+        TooltipPrewarm.startOnce();
     }
 
     public void setProtectedNames(Supplier<? extends Collection<String>> supplier) {

@@ -84,15 +84,22 @@ public final class TextFilter {
     // own per-string MEMO: single-entry eviction on overflow, never a whole-table
     // clear, so a full cache never causes a next-frame cost spike.
     private static final int SHOULD_TRANSLATE_MEMO_MAX = 4096;
-    private static final java.util.Map<String, Boolean> SHOULD_TRANSLATE_MEMO =
-            java.util.Collections.synchronizedMap(
-                    new java.util.LinkedHashMap<String, Boolean>(256, 0.75f, true) {
-                        @Override
-                        protected boolean removeEldestEntry(
-                                java.util.Map.Entry<String, Boolean> eldest) {
-                            return size() > SHOULD_TRANSLATE_MEMO_MAX;
-                        }
-                    });
+    /** One memo per (targetLang, sourceLangHint) pair, so a lookup hashes just the text and never
+     *  builds a concatenated key (this runs several times per line per frame). A handful of
+     *  languages exist; the guard only stops a pathological caller from growing the table. */
+    private static final java.util.concurrent.ConcurrentHashMap<String, LruMemo<Boolean>> SHOULD_TRANSLATE_MEMOS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int SHOULD_TRANSLATE_CONTEXTS_MAX = 64;
+
+    private static LruMemo<Boolean> shouldTranslateMemo(String targetLang, String sourceLangHint) {
+        String context = sourceLangHint == null || sourceLangHint.isEmpty()
+                ? String.valueOf(targetLang)
+                : targetLang + '\u0000' + sourceLangHint;
+        LruMemo<Boolean> memo = SHOULD_TRANSLATE_MEMOS.get(context);
+        if (memo != null) return memo;
+        if (SHOULD_TRANSLATE_MEMOS.size() >= SHOULD_TRANSLATE_CONTEXTS_MAX) SHOULD_TRANSLATE_MEMOS.clear();
+        return SHOULD_TRANSLATE_MEMOS.computeIfAbsent(context, ignored -> new LruMemo<>(SHOULD_TRANSLATE_MEMO_MAX));
+    }
 
     public static boolean shouldTranslate(String text, String targetLang) {
         return shouldTranslate(text, targetLang, null);
@@ -106,13 +113,8 @@ public final class TextFilter {
      * must be part of the key, not folded away.</p> */
     public static boolean shouldTranslate(String text, String targetLang, String sourceLangHint) {
         if (text == null) return false;
-        String memoKey = targetLang + '\u0000' + (sourceLangHint == null ? "" : sourceLangHint)
-                + '\u0000' + text;
-        Boolean memoized = SHOULD_TRANSLATE_MEMO.get(memoKey);
-        if (memoized != null) return memoized;
-        boolean result = shouldTranslateUncached(text, targetLang, sourceLangHint);
-        SHOULD_TRANSLATE_MEMO.put(memoKey, result);
-        return result;
+        return shouldTranslateMemo(targetLang, sourceLangHint)
+                .get(text, source -> shouldTranslateUncached(source, targetLang, sourceLangHint));
     }
 
     /** Original body, untouched apart from the null check moving to the memoised
@@ -502,7 +504,10 @@ public final class TextFilter {
      *  that treats their code letters as letters mis-reads the string (see
      *  {@link #isPartialTransliteration}). Null-safe. */
     public static String stripSectionCodes(String text) {
-        return text == null ? null : SECTION_CODE.matcher(text).replaceAll("");
+        if (text == null) return null;
+        // Most lines carry no style code at all: skip the regex sweep (a per-frame cost).
+        if (text.indexOf('\u00A7') < 0) return text;
+        return SECTION_CODE.matcher(text).replaceAll("");
     }
 
     /**
