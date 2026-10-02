@@ -32,11 +32,6 @@ public final class ItemWarmupConfirmScreen extends Screen {
         this.parent = parent;
     }
 
-    private static boolean requestsOn() {
-        TranslatorConfig cfg = NyanLexFabric.config();
-        return cfg != null && cfg.translationRequestsEnabled;
-    }
-
     private static boolean eligibleEngine() {
         TranslationService s = NyanLexFabric.service();
         return s != null && s.isItemWarmupEngine();
@@ -76,16 +71,23 @@ public final class ItemWarmupConfirmScreen extends Screen {
                         NyanLexFabric.tokenUsageSnapshot());
             }
         }
-        startButton.active = plan != null && !plan.nothingToDo() && eligibleEngine() && requestsOn();
+        startButton.active = plan != null && !plan.nothingToDo() && eligibleEngine();
     }
 
+    /** 線上翻譯 off: the player is asked on the spot first; either way the run then starts in the background. */
     private void onStart() {
+        ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.WARMUP, this::startNow);
+    }
+
+    private void startNow() {
         TranslatorConfig cfg = NyanLexFabric.config();
         cfg.itemWarmupEnabled = true;
         cfg.itemWarmupWarningAcknowledged = true;
         NyanLexFabric.saveConfig();
         NyanLexFabric.itemWarmupDriver().start();
-        if (this.minecraft != null) this.minecraft.setScreen(new ItemWarmupProgressScreen(parent));
+        // straight back to the screen the player came from; the run goes on in the background
+        // (corner readout everywhere, details from the settings card)
+        if (this.minecraft != null) this.minecraft.setScreen(parent);
     }
 
     @Override
@@ -101,10 +103,6 @@ public final class ItemWarmupConfirmScreen extends Screen {
             y = paragraph(g, Component.translatable("screen.nyanlex.warmup.unavailable.engine"),
                     left, y, wrap, 0xFFFFD700);
             return;
-        }
-        if (!requestsOn()) {
-            y = paragraph(g, Component.literal(NyanLexFabric.requestsOffReminder()), left, y, wrap, 0xFFFFD700);
-            y += 6;
         }
         if (plan == null) {
             g.drawCenteredString(this.font,

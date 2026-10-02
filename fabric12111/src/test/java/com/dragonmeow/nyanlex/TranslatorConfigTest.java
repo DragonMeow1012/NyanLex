@@ -29,7 +29,8 @@ class TranslatorConfigTest {
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
         assertTrue(cfg.deliverChatTranslationsInOrder);
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
-        assertEquals(DisplayMode.ORIGINAL_ONLY, cfg.screenTextMode, "介面文字預設不翻譯");
+        assertEquals(DisplayMode.TRANSLATION, cfg.screenTextMode, "新安裝：介面文字預設翻譯");
+        assertFalse(cfg.firstRunDone);
         assertFalse(cfg.translationRequestsEnabled, "a fresh install sends nothing until the player turns it on");
         assertFalse(cfg.debugTranslationOverlay);
         assertTrue(cfg.churnGuard, "特效字防護預設開啟");
@@ -204,6 +205,32 @@ class TranslatorConfigTest {
         assertEquals("zh-TW", cfg.targetLang);
         assertEquals(DisplayMode.BOTH, cfg.chatMode);
         assertTrue(cfg.deliverChatTranslationsInOrder);
+    }
+
+    @Test
+    void firstRunCardIsDueOnceForAFreshInstallOnly() {
+        assertTrue(com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(new TranslatorConfig()), "fresh install");
+        // an existing user whose config already translates (key missing or true) never sees it
+        TranslatorConfig old = TranslatorConfig.fromReader(new StringReader("{ \"targetLang\": \"zh-TW\" }"));
+        assertTrue(old.translationRequestsEnabled);
+        assertTrue(old.firstRunDone);
+        assertFalse(com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(old));
+        TranslatorConfig stored = TranslatorConfig.fromReader(new StringReader(
+                "{ \"translationRequestsEnabled\": true, \"chatMode\": \"BOTH\" }"));
+        assertFalse(com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(stored));
+        // after any answer it is gone for good, also across a save and reload
+        TranslatorConfig answered = new TranslatorConfig();
+        answered.firstRunDone = true;
+        StringWriter out = new StringWriter();
+        answered.writeTo(out);
+        TranslatorConfig reloaded = TranslatorConfig.fromReader(new StringReader(out.toString()));
+        assertTrue(reloaded.firstRunDone);
+        assertFalse(reloaded.translationRequestsEnabled, "answering 'not now' keeps online translation off");
+        assertFalse(com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(reloaded));
+        // a stored 'screenTextMode' of an existing config is kept
+        assertEquals(DisplayMode.ORIGINAL_ONLY, TranslatorConfig.fromReader(new StringReader(
+                "{ \"screenTextMode\": \"ORIGINAL_ONLY\", \"translationRequestsEnabled\": false,"
+                        + " \"firstRunDone\": true }")).screenTextMode);
     }
 
     @Test

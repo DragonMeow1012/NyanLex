@@ -7,6 +7,8 @@ package com.dragonmeow.nyanlex.config;
 public enum SettingAction {
     OPEN_LANGUAGE,
     OPEN_KEYBINDS,
+    /** Opens the stand-alone manual screen (說明書). */
+    OPEN_MANUAL,
     OPEN_AI,
     OPEN_PROVIDER,
     OPEN_DO_NOT_TRANSLATE,

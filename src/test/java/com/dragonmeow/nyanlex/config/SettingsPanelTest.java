@@ -303,17 +303,20 @@ class SettingsPanelTest {
     }
 
     @Test
-    void aboutCategoryShowsVersionAndTheWholeUsageGuide() {
+    void aboutCategoryIsJustTheVersionAndTheManualButton() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 427, 240);
         p.setCategory(SettingsCategory.ABOUT);
+        assertEquals(2, p.rowCount());
         Rec c = new Rec();
         p.render(c, -1, -1);
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("NyanLex Translator")));
         assertTrue(c.texts.stream().anyMatch(t -> t.s().contains("1.0.0")));
-        // every section is its own scrollable card
-        assertTrue(p.contentHeight() > p.listRect()[3], "the guide scrolls");
-        for (int i = 1; i <= SettingsModel.ABOUT_SECTIONS; i++) assertNotNull(SettingsModel.byId("about_s" + i));
-        assertTrue(host.actions.isEmpty(), "no help screen anywhere: the guide lives in the list");
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("說明書")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("開啟")), "the button says 開啟");
+        assertEquals(List.of(), host.actions);
+        click(p, p.controlBounds("about_manual"));
+        assertEquals(List.of(SettingAction.OPEN_MANUAL), host.actions);
     }
 
     @Test
@@ -333,7 +336,6 @@ class SettingsPanelTest {
             assertTrue(c.texts.stream().anyMatch(t -> t.s().equals(e[1])), e[0] + " title");
             String body = c.texts.stream().map(Text::s).reduce("", String::concat);
             assertTrue(body.contains(e[2]), e[0] + " body names the default machine service");
-            // clicking it does nothing
             int saves = host.saves;
             click(p, card);
             assertEquals(saves, host.saves);
@@ -348,26 +350,33 @@ class SettingsPanelTest {
         assertFalse(host.cfg.translationRequestsEnabled, "fresh install: nothing is sent");
         Rec off = new Rec();
         p.render(off, -1, -1);
-        assertTrue(off.texts.stream().anyMatch(t -> t.s().equals("送出翻譯請求：關")), "switch caption on the card");
+        assertTrue(off.texts.stream().anyMatch(t -> t.s().equals("線上翻譯：關，不會送出任何文字")), "grey status row on the card");
         click(p, p.controlBounds(SettingsModel.PRIVACY_ID));
         assertTrue(host.cfg.translationRequestsEnabled);
         assertEquals(List.of(SettingEntry.SideEffect.CLEAR_PENDING), host.effects);
         Rec on = new Rec();
         p.render(on, -1, -1);
-        assertTrue(on.texts.stream().anyMatch(t -> t.s().equals("送出翻譯請求：開")));
-        // the general card below shows the same state, and flipping it flips the privacy card back
+        assertTrue(on.texts.stream().anyMatch(t -> t.s().startsWith("線上翻譯：開（")), "green status row names the engine");
         click(p, p.cardBounds("master"));
         assertFalse(host.cfg.translationRequestsEnabled);
     }
 
     @Test
-    void aboutGuideCoversWhatEachSurfaceSendsAndTheLocalApiKey() {
+    void theManualCoversEveryTopicInEveryLanguage() {
         for (String code : new String[] {"zh_tw", "zh_hk", "zh_cn", "en_us"}) {
-            String send = lookup(code, SettingsModel.aboutBodyKey(10));
-            String local = lookup(code, SettingsModel.aboutBodyKey(11));
-            assertTrue(send.contains("Google"), code);
-            assertTrue(local.contains("API"), code);
-            assertFalse(send.equals(SettingsModel.aboutBodyKey(10)), code + " key must exist");
+            for (int i = 1; i <= SettingsModel.MANUAL_SECTIONS; i++) {
+                assertFalse(lookup(code, SettingsModel.manualTitleKey(i)).equals(SettingsModel.manualTitleKey(i)), code + " title " + i);
+                assertFalse(lookup(code, SettingsModel.manualBodyKey(i)).equals(SettingsModel.manualBodyKey(i)), code + " body " + i);
+            }
+            String privacy = lookup(code, SettingsModel.manualBodyKey(6));
+            assertTrue(privacy.contains("Google") && privacy.contains("API"), code);
+            String last = lookup(code, SettingsModel.manualBodyKey(10));
+            assertTrue(last.contains("MIT") && last.contains("github.com/DragonMeow1012/NyanLex"), code);
+            // the old wording is gone for good
+            for (int i = 1; i <= SettingsModel.MANUAL_SECTIONS; i++) {
+                String body = lookup(code, SettingsModel.manualBodyKey(i));
+                assertFalse(body.contains("最底下的總開關") || body.contains("匯出／匯入翻譯檔可以把"), code + " " + i);
+            }
         }
     }
 
@@ -379,7 +388,7 @@ class SettingsPanelTest {
         int[] s = p.searchRect();
         p.mouseClicked(s[0] + s[2] + 4 + 6, s[1] + 5, 0);
         assertEquals(SettingsCategory.ABOUT, p.category());
-        assertTrue(host.actions.isEmpty(), "no other screen is opened");
+        assertEquals(List.of(SettingAction.OPEN_MANUAL), host.actions, "the ? button opens the manual straight away");
     }
 
     @Test
@@ -459,34 +468,82 @@ class SettingsPanelTest {
     }
 
     @Test
-    void bulkRowsSetEveryEngineAndEveryDisplayMode() {
+    void allItemsRowShowsTheSharedValueOrMixedAndActsOnEverySurface() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 480, 270);
         p.setCategory(SettingsCategory.DISPLAY);
-        click(p, p.buttonBounds("bulk_engine", 0)); // 全設 AI
+        assertNotNull(p.cardBounds("all_items"));
+        Rec c = new Rec();
+        p.render(c, -1, -1);
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("全部項目")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("一次設定下面所有項目")));
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("顯示方式")), "column header over the mode column");
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("翻譯引擎")), "column header over the engine column");
+        // defaults: chat 雙語, the rest 譯文 -> the display columns differ -> 混合; every engine is 機翻
+        assertTrue(c.texts.stream().anyMatch(t -> t.s().equals("混合")));
+        // pressing the mixed mode button: everything becomes 譯文
+        click(p, p.buttonBounds("all_items", 0));
+        assertAllModes(host.cfg, DisplayMode.TRANSLATION);
+        // now they agree: the button follows 不翻譯 -> 雙語 -> 譯文 for all of them
+        click(p, p.buttonBounds("all_items", 0));
+        assertAllModes(host.cfg, DisplayMode.ORIGINAL_ONLY);
+        click(p, p.buttonBounds("all_items", 0));
+        assertAllModes(host.cfg, DisplayMode.BOTH);
+        click(p, p.buttonBounds("all_items", 0));
+        assertAllModes(host.cfg, DisplayMode.TRANSLATION);
+        // engine: all 機翻 -> all AI -> all 機翻
+        click(p, p.buttonBounds("all_items", 1));
         assertTrue(host.cfg.aiChat && host.cfg.aiTooltip && host.cfg.aiScoreboard && host.cfg.aiName
                 && host.cfg.aiBossBar && host.cfg.aiTitle && host.cfg.aiActionBar && host.cfg.aiBook
                 && host.cfg.aiScreenText);
-        click(p, p.buttonBounds("bulk_engine", 1)); // 全設機翻
+        click(p, p.buttonBounds("all_items", 1));
         assertFalse(host.cfg.aiChat || host.cfg.aiTooltip || host.cfg.aiScoreboard || host.cfg.aiName
                 || host.cfg.aiBossBar || host.cfg.aiTitle || host.cfg.aiActionBar || host.cfg.aiBook
                 || host.cfg.aiScreenText);
-        click(p, p.buttonBounds("bulk_mode", 2)); // 全部不翻譯
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.chatMode);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.tooltipMode);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.scoreboardMode);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.nameMode);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.bossBarMode);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.titleMode);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.actionBarMode);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.bookMode);
-        assertEquals(DisplayMode.ORIGINAL_ONLY, host.cfg.screenTextMode);
-        click(p, p.buttonBounds("bulk_mode", 1)); // 全設雙語
-        assertEquals(DisplayMode.BOTH, host.cfg.chatMode);
-        assertEquals(DisplayMode.BOTH, host.cfg.screenTextMode);
-        click(p, p.buttonBounds("bulk_mode", 0)); // 全設譯文
-        assertEquals(DisplayMode.TRANSLATION, host.cfg.bookMode);
-        assertEquals(5, host.saves);
+        // a mixed engine state reads 混合 and pressing it sets everything to 機翻
+        host.cfg.aiChat = true;
+        host.cfg.aiBook = true;
+        p.invalidate();
+        Rec mixed = new Rec();
+        p.render(mixed, -1, -1);
+        assertEquals(1, mixed.texts.stream().filter(t -> t.s().equals("混合")).count(), "only the engine column is mixed now");
+        click(p, p.buttonBounds("all_items", 1));
+        assertFalse(host.cfg.aiChat || host.cfg.aiBook);
+        assertEquals(7, host.saves);
+        // the surface rows below keep their own buttons
+        click(p, p.buttonBounds("chat", 1));
+        assertTrue(host.cfg.aiChat);
+        assertFalse(host.cfg.aiTooltip);
+    }
+
+    private static void assertAllModes(TranslatorConfig cfg, DisplayMode mode) {
+        assertEquals(mode, cfg.chatMode);
+        assertEquals(mode, cfg.tooltipMode);
+        assertEquals(mode, cfg.scoreboardMode);
+        assertEquals(mode, cfg.nameMode);
+        assertEquals(mode, cfg.bossBarMode);
+        assertEquals(mode, cfg.titleMode);
+        assertEquals(mode, cfg.actionBarMode);
+        assertEquals(mode, cfg.bookMode);
+        assertEquals(mode, cfg.screenTextMode);
+    }
+
+    @Test
+    void allItemsAndSurfaceRowsShareTheSameButtonColumns() {
+        for (String code : new String[] {"zh_tw", "en_us", "zh_cn"}) {
+            FakeHost host = new FakeHost();
+            host.lang = code;
+            SettingsPanel p = panel(host, 480, 270);
+            p.setCategory(SettingsCategory.DISPLAY);
+            int[] allMode = p.buttonBounds("all_items", 0);
+            int[] allEngine = p.buttonBounds("all_items", 1);
+            int[] chatMode = p.buttonBounds("chat", 0);
+            int[] chatEngine = p.buttonBounds("chat", 1);
+            assertEquals(chatMode[0], allMode[0], code + " mode column x");
+            assertEquals(chatMode[2], allMode[2], code + " mode column width");
+            assertEquals(chatEngine[0], allEngine[0], code + " engine column x");
+            assertEquals(chatEngine[2], allEngine[2], code + " engine column width");
+        }
     }
 
     @Test

@@ -14,7 +14,22 @@ final class WarmupHudOverlay {
 
     private WarmupHudOverlay() {}
 
+    /** In-game HUD: only while no screen is open (a screen draws it itself, see {@link #renderOnScreen}). */
     static void render(GuiGraphicsExtractor g) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.screen != null) return;
+        draw(g);
+    }
+
+    /** Title screen, menus and every other screen: the warm-up keeps running behind them, so show it there too. */
+    static void renderOnScreen(net.minecraft.client.gui.screens.Screen screen, GuiGraphicsExtractor g) {
+        // the settings and warm-up screens show the progress themselves
+        if (screen instanceof Fabric26ConfigScreen || screen instanceof ItemWarmupConfirmScreen
+                || screen instanceof ItemWarmupProgressScreen || screen instanceof FirstRunScreen) return;
+        draw(g);
+    }
+
+    private static void draw(GuiGraphicsExtractor g) {
         TranslatorConfig cfg = NyanLexFabric26.config();
         Minecraft mc = Minecraft.getInstance();
         if (cfg == null || mc == null || mc.options.hideGui) return;

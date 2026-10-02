@@ -42,8 +42,8 @@ public final class TranslatorConfig {
     public DisplayMode titleMode = DisplayMode.TRANSLATION;      // 標題 / 副標題 (on/off)
     public DisplayMode actionBarMode = DisplayMode.TRANSLATION;  // 動作列訊息 (on/off)
     public DisplayMode bookMode = DisplayMode.TRANSLATION;       // 書籍 / 講台書頁面 (on/off)
-    // 自訂模組介面文字（光影/模組設定等，經 GuiGraphics 繪字）。預設關閉——較廣，使用者自行開啟。
-    public DisplayMode screenTextMode = DisplayMode.ORIGINAL_ONLY; // 介面文字 (on/off, 預設關)
+    // 自訂模組介面文字（光影/模組設定等，經 GuiGraphics 繪字）。新安裝預設翻譯；既有設定檔沿用自己的值。
+    public DisplayMode screenTextMode = DisplayMode.TRANSLATION;   // 介面文字 (on/off)
 
     // ---- AI fine-translation (精翻) — per-surface: each surface chooses 機翻(Google) or AI ----
     public boolean aiChat = false;
@@ -123,6 +123,13 @@ public final class TranslatorConfig {
      * (see {@link #fromReader}). Field type is part of the persisted format and must never change.
      */
     public boolean translationRequestsEnabled = false;
+
+    /**
+     * The first-start card on the title screen has been answered (any of its choices) or was
+     * never needed (an existing config that already translates). It is shown once, while this
+     * is false and 線上翻譯 is off. Field type is part of the persisted format and must never change.
+     */
+    public boolean firstRunDone = false;
 
     /**
      * Do-not-translate terms (不翻譯詞彙): case-insensitive whole words/phrases that are
@@ -248,6 +255,10 @@ public final class TranslatorConfig {
                 && !json.getAsJsonObject().has("translationRequestsEnabled")) {
             cfg.translationRequestsEnabled = true; // an existing config from before the switch: keep its behaviour
         }
+        if (cfg != null && json != null && json.isJsonObject()
+                && !json.getAsJsonObject().has("firstRunDone") && cfg.translationRequestsEnabled) {
+            cfg.firstRunDone = true; // an existing user who already translates never sees the first-start card
+        }
         return (cfg == null ? new TranslatorConfig() : cfg).normalized();
     }
 
@@ -269,7 +280,7 @@ public final class TranslatorConfig {
         if (titleMode == null) titleMode = DisplayMode.TRANSLATION;
         if (actionBarMode == null) actionBarMode = DisplayMode.TRANSLATION;
         if (bookMode == null) bookMode = DisplayMode.TRANSLATION;
-        if (screenTextMode == null) screenTextMode = DisplayMode.ORIGINAL_ONLY;
+        if (screenTextMode == null) screenTextMode = DisplayMode.TRANSLATION;
         // All surfaces are 3-way (原文 / 翻譯 / 原文＋翻譯). Single-line surfaces (HUD: held name,
         // scoreboard, name tag, boss bar, title, action bar, book, GUI text) render 原文＋翻譯
         // INLINE ("原文　譯文") since they can't stack two lines; chat & tooltip use a block.

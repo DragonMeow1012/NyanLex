@@ -51,10 +51,10 @@ class SettingsModelTest {
     void everyCatalogEntryBecomesExactlyOneCard() {
         List<String> cardIds = ids(SettingsModel.allCards());
         assertEquals(cardIds.size(), new HashSet<>(cardIds).size(), "card ids are unique");
-        // every entry once (a display surface's engine entry rides on its surface card), plus the two
-        // bulk rows, the privacy notice, the info card and the guide sections under 關於, and one FILE card per mod file
+        // every entry once (a display surface's engine entry rides on its surface card), plus the one
+        // 全部項目 row, the privacy notice, the two 關於 cards (version, manual) and one FILE card per mod file
         int surfaces = SettingsCatalog.rows(SettingsPage.DISPLAY).size();
-        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 2 + 1 + 1 + SettingsModel.ABOUT_SECTIONS
+        assertEquals(SettingsCatalog.allEntries().size() - surfaces + 1 + 1 + 2
                 + FileLocations.IDS.size(), cardIds.size());
         for (SettingEntry entry : SettingsCatalog.allEntries()) {
             if (entry.id().endsWith(".engine")) continue;
@@ -70,66 +70,53 @@ class SettingsModelTest {
         assertEquals(SettingCard.Kind.NOTICE, SettingsModel.byId(SettingsModel.PRIVACY_ID).kind());
         assertEquals(SettingsModel.PRIVACY_ID, SettingsModel.nodes(SettingsCategory.GENERAL).get(0).card().id(),
                 "the privacy card is the first thing on the first page");
-        assertEquals(SettingCard.Kind.BULK, SettingsModel.byId("bulk_engine").kind());
-        assertEquals(SettingCard.Kind.BULK, SettingsModel.byId("bulk_mode").kind());
+        assertEquals(SettingCard.Kind.ALL, SettingsModel.byId("all_items").kind());
         assertEquals(SettingCard.Kind.SLIDER, SettingsModel.byId("cooldown").kind());
         assertEquals(SettingCard.Kind.SLIDER, SettingsModel.byId("batch").kind());
         assertEquals(SettingCard.Kind.WARMUP, SettingsModel.byId("warmup").kind());
         assertEquals(SettingCard.Kind.BUTTON, SettingsModel.byId("language").kind());
         assertEquals(SettingCard.Kind.BUTTON, SettingsModel.byId("clear_cache").kind());
         assertEquals(SettingCard.Kind.INFO, SettingsModel.byId("about_info").kind());
-        assertNull(SettingsModel.byId("help"), "no help card anywhere: the guide is part of 關於");
+        assertNull(SettingsModel.byId("help"), "no help card on 一般");
         assertNull(SettingsModel.byId("screen_scan"));
-        assertEquals(SettingsCategory.ABOUT, SettingsModel.byId("about_s1").category());
-        assertEquals(SettingCard.Kind.INFO, SettingsModel.byId("about_s" + SettingsModel.ABOUT_SECTIONS).kind());
+        // 關於 is just the version and the manual button
+        assertEquals(List.of("about_info", "about_manual"), ids(SettingsModel.cards(SettingsCategory.ABOUT)));
+        assertEquals(SettingCard.Kind.BUTTON, SettingsModel.byId("about_manual").kind());
+        assertEquals(SettingAction.OPEN_MANUAL, SettingsModel.byId("about_manual").entry().action());
     }
 
     @Test
-    void displayCategoryIsTwoBulkRowsThenOneSurfaceRowEach() {
+    void displayCategoryIsOneAllItemsRowThenOneSurfaceRowEach() {
         List<SettingsModel.Node> nodes = SettingsModel.nodes(SettingsCategory.DISPLAY);
-        assertEquals(2 + 9, nodes.size());
+        assertEquals(1 + 9, nodes.size());
         for (SettingsModel.Node node : nodes) assertFalse(node.isGroup(), "no folding groups on the display page");
-        assertEquals("bulk_engine", nodes.get(0).card().id());
-        assertEquals(2, nodes.get(0).card().buttons().size());
-        assertEquals("bulk_mode", nodes.get(1).card().id());
-        assertEquals(3, nodes.get(1).card().buttons().size());
-        for (int i = 2; i < nodes.size(); i++) {
+        assertEquals("all_items", nodes.get(0).card().id());
+        assertEquals(SettingCard.Kind.ALL, nodes.get(0).card().kind());
+        for (int i = 1; i < nodes.size(); i++) {
             SettingCard card = nodes.get(i).card();
             assertEquals(SettingCard.Kind.SURFACE, card.kind());
             assertEquals(SettingEntry.Type.CYCLE, card.entry().type());
             assertEquals(SettingEntry.Type.TOGGLE, card.engineEntry().type());
         }
-        assertEquals("chat", nodes.get(2).card().id());
-        assertEquals("screen", nodes.get(10).card().id());
+        assertEquals("chat", nodes.get(1).card().id());
+        assertEquals("screen", nodes.get(9).card().id());
     }
 
     @Test
     void titlesDropTheStatePartAndEllipsis() throws Exception {
         Function<String, String> lang = zhTw();
-        assertEquals("送出翻譯請求", SettingsModel.title(SettingsModel.byId("master"), lang));
+        assertEquals("線上翻譯", SettingsModel.title(SettingsModel.byId("master"), lang));
         assertEquals("全物品預熱", SettingsModel.title(SettingsModel.byId("warmup"), lang));
         assertEquals("清除快取", SettingsModel.title(SettingsModel.byId("clear_cache"), lang));
         assertEquals("聊天", SettingsModel.title(SettingsModel.byId("chat"), lang));
-        assertEquals("全部引擎", SettingsModel.title(SettingsModel.byId("bulk_engine"), lang));
+        assertEquals("全部項目", SettingsModel.title(SettingsModel.byId("all_items"), lang));
+        assertEquals("說明書", SettingsModel.title(SettingsModel.byId("about_manual"), lang));
         assertEquals("偵測伺服器／模組並下載翻譯包", SettingsModel.title(SettingsModel.byId("download"), lang));
         assertEquals("檔案位置", SettingsModel.groupTitle(SettingsModel.groupById(SettingsModel.FILES_GROUP_ID), lang));
         for (SettingCard card : SettingsModel.allCards()) {
             String title = SettingsModel.title(card, lang);
             assertFalse(title.isBlank(), card.id());
             assertFalse(title.contains("%"), card.id());
-        }
-    }
-
-    @Test
-    void requestsOffReminderIsBuiltFromTheLangValuesInEveryLanguage() throws Exception {
-        String[][] expect = {
-                {"zh_tw", "請先至 設定 → 一般 開啟「送出翻譯請求」"},
-                {"zh_hk", "請先至 設定 → 一般 開啟「送出翻譯請求」"},
-                {"zh_cn", "请先至 设置 → 常规 开启“发送翻译请求”"},
-                {"en_us", "Turn on \"Send translation requests\" in Settings → General first"}};
-        for (String[] e : expect) {
-            JsonObject l = lang(e[0]);
-            assertEquals(e[1], SettingsModel.requestsOffReminder(k -> l.has(k) ? l.get(k).getAsString() : k), e[0]);
         }
     }
 

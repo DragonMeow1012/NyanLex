@@ -31,6 +31,9 @@ public final class SettingsPanel {
 
     public static State sessionState() { return SESSION; }
 
+    /** The category the next settings screen of this session opens on. */
+    public static void rememberCategory(SettingsCategory category) { SESSION.category = category; }
+
     // ------------------------------------------------------------------ keys (GLFW values)
 
     public static final int KEY_ESCAPE = 256;
@@ -157,7 +160,7 @@ public final class SettingsPanel {
         boolean stacked;
         int ctrlW;
         int ctrlH;
-        /** SURFACE / BULK cards: width of each button (shrunk to fit when the card is stacked). */
+        /** SURFACE / ALL cards: width of each button (shrunk to fit when the card is stacked). */
         int[] multiW;
         /** FILE cards: index of the path line inside {@link #desc} (-1 otherwise) and the full path. */
         int pathLine = -1;
@@ -320,8 +323,7 @@ public final class SettingsPanel {
 
     private String aboutText(SettingCard card) {
         String version = host.modVersion();
-        String base = host.text(card.descKey());
-        return version == null || version.isEmpty() ? base : host.text(SettingsModel.KEY_ABOUT_VERSION, version) + "\n" + base;
+        return version == null || version.isEmpty() ? "" : host.text(SettingsModel.KEY_ABOUT_VERSION, version);
     }
 
     private void measureControl(Row r) {
@@ -358,10 +360,10 @@ public final class SettingsPanel {
                 r.ctrlW = 24 + 6 + host.textWidth(noticeSwitchText(card.entry(), cfg));
                 r.ctrlH = 12;
             }
-            case SURFACE, BULK -> {
-                r.multiW = multiWidths(card);
+            case SURFACE, ALL -> {
+                r.multiW = multiWidths();
                 r.ctrlW = totalWidth(r.multiW);
-                r.ctrlH = 14;
+                r.ctrlH = card.kind() == SettingCard.Kind.ALL ? 14 + COL_HEADER_H : 14;
             }
             default -> {
                 r.ctrlW = 0;
@@ -372,9 +374,9 @@ public final class SettingsPanel {
 
     static final int MULTI_GAP = 4;
 
-    /** The privacy card's switch caption, e.g. "送出翻譯請求：關". */
+    /** The privacy card's status row: "線上翻譯：開（引擎）" / "線上翻譯：關，不會送出任何文字". */
     private String noticeSwitchText(SettingEntry entry, TranslatorConfig cfg) {
-        return host.text(entry.labelKey(), host.text(entry.isOn(cfg) ? SettingsCatalog.STATE_ON : SettingsCatalog.STATE_OFF));
+        return DialogContent.onlineStatus(cfg, host::text);
     }
 
     private static int totalWidth(int[] ws) {
@@ -394,30 +396,32 @@ public final class SettingsPanel {
         r.ctrlW = totalWidth(scaled);
     }
 
-    /** Widths of the buttons of a SURFACE (mode, engine) or BULK card. */
-    private int[] multiWidths(SettingCard card) {
-        if (card.kind() == SettingCard.Kind.SURFACE) {
-            int mode = 0;
-            for (StateText label : card.entry().options().labels()) mode = Math.max(mode, host.textWidth(resolve(label)));
-            int engine = Math.max(host.textWidth(resolve(SettingsCatalog.engineState(true))),
-                    host.textWidth(resolve(SettingsCatalog.engineState(false))));
-            return new int[] {Math.max(34, mode + 12), Math.max(32, engine + 12)};
-        }
-        int[] ws = new int[card.buttons().size()];
-        for (int i = 0; i < ws.length; i++) {
-            ws[i] = Math.max(36, host.textWidth(host.text(card.buttons().get(i).labelKey())) + 8);
-        }
-        return ws;
+    static final int COL_HEADER_H = 10;
+
+    /**
+     * Widths of the (mode, engine) button columns, the same for every surface row and the 全部項目
+     * row so that the two columns line up all the way down; wide enough for the column headers.
+     */
+    private int[] multiWidths() {
+        int mode = host.textWidth(host.text(SettingsModel.KEY_ALL_MIXED));
+        for (DisplayMode m : DisplayMode.values()) mode = Math.max(mode, host.textWidth(resolve(SettingsCatalog.modeState(m))));
+        int engine = Math.max(host.textWidth(host.text(SettingsModel.KEY_ALL_MIXED)),
+                Math.max(host.textWidth(resolve(SettingsCatalog.engineState(true))),
+                        host.textWidth(resolve(SettingsCatalog.engineState(false)))));
+        int headMode = host.textWidth(host.text(SettingsModel.KEY_ALL_COL_MODE)) + 4;
+        int headEngine = host.textWidth(host.text(SettingsModel.KEY_ALL_COL_ENGINE)) + 4;
+        return new int[] {Math.max(34, Math.max(mode + 12, headMode)), Math.max(32, Math.max(engine + 12, headEngine))};
     }
 
-    /** Button rectangles of a SURFACE / BULK card, left to right, inside its control area. */
+    /** Button rectangles of a SURFACE / ALL card, left to right, inside its control area (below the column headers on ALL). */
     private int[][] multiRects(Row r) {
         int[] rc = controlRect(r);
         int[] ws = r.multiW;
+        int top = r.card.kind() == SettingCard.Kind.ALL ? rc[1] + COL_HEADER_H : rc[1];
         int[][] out = new int[ws.length][];
         int x = rc[0];
         for (int i = 0; i < ws.length; i++) {
-            out[i] = new int[] {x, rc[1], ws[i], rc[3]};
+            out[i] = new int[] {x, top, ws[i], 14};
             x += ws[i] + MULTI_GAP;
         }
         return out;
@@ -441,6 +445,8 @@ public final class SettingsPanel {
             switch (action) {
                 case OPEN_DO_NOT_TRANSLATE:
                     return host.text(SettingsModel.KEY_BTN_EDIT);
+                case OPEN_MANUAL:
+                    return host.text(SettingsModel.KEY_BTN_OPEN);
                 case HUB_DOWNLOAD:
                     return host.text(SettingsModel.KEY_BTN_DETECT);
                 case HUB_OPEN_REPO:
@@ -742,7 +748,7 @@ public final class SettingsPanel {
             case FILE -> drawFileButton(c, r, mx, my);
             case NOTICE -> drawNoticeSwitch(c, r, mx, my);
             case SURFACE -> drawSurface(c, r, mx, my);
-            case BULK -> drawBulk(c, r, mx, my);
+            case ALL -> drawAll(c, r, mx, my);
             case WARMUP -> drawWarmup(c, r, ty, mx, my);
             default -> { }
         }
@@ -903,7 +909,7 @@ public final class SettingsPanel {
         rrect(c, rc[0], rc[1], 24, 12, on ? C_ON : C_OFF);
         c.fill(on ? rc[0] + 14 : rc[0] + 2, rc[1] + 2, 8, 8, C_KNOB);
         String caption = UiText.fit(noticeSwitchText(e, cfg), Math.max(20, rc[2] - 30), host::textWidth);
-        c.text(caption, rc[0] + 30, rc[1] + 2, on ? C_GOOD : C_WARN);
+        c.text(caption, rc[0] + 30, rc[1] + 2, on ? C_GOOD : C_DESC);
     }
 
     private static final int C_AI = 0xFF2E5E9E;
@@ -927,17 +933,30 @@ public final class SettingsPanel {
         centered(c, resolve(engine.state(cfg)), e, C_TITLE);
     }
 
-    private void drawBulk(UiCanvas c, Row r, int mx, int my) {
+    /** The 全部項目 row: grey column headers over two buttons that show the shared value or "混合". */
+    private void drawAll(UiCanvas c, Row r, int mx, int my) {
         TranslatorConfig cfg = host.config();
         int[][] rects = multiRects(r);
-        for (int i = 0; i < rects.length; i++) {
-            SettingCard.BulkButton b = r.card.buttons().get(i);
-            int[] rc = rects[i];
-            boolean hover = in(mx, my, rc[0], rc[1], rc[2], rc[3]);
-            boolean active = b.active().test(cfg);
-            rrect(c, rc[0], rc[1], rc[2], rc[3], active ? (hover ? C_AI_HOVER : C_AI) : (hover ? C_BUTTON_HOVER : C_BUTTON));
-            centered(c, host.text(b.labelKey()), rc, C_TITLE);
+        String[] heads = {host.text(SettingsModel.KEY_ALL_COL_MODE), host.text(SettingsModel.KEY_ALL_COL_ENGINE)};
+        for (int i = 0; i < 2; i++) {
+            String head = UiText.fit(heads[i], rects[i][2], host::textWidth);
+            c.text(head, rects[i][0] + (rects[i][2] - host.textWidth(head)) / 2, rects[i][1] - COL_HEADER_H + 1, C_DESC);
         }
+        int[] m = rects[0];
+        DisplayMode common = SettingsCatalog.commonMode(cfg);
+        boolean hoverMode = in(mx, my, m[0], m[1], m[2], m[3]);
+        rrect(c, m[0], m[1], m[2], m[3], hoverMode ? C_BUTTON_HOVER : C_BUTTON);
+        String modeLabel = common == null ? host.text(SettingsModel.KEY_ALL_MIXED) : resolve(SettingsCatalog.modeState(common));
+        int modeColor = common == null ? C_WARN : common == DisplayMode.TRANSLATION ? C_GOOD
+                : common == DisplayMode.BOTH ? C_CRUMB : C_DESC;
+        centered(c, modeLabel, m, modeColor);
+        int[] e = rects[1];
+        Boolean ai = SettingsCatalog.commonEngine(cfg);
+        boolean hoverEngine = in(mx, my, e[0], e[1], e[2], e[3]);
+        boolean blue = ai != null && ai;
+        rrect(c, e[0], e[1], e[2], e[3], blue ? (hoverEngine ? C_AI_HOVER : C_AI) : (hoverEngine ? C_BUTTON_HOVER : C_BUTTON));
+        centered(c, ai == null ? host.text(SettingsModel.KEY_ALL_MIXED) : resolve(SettingsCatalog.engineState(ai)), e,
+                ai == null ? C_WARN : C_TITLE);
     }
 
     private void centered(UiCanvas c, String text, int[] rc, int color) {
@@ -1121,7 +1140,8 @@ public final class SettingsPanel {
         searchFocused = false;
         if (in(mx, my, cx + searchW + 4, cy, HELP_W, SEARCH_H)) {
             host.playClick();
-            selectCategory(SettingsCategory.ABOUT); // the usage notes live in 關於
+            selectCategory(SettingsCategory.ABOUT); // returning from the manual lands on 關於
+            host.runAction(SettingAction.OPEN_MANUAL);
             return true;
         }
         // sidebar
@@ -1226,14 +1246,14 @@ public final class SettingsPanel {
                     changed();
                 }
             }
-            case BULK -> {
+            case ALL -> {
                 int[][] rects = multiRects(r);
-                for (int i = 0; i < rects.length; i++) {
-                    if (in(mx, my, rects[i][0], rects[i][1], rects[i][2], rects[i][3])) {
-                        card.buttons().get(i).apply().accept(host.config());
-                        changed();
-                        break;
-                    }
+                if (in(mx, my, rects[0][0], rects[0][1], rects[0][2], rects[0][3])) {
+                    SettingsCatalog.cycleAllModes(host.config());
+                    changed();
+                } else if (in(mx, my, rects[1][0], rects[1][1], rects[1][2], rects[1][3])) {
+                    SettingsCatalog.toggleAllEngines(host.config());
+                    changed();
                 }
             }
             case WARMUP -> {
@@ -1516,7 +1536,7 @@ public final class SettingsPanel {
         return r == null ? null : controlRect(r);
     }
 
-    /** Rectangle of the i-th button of a SURFACE / BULK card, or null. */
+    /** Rectangle of the i-th button of a SURFACE / ALL card, or null. */
     int[] buttonBounds(String cardId, int index) {
         ensureLayout();
         Row r = rowById(cardId);

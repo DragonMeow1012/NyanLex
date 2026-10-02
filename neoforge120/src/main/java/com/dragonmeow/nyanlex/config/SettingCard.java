@@ -22,13 +22,8 @@ public final class SettingCard {
         SURFACE,
         /** A highlighted text-only notice (the privacy card on 一般). */
         NOTICE,
-        /** A row of quick buttons that set one value on every surface at once. */
-        BULK
-    }
-
-    /** One quick button of a {@link Kind#BULK} card; {@code active} tells whether the config already matches it. */
-    public record BulkButton(String labelKey, java.util.function.Consumer<TranslatorConfig> apply,
-                             java.util.function.Predicate<TranslatorConfig> active) {
+        /** The "全部項目" row: the same two buttons as a surface row, acting on every surface at once. */
+        ALL
     }
 
     private final String id;
@@ -40,16 +35,15 @@ public final class SettingCard {
     private final String groupId;
     private final String groupTitleKey;
     private final SettingEntry engineEntry;
-    private final java.util.List<BulkButton> buttons;
 
     SettingCard(String id, Kind kind, SettingsCategory category, SettingEntry entry,
                 String titleKey, String descKey, String groupId, String groupTitleKey) {
-        this(id, kind, category, entry, titleKey, descKey, groupId, groupTitleKey, null, java.util.List.of());
+        this(id, kind, category, entry, titleKey, descKey, groupId, groupTitleKey, null);
     }
 
     SettingCard(String id, Kind kind, SettingsCategory category, SettingEntry entry,
                 String titleKey, String descKey, String groupId, String groupTitleKey,
-                SettingEntry engineEntry, java.util.List<BulkButton> buttons) {
+                SettingEntry engineEntry) {
         this.id = id;
         this.kind = kind;
         this.category = category;
@@ -59,7 +53,6 @@ public final class SettingCard {
         this.groupId = groupId;
         this.groupTitleKey = groupTitleKey;
         this.engineEntry = engineEntry;
-        this.buttons = buttons;
     }
 
     public String id() { return id; }
@@ -75,8 +68,6 @@ public final class SettingCard {
     public String groupTitleKey() { return groupTitleKey; }
     /** {@link Kind#SURFACE}: the engine toggle next to the mode button ({@link #entry()}); else null. */
     public SettingEntry engineEntry() { return engineEntry; }
-    /** {@link Kind#BULK}: the quick buttons, in order; else empty. */
-    public java.util.List<BulkButton> buttons() { return buttons; }
 
     /** Removes a trailing "：%s" state part and "…" from a button-style label ("聊天：%s" becomes "聊天"). */
     public static String stripState(String label) {

@@ -52,6 +52,7 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.minecraft.client.input.KeyEvent;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
@@ -103,6 +104,9 @@ public final class NyanLexFabric26 implements ClientModInitializer {
     private static HubDownloader hubDownloader;
     private static final HubDownloadJob hubDownloadJob = new HubDownloadJob();
     private static volatile boolean hubStartupChecked;
+    private static boolean firstRunTried;
+    private static volatile HubPlan firstRunHubPlan;
+    private static volatile int firstRunModCount;
     private static volatile boolean keybindMigrationChecked;
 
     private static CodexAppServerClient codexClient;
@@ -819,6 +823,52 @@ public final class NyanLexFabric26 implements ClientModInitializer {
 
 /** Once per launch, the first time the title screen appears: a silent,
      *  index.json-only check for mod translations the player doesn't have yet. */
+    /** The newest repository plan found for the first-start card (null until the check finishes or when nothing is new). */
+    public static HubPlan firstRunHubPlan() {
+        return firstRunHubPlan;
+    }
+
+    public static int firstRunModCount() {
+        return firstRunModCount;
+    }
+
+    /** An AI key has been entered (the first-start card waits for this before turning online translation on). */
+    public static boolean aiConfigured() {
+        if (config == null || config.aiApiKeys == null) return false;
+        for (String key : config.aiApiKeys) if (key != null && !key.isBlank()) return true;
+        return false;
+    }
+
+    /**
+     * Once, on the title screen of a fresh install: the first-start card. It replaces the
+     * separate repository popup of this launch (the card carries the repository line itself).
+     */
+    private void maybeStartFirstRun(Minecraft mc) {
+        if (firstRunTried || mc == null || config == null || mc.getOverlay() != null) return;
+        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
+        if (!com.dragonmeow.nyanlex.config.DialogContent.firstRunDue(config)) {
+            firstRunTried = true;
+            return;
+        }
+        firstRunTried = true;
+        hubStartupChecked = true;
+        if (hubDownloader != null && !config.hubStartupPromptDisabled) {
+            runHubBackground(() -> {
+                try {
+                    List<String> modIds = loadedModIds();
+                    Optional<ModpackIdentity> modpack = ModpackDetector.detect(hubCandidateRoots(), modIds, null);
+                    HubPlan plan = hubDownloader.planStartupMods(false, modpack.orElse(null), modIds,
+                            config.targetLang, hubDownloadState);
+                    firstRunModCount = modIds.size();
+                    if (!plan.downloadable().isEmpty()) firstRunHubPlan = plan;
+                } catch (IOException | RuntimeException ignored) {
+                    // best-effort: the card simply has no repository line
+                }
+            });
+        }
+        mc.setScreenAndShow(new FirstRunScreen(mc.screen));
+    }
+
     private void maybeStartHubStartupCheck(Minecraft mc) {
         if (hubStartupChecked || mc == null || mc.screen == null) return;
         if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;
@@ -1391,9 +1441,22 @@ public final class NyanLexFabric26 implements ClientModInitializer {
 
         
         
-        ScreenEvents.AFTER_INIT.register((client, screen, w, h) ->
-                ScreenKeyboardEvents.afterKeyPress(screen).register((scr, keyEvent) ->
-                        HookGuard.run("event.screenKey", () -> onScreenKey(scr, keyEvent))));
+        ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
+            // The consent box (and nothing else) swallows input while it is up; it never closes the screen.
+            ScreenMouseEvents.allowMouseClick(screen).register(
+                    (scr, event) -> !ConsentOverlay.mouseClicked(scr, event.x(), event.y(), event.button()));
+            ScreenMouseEvents.allowMouseRelease(screen).register((scr, event) -> !ConsentOverlay.covers(scr));
+            ScreenMouseEvents.allowMouseScroll(screen).register((scr, mx, my, h2, v2) -> !ConsentOverlay.covers(scr));
+            ScreenKeyboardEvents.allowKeyPress(screen).register(
+                    (scr, keyEvent) -> !ConsentOverlay.keyPressed(scr, keyEvent.key()));
+            ScreenKeyboardEvents.allowKeyRelease(screen).register((scr, keyEvent) -> !ConsentOverlay.covers(scr));
+            ScreenEvents.afterExtract(screen).register((scr, graphics, mouseX, mouseY, delta) -> HookGuard.run("event.warmupHud", () -> {
+                WarmupHudOverlay.renderOnScreen(scr, graphics);
+                ConsentOverlay.render(scr, graphics, mouseX, mouseY);
+            }));
+            ScreenKeyboardEvents.afterKeyPress(screen).register((scr, keyEvent) ->
+                    HookGuard.run("event.screenKey", () -> onScreenKey(scr, keyEvent)));
+        });
     }
 
     private boolean handleOverlayMessage(Component message) {
@@ -2003,7 +2066,8 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         }
         if (!pending && !missing) return null;
         Component message = requestsOff
-                ? Component.literal(requestsOffReminder())
+                ? Component.translatable("message.nyanlex.tooltip_hint_start",
+                        retranslateKey == null ? "R" : retranslateKey.getTranslatedKeyMessage().getString())
                 : pending
                 ? Component.translatable("message.nyanlex.tooltip_hint_pending")
                 : Component.translatable("message.nyanlex.tooltip_hint",
@@ -2109,6 +2173,8 @@ public final class NyanLexFabric26 implements ClientModInitializer {
     
 
     private void onClientTick(Minecraft mc) {
+        ConsentOverlay.tick();
+        maybeStartFirstRun(mc);
         maybeStartHubStartupCheck(mc);
         maybeMigrateKeybinds(mc);
         SCREEN_RENDER_STACK.remove();
@@ -2179,7 +2245,17 @@ public final class NyanLexFabric26 implements ClientModInitializer {
                 || screen instanceof net.minecraft.client.gui.screens.ChatScreen
                 || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
                 || !screenTranslationAllowed(screen)) return;
-        if (blockedByMasterSwitch()) return;
+        // 線上翻譯 off: ask on the spot; the scan then runs once for this very screen.
+        ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.SCREEN, () -> {
+            if (Minecraft.getInstance().screen == screen) scanAndTranslateScreenNow(screen);
+        });
+    }
+
+    private void scanAndTranslateScreenNow(net.minecraft.client.gui.screens.Screen screen) {
+        if (screen == null || service == null
+                || screen instanceof net.minecraft.client.gui.screens.ChatScreen
+                || screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox
+                || !screenTranslationAllowed(screen)) return;
         SCREEN_CAPTURE.begin(screen);
         TOOLTIP_CAPTURE.begin(screen);
         captureScreenText(screen.getTitle(), true);
@@ -2407,22 +2483,14 @@ public final class NyanLexFabric26 implements ClientModInitializer {
      * of those slots on every supported screen, including when no GUI is open.
      * Names are deduplicated for the session; full lore still warms only on hover.
      */
-    /** "請先至 設定 → 一般 開啟「送出翻譯請求」" built from the live lang values. */
-    public static String requestsOffReminder() {
-        return com.dragonmeow.nyanlex.config.SettingsModel.requestsOffReminder(
-                key -> Component.translatable(key).getString());
-    }
-
-    /** True (after telling the player how to fix it) when the master switch blocks a manual request. */
-    private static boolean blockedByMasterSwitch() {
-        if (config == null || config.translationRequestsEnabled) return false;
-        status(requestsOffReminder());
-        return true;
-    }
-
     private void retranslateItem(ItemStack stack) {
         if (stack == null || stack.isEmpty() || service == null) return;
-        if (blockedByMasterSwitch()) return;
+        // 線上翻譯 off: ask on the spot; the request then goes out once for this very item.
+        ConsentOverlay.ask(com.dragonmeow.nyanlex.config.ConsentGate.Kind.ITEM, () -> retranslateItemNow(stack));
+    }
+
+    private void retranslateItemNow(ItemStack stack) {
+        if (stack == null || stack.isEmpty() || service == null) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
         List<String> sources = lastTooltipStack == stack ? lastTooltipParagraphSources : null;

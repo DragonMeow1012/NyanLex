@@ -253,12 +253,41 @@ public final class SettingsCatalog {
         };
     }
 
-    /** Engine (機翻／AI) of every display surface, in display order. */
-    public static boolean allEnginesAre(TranslatorConfig c, boolean ai) {
+    /** The display mode every surface shares, or {@code null} when they differ ("混合"). */
+    public static DisplayMode commonMode(TranslatorConfig c) {
+        DisplayMode common = null;
         for (SettingsRow row : ROWS.get(SettingsPage.DISPLAY)) {
-            if (row.secondary().isOn(c) != ai) return false;
+            DisplayMode m = MODE_ORDER[Math.max(0, Math.min(2, row.primary().options().index().applyAsInt(c)))];
+            if (common == null) common = m;
+            else if (common != m) return null;
         }
-        return true;
+        return common;
+    }
+
+    /** Whether every surface uses AI ({@code TRUE}), every surface uses machine translation ({@code FALSE}), or they differ ({@code null}). */
+    public static Boolean commonEngine(TranslatorConfig c) {
+        Boolean common = null;
+        for (SettingsRow row : ROWS.get(SettingsPage.DISPLAY)) {
+            boolean ai = row.secondary().isOn(c);
+            if (common == null) common = ai;
+            else if (common != ai) return null;
+        }
+        return common;
+    }
+
+    /**
+     * Press of the "全部項目" mode button: every surface follows 不翻譯 → 雙語 → 譯文; from a mixed
+     * state everything becomes 譯文.
+     */
+    public static void cycleAllModes(TranslatorConfig c) {
+        DisplayMode common = commonMode(c);
+        setAllModes(c, common == null ? DisplayMode.TRANSLATION : nextUiMode(common));
+    }
+
+    /** Press of the "全部項目" engine button: machine <-> AI for everything; from a mixed state everything becomes machine. */
+    public static void toggleAllEngines(TranslatorConfig c) {
+        Boolean common = commonEngine(c);
+        setAllEngines(c, common != null && !common);
     }
 
     /** Sets the engine of every display surface at once. */
@@ -267,15 +296,6 @@ public final class SettingsCatalog {
             SettingEntry engine = row.secondary();
             if (engine.isOn(c) != ai) engine.press(c);
         }
-    }
-
-    /** Whether every display surface shows {@code mode}. */
-    public static boolean allModesAre(TranslatorConfig c, DisplayMode mode) {
-        int index = modeOrder(mode);
-        for (SettingsRow row : ROWS.get(SettingsPage.DISPLAY)) {
-            if (row.primary().options().index().applyAsInt(c) != index) return false;
-        }
-        return true;
     }
 
     /** Sets the display mode of every surface at once. */

@@ -90,6 +90,36 @@ class TranslationServiceTest {
         }
     }
 
+    @Test
+    void manualRequestsAreSentOnlyAfterConsentAndExactlyOnce() {
+        TranslatorConfig cfg = new TranslatorConfig(); // 線上翻譯 off
+        AtomicInteger calls = new AtomicInteger();
+        TranslationService s = service(cfg, inlineTranslator(calls), DIRECT);
+        com.dragonmeow.nyanlex.config.ConsentGate gate =
+                new com.dragonmeow.nyanlex.config.ConsentGate(() -> cfg, () -> { });
+        List<String> sources = List.of("Diamond Sword");
+        // R / P / warm-up asked while off: parked, nothing reaches the service
+        gate.request(com.dragonmeow.nyanlex.config.ConsentGate.Kind.ITEM, () -> s.retranslate(sources));
+        pump(s);
+        assertEquals(0, calls.get());
+        // 開始翻譯: the parked action completes once
+        gate.confirm();
+        pump(s);
+        assertEquals(1, calls.get(), "the asked item request goes out exactly once");
+
+        // 取消: nothing is ever sent
+        TranslatorConfig cfg2 = new TranslatorConfig();
+        AtomicInteger calls2 = new AtomicInteger();
+        TranslationService s2 = service(cfg2, inlineTranslator(calls2), DIRECT);
+        com.dragonmeow.nyanlex.config.ConsentGate gate2 =
+                new com.dragonmeow.nyanlex.config.ConsentGate(() -> cfg2, () -> { });
+        gate2.request(com.dragonmeow.nyanlex.config.ConsentGate.Kind.SCREEN, () -> s2.retranslateScreen(sources));
+        gate2.cancel();
+        pump(s2);
+        assertEquals(0, calls2.get());
+        assertFalse(cfg2.translationRequestsEnabled);
+    }
+
     private static final Executor DIRECT = Runnable::run;
 
     /** Inline translator returning a fixed Chinese rendering for known inputs. */
