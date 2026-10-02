@@ -253,10 +253,14 @@ public final class CodexAppServerClient implements AutoCloseable {
             try {
                 ensureStarted();
                 // Also fills the signed-in cache (otherwise only the settings screen does),
-                // so the retry gate does not read "signed out" in a fresh session. The model
-                // list is deliberately NOT fetched here: it drives the service-tier choice,
-                // which is the user's call, not warm-up's.
-                readAccount(false);
+                // so the retry gate does not read "signed out" in a fresh session.
+                AccountSnapshot account = readAccount(false);
+                // The model catalog decides whether the service tier (priority) the model
+                // supports is sent. It used to be fetched only when the AI settings screen was
+                // opened, so a fresh session silently ran without it; load it here so the
+                // behaviour does not depend on having visited that screen. Configured model,
+                // effort and tier choice are untouched -- this only fills the lookup table.
+                if (account.signedIn() && cachedModels.isEmpty()) listModels();
             } catch (IOException ignored) {
                 // The first real request reports the actual error.
             }

@@ -1094,6 +1094,64 @@ public final class TranslationService {
      * so splicing it into the full paragraph still lines up with THAT paragraph's own
      * style-run table. A no-op (text unchanged, empty mapping) for the many callers that
      * pass plain, token-free text (an enchant/scroll name, …). */
+    private static final java.util.regex.Pattern SEGMENT_CS_TOKEN =
+            java.util.regex.Pattern.compile("⟦(/?)CS(\\d+)⟧");
+    private static final java.util.regex.Pattern ANY_PROTOCOL_TOKEN =
+            java.util.regex.Pattern.compile("⟦[^⟦⟧]*⟧");
+
+    /**
+     * The colour-free {@code semanticFallback} wording of {@code coloredSource} (a segment
+     * whose own colour topology is not cached), wrapped in the segment's DOMINANT colour pair
+     * -- the one covering the most letters, first on a tie -- with every other pair of the
+     * source re-emitted EMPTY after it, so the marker multiset the paragraph projection
+     * validates against is unchanged. {@code null} when the value cannot be projected.
+     */
+    static String projectStyleFallback(String coloredSource, String semanticFallback) {
+        String semantic = TextFilter.stripStyleFallback(semanticFallback);
+        if (semantic == null || semantic.isBlank()) return null;
+        java.util.regex.Matcher matcher = SEGMENT_CS_TOKEN.matcher(coloredSource);
+        List<String> order = new ArrayList<>();
+        Map<String, Integer> letters = new HashMap<>();
+        String open = null;
+        int openEnd = 0;
+        while (matcher.find()) {
+            boolean closing = !matcher.group(1).isEmpty();
+            String index = matcher.group(2);
+            if (!closing) {
+                if (open != null) return null; // nested pairs: not a shape this fallback understands
+                open = index;
+                openEnd = matcher.end();
+                order.add(index);
+            } else {
+                if (open == null || !open.equals(index)) return null;
+                String inside = ANY_PROTOCOL_TOKEN.matcher(
+                        coloredSource.substring(openEnd, matcher.start())).replaceAll("");
+                int count = 0;
+                for (int i = 0; i < inside.length(); ) {
+                    int cp = inside.codePointAt(i);
+                    i += Character.charCount(cp);
+                    if (Character.isLetter(cp)) count++;
+                }
+                letters.merge(index, count, Integer::sum);
+                open = null;
+            }
+        }
+        if (open != null) return null;
+        if (order.isEmpty()) return semantic;
+        String dominant = order.get(0);
+        for (String index : order) {
+            if (letters.getOrDefault(index, 0) > letters.getOrDefault(dominant, 0)) dominant = index;
+        }
+        StringBuilder out = new StringBuilder(semantic.length() + 16 * order.size());
+        out.append('⟦').append("CS").append(dominant).append('⟧').append(semantic)
+                .append("⟦/CS").append(dominant).append('⟧');
+        for (String index : order) {
+            if (index.equals(dominant)) continue;
+            out.append("⟦CS").append(index).append("⟧⟦/CS").append(index).append('⟧');
+        }
+        return out.toString();
+    }
+
     private String resolveEnchantName(String name, boolean useAi) {
         LocalTokenRenumberer.Localized localized = LocalTokenRenumberer.localize(name);
         String localName = localized.text();
@@ -1137,7 +1195,15 @@ public final class TranslationService {
         // this frame; once the exact-style projection lands the next lookup returns it
         // directly (TranslationCache#getCached's own sameSemanticText fast path), with no
         // extra request ever sent for an already-cached key.
-        if (TextFilter.isStyleFallback(translated)) return null;
+        // R1: a colour-insensitive hit used to leave the segment pending forever (nothing ever
+        // buys the exact colour topology on this path), so a fragmented segment -- which is now
+        // requested as its plain semantic row -- would never show. Splice the semantic wording
+        // into the segment's own colour structure instead (dominant colour, other pairs empty):
+        // marker multiset and nesting stay valid for the whole-paragraph projection.
+        if (TextFilter.isStyleFallback(translated)) {
+            translated = projectStyleFallback(localName, translated);
+            if (translated == null) return null;
+        }
         // Map the LOCAL-numbered resolved value back to name's own GLOBAL indices (see
         // this method's class doc "2026-10-02 segment-key normalisation") — a no-op when
         // localized.newToOld() is empty (plain token-free text, the common enchant/scroll

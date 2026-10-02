@@ -41,6 +41,38 @@ public final class TranslationTemplate {
                         + "\\s*\\u27E7[ \\t\\u00A0]*"));
     }
 
+    /**
+     * A decorative icon run that opens a unit and is followed by real text ("[icon] Requires
+     * Enderman Slayer 7."). Same symbol classes as {@code TemplateText}'s icon slot, minus box
+     * drawing / block elements (divider rules are not icons). Optionally wrapped in its own
+     * balanced colour pair, which then belongs to the prefix. In live runs the model dropped a
+     * unit-leading icon slot far more often than any mid-sentence token (8.8% vs 1.3%): it
+     * carries no translatable content, so it is taken OUT of the request and put back in front
+     * of the translation.
+     */
+    private static final Pattern LEAD_ICON = Pattern.compile(
+            "^((?:\u27E6CS(\\d+)\u27E7)?"
+                    + "[\\p{So}\\p{Co}\\p{Cs}\u2460-\u24FF\u2776-\u2793&&[^\u00A7\u27E6\u27E7\u2500-\u259F]]+"
+                    + "(?:\u27E6/CS\\2\u27E7)?[ \\t\u00A0]+)"
+                    + "(?=(?:\u27E6CS\\d+\u27E7)?[A-Za-z0-9\\[(\"'])");
+    /** The remainder must be real prose (3+ words with letters): short stat rows are stable
+     *  already and keep their historical keys. */
+    private static final Pattern PROSE_WORD = Pattern.compile("[A-Za-z]{2,}");
+    private static final int LEAD_ICON_MIN_WORDS = 3;
+
+    private static int leadIconLength(String text) {
+        Matcher lead = LEAD_ICON.matcher(text);
+        if (!lead.find()) return 0;
+        // An opened colour pair must also be closed inside the prefix, or it is not ours.
+        if (lead.group(2) != null && !lead.group(1).contains("⟦/CS" + lead.group(2) + "⟧")) return 0;
+        String rest = text.substring(lead.end());
+        if (rest.indexOf('⟦') == 0 && !rest.startsWith("⟦CS")) return 0;
+        Matcher words = PROSE_WORD.matcher(rest.replaceAll("⟦[^⟧]*⟧", " "));
+        int count = 0;
+        while (words.find() && count < LEAD_ICON_MIN_WORDS) count++;
+        return count >= LEAD_ICON_MIN_WORDS ? lead.end() : 0;
+    }
+
     public Snapshot prepare(String source) {
         String normalized = source == null ? "" : source.strip();
         List<String> gaps = new ArrayList<>();
@@ -58,24 +90,38 @@ public final class TranslationTemplate {
         }
         protectedText.append(normalized, cursor, normalized.length());
         String layoutProtected = gaps.isEmpty() ? normalized : protectedText.toString();
-        TemplateText.Prepared base = TemplateText.prepare(layoutProtected);
+        int leadLength = leadIconLength(layoutProtected);
+        String leadIcon = leadLength == 0 ? "" : layoutProtected.substring(0, leadLength);
+        TemplateText.Prepared base = TemplateText.prepare(
+                leadLength == 0 ? layoutProtected : layoutProtected.substring(leadLength));
         // Deterministic numbers, times, icons and player IDs are safe slots. A location
         // is semantic content: translate each distinct location once and cache it.
-        return new Snapshot(source, normalized, base, List.copyOf(gaps));
+        return new Snapshot(source, normalized, base, List.copyOf(gaps), leadIcon);
     }
 
+    /**
+     * @param leadIcon the unit-leading icon run (with its optional own colour pair and the
+     *                 spaces after it) that is NOT part of {@link #key()}; {@link #restore}
+     *                 puts it back in front of the translation. Empty for most units.
+     */
     public record Snapshot(String source, String normalized, TemplateText.Prepared base,
-                           List<String> layoutGaps) {
+                           List<String> layoutGaps, String leadIcon) {
+        public Snapshot(String source, String normalized, TemplateText.Prepared base,
+                        List<String> layoutGaps) {
+            this(source, normalized, base, layoutGaps, "");
+        }
+
         public String key() {
             return base.text();
         }
 
         public String restore(String translated) {
-            return restoreLayout(base.restore(translated), layoutGaps);
+            String restored = restoreLayout(base.restore(translated), layoutGaps);
+            return restored == null || leadIcon.isEmpty() ? restored : leadIcon + restored;
         }
 
         public boolean changed() {
-            return base.changed() || !layoutGaps.isEmpty();
+            return base.changed() || !layoutGaps.isEmpty() || !leadIcon.isEmpty();
         }
 
         /**
@@ -84,6 +130,10 @@ public final class TranslationTemplate {
          * gaps are converted back to their stable tokens for durable plain-cache reuse.
          */
         public String retokenize(String restored) {
+            if (!leadIcon.isEmpty()) {
+                if (restored == null || !restored.startsWith(leadIcon)) return null;
+                restored = restored.substring(leadIcon.length());
+            }
             String withValues = retokenizeValues(
                     restored, base.values(), base.slotIndices());
             if (withValues == null) return null;

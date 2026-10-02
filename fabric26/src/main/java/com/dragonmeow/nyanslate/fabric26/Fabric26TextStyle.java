@@ -203,17 +203,11 @@ public final class Fabric26TextStyle {
 
     // ---- wrapped-sentence tooltips: join → translate whole → re-wrap ----
 
-    /** True when {@code next} is a lower-case continuation of a server-wrapped lore
-     * sentence. Independent stat/enchantment rows deliberately stay separate. */
+    /** True when {@code next} continues a server-wrapped lore sentence that {@code prev} starts
+     * (see {@link ParagraphModel#continuesWrappedSentence}). Independent stat/enchantment rows
+     * deliberately stay separate. */
     public static boolean continuesSentence(String prev, String next) {
-        if (prev == null || next == null) return false;
-        String p = prev.strip();
-        String n = next.strip();
-        if (p.isEmpty() || n.isEmpty() || p.split("\\s+").length < 4) return false;
-        int last = p.codePointBefore(p.length());
-        int first = n.codePointAt(0);
-        return Character.isLetter(last)
-                && Character.isLetter(first) && Character.isLowerCase(first);
+        return ParagraphModel.continuesWrappedSentence(prev, next);
     }
 
     /** Join visual lore rows into one styled semantic sentence. */

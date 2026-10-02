@@ -55,6 +55,51 @@ public final class ParagraphModel {
         return List.copyOf(ranges);
     }
 
+    /** Words that cannot end a sentence: a row ending in one is cut mid-clause by a server-side
+     *  visual wrap and continues on the next row, whatever that row starts with. */
+    private static final java.util.Set<String> DANGLING_WORDS = java.util.Set.of(
+            "and", "or", "but", "nor", "on", "in", "of", "to", "for", "with", "the", "a", "an",
+            "by", "at", "from", "as", "that", "when", "while", "if", "your", "you", "is", "are",
+            "be", "per", "into", "onto", "than", "then", "which", "who", "its", "their", "his",
+            "her", "our", "every", "each", "all", "up", "off", "over", "under", "after",
+            "before", "until", "within", "without", "against", "between", "through");
+    /** "Cooldown: 5s", "Seller: x": the next row is a labelled field of its own, never a tail. */
+    private static final Pattern LABEL_ROW = Pattern.compile("^[\\p{L}][\\p{L} ]{0,24}:\\s");
+
+    /**
+     * Whether {@code next} is the visual continuation of the server-wrapped sentence that
+     * {@code prev} starts, so the two rows are one semantic sentence joined by a SPACE (no
+     * {@code ⟦PB⟧} row token on the wire). Every row boundary that stays a {@code ⟦PB⟧} is one
+     * more thing the model must carry through a re-ordered clause; live runs failed 85% of the
+     * time through a PB that sat in the middle of a sentence (0.5% for PB-free units).
+     *
+     * <p>Two evidence rules, both conservative so independent stat/enchant/ability rows keep
+     * their own boundary: (1) the original one -- {@code prev} has at least four words, ends in
+     * a letter and {@code next} starts in lower case; (2) {@code prev} has at least three
+     * words and ends mid-clause -- in a function word ("and", "on", "the"...), or in a comma
+     * with a lower-case row after it -- and {@code next} is not a labelled field.</p>
+     */
+    public static boolean continuesWrappedSentence(String prev, String next) {
+        if (prev == null || next == null) return false;
+        String p = prev.strip();
+        String n = next.strip();
+        if (p.isEmpty() || n.isEmpty()) return false;
+        int words = p.split("\\s+").length;
+        int last = p.codePointBefore(p.length());
+        int first = n.codePointAt(0);
+        if (words >= 4 && Character.isLetter(last) && Character.isLetter(first)
+                && Character.isLowerCase(first)) {
+            return true;
+        }
+        if (words < 2 || LABEL_ROW.matcher(n).find()) return false;
+        if (TextFilter.isDecorativeSymbol(first)) return false;
+        if (last == ',') return Character.isLetter(first) && Character.isLowerCase(first);
+        if (words < 3 || !Character.isLetter(last)) return false;
+        int lastSpace = p.lastIndexOf(' ');
+        String lastWord = p.substring(lastSpace + 1).toLowerCase(java.util.Locale.ROOT);
+        return DANGLING_WORDS.contains(lastWord);
+    }
+
     /** Join one non-blank paragraph into one backend unit with immutable row anchors. */
     public static String join(List<String> lines) {
         if (lines == null || lines.isEmpty()) return "";

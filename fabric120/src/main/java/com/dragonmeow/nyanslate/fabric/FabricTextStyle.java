@@ -210,20 +210,11 @@ public final class FabricTextStyle {
 
     // ---- wrapped-sentence tooltips: join → translate whole → re-wrap ----
 
-    /**
-     * Whether tooltip line {@code next} is the continuation of a sentence that the server
-     * wrapped across lines ("…when Diaz is" / "Mayor for special items!"). Conservative:
-     * stat rows ("+50% Skill XP") and headers never join.
-     */
+    /** True when {@code next} continues a server-wrapped lore sentence that {@code prev} starts
+     * (see {@link ParagraphModel#continuesWrappedSentence}). Independent stat/enchantment rows
+     * deliberately stay separate. */
     public static boolean continuesSentence(String prev, String next) {
-        if (prev == null || next == null) return false;
-        String p = prev.strip();
-        String n = next.strip();
-        if (p.isEmpty() || n.isEmpty() || p.split("\\s+").length < 4) return false;
-        int last = p.codePointBefore(p.length());
-        int first = n.codePointAt(0);
-        return Character.isLetter(last)
-                && Character.isLetter(first) && Character.isLowerCase(first);
+        return ParagraphModel.continuesWrappedSentence(prev, next);
     }
 
     /** Join a wrapped sentence's lines into one styled component (runs preserved, single

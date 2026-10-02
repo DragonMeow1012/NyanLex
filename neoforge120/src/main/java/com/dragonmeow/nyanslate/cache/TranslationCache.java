@@ -1810,12 +1810,48 @@ public final class TranslationCache {
         if (!requestsAllowed()) return List.of();
         for (String source : sources) {
             if (source == null || getCached(source) != null) continue;
-            TranslationTemplate.Snapshot snapshot = templates.prepare(source);
+            TranslationTemplate.Snapshot snapshot = semanticRequestFor(templates.prepare(source));
             if (!eligible(snapshot)) continue;
             if (skipActiveFlights && flights.containsKey(snapshot.key())) continue;
             unique.putIfAbsent(snapshot.key(), snapshot);
         }
         return new ArrayList<>(unique.values());
+    }
+
+    /**
+     * Most colour pairs one request unit may carry. Live runs: units with 6-8 pairs failed
+     * ~8% of the time, 20+ pairs about 6 times out of 7 -- the model merges, renumbers or
+     * drops adjacent pairs, deterministically (same unit, same failure on every retry).
+     */
+    static final int MAX_CS_PAIRS_PER_REQUEST = 8;
+
+    private static int csPairCount(String key) {
+        int pairs = 0;
+        java.util.regex.Matcher matcher = CS_TOKEN.matcher(key);
+        while (matcher.find()) {
+            if (matcher.group(1).isEmpty()) pairs++;
+        }
+        return pairs;
+    }
+
+    /**
+     * What to actually ask the provider for when a CS-marked line is missing. Normally the
+     * line itself; but a fragmented line (more than {@link #MAX_CS_PAIRS_PER_REQUEST} colour
+     * pairs) -- or one whose request already failed validation once (the failure ledger is
+     * shared by the whole colour-free family) -- is requested as its COLOUR-INSENSITIVE
+     * semantic row instead. That row is validated and stored like any plain line; every
+     * lookup of the coloured line then finds it as a style-fallback hit and re-applies the
+     * line's own colours on the display side, so the sentence is translated reliably and
+     * colour only degrades to the conservative fallback, never to "stays English forever".
+     * A line that is not CS-marked, or whose plain form is untranslatable, is returned as is.
+     */
+    private TranslationTemplate.Snapshot semanticRequestFor(TranslationTemplate.Snapshot snapshot) {
+        if (snapshot == null || !hasCsMarkers(snapshot.key())) return snapshot;
+        TranslationTemplate.Snapshot plain = templates.prepare(stripStyle(snapshot.source()));
+        if (plain.key().isEmpty() || !plain.hasTranslatableContent()) return snapshot;
+        boolean heavy = csPairCount(snapshot.key()) > MAX_CS_PAIRS_PER_REQUEST
+                || contentRetryAttempts.getOrDefault(plain.key(), 0) > 0;
+        return heavy ? plain : snapshot;
     }
 
     private boolean translateBatch(List<TranslationTemplate.Snapshot> snapshots,
