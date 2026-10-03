@@ -1,6 +1,6 @@
 # NyanLex Translator
 
-讀懂 Minecraft 的世界，也讓世界聽懂你。翻譯聊天、物品與介面，用自己的語言自在回話。
+讀懂 Minecraft 的世界，也讓世界讀懂你。翻譯聊天、物品與介面，用自己的語言自在回話。
 
 ## 資料與隱私
 
@@ -34,11 +34,11 @@
 | NeoForge | 1.20.1、1.21.1、26.2、26.3 |
 | Forge | 1.12.2、1.13.2 |
 
-舊式版本（Fabric 1.14.4～1.16.5、Forge 1.12.2～1.13.2）提供精簡設定介面，沒有翻譯包及全內容預熱，快捷鍵也有差異。完整操作見 [README](https://github.com/DragonMeow1012/NyanLex/blob/main/README.zh-TW.md)。翻譯品質與速度取決於服務商，建置成功不代表每個模組介面都已實測。
+舊式版本（Fabric 1.14.4～1.16.5、Forge 1.12.2～1.13.2）提供精簡設定介面，沒有翻譯包及全內容預熱，快捷鍵也有差異。完整操作見 [README](https://github.com/DragonMeow1012/NyanLex/blob/main/README.md)。翻譯品質與速度取決於服務商，建置成功不代表每個模組介面都已實測。
 
 ## 專案資訊
 
-程式碼、譯文、文件及圖示使用了 AI 輔助；選用的 AI 翻譯功能連線到本機或線上語言模型。Codex 選項會啟動已安裝的本機 Codex 程序，不會代為安裝。
+選用的 AI 翻譯功能連線到本機或線上語言模型。Codex 選項會啟動已安裝的本機 Codex 程序，不會代為安裝。製作來源與平台正式揭露的填寫方式見[審核資料](submission-guide.zh-TW.md)。
 
 本專案為非官方作品，與 Mojang、Microsoft 或其他模組作者無隸屬或背書關係。程式碼採 MIT 授權；選用的翻譯包另有授權與來源標示，見 [翻譯倉庫](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub)。
 

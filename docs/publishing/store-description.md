@@ -1,56 +1,87 @@
 # NyanLex Translator
 
-Understand your Minecraft world. Join the conversation in your own language.
+**Understand Minecraft—and make yourself understood.**
 
-## Data and privacy
+NyanLex helps you read unfamiliar languages in Minecraft and reply in your own. Translate chat, item tooltips, quest descriptions and interface text without leaving the game. It runs on your client; the server does not need to install it.
 
-**Online translation is off on a new installation.** Enable it through Quick setup, the settings, or a translation confirmation before text is sent. Existing local translations work while it is off.
+> Online translation is **off on a new installation**. Enabling it sends the text you choose to your selected translation provider. Chat translation can include private messages. Saved translations remain available offline.
 
-When enabled, text from the surfaces you choose is sent to the translation provider you select. Chat translation can include private messages. TAB-list player names are masked locally; other text may still include personal information. Google machine translation uses an unofficial endpoint and can be rate-limited or become unavailable. AI translation connects to your configured service; optional Google fallback can also send a failed AI request's text to Google. API keys are stored in your local configuration and masked in the interface.
+## Read the game in your language
 
-Chat composer drafts are sent for translation only when you submit them in the panel. They are not stored in translation caches or exports. The translated text is only inserted into the chat bar; you decide when to send it.
+- **Follow conversations:** show incoming chat with its translation, or choose a translation-only display.
+- **Understand items and quests:** translate item names, descriptions, books and modpack quest text while keeping the original available for comparison.
+- **Read interfaces and HUD text:** translate supported menus, tooltips, scoreboards, boss bars, titles, action bars and name tags. The screen-translation shortcut captures visible text, including hovered tooltips.
+- **Keep useful translations:** reuse saved results and share them through JSON import/export. Supported modern builds also offer translation packs and batch translation before you explore.
 
-Translation packs are download-only. Pack discovery reads a public GitHub index to show available packs; the selected translation files are downloaded only after confirmation. The mod does not upload your translations or installed-mod list. Exported translations are files you choose to share yourself.
+Translation quality and speed depend on the provider. Custom mod interfaces may render text in ways NyanLex cannot capture. NyanLex does not read text baked into images, and the screen-translation shortcut captures only what is currently visible.
 
-## Features
+## Reply in your own language
 
-- Chat input translation: write in a draggable panel that remembers its position, translate into your chosen language (English by default), and fill the normal chat bar. Review the result before pressing Enter to send. Disabled by default; uses your selected chat translation service.
-- Translate chat, item names, tooltips, screen text, books and supported HUD text. Choose original text, translation or both.
-- Reuse local translations and downloaded packs instead of requesting the same text repeatedly, including after an AI provider or model change.
-- Select Google machine translation, Gemini, OpenAI, DeepSeek, an OpenAI-compatible service such as OpenRouter, Ollama or LM Studio, or ChatGPT/Codex sign-in. API services may require your own key and incur provider charges. ChatGPT sign-in requires a separately installed Codex CLI and uses your account's Codex quota.
-- On modern targets, AI translates enabled surfaces automatically. With Google, chat is automatic and other surfaces are translated on demand: `R` for the hovered item and `P` for visible screen or HUD text. Existing translations remain available in either mode.
-- Full-content warmup on modern targets: expand Categories to choose item names/descriptions and screen text, selected by default. Quest titles and descriptions are screen text. Start or continue manually; cached content is skipped. Some content loads only after entering a world.
-- Pause, continue or stop warmup. After switching an AI model, Continue checks the new model's state. Google 429 backoff remains active.
-- Export/import translation files, protect terms from translation, and adjust batching. Send interval and collection window default to 5 seconds, with Off and 1–10 second settings.
+Enable **Chat input translation** in the General settings, then open chat. Write a draft in the movable composer, select a target language and click **Translate & fill**. The result appears in the normal chat bar for you to review or edit before pressing Enter to send.
 
-## Installation and supported versions
+The composer remembers its position. Its target language is separate from the language used to read game content. It is disabled by default and never sends a chat message for you.
 
-Install on the **client only**, using the JAR matching your exact game version and loader. Fabric builds also require the matching Fabric API. A server installation is not needed.
+![Chat translation composer with an English translation filled into the chat bar for review](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-chat-composer.png)
 
-| Loader | Minecraft versions |
+## See it in game
+
+The examples below show translation into **Traditional Chinese**; you can select a different target language in settings. Screenshots were captured while playing the Better MC modpack, with the in-game translation text left unaltered.
+
+| Original item tooltip | Traditional Chinese translation |
 | --- | --- |
-| Fabric | 1.14.4, 1.15.2, 1.16.5, 1.17.1, 1.18.2, 1.19.4, 1.20.1, 1.21.1, 1.21.11, 26.1.2, 26.2, 26.3 |
-| NeoForge | 1.20.1, 1.21.1, 26.2, 26.3 |
-| Forge | 1.12.2, 1.13.2 |
+| ![Original English item name and description](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-item-original.png) | ![The same item translated into Traditional Chinese, retaining its text colours](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-item-translated.png) |
 
-Legacy targets (Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2) provide a simpler settings interface and do not include translation packs or full-content warmup. Their shortcuts differ; see the [README](https://github.com/DragonMeow1012/NyanLex#keyboard-shortcuts). Translation quality and response time depend on the selected provider; a successful build does not mean every mod screen has been tested.
+![Original chat and Traditional Chinese translations displayed together](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-bilingual-chat.png)
 
-## Screenshots
+## First-time setup
 
-Real gameplay screenshots captured in the Better MC modpack. Translation text is unchanged.
+Install the build matching your Minecraft version and loader on the **client only**. Fabric builds also require a matching **Fabric API**. Complete the in-game Quick setup to choose your language and provider; no selection is applied until you confirm it. You can leave online translation off and use existing local translations.
 
-![Chat input translation](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-chat-composer.png)
+On **Fabric 1.17.1+ and NeoForge**:
 
-![Translated item tooltip](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-item-translated.png)
+| Key | Action |
+| --- | --- |
+| `G` | Switch between original and translated display |
+| `R` | Translate or retranslate the item under the pointer |
+| `P` | Translate or retranslate visible screen, tooltip or HUD text |
 
-![Original chat and translated text](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-bilingual-chat.png)
+With Google, incoming chat translates automatically after opt-in; other content is translated on demand with `R` or `P`. With AI, enabled content translates automatically and those keys request a fresh translation. Saved results display without another request. Shortcuts do not activate while you are typing.
 
-![Translation settings](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-translation-settings.png)
+**Legacy builds** (Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2) use a simpler interface and do not include translation packs or full-content warmup. `G` opens settings and `P` retranslates the current screen; Forge also uses `H` to enable or disable translation.
 
-## Project information
+## Choose a translation service
 
-AI tools assisted with code, translations, documentation and the project icon. Optional AI functionality connects to local or online language models. The Codex option launches a locally installed Codex process; the mod does not install it for you.
+| Service | What you need |
+| --- | --- |
+| Google machine translation | No API key. Uses an unofficial web endpoint, so availability and rate limits may change. |
+| Gemini, OpenAI or DeepSeek | Your own API key; presets are available in settings. |
+| OpenRouter or another OpenAI-compatible service | Its service URL, model and any required API key. |
+| Ollama or LM Studio | Your own running OpenAI-compatible local server and model. |
+| ChatGPT / Codex | A separately installed Codex CLI and ChatGPT sign-in. Uses your account's Codex allowance. |
 
-Unofficial project; not affiliated with or endorsed by Mojang, Microsoft or other mod authors. Code is MIT-licensed. Optional translation packs have separate licenses and per-pack attribution described in the [translation hub](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub).
+AI providers may charge for usage. The optional Codex integration starts a local Codex process; NyanLex does not install the CLI for you. You can choose whether Google is used as a fallback after an AI failure. If enabled, that text may also be sent to Google.
 
-[Source and documentation](https://github.com/DragonMeow1012/NyanLex) · [Report an issue](https://github.com/DragonMeow1012/NyanLex/issues)
+## Prepare and share translations
+
+On modern builds, **full-content warmup** can translate item names/descriptions and screen text in batches; quest text belongs to the screen category. It requires AI, starts only when you choose Start or Continue, skips existing translations, and can be paused or stopped. Some content becomes available only after entering a world.
+
+**Translation packs** provide prepared translations for supported mods. Packs are detected from the last Quick setup page or the Packs settings, not automatically at game startup. The mod lists matching packs and their sizes before you confirm a download. Clearing downloaded packs keeps translations you generated yourself.
+
+**Import and export** let you share saved translations as JSON. Large exports split into numbered files; share the whole set. Importing adds missing valid entries without replacing existing translations or sending new translation requests. Modern Fabric/NeoForge builds share one format; legacy builds share another, and the two formats cannot be mixed.
+
+## Privacy and data handling
+
+- **You control online translation.** A new installation starts with it off. Quick setup, settings or an explicit translation confirmation can enable it. Upgrading preserves your existing choice.
+- **Selected text goes to your selected provider.** Depending on enabled features, this includes chat, item descriptions and other game text. Chat may include **private messages**. TAB-list player names are masked locally, but other text may still contain personal information; masking is not a guarantee of anonymity.
+- **Outgoing drafts are sent only when you request their translation.** They are not stored in the translation cache or translation exports. You still review and send the final chat message yourself.
+- **API keys are stored in your local configuration** and used for the configured service. Translation providers apply their own data-handling policies.
+- **Translation packs are download-only.** Discovery reads a public GitHub index; selected pack files are downloaded after confirmation. Your local translations and installed-mod list are not uploaded to the hub.
+- **Exports contain translation entries, not API keys or settings.** Translated text itself may contain personal information, so review exports before sharing them.
+
+## Documentation and licensing
+
+Full documentation: [English](https://github.com/DragonMeow1012/NyanLex/blob/main/README.en.md) · [日本語](https://github.com/DragonMeow1012/NyanLex/blob/main/README.ja.md) · [繁體中文](https://github.com/DragonMeow1012/NyanLex/blob/main/README.md) · [简体中文](https://github.com/DragonMeow1012/NyanLex/blob/main/README.zh-CN.md)
+
+Code is licensed under MIT. Optional translation packs have separate licensing and attribution; see the [translation hub documentation](https://github.com/DragonMeow1012/NyanLex/blob/main/translation-hub/README.md).
+
+NyanLex is an unofficial project, not affiliated with or endorsed by Mojang, Microsoft or other mod authors. Server rules vary; check the rules of the server you play on.
