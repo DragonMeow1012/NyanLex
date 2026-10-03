@@ -35,28 +35,34 @@
 
 ## In-game screenshots
 
+### Reply in your own language
+
+Write in the movable composer, choose the language, and fill the chat bar with the translation. Review it before you press Enter to send.
+
+<p align="center"><a href="docs/images/promo/better-mc-chat-composer.png"><img src="docs/images/promo/better-mc-chat-composer.png" alt="Chat translation composer in Better MC, with the English text filled into the chat bar" width="920"></a></p>
+
 ### Item tooltips, before and after
 
-Read the item description while keeping its numbers and text colors. Click either image to view it at full size.
+The same modded item keeps its colored name and description after translation. Click either image to view it at full size.
 
 <table>
   <tr><th width="50%">Original</th><th width="50%">Traditional Chinese translation</th></tr>
   <tr>
-    <td valign="top"><img src="docs/images/promo/hypixel-potion-en.png" alt="Original English item tooltip" width="380"></td>
-    <td valign="top"><img src="docs/images/promo/hypixel-potion-zh-TW.png" alt="The same item translated into Traditional Chinese" width="380"></td>
+    <td valign="top"><a href="docs/images/promo/better-mc-item-original.png"><img src="docs/images/promo/better-mc-item-original.png" alt="Original English item name and description in Better MC" width="380"></a></td>
+    <td valign="top"><a href="docs/images/promo/better-mc-item-translated.png"><img src="docs/images/promo/better-mc-item-translated.png" alt="The same item translated into Traditional Chinese" width="380"></a></td>
   </tr>
 </table>
 
 ### Original chat and translation, together
 
-<p align="center"><img src="docs/images/promo/hypixel-chat-bilingual.png" alt="Bilingual chat with player names pixelated" width="660"></p>
+<p align="center"><a href="docs/images/promo/better-mc-bilingual-chat.png"><img src="docs/images/promo/better-mc-bilingual-chat.png" alt="Original chat and Traditional Chinese translation together in Better MC" width="740"></a></p>
 
-Actual gameplay screenshots. Player names are pixelated; translation text is unchanged. Translation quality and response time depend on your provider.
+All screenshots above were captured in the Better MC modpack. The translation text is unaltered. Translation quality and response time depend on your provider.
 
 <details>
-<summary>See more: choosing your translation language</summary>
+<summary>See more: translation settings</summary>
 
-![Translation language selection](docs/images/promo/language-selector.png)
+<a href="docs/images/promo/better-mc-translation-settings.png"><img src="docs/images/promo/better-mc-translation-settings.png" alt="Translation settings in Better MC, including the chat composer switch" width="700"></a>
 
 </details>
 
@@ -252,4 +258,4 @@ See [PACKAGING.md](PACKAGING.md) for build commands and the release folder layou
 
 Code is licensed under [MIT](LICENSE). Translation data has separate source and license notices in the [translation hub](translation-hub/README.md).
 
-Unofficial project; not affiliated with, endorsed by, or sponsored by Mojang, Microsoft, Hypixel, or other mod authors. Minecraft is a trademark of Mojang AB / Microsoft.
+Unofficial project; not affiliated with, endorsed by, or sponsored by Mojang, Microsoft, or other mod authors. Minecraft is a trademark of Mojang AB / Microsoft.

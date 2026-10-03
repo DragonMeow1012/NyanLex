@@ -40,6 +40,6 @@
 
 程式碼、譯文、文件及圖示使用了 AI 輔助；選用的 AI 翻譯功能連線到本機或線上語言模型。Codex 選項會啟動已安裝的本機 Codex 程序，不會代為安裝。
 
-本專案為非官方作品，與 Mojang、Microsoft、Hypixel 或其他模組作者無隸屬或背書關係。程式碼採 MIT 授權；選用的翻譯包另有授權與來源標示，見 [翻譯倉庫](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub)。
+本專案為非官方作品，與 Mojang、Microsoft 或其他模組作者無隸屬或背書關係。程式碼採 MIT 授權；選用的翻譯包另有授權與來源標示，見 [翻譯倉庫](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub)。
 
 [原始碼](https://github.com/DragonMeow1012/NyanLex) · [問題回報](https://github.com/DragonMeow1012/NyanLex/issues)

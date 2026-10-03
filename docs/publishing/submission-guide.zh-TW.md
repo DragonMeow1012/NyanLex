@@ -27,11 +27,13 @@ CurseForge 使用同一份完整英文功能與隱私說明，保留 AI 輔助�
 
 ## 圖片
 
-- `hypixel-chat-bilingual.png`：實機聊天雙語畫面，玩家名已像素化，譯文未改動。
-- `language-selector.png`：實機語言選擇畫面。
+- `better-mc-chat-composer.png`：Better MC 中的聊天輸入翻譯浮窗，譯文填入聊天欄後由玩家確認送出。
+- `better-mc-item-original.png`、`better-mc-item-translated.png`：同一物品的翻譯前後對照。
+- `better-mc-bilingual-chat.png`：聊天原文與繁體中文譯文並列，畫面中可見玩家名稱。
+- `better-mc-translation-settings.png`：翻譯設定畫面。
 - 圖示：使用 JAR 內宣告的專案圖示，標示 AI 輔助製作。
 
-以上兩張截圖已目視檢查。不要把先前帶 debug 浮窗的任務截圖、私人桌面圖片或未確認音軌的影片混入本次資料包。
+以上截圖均由 Better MC 遊戲畫面取得。不要把帶 debug 浮窗的任務截圖、私人桌面圖片或未確認音軌的影片混入資料包。
 
 ## 給審核員的說明（英文）
 

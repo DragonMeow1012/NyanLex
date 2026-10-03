@@ -37,16 +37,20 @@ Legacy targets (Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2) provide a simp
 
 ## Screenshots
 
-Real gameplay screenshots. Player names in the chat image are pixelated for privacy; translation text is unchanged.
+Real gameplay screenshots captured in the Better MC modpack. Translation text is unchanged.
 
-![Original chat and translated text](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/hypixel-chat-bilingual.png)
+![Chat input translation](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-chat-composer.png)
 
-![Translation language selection](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/language-selector.png)
+![Translated item tooltip](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-item-translated.png)
+
+![Original chat and translated text](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-bilingual-chat.png)
+
+![Translation settings](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-translation-settings.png)
 
 ## Project information
 
 AI tools assisted with code, translations, documentation and the project icon. Optional AI functionality connects to local or online language models. The Codex option launches a locally installed Codex process; the mod does not install it for you.
 
-Unofficial project; not affiliated with or endorsed by Mojang, Microsoft, Hypixel or other mod authors. Code is MIT-licensed. Optional translation packs have separate licenses and per-pack attribution described in the [translation hub](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub).
+Unofficial project; not affiliated with or endorsed by Mojang, Microsoft or other mod authors. Code is MIT-licensed. Optional translation packs have separate licenses and per-pack attribution described in the [translation hub](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub).
 
 [Source and documentation](https://github.com/DragonMeow1012/NyanLex) · [Report an issue](https://github.com/DragonMeow1012/NyanLex/issues)

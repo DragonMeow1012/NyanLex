@@ -35,28 +35,34 @@
 
 ## 實際遊戲展示
 
+### 用自己的語言回話
+
+在可拖曳的浮窗輸入中文，選好目標語言後將譯文填入聊天欄；確認內容，再按 Enter 送出。
+
+<p align="center"><a href="docs/images/promo/better-mc-chat-composer.png"><img src="docs/images/promo/better-mc-chat-composer.png" alt="Better MC 中的聊天輸入翻譯浮窗，譯文已填入聊天欄" width="920"></a></p>
+
 ### 物品提示：翻譯前與翻譯後
 
-閱讀完整物品說明，同時保留數值與文字顏色。點圖片可看原尺寸。
+同一個模組物品，翻譯後仍保留名稱與說明的文字顏色。點圖片可看原尺寸。
 
 <table>
   <tr><th width="50%">原文</th><th width="50%">繁體中文翻譯</th></tr>
   <tr>
-    <td valign="top"><img src="docs/images/promo/hypixel-potion-en.png" alt="英文物品說明" width="380"></td>
-    <td valign="top"><img src="docs/images/promo/hypixel-potion-zh-TW.png" alt="同一物品的繁體中文譯文" width="380"></td>
+    <td valign="top"><a href="docs/images/promo/better-mc-item-original.png"><img src="docs/images/promo/better-mc-item-original.png" alt="Better MC 中的英文物品名稱與說明" width="380"></a></td>
+    <td valign="top"><a href="docs/images/promo/better-mc-item-translated.png"><img src="docs/images/promo/better-mc-item-translated.png" alt="同一物品的繁體中文名稱與說明" width="380"></a></td>
   </tr>
 </table>
 
 ### 聊天原文與譯文並列
 
-<p align="center"><img src="docs/images/promo/hypixel-chat-bilingual.png" alt="聊天雙語對照，玩家名稱已打碼" width="660"></p>
+<p align="center"><a href="docs/images/promo/better-mc-bilingual-chat.png"><img src="docs/images/promo/better-mc-bilingual-chat.png" alt="Better MC 中的聊天原文與繁體中文譯文並列" width="740"></a></p>
 
-以上為實際遊戲截圖，玩家名稱已打碼；譯文未改動。翻譯品質與速度取決於所選服務。
+以上圖片均截自 Better MC 模組包中的實際遊戲畫面；譯文未改動。翻譯品質與速度取決於所選服務。
 
 <details>
-<summary>查看更多：翻譯目標語言選擇</summary>
+<summary>查看更多：翻譯設定畫面</summary>
 
-![翻譯目標語言選擇](docs/images/promo/language-selector.png)
+<a href="docs/images/promo/better-mc-translation-settings.png"><img src="docs/images/promo/better-mc-translation-settings.png" alt="Better MC 中的翻譯設定，包含聊天輸入翻譯開關" width="700"></a>
 
 </details>
 
@@ -247,4 +253,4 @@ Fabric 1.17.1 以上與 NeoForge：
 
 程式碼採 [MIT](LICENSE) 授權；翻譯包另有來源與授權說明，見[翻譯倉庫](translation-hub/README.md)。
 
-本專案為非官方作品，與 Mojang、Microsoft、Hypixel 或其他模組作者無隸屬、贊助或背書關係。Minecraft 為 Mojang AB／Microsoft 的商標。
+本專案為非官方作品，與 Mojang、Microsoft 或其他模組作者無隸屬、贊助或背書關係。Minecraft 為 Mojang AB／Microsoft 的商標。
