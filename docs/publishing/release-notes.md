@@ -12,6 +12,7 @@ Enable **Chat input translation**, open chat, and write in the floating panel. C
 - Drafts are sent for translation only when you submit them in the panel. They are not written to translation caches or exports.
 - Editing the draft, changing the service, or closing chat discards stale results. Failed or overlong translations leave your draft available to edit and retry.
 - Updated the English and Traditional Chinese README with feature cards and clearer explanations of the benefits.
+- Long descriptions remain readable when an AI response loses only display-wrap markers. A single review can restore the layout; cached reads do not repeat the request, and numbers, protected names and colour markers must still survive validation.
 
 Also included: Google, Gemini, OpenAI, DeepSeek, OpenAI-compatible services and ChatGPT/Codex sign-in; translation import/export; and, on modern versions, downloadable translation packs and full-content warmup with selectable categories. Completed translations remain reusable after switching AI providers or models.
 
@@ -33,6 +34,7 @@ Validation covers automated tests, all-target builds, packaged classes and metad
 - 只有主動提交浮窗草稿時才會要求翻譯，草稿不寫入翻譯快取或匯出檔。
 - 修改草稿、切換服務或關閉聊天後，過時結果不會覆蓋聊天欄；翻譯失敗或超過聊天長度時會保留草稿，方便修改重試。
 - 中英文 README 加入特色卡片，以遊玩情境介紹功能與好處。
+- 長篇說明只遺失自動換行標記時，先保留可讀譯文，再校正一次；讀取快取不會反覆重送。數值、受保護名稱與顏色標記仍需通過完整檢查。
 
 同時提供 Google、Gemini、OpenAI、DeepSeek、OpenAI 相容服務與 ChatGPT／Codex 登入，以及翻譯匯入／匯出。現代版本另有翻譯包下載與可選分類的全內容預熱；切換 AI 服務或模型後，已完成的譯文仍可沿用。
 

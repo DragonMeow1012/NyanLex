@@ -533,15 +533,7 @@ class OpenAiTranslatorTest {
     }
 
     @Test
-    void droppedParagraphBreakStillFailsAtTheOrdinaryTokenMultisetCheck() throws Exception {
-        // Confirms the existing (unchanged) safety net for a token that is simply GONE,
-        // with nothing put in its place — as opposed to the reshaped-but-present case
-        // above, which needed the new check. 2026-10-02: a dropped ⟦PBn⟧ specifically is
-        // now classified "paragraph lost" (checked BEFORE the general token multiset, see
-        // OpenAiTranslator#paragraphBreakSequenceMatches) instead of the generic "format/
-        // token lost" — a real-traffic finding (scratchpad/live-ai/LIVE-RESULT.md) showed
-        // the old generic label pre-empted TranslationCache#failureReasonFor's own more
-        // precise paragraph-break diagnosis, which otherwise never even ran.
+    void droppedDisplayWrapKeepsReadableTextForTheCachesOneShotReview() throws Exception {
         HttpTransport fake = new HttpTransport() {
             @Override public String get(String url) { throw new UnsupportedOperationException(); }
             @Override public String post(String url, String body, Map<String, String> headers) {
@@ -551,8 +543,8 @@ class OpenAiTranslatorTest {
         OpenAiTranslator t = new OpenAiTranslator(fake,
                 () -> new AiSettings("https://x/v1", "m", List.of("k")));
         List<TranslationResult> r = t.translateBatch(List.of("Hello⟦PB0⟧World"), "zh-TW");
-        assertEquals("", r.get(0).translatedText());
-        assertEquals("paragraph lost", r.get(0).failureReason());
+        assertEquals("哈囉世界", r.get(0).translatedText());
+        assertNull(r.get(0).failureReason());
     }
 
     @Test

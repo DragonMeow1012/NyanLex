@@ -274,6 +274,29 @@ class TokenLostReproTest {
         assertTrue(d.translated().contains("1,000,000"));
     }
 
+    @Test
+    void colouredProseStillDisplaysAfterBothAnswersLoseADisplayWrap() {
+        RuleFollowingAiTransport transport = new RuleFollowingAiTransport(wire ->
+                perfectTranslateWire(wire).replaceFirst("\\{pb\\d+\\}", ""));
+        TranslationDebugLog log = newDebugLog();
+        TranslationService service = newService(realTranslator(transport), log);
+        String source = ParagraphModel.join(List.of("⟦CS0⟧Tiered Bonus: Feast (4/4)⟦/CS0⟧",
+                "⟦CS1⟧Farming Wild Rose gives a ⟦/CS1⟧⟦CS2⟧0.004%⟦/CS2⟧⟦CS3⟧ chance.⟦/CS3⟧",
+                "⟦CS4⟧Grants 75 Farming Fortune.⟦/CS4⟧"));
+        service.warmTooltipBatch(List.of(source));
+        pump(service);
+        TranslationDecision decision = service.translateItemLine(source);
+        assertTrue(decision.changed(), decision.translated());
+        assertFalse(decision.translated().contains("Tiered Bonus"));
+        assertTrue(decision.translated().contains("0.004%"));
+        assertTrue(decision.translated().contains("75"));
+        assertTrue(decision.translated().contains("⟦CS2⟧"));
+        assertNoFailures(log, "readable coloured prose");
+        assertEquals(2, transport.requestBodies.size());
+        pump(service);
+        assertEquals(2, transport.requestBodies.size());
+    }
+
     // =====================================================================
     // Scenario C: STATS only — "Strength: +⟦MT0⟧" style rows.
     // =====================================================================
@@ -574,16 +597,11 @@ class TokenLostReproTest {
     // a 7-display-line "Ability:" block whose English word-wrap falls mid-phrase made the
     // model reorder for natural Chinese word order and silently drop/renumber ONE ⟦PBn⟧
     // boundary (6 PB tokens in the source, only 5 came back) while every ⟦MTn⟧ value slot
-    // round-tripped perfectly. OpenAiTranslator correctly REJECTS this (never a silent
-    // corruption), but — before the 2026-10-02 fix — stamped the generic "format/token
-    // lost" reason because tokensMatch's ANY_TOKEN multiset check is what actually caught
-    // it, pre-empting TranslationCache#failureReasonFor's own more precise
-    // "paragraph lost" diagnosis (which never even ran, since that method prefers an
-    // already-set failureReason). This test replays the EXACT captured source/response
-    // pair and asserts the per-unit reason is now "paragraph lost", not the generic one.
+    // round-tripped perfectly. Preserve the readable paragraph for reflow; the cache
+    // owns its one isolated review without withholding the first translation.
     // =====================================================================
     @Test
-    void droppedParagraphBreakInAnAbilityBlockIsClassifiedAsParagraphLostNotFormatTokenLost() {
+    void droppedParagraphBreakInAnAbilityBlockKeepsTheReadableTranslation() {
         // Exact internal-format source from the live capture (6 PB tokens: pb0..pb5).
         String source = "Ability: Reaper Strike RIGHT CLICK ⟦PB0⟧ Deal a devastating blow, dealing "
                 + "⟦PB1⟧ ⟦MT0⟧ damage to all nearby ⟦PB2⟧ enemies. ⟦PB3⟧ Mark struck enemies for "
@@ -606,12 +624,9 @@ class TokenLostReproTest {
 
         assertEquals(1, results.size());
         TranslationResult result = results.get(0);
-        assertFalse(result.translatedText() != null && !result.translatedText().isEmpty()
-                && result.failureReason() == null,
-                "a dropped PB boundary must never be silently accepted");
-        assertEquals("paragraph lost", result.failureReason(),
-                "a dropped/renumbered ⟦PBn⟧ must be classified 'paragraph lost', not the "
-                        + "generic 'format/token lost' -- actual=" + result.failureReason());
+        assertTrue(result.translatedText().startsWith("技能：收割者猛擊"));
+        assertEquals(null, result.failureReason());
+        assertTrue(ParagraphModel.canReflowBreakLoss(source, result.translatedText()));
     }
 
     // =====================================================================

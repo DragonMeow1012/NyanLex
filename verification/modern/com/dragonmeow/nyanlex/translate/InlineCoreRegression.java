@@ -90,6 +90,7 @@ public final class InlineCoreRegression {
     public static void main(String[] args) throws Exception {
         Path runtime = Paths.get(args[0]);
         Files.createDirectories(runtime);
+        readableParagraphDoesNotRepeatCachedRequests();
         quantityTemplatesShareOneRequest();
         numericMarkersRejectSubstringCollisions();
         chatDeliveryModesBehaveDifferently();
@@ -112,6 +113,25 @@ public final class InlineCoreRegression {
         System.out.println("INLINE_CORE_OK hostile=24 codex=21 v107=" + RequestSwitchAndTermsSuite.CASES
                 + " coverage=recovery-assembly,result-progress,batch-budget,codex-state,"
                 + "request-switch,do-not-translate");
+    }
+
+    private static void readableParagraphDoesNotRepeatCachedRequests() {
+        ArrayDeque<Runnable> tasks = new ArrayDeque<>();
+        AtomicInteger calls = new AtomicInteger();
+        Translator backend = (text, language) -> {
+            if (calls.incrementAndGet() == 2) throw new TranslationException("review unavailable");
+            return new TranslationResult("第一行第二行", null);
+        };
+        TranslationCache cache = new TranslationCache(backend, "zh-TW", tasks::add, 100);
+        String source = "First line⟦PB0⟧Second line";
+        cache.requestAsync(source);
+        tasks.remove().run();
+        check("第一行第二行".equals(cache.getCached(source)), "readable paragraph was withheld");
+        tasks.remove().run();
+        for (int i = 0; i < 20; i++) cache.requestAsync(source);
+        check(tasks.isEmpty() && calls.get() == 2, "cached paragraph repeated its review");
+        check("第一行第二行".equals(cache.getCached(source)), "failed review lost readable text");
+        System.out.println("INLINE_PARAGRAPH_RECOVERY_OK cached_requests=0 review_attempts=1");
     }
 
     private static void quantityTemplatesShareOneRequest() {

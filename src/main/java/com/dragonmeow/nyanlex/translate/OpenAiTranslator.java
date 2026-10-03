@@ -299,19 +299,14 @@ public final class OpenAiTranslator implements Translator {
             if (restored == null) {
                 chunkResults.add(new TranslationResult("", null, false, "paragraph lost"));
             } else if (!paragraphBreakSequenceMatches(texts.get(i), restored)) {
-                // 2026-10-02 real-traffic finding (scratchpad/live-ai, gpt-5.4-mini): a
-                // multi-row Ability/PROSE block whose English line-wrap falls mid-phrase
-                // can make the model reorder for natural target-language word order and
-                // silently drop/renumber one ⟦PBn⟧ boundary while every OTHER token
-                // (⟦MTn⟧/⟦CSn⟧/names) still round-trips perfectly. tokensMatch's ANY_TOKEN
-                // multiset below would ALSO catch this (PB spans count toward it too), but
-                // only ever as the generic "format/token lost" -- checking the PB sequence
-                // FIRST and specifically classifies it as "paragraph lost", matching
-                // TranslationCache#failureReasonFor's own more precise diagnosis instead of
-                // being silently pre-empted by this method stamping the generic reason
-                // first (TranslationCache prefers an already-set failureReason over its own
-                // paragraph-break check -- see failureReasonFor).
-                chunkResults.add(new TranslationResult("", null, false, "paragraph lost"));
+                // Keep readable prose when only display wraps were lost. The cache
+                // publishes it first, then owns one isolated review; do not block this
+                // entire batch behind retryIsolatedFailures for a usable translation.
+                boolean readable = ParagraphModel.canReflowBreakLoss(texts.get(i), restored)
+                        && tokensMatch(ParagraphModel.flattenBreakTokens(texts.get(i)),
+                                ParagraphModel.flattenBreakTokens(restored));
+                chunkResults.add(readable ? new TranslationResult(restored, null)
+                        : new TranslationResult("", null, false, "paragraph lost"));
             } else if (!tokensMatch(texts.get(i), restored)) {
                 chunkResults.add(new TranslationResult("", null, false, "format/token lost"));
             } else {
@@ -459,12 +454,9 @@ public final class OpenAiTranslator implements Translator {
     private static final java.util.regex.Pattern PARAGRAPH_BREAK_TOKEN =
             java.util.regex.Pattern.compile("⟦\\s*PB\\s*(\\d+)\\s*⟧");
 
-    /** Paragraph breaks are layout AND semantic context boundaries: unlike a movable
-     *  MT/CS unit, their ORDER is fixed (a reordered PB sequence is as wrong as a missing
-     *  one), so this is a sequence comparison, not a multiset. Checked before the general
-     *  {@link #tokensMatch} so a dropped ⟦PBn⟧ is classified "paragraph lost" instead of
-     *  the generic "format/token lost" that {@code tokensMatch}'s own ANY_TOKEN multiset
-     *  check would otherwise also (correctly, but less precisely) reject it as. */
+    /** Exact layout check before general token validation. A mismatch is eligible for
+     *  readable reflow only when ParagraphModel confirms lost wraps; other paragraph
+     *  damage remains a failure. */
     static boolean paragraphBreakSequenceMatches(String source, String translated) {
         return paragraphBreakSequence(source).equals(paragraphBreakSequence(translated));
     }

@@ -200,6 +200,36 @@ public final class ParagraphModel {
         return count;
     }
 
+    /**
+     * A dropped display wrap can be shown as flowing prose. Surviving breaks must be
+     * an ordered subset of the source; fixed columns and real newlines cannot reflow.
+     * Callers must still validate every non-PB placeholder and the text itself.
+     */
+    public static boolean canReflowBreakLoss(String source, String translated) {
+        if (source == null || translated == null || translated.isBlank()
+                || source.indexOf('\n') >= 0 || source.indexOf('\r') >= 0
+                || translated.indexOf('\n') >= 0 || translated.indexOf('\r') >= 0
+                || !TranslationTemplate.layoutTokens(source).isEmpty()
+                || !TranslationTemplate.layoutTokens(translated).isEmpty()) return false;
+        List<String> expected = breakSequence(source);
+        List<String> actual = breakSequence(translated);
+        if (expected.isEmpty() || actual.size() >= expected.size()) return false;
+        int cursor = 0;
+        for (String index : actual) {
+            while (cursor < expected.size() && !expected.get(cursor).equals(index)) cursor++;
+            if (cursor == expected.size()) return false;
+            cursor++;
+        }
+        return true;
+    }
+
+    private static List<String> breakSequence(String text) {
+        List<String> indices = new ArrayList<>();
+        java.util.regex.Matcher matcher = BREAK_TOKEN_PATTERN.matcher(text);
+        while (matcher.find()) indices.add(matcher.group(1));
+        return indices;
+    }
+
     /** True when the PB indices in {@code translated} are exactly {@code 0..expectedBreaks-1}
      *  and appear in that order (an unparseable index is invalid). With
      *  {@code expectedBreaks == 0} the translated text must not contain any PB token, so an

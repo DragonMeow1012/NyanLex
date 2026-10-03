@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.cache;
 
 import com.dragonmeow.nyanlex.translate.ChurnGuard;
 import com.dragonmeow.nyanlex.translate.DebugErrorLog;
+import com.dragonmeow.nyanlex.translate.ParagraphModel;
 import com.dragonmeow.nyanlex.translate.RequestGate;
 import com.dragonmeow.nyanlex.translate.RequestPacer;
 import com.dragonmeow.nyanlex.translate.RequestsPausedException;
@@ -207,6 +208,8 @@ public final class TranslationCache {
 
     private final Set<String> provisional = ConcurrentHashMap.newKeySet();
     private final Set<String> provisionalRetrying = ConcurrentHashMap.newKeySet();
+    /** Only live, newly accepted wrap-loss results get one review, never cache hits. */
+    private final Set<String> paragraphReviews = ConcurrentHashMap.newKeySet();
     private final Map<String, Integer> provisionalRetryAttempts = new ConcurrentHashMap<>();
     /** Callbacks used by UI mutations that must not consume provisional GT results. */
     private final Map<String, java.util.concurrent.CopyOnWriteArrayList<FinalWaiter>> finalWaiters =
@@ -820,6 +823,7 @@ public final class TranslationCache {
             if (current(snapshot.key(), expectedGeneration, expectedRevision)) {
                 store(snapshot, result.translatedText(), result.fromFallback());
                 failedUntil.remove(snapshot.key());
+                reviewParagraphOnce(snapshot, result, null, expectedGeneration, expectedRevision);
             }
             debugCompleted(debugId, result.translatedText(), result.fromFallback()
                     ? TranslationDebugLog.Status.FALLBACK : TranslationDebugLog.Status.SUCCESS);
@@ -925,6 +929,7 @@ public final class TranslationCache {
                     if (usableResult && current(key, expectedGeneration, expectedRevision)) {
                         store(snapshot, result.translatedText(), result.fromFallback());
                         failedUntil.remove(key);
+                        reviewParagraphOnce(snapshot, result, null, expectedGeneration, expectedRevision);
                     }
                     debugCompleted(debugId, usableResult || kept ? result.translatedText() : null,
                             kept ? TranslationDebugLog.Status.KEEP_ORIGINAL
@@ -2216,6 +2221,13 @@ public final class TranslationCache {
                     }
                 }
                 writes.flush();
+                // Publish/persist the readable batch before scheduling any review.
+                for (int i = 0; i < todo.size(); i++) {
+                    TranslationTemplate.Snapshot snapshot = todo.get(i);
+                    reviewParagraphOnce(snapshot, results.get(i), itemContexts == null
+                                    ? surfaceContext : itemContexts.get(snapshot.key()),
+                            expectedGeneration, expectedRevisions.getOrDefault(snapshot.key(), 0L));
+                }
             }
             List<String> debugTranslations = new ArrayList<>(results.size());
             List<TranslationDebugLog.Status> debugStatuses = new ArrayList<>(results.size());
@@ -2388,7 +2400,9 @@ public final class TranslationCache {
         // its own style row, but can never rewrite an existing final semantic row. A final
         // primary answer still replaces a provisional fallback because provisional rows do
         // not satisfy hasFinalValue(); neither do session copies derived from a projection.
-        if (hasFinalValue(key, writes)) return;
+        // A complete paragraph may also upgrade readable wording whose wraps were lost.
+        if (hasFinalValue(key, writes)
+                && (isProvisional || !upgradesParagraphLayout(key, value))) return;
         synchronized (memory) {
             // A copy derived from a final AI projection ranks between a GT stand-in and a
             // genuine final row: the stand-in never replaces it, a final answer or import does.
@@ -2420,6 +2434,64 @@ public final class TranslationCache {
         if (store == null) return false;
         existing = store.get(key);
         return existing != null && usable(existing) && !store.isProvisional(key);
+    }
+
+    /** A verified review may replace only wording that still has missing wraps. */
+    private boolean upgradesParagraphLayout(String key, String value) {
+        String existing = memory.get(key);
+        if (existing == null && store != null) existing = store.get(key);
+        return ParagraphModel.canReflowBreakLoss(key, existing)
+                && matchingParagraphBreakShape(key, value)
+                && matchingParagraphSlotShape(key, value);
+    }
+
+    private void reviewParagraphOnce(TranslationTemplate.Snapshot snapshot, TranslationResult first,
+                                     List<String> surfaceContext, long expectedGeneration,
+                                     long expectedRevision) {
+        String key = snapshot.key();
+        if (first.fromFallback() || !usable(key, first.translatedText())
+                || !ParagraphModel.canReflowBreakLoss(key, first.translatedText())
+                || !current(key, expectedGeneration, expectedRevision)
+                || !paragraphReviews.add(key)) return;
+        String language = targetLang;
+        Runnable task = () -> {
+            long debugId = 0L;
+            try {
+                if (!current(key, expectedGeneration, expectedRevision) || !requestsAllowed()) return;
+                debugId = debugSubmitted(List.of(key));
+                TranslationResult reviewed;
+                BooleanSupplier previousGate = RequestGate.bind(requestGateBinding);
+                try {
+                    List<TranslationResult> results = translator.translateBatch(
+                            List.of(key), language, surfaceContext);
+                    if (results.size() != 1) {
+                        debugDiscarded(debugId);
+                        return;
+                    }
+                    reviewed = results.get(0);
+                } finally {
+                    RequestGate.restore(previousGate);
+                }
+                boolean accepted = !reviewed.fromFallback() && reviewed.failureReason() == null
+                        && usable(key, reviewed.translatedText())
+                        && matchingParagraphBreakShape(key, reviewed.translatedText())
+                        && matchingParagraphSlotShape(key, reviewed.translatedText());
+                if (accepted && current(key, expectedGeneration, expectedRevision)) {
+                    store(snapshot, reviewed.translatedText(), false);
+                }
+                if (accepted) debugCompleted(debugId, reviewed.translatedText(), TranslationDebugLog.Status.SUCCESS);
+                else debugDiscarded(debugId);
+            } catch (RequestsPausedException paused) {
+                debugDiscarded(debugId);
+            } catch (TranslationException | RuntimeException ignored) {
+                // The readable first answer is already durable. A failed review must
+                // never enter the ordinary failure ledger or schedule another request.
+                debugDiscarded(debugId);
+            } finally {
+                paragraphReviews.remove(key);
+            }
+        };
+        if (!executeLow(task)) paragraphReviews.remove(key);
     }
 
     private boolean writePlainCopy(TranslationTemplate.Snapshot original, String translated,
@@ -2633,6 +2705,7 @@ public final class TranslationCache {
                         failedUntil.remove(snapshot.key());
                         provisionalRetryAttempts.remove(semanticKey);
                         provisionalRetryAttempts.remove(snapshot.key());
+                        reviewParagraphOnce(snapshot, result, null, expectedGeneration, expectedRevision);
                     }
                 } else if (isCurrent && !kept && !identity) {
                     fail(snapshot.key());
@@ -3363,8 +3436,10 @@ public final class TranslationCache {
                 && newlineCount(source) == newlineCount(translated)
                 && matchingCsShape(source, translated)
                 && matchingMtShape(source, translated)
-                && matchingParagraphBreakShape(source, translated)
-                && matchingParagraphSlotShape(source, translated)
+                && ((matchingParagraphBreakShape(source, translated)
+                        && matchingParagraphSlotShape(source, translated))
+                    || (ParagraphModel.canReflowBreakLoss(source, translated)
+                        && matchingProtectedPlaceholderShape(source, translated)))
                 && TranslationTemplate.layoutSkeletonMatches(source, translated)
                 && TranslationTemplate.styleSlotShapeMatches(source, translated)
                 && !TextFilter.isPartialTransliteration(source, translated)
@@ -3410,6 +3485,8 @@ public final class TranslationCache {
      *  other safety net if it silently drops a masked name into a shared template. */
     public static boolean usableForBulkTransfer(String source, String translated) {
         return usable(source, translated)
+                && matchingParagraphBreakShape(source, translated)
+                && matchingParagraphSlotShape(source, translated)
                 && matchingProtectedPlaceholderShape(source, translated)
                 && TranslationTemplate.styleSlotShapeMatches(source, translated, true);
     }
