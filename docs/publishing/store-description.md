@@ -8,7 +8,7 @@ Real-time translation for chat, items, tooltips and screens, with reusable local
 
 When enabled, text from the surfaces you choose is sent to the translation provider you select. Chat translation can include private messages. TAB-list player names are masked locally; other text may still include personal information. Google machine translation uses an unofficial endpoint and can be rate-limited or become unavailable. AI translation connects to your configured service; optional Google fallback can also send a failed AI request's text to Google. API keys are stored in your local configuration and masked in the interface.
 
-Translation packs are download-only. The mod reads public GitHub files after you confirm the download and does not upload your translations or installed-mod list. Exported translations are files you choose to share yourself.
+Translation packs are download-only. Pack discovery reads a public GitHub index to show available packs; the selected translation files are downloaded only after confirmation. The mod does not upload your translations or installed-mod list. Exported translations are files you choose to share yourself.
 
 ## Features
 
