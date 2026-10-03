@@ -142,7 +142,7 @@ class SettingsPanelTest {
     @Test
     void layoutHasNoOverlapOrOverflowInEveryCategoryAndSize() {
         for (int[] size : SIZES) {
-            for (String code : new String[] {"zh_tw", "en_us", "zh_cn"})
+            for (String code : new String[] {"zh_tw", "en_us", "zh_cn", "ja_jp"})
             for (SettingsCategory cat : SettingsCategory.values()) {
                 for (String query : new String[] {"", "a", "聊天"}) {
                     FakeHost host = new FakeHost();
@@ -224,7 +224,7 @@ class SettingsPanelTest {
         int[][] counts = {{0, 0}, {12345, 6789}, {1234567, 987654}, {2147483647, 2147483647}};
         int shownEnglish = 0;
         for (int[] size : new int[][] {{320, 240}, {427, 240}, {320, 270}, {427, 270}, {480, 270}, {640, 360}}) {
-            for (String code : new String[] {"en_us", "zh_tw", "zh_cn", "zh_hk"}) {
+            for (String code : new String[] {"en_us", "zh_tw", "zh_cn", "ja_jp"}) {
                 for (int[] n : counts) {
                     FakeHost host = new FakeHost();
                     host.lang = code;
@@ -332,12 +332,18 @@ class SettingsPanelTest {
 
     @Test
     void narrowSidebarShowsShortLabelsOnly() {
-        SettingsPanel p = panel(new FakeHost(), 256, 240);
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 256, 240);
         Rec c = new Rec();
         p.render(c, -1, -1);
         List<String> shown = new ArrayList<>();
         for (Text t : c.texts) shown.add(t.s());
-        assertTrue(shown.contains("完"), "short Done label");
+        String done = host.text("nyanlex.ui.done.short");
+        assertTrue(shown.contains(done), "localized short Done label is drawn without truncation");
+        int[] doneBounds = p.doneBounds();
+        Text doneText = c.texts.stream().filter(t -> t.s().equals(done)).findFirst().orElseThrow();
+        assertTrue(doneText.x() >= doneBounds[0]
+                && doneText.x() + doneText.w() <= doneBounds[0] + doneBounds[2], "Done label fits its button");
         assertTrue(shown.contains("服務"));
         assertFalse(shown.contains("翻譯設定"), "no title in the collapsed sidebar");
         assertFalse(shown.stream().anyMatch(t -> t.startsWith("已翻譯")), "no counters in the collapsed sidebar");
@@ -369,15 +375,25 @@ class SettingsPanelTest {
 
     @Test
     void buttonCardRunsItsAction() {
-        FakeHost host = new FakeHost();
-        SettingsPanel p = panel(host, 427, 240);
-        click(p, p.controlBounds("language"));
-        assertEquals(List.of(SettingAction.OPEN_LANGUAGE), host.actions);
-        // clicking the card but not the button does nothing
-        host.actions.clear();
-        int[] card = p.cardBounds("language");
-        p.mouseClicked(card[0] + 4, card[1] + 3, 0);
-        assertTrue(host.actions.isEmpty());
+        for (String code : new String[] {"en_us", "ja_jp", "zh_tw", "zh_cn"}) {
+            FakeHost host = new FakeHost();
+            host.lang = code;
+            SettingsPanel p = panel(host, 427, 240);
+            // Localized cards above this one may wrap; navigate to reveal the real control.
+            for (int i = 0; i < 40 && !"card:language#0".equals(p.focusedKey()); i++) p.moveFocus(1);
+            assertEquals("card:language#0", p.focusedKey(), code);
+            int[] button = p.controlBounds("language");
+            int[] list = p.listRect();
+            assertTrue(button[1] >= list[1] && button[1] + button[3] <= list[1] + list[3], code);
+            click(p, button);
+            assertEquals(List.of(SettingAction.OPEN_LANGUAGE), host.actions, code);
+            // Clicking the visible card text instead of the button does nothing.
+            host.actions.clear();
+            int[] card = p.cardBounds("language");
+            assertTrue(card[1] >= list[1], code);
+            p.mouseClicked(card[0] + 4, card[1] + 3, 0);
+            assertTrue(host.actions.isEmpty(), code);
+        }
     }
 
     @Test
@@ -454,7 +470,7 @@ class SettingsPanelTest {
 
     @Test
     void onlineTranslationCardStatesTheThreeSentencesInEveryLanguage() {
-        String[][] expect = {{"zh_tw", "送什麼", "送去哪", "怎麼停", "隱私說明"}, {"zh_hk", "送什麼", "送去哪", "怎麼停", "隱私說明"},
+        String[][] expect = {{"zh_tw", "送什麼", "送去哪", "怎麼停", "隱私說明"}, {"ja_jp", "送信する内容", "送信先", "停止方法", "プライバシー"},
                 {"zh_cn", "发送什么", "发送到哪", "怎么停", "隐私说明"}, {"en_us", "What is sent", "Where it goes", "How to stop", "Privacy"}};
         for (String[] e : expect) {
             FakeHost host = new FakeHost();
@@ -500,7 +516,7 @@ class SettingsPanelTest {
 
     @Test
     void theManualCoversEveryTopicInEveryLanguage() {
-        for (String code : new String[] {"zh_tw", "zh_hk", "zh_cn", "en_us"}) {
+        for (String code : new String[] {"zh_tw", "ja_jp", "zh_cn", "en_us"}) {
             for (int i = 1; i <= SettingsModel.MANUAL_SECTIONS; i++) {
                 assertFalse(lookup(code, SettingsModel.manualTitleKey(i)).equals(SettingsModel.manualTitleKey(i)), code + " title " + i);
                 assertFalse(lookup(code, SettingsModel.manualBodyKey(i)).equals(SettingsModel.manualBodyKey(i)), code + " body " + i);
@@ -676,7 +692,7 @@ class SettingsPanelTest {
 
     @Test
     void allItemsAndSurfaceRowsShareTheSameButtonColumns() {
-        for (String code : new String[] {"zh_tw", "en_us", "zh_cn"}) {
+        for (String code : new String[] {"zh_tw", "en_us", "zh_cn", "ja_jp"}) {
             FakeHost host = new FakeHost();
             host.lang = code;
             SettingsPanel p = panel(host, 480, 270);
@@ -805,7 +821,7 @@ class SettingsPanelTest {
 
     @Test
     void noFirstUseHintIsEverShown() {
-        for (String code : new String[] {"zh_tw", "zh_cn", "zh_hk", "en_us"}) {
+        for (String code : new String[] {"zh_tw", "zh_cn", "ja_jp", "en_us"}) {
             FakeHost host = new FakeHost();
             host.lang = code;
             SettingsPanel p = panel(host, 427, 240);
@@ -880,7 +896,7 @@ class SettingsPanelTest {
         assertEquals(2, host.saves);
         click(p, p.warmButtonBounds(0));
         assertTrue(host.commands.isEmpty(), "nothing selected must never start a run");
-        for (String lang : List.of("zh_tw", "zh_hk", "zh_cn", "en_us")) {
+        for (String lang : List.of("zh_tw", "ja_jp", "zh_cn", "en_us")) {
             host.lang = lang;
             for (int width : new int[] {256, 320, 480}) {
                 p.resize(width, 400);
@@ -950,7 +966,7 @@ class SettingsPanelTest {
     void runningWarmupCardShowsTheWholeStateTextAndTheCountsBesideTheBarInEveryLanguageAndSize() {
         int shown = 0;
         for (int[] size : SIZES) {
-            for (String code : new String[] {"zh_tw", "en_us", "zh_cn"}) {
+            for (String code : new String[] {"zh_tw", "en_us", "zh_cn", "ja_jp"}) {
                 FakeHost host = new FakeHost();
                 host.lang = code;
                 host.warm = new WarmupStatus(true, ItemWarmupDriver.State.RUNNING, ItemWarmupDriver.PauseReason.NONE,

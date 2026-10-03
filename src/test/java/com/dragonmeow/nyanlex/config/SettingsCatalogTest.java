@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SettingsCatalogTest {
 
-    private static final List<String> LANGS = List.of("en_us", "zh_tw", "zh_cn", "zh_hk");
+    private static final List<String> LANGS = List.of("en_us", "zh_tw", "zh_cn", "ja_jp");
 
     private static JsonObject lang(String code) throws Exception {
         try (InputStream in = SettingsCatalogTest.class.getResourceAsStream(

@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The pre-translation confirmation card: every warning shows, long text scrolls, the buttons never move (inline fakes only). */
 class WarmupConfirmDialogTest {
 
-    private static final String[] LANGS = {"zh_tw", "zh_hk", "zh_cn", "en_us"};
+    private static final String[] LANGS = {"zh_tw", "ja_jp", "zh_cn", "en_us"};
     /** GUI-scaled sizes: 854x480 at scale 2, 640x480 at scale 2, a tiny window, and a large one. */
     private static final int[][] SIZES = {{427, 240}, {320, 240}, {256, 240}, {640, 360}, {284, 160}};
 

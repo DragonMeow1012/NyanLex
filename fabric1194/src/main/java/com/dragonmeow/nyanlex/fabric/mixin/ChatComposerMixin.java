@@ -22,6 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ChatComposerMixin extends Screen {
     @Shadow protected EditBox input;
     @Unique private EditBox nyanlex$draft;
+    @Unique private EditBox nyanlex$search;
     @Unique private boolean nyanlex$enterHeld;
     @Unique private ChatComposerPanel nyanlex$composer;
     protected ChatComposerMixin(Component title) { super(title); }
@@ -32,7 +33,7 @@ public abstract class ChatComposerMixin extends Screen {
         try {
             if (NyanLexFabric.config() == null || !NyanLexFabric.config().chatComposerEnabled
                     || input.getValue().startsWith("/")) return;
-            String draft = nyanlex$draft == null ? "" : nyanlex$draft.getValue();
+            String draft = nyanlex$draft == null ? ChatComposerPanel.savedDraft() : nyanlex$draft.getValue();
             if (nyanlex$composer != null) nyanlex$composer.close();
             final String[][] languages = nyanlex$languages();
             nyanlex$composer = new ChatComposerPanel(new ChatComposerPanel.Host() {
@@ -63,6 +64,10 @@ public abstract class ChatComposerMixin extends Screen {
             nyanlex$composer.resize(width, height);
             nyanlex$draft = new EditBox(font, nyanlex$composer.inputX(), nyanlex$composer.inputY(),
                     nyanlex$composer.inputWidth(), 20, Component.translatable("nyanlex.composer.title"));
+            nyanlex$search = new EditBox(font, nyanlex$composer.searchX(), nyanlex$composer.searchY(),
+                    nyanlex$composer.inputWidth(), 20, Component.translatable("screen.nyanlex.language.search"));
+            nyanlex$search.setMaxLength(64);
+            nyanlex$search.setResponder(text -> nyanlex$composer.search(text));
             nyanlex$draft.setMaxLength(256);
             nyanlex$draft.setValue(draft);
             nyanlex$draft.setResponder(text -> nyanlex$composer.observe());
@@ -80,8 +85,17 @@ public abstract class ChatComposerMixin extends Screen {
         }
         return rows.toArray(new String[0][]);
     }
+    @Unique private void nyanlex$focusSearch() {
+        if (nyanlex$composer.choosing()) {
+            input.setFocused(false);
+            nyanlex$draft.setFocused(false);
+            setFocused(nyanlex$search);
+            nyanlex$search.setFocused(true);
+        } else nyanlex$focusDraft();
+    }
     @Unique private void nyanlex$focusDraft() {
         if (nyanlex$composer == null) return;
+        nyanlex$search.setFocused(false);
         input.setFocused(false);
         setFocused(nyanlex$draft);
         nyanlex$draft.setFocused(true);
@@ -118,6 +132,10 @@ public abstract class ChatComposerMixin extends Screen {
             nyanlex$draft.setX(nyanlex$composer.inputX()); nyanlex$draft.setY(nyanlex$composer.inputY());
             nyanlex$draft.render(g, mx, my, delta);
             nyanlex$composer.renderChoices(canvas);
+            if (nyanlex$composer.choosing()) {
+            nyanlex$search.setX(nyanlex$composer.searchX()); nyanlex$search.setY(nyanlex$composer.searchY());
+            nyanlex$search.render(g, mx, my, delta);
+            }
         } catch (Throwable guardError) {
             HookGuard.fail("ChatComposer.renderComposer", guardError);
         }
@@ -128,13 +146,18 @@ public abstract class ChatComposerMixin extends Screen {
         try {
             if (nyanlex$composer == null) return;
             if (nyanlex$composer.choosing()) {
-                nyanlex$composer.click(mx, my, button); ci.setReturnValue(true); return;
+                if (my >= nyanlex$composer.searchY() && my < nyanlex$composer.searchY() + 20
+                        && mx >= nyanlex$composer.searchX() && mx < nyanlex$composer.searchX() + nyanlex$composer.inputWidth())
+                    nyanlex$search.mouseClicked(mx, my, button);
+                else nyanlex$composer.click(mx, my, button);
+                nyanlex$focusSearch(); ci.setReturnValue(true); return;
             }
             boolean inside = nyanlex$composer.contains(mx, my);
             if (inside) {
                 if (my >= nyanlex$composer.inputY() && my < nyanlex$composer.inputY() + 20) {
                     nyanlex$focusDraft(); nyanlex$draft.mouseClicked(mx, my, button);
                 } else nyanlex$composer.click(mx, my, button);
+                if (nyanlex$composer.choosing()) nyanlex$focusSearch();
                 ci.setReturnValue(true);
             } else { nyanlex$draft.setFocused(false); input.setFocused(true); setFocused(input); }
         } catch (Throwable guardError) {
@@ -164,6 +187,12 @@ public abstract class ChatComposerMixin extends Screen {
         try {
             int key = code;
             if (nyanlex$enterHeld && (key == 257 || key == 335)) { ci.setReturnValue(true); return; }
+            if (nyanlex$composer != null && nyanlex$composer.choosing()) {
+                if (key == 256 || key == 258) nyanlex$composer.closeChoices();
+                else if (key == 257 || key == 335) { nyanlex$enterHeld = true; nyanlex$composer.chooseFirst(); }
+                else nyanlex$search.keyPressed(code, scan, modifiers);
+                nyanlex$focusSearch(); ci.setReturnValue(true); return;
+            }
             if (nyanlex$composer == null || !nyanlex$draft.isFocused()) return;
             if (key == 256) return;
             if (key == 257 || key == 335) { nyanlex$enterHeld = true; nyanlex$composer.submit(); }

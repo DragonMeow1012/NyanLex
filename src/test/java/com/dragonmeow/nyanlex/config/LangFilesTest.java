@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The four hand-written language files stay in step, and no lang key is left without a user. */
 class LangFilesTest {
 
-    private static final List<String> HAND_WRITTEN = List.of("zh_tw", "zh_hk", "zh_cn", "en_us");
+    private static final List<String> HAND_WRITTEN = List.of("zh_tw", "ja_jp", "zh_cn", "en_us");
     private static final Path JAVA = Path.of("src/main/java");
 
     private static JsonObject lang(String code) {
@@ -59,6 +59,13 @@ class LangFilesTest {
             assertEquals(Set.of(), missing, code + " is missing keys");
             assertEquals(Set.of(), extra, code + " has keys zh_tw does not");
         }
+    }
+
+    @Test
+    void packagedUiLanguagesAreExactlyTheFourSupportedLocales() throws IOException {
+        Set<String> files = new TreeSet<>();
+        for (Path path : allLangFiles()) files.add(path.getFileName().toString());
+        assertEquals(Set.of("en_us.json", "ja_jp.json", "zh_tw.json", "zh_cn.json"), files);
     }
 
     @Test
@@ -180,7 +187,7 @@ class LangFilesTest {
         assertEquals("不翻譯", tw.get("nyanlex.settings.state.original").getAsString());
         assertEquals("雙語", tw.get("nyanlex.settings.state.both").getAsString());
         assertEquals("譯文", tw.get("nyanlex.settings.state.translation").getAsString());
-        for (String code : List.of("zh_tw", "zh_hk")) {
+        for (String code : List.of("zh_tw")) {
             JsonObject json = lang(code);
             for (String key : json.keySet()) {
                 String v = json.get(key).getAsString();
@@ -189,6 +196,14 @@ class LangFilesTest {
             // the first mention explains the short names
             String intro = json.get("nyanlex.manual.s2.body").getAsString();
             assertTrue(intro.contains("雙語（原文＋譯文）") && intro.contains("譯文（只看譯文）"), code + ": " + intro);
+        }
+        JsonObject ja = lang("ja_jp");
+        assertEquals("オフ", ja.get("nyanlex.settings.state.original").getAsString());
+        assertEquals("原文と訳文", ja.get("nyanlex.settings.state.both").getAsString());
+        assertEquals("訳文のみ", ja.get("nyanlex.settings.state.translation").getAsString());
+        String intro = ja.get("nyanlex.manual.s2.body").getAsString();
+        for (String key : List.of("original", "both", "translation")) {
+            assertTrue(intro.contains(ja.get("nyanlex.settings.state." + key).getAsString()), key);
         }
     }
 

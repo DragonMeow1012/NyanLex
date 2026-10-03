@@ -122,7 +122,7 @@ function New-FabricRow {
         HarnessKind = $HarnessKind
         MainClass = $MainClass
         SettingsClass = $SettingsClass
-        LangCount = 143
+        LangCount = 4
         LangExtension = 'json'
     }
 }
@@ -214,7 +214,7 @@ function New-Forge1122Row {
         HarnessKind = 'forgelegacy'
         MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge'
         SettingsClass = 'com.dragonmeow.nyanlex.forgelegacy.ForgeSettingsScreen'
-        LangCount = 3
+        LangCount = 4
         LangExtension = 'lang'
     }
 }
@@ -303,7 +303,7 @@ $rows = @(
         -RuntimeJdk 21 -BuildJdk 21 -HarnessKind 'modern' `
         -MainClass 'com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge' `
         -SettingsClass 'com.dragonmeow.nyanlex.neoforge.TranslationConfigScreen' `
-        -LangCount 143 -LangExtension 'json'
+        -LangCount 4 -LangExtension 'json'
     New-TomlRow -Key 'neoforge1211' -Project 'neoforge' -Loader 'neoforge' `
         -Label 'NeoForge' -Minecraft '1.21.1' `
         -MetadataEntry 'META-INF/neoforge.mods.toml' `
@@ -313,7 +313,7 @@ $rows = @(
         -RuntimeJdk 21 -BuildJdk 21 -HarnessKind 'modern' `
         -MainClass 'com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge' `
         -SettingsClass 'com.dragonmeow.nyanlex.neoforge.TranslationConfigScreen' `
-        -LangCount 143 -LangExtension 'json'
+        -LangCount 4 -LangExtension 'json'
     New-TomlRow -Key 'neoforge26' -Project 'neoforge26' -Loader 'neoforge' `
         -Label 'NeoForge' -Minecraft '26.2' `
         -MetadataEntry 'META-INF/neoforge.mods.toml' `
@@ -323,7 +323,7 @@ $rows = @(
         -RuntimeJdk 25 -BuildJdk 21 -HarnessKind 'modern' `
         -MainClass 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26' `
         -SettingsClass 'com.dragonmeow.nyanlex.neoforge26.Neo26ConfigScreen' `
-        -LangCount 143 -LangExtension 'json'
+        -LangCount 4 -LangExtension 'json'
     # No sources of its own: neoforge263/build.gradle compiles ../neoforge26 (java and
     # resources) plus ../platform263, against NeoForge 26.3.0.6-beta (ModDevGradle 2.0.147).
     New-TomlRow -Key 'neoforge263' -Project 'neoforge263' -Loader 'neoforge' `
@@ -335,7 +335,7 @@ $rows = @(
         -RuntimeJdk 25 -BuildJdk 21 -HarnessKind 'modern' `
         -MainClass 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26' `
         -SettingsClass 'com.dragonmeow.nyanlex.neoforge26.Neo26ConfigScreen' `
-        -LangCount 143 -LangExtension 'json' `
+        -LangCount 4 -LangExtension 'json' `
         -SourceProject 'neoforge26' -PlatformProject 'platform263'
 )
 
@@ -853,7 +853,7 @@ function Get-SourceReadiness {
     if ($wrongExtensions.Count -ne 0) {
         $issues += 'unexpected language extension'
     }
-    foreach ($locale in @('en_us', 'zh_tw')) {
+    foreach ($locale in @('en_us', 'ja_jp', 'zh_tw', 'zh_cn')) {
         $languagePath = Join-Path $langRoot "$locale.$($Row.LangExtension)"
         if (-not (Test-Path -LiteralPath $languagePath -PathType Leaf)) {
             $issues += "missing language $locale.$($Row.LangExtension)"
@@ -1302,7 +1302,7 @@ function Assert-JarResources {
     Assert-ExactStringSet $jarLangEntries $sourceLangEntries `
         "$($Row.Key) JAR language entry set"
 
-    foreach ($locale in @('en_us', 'zh_tw')) {
+    foreach ($locale in @('en_us', 'ja_jp', 'zh_tw', 'zh_cn')) {
         $entryName = "assets/nyanlex/lang/$locale.$($Row.LangExtension)"
         $text = Read-ZipEntryText $Archive $entryName
         Assert-DeliveryLanguageText $text $Row.LangExtension `

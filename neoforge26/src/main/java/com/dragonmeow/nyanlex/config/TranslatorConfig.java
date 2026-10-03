@@ -40,7 +40,7 @@ public final class TranslatorConfig {
     /** Explicit outgoing drafts; independent of the language used to read the game. */
     public boolean chatComposerEnabled = false;
     public String chatComposerLanguage = "en";
-    public double chatComposerX = 0.0;
+    public double chatComposerX = 1.0;
     public double chatComposerY = 1.0;
     public DisplayMode tooltipMode = DisplayMode.TRANSLATION;    // 物品名稱／說明（提示與手持共用）(3-way)
     public DisplayMode scoreboardMode = DisplayMode.TRANSLATION; // 記分板 (on/off)
