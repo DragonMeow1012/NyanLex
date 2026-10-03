@@ -43,7 +43,7 @@ public final class ItemWarmupConfirmScreen extends Screen {
 
     private static boolean eligibleEngine() {
         TranslationService s = NyanLexFabric26.service();
-        return s != null && s.isItemWarmupEngine();
+        return s != null && s.isContentWarmupEngine();
     }
 
     private boolean inWorld() {
@@ -53,7 +53,7 @@ public final class ItemWarmupConfirmScreen extends Screen {
     @Override
     protected void init() {
         if (eligibleEngine() && scanner == null) {
-            scanner = new ItemWarmupScanner(new Fabric26ItemWarmupSource(),
+            scanner = new ItemWarmupScanner(Fabric26ItemWarmupSource.contentSource(),
                     new Fabric26ItemWarmupSource.Backend(() -> false));
         }
         panel.setNarration(DialogContent.narration(LANG));

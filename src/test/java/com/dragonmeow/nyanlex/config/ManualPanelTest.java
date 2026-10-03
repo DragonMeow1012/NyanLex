@@ -262,7 +262,8 @@ class ManualPanelTest {
         for (int i = 1; i <= SettingsModel.MANUAL_SECTIONS; i++) {
             text.append(tw.get(SettingsModel.manualTitleKey(i)).getAsString()).append(tw.get(SettingsModel.manualBodyKey(i)).getAsString());
         }
-        for (String old : new String[] {"倉庫", "預熱", "快取", "引擎", "懶人包", "總開關", "首次啟動卡", "分享", "最底下"}) {
+        assertTrue(text.toString().contains("全內容預熱"));
+        for (String old : new String[] {"倉庫", "快取", "引擎", "懶人包", "總開關", "首次啟動卡", "分享", "最底下"}) {
             assertFalse(text.toString().contains(old), "the old word '" + old + "' is gone from the manual");
         }
     }

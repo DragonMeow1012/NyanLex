@@ -323,7 +323,8 @@ public final class SettingsPanel {
         int block = head + (r.desc.isEmpty() ? 0 : 2 + r.desc.size() * LINE_H) + CARD_PAD - 1;
         if (card.kind() == SettingCard.Kind.WARMUP) {
             r.statusLines = warmStatusLines(inner);
-            r.h = block - (CARD_PAD - 1) + 4 + r.statusLines * LINE_H + 3 + 6 + 5 + 14 + CARD_PAD;
+            r.h = block - (CARD_PAD - 1) + 4 + r.statusLines * LINE_H + 3 + 6 + 5 + 14 + CARD_PAD
+                    + (isExpanded("warmup.categories") ? 36 : 0);
         } else if (r.stacked && hasCtrl) {
             r.h = block - (CARD_PAD - 1) + 4 + r.ctrlH + CARD_PAD;
             if (card.kind() == SettingCard.Kind.SLIDER) r.ctrlW = inner;
@@ -788,7 +789,8 @@ public final class SettingsPanel {
             c.text(UiText.fit(r.crumb, textMaxW, host::textWidth), tx, ty, C_CRUMB);
             ty += LINE_H;
         }
-        drawTitle(c, r, tx, ty, textMaxW);
+        drawTitle(c, r, tx, ty, card.kind() == SettingCard.Kind.WARMUP
+                ? textMaxW - host.textWidth("> " + host.text("nyanlex.ui.warmup.categories")) - 22 : textMaxW);
         ty += LINE_H;
         if (!r.desc.isEmpty()) {
             ty += 2;
@@ -1025,7 +1027,8 @@ public final class SettingsPanel {
 
     /** Cannot run because the items are not on AI: the button leads to 翻譯服務 instead of being a dead end. */
     private boolean warmupNeedsAi(WarmupStatus st) {
-        return !st.active() && !st.available();
+        return !st.active() && !st.available()
+                && (host.config().warmupItems || host.config().warmupScreenText);
     }
 
     private List<WarmButton> warmButtons(WarmupStatus st) {
@@ -1044,7 +1047,16 @@ public final class SettingsPanel {
         } else {
             // A run that stopped before the end is picked up again by the player pressing Continue.
             out.add(new WarmButton(host.text(st.resumable() ? SettingsModel.KEY_WARMUP_CONTINUE
-                    : SettingsModel.KEY_WARMUP_START), WarmupCommand.START, true, false));
+                    : SettingsModel.KEY_WARMUP_START), WarmupCommand.START,
+                    host.config().warmupItems || host.config().warmupScreenText, false));
+        }
+        out.add(new WarmButton((isExpanded("warmup.categories") ? "v " : "> ")
+                + host.text("nyanlex.ui.warmup.categories"), WarmupCommand.TOGGLE_CATEGORIES, true, false));
+        if (isExpanded("warmup.categories")) {
+            out.add(new WarmButton((host.config().warmupItems ? "[x] " : "[ ] ")
+                    + host.text("nyanlex.ui.warmup.items"), WarmupCommand.TOGGLE_ITEMS, !st.active(), false));
+            out.add(new WarmButton((host.config().warmupScreenText ? "[x] " : "[ ] ")
+                    + host.text("nyanlex.ui.warmup.screen"), WarmupCommand.TOGGLE_SCREEN, !st.active(), false));
         }
         return out;
     }
@@ -1054,8 +1066,18 @@ public final class SettingsPanel {
         int x = cardX + CARD_PAD;
         int[][] rects = new int[buttons.size()][];
         for (int i = 0; i < buttons.size(); i++) {
+            WarmupCommand command = buttons.get(i).command();
             int w = Math.max(40, host.textWidth(buttons.get(i).label()) + 14);
-            rects[i] = new int[] {x, rowY, w, 14};
+            int y = rowY;
+            if (command == WarmupCommand.TOGGLE_CATEGORIES) {
+                x = cardX + cardWidth(r.indent) - CARD_PAD - w;
+                y = rowScreenY(r) + CARD_PAD - 2 + (r.crumb != null ? LINE_H : 0);
+            } else if (command == WarmupCommand.TOGGLE_ITEMS || command == WarmupCommand.TOGGLE_SCREEN) {
+                x = cardX + CARD_PAD;
+                y += command == WarmupCommand.TOGGLE_ITEMS ? 18 : 36;
+                w = Math.min(w, cardWidth(r.indent) - 2 * CARD_PAD);
+            }
+            rects[i] = new int[] {x, y, w, command == WarmupCommand.TOGGLE_CATEGORIES ? 12 : 14};
             x += w + 4;
         }
         return rects;
@@ -1063,10 +1085,13 @@ public final class SettingsPanel {
 
     /** Screen y of the warm-up card's button row. */
     private int warmButtonY(Row r) {
-        return rowScreenY(r) + r.h - CARD_PAD - 14;
+        return rowScreenY(r) + r.h - CARD_PAD - 14
+                - (isExpanded("warmup.categories") ? 36 : 0);
     }
 
     private String warmStatusText(WarmupStatus st) {
+        if (!st.active() && !host.config().warmupItems && !host.config().warmupScreenText)
+            return host.text(SettingsModel.KEY_WARMUP_IDLE);
         if (!st.available() && !st.active()) return host.text(SettingsCatalog.KEY_NEEDS_AI);
         // A run that stopped before the end says where, and the button then reads Continue.
         String base = !st.active() && st.resumable()
@@ -1165,9 +1190,22 @@ public final class SettingsPanel {
             boolean hover = b.enabled() && in(mx, my, rc[0], rc[1], rc[2], rc[3]);
             int bg = !b.enabled() ? 0xFF2C2F3A : b.danger() ? (hover ? C_DANGER_HOVER : C_DANGER)
                     : (hover ? C_BUTTON_HOVER : C_BUTTON);
+            Boolean selected = switch (b.command()) {
+                case TOGGLE_ITEMS -> host.config().warmupItems;
+                case TOGGLE_SCREEN -> host.config().warmupScreenText;
+                default -> null;
+            };
+            int textColor = b.enabled() ? C_TITLE : C_DISABLED_TEXT;
+            if (selected != null) {
+                // Keep selection visible while a running warm-up locks these controls.
+                bg = selected ? (hover ? 0xFF2C6342 : 0xFF1D4930)
+                        : (hover ? C_DANGER_HOVER : C_DANGER);
+                textColor = selected ? C_GOOD : 0xFFFF9090;
+            }
             rrect(c, rc[0], rc[1], rc[2], rc[3], bg);
-            c.text(b.label(), rc[0] + (rc[2] - host.textWidth(b.label())) / 2, rc[1] + 3,
-                    b.enabled() ? C_TITLE : C_DISABLED_TEXT);
+            String label = UiText.fit(b.label(), rc[2] - 8, host::textWidth);
+            c.text(label, rc[0] + (rc[2] - host.textWidth(label)) / 2, rc[1] + 3,
+                    textColor);
         }
     }
 
@@ -1339,7 +1377,16 @@ public final class SettingsPanel {
     }
 
     private void runWarmButton(WarmButton button) {
-        if (button.command() == WarmupCommand.OPEN_SERVICE) {
+        if (button.command() == WarmupCommand.TOGGLE_CATEGORIES) {
+            if (!state.expanded.remove("warmup.categories")) state.expanded.add("warmup.categories");
+            dirty = true;
+        } else if (button.command() == WarmupCommand.TOGGLE_ITEMS) {
+            host.config().warmupItems = !host.config().warmupItems;
+            changed();
+        } else if (button.command() == WarmupCommand.TOGGLE_SCREEN) {
+            host.config().warmupScreenText = !host.config().warmupScreenText;
+            changed();
+        } else if (button.command() == WarmupCommand.OPEN_SERVICE) {
             selectCategory(SettingsCategory.SERVICE);
         } else {
             host.warmupCommand(button.command());

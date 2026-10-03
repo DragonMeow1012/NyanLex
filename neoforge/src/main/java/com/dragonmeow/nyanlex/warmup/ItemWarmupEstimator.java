@@ -37,6 +37,7 @@ public final class ItemWarmupEstimator {
     private long missingChars;
     private int requests;
     private BatchBudget pack;
+    private WarmupCategory packCategory;
 
     public ItemWarmupEstimator(ItemWarmupBackend backend) {
         this.backend = backend;
@@ -53,8 +54,8 @@ public final class ItemWarmupEstimator {
         for (String source : target.sources()) {
             if (source == null || source.isBlank()) continue;
             anyUnit = true;
-            if (!backend.needsNoTranslation(source)) allNative = false;
-            if (backend.isReady(source)) continue;
+            if (!backend.needsNoTranslation(target.category(), source)) allNative = false;
+            if (backend.isReady(target.category(), source)) continue;
             itemMissing = true;
             String key = source.strip();
             if (!missingUnits.contains(key) && fresh.add(key)) {
@@ -70,9 +71,10 @@ public final class ItemWarmupEstimator {
         missing++;
         missingUnits.addAll(fresh);
         missingChars += chars;
-        if (pack == null || !pack.fits(cost)
+        if (pack == null || packCategory != target.category() || !pack.fits(cost)
                 || pack.count() >= ItemWarmupDriver.MAX_ITEMS_PER_BATCH) {
             pack = BatchBudget.windowed();
+            packCategory = target.category();
             requests++;
         }
         for (String key : fresh) pack.add(BatchBudget.unitChars(key));

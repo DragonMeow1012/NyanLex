@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('All', 'Source', 'Build', 'FinalJar')]
     [string]$Phase = 'All',
@@ -21,14 +21,15 @@ $expectedCoreRuns = 20
 $expectedCodexRuns = 72
 # One CodeSource proof per core harness run and per Codex run.
 $expectedCodeSourceRuns = 92
-# 1.0.7 settings anchor: the request switch toggle of the new requests/terms screen.
-$requestSwitchUiKey = 'screen.nyanlex.requests.toggle'
+# The request switch lives in SettingsCatalog (modern) or LegacyUiModel (legacy).
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
+$commonGit = (& git -C $repoRoot rev-parse --path-format=absolute --git-common-dir).Trim()
+$toolRoot = Split-Path -Parent $commonGit
 $verificationRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $gradleExecutables = @{
-    '8.10' = Join-Path $repoRoot '.gradle-local\gradle-8.10\bin\gradle.bat'
-    '8.13' = Join-Path $repoRoot '.gradle-local\gradle-8.13\bin\gradle.bat'
-    '9.5.0' = Join-Path $repoRoot '.gradle-local\gradle-9.5.0\bin\gradle.bat'
+    '8.10' = Join-Path $toolRoot '.gradle-local\gradle-8.10\bin\gradle.bat'
+    '8.13' = Join-Path $toolRoot '.gradle-local\gradle-8.13\bin\gradle.bat'
+    '9.5.0' = Join-Path $toolRoot '.gradle-local\gradle-9.5.0\bin\gradle.bat'
 }
 $initScript = Join-Path $verificationRoot 'final-jar-inline.init.gradle'
 $launcherSource = Join-Path $verificationRoot 'FinalJarHarnessLauncher.java'
@@ -37,11 +38,6 @@ $sourceLauncher = Join-Path $verificationRoot 'SourceOutputHarnessLauncher.java'
 $fakeCodex = Join-Path $verificationRoot 'fake-codex.cmd'
 $fakeCodexPython = Join-Path $verificationRoot 'fake_codex.py'
 $protocolAssertion = Join-Path $verificationRoot 'assert-inline-protocol.ps1'
-$requiredDeliveryKeys = @(
-    'config.nyanlex.chat_delivery',
-    'config.nyanlex.chat_delivery.ordered',
-    'config.nyanlex.chat_delivery.ready_first'
-)
 
 function Require {
     param(
@@ -218,7 +214,7 @@ function New-Forge1122Row {
         HarnessKind = 'forgelegacy'
         MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge'
         SettingsClass = 'com.dragonmeow.nyanlex.forgelegacy.ForgeSettingsScreen'
-        LangCount = 2
+        LangCount = 3
         LangExtension = 'lang'
     }
 }
@@ -233,7 +229,7 @@ $rows = @(
         -RuntimeJdk 8 -BuildJdk 8 -HarnessKind 'forgelegacy' `
         -MainClass 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge' `
         -SettingsClass 'com.dragonmeow.nyanlex.forgelegacy.ForgeSettingsScreen' `
-        -LangCount 2 -LangExtension 'json'
+        -LangCount 4 -LangExtension 'json'
 
     New-FabricRow -Key 'fabric1144' -Project 'fabric1144' -Minecraft '1.14.4' `
         -LoaderRange '>=0.16.0' -JavaRange '>=8' -SourceRelease 8 `
@@ -515,7 +511,7 @@ function Get-JdkCandidates {
     param([Parameter(Mandatory = $true)][int]$Major)
 
     if ($Major -eq 8) {
-        return @(Join-Path $repoRoot '.jdks\temurin8\jdk8u492-b09')
+        return @(Join-Path $toolRoot '.jdks\temurin8\jdk8u492-b09')
     }
 
     $candidates = @()
@@ -588,7 +584,7 @@ function Resolve-Jdk {
         if (Test-JdkMajor $full $Major) {
             if ($Major -eq 8) {
                 $requiredTemurin = [System.IO.Path]::GetFullPath(
-                    (Join-Path $repoRoot '.jdks\temurin8\jdk8u492-b09'))
+                    (Join-Path $toolRoot '.jdks\temurin8\jdk8u492-b09'))
                 Require (Test-SamePath $full $requiredTemurin) `
                     "Java 8 verification must use the repository Temurin 8: $full"
             }
@@ -614,55 +610,25 @@ function Get-ClassSourcePath {
     return Join-Path $Row.SourceRoot (Join-Path 'src\main\java' $relative)
 }
 
-function Get-RequestSwitchUiReferences {
-    param([Parameter(Mandatory = $true)]$Row)
-
-    # UI/glue sources only: the five mirrored core packages never reference UI keys. The
-    # new requests/terms screen may live in any glue package, so search them all. Block
-    # comments and whole-line // comments are ignored: only code may satisfy the anchor.
-    # Known limit: the comment stripping is not string-aware, so a string literal holding
-    # "/*" or "*/" can hide real code. That only fails closed (reported as missing).
-    $javaRoot = Join-Path $Row.SourceRoot 'src\main\java'
-    if (-not (Test-Path -LiteralPath $javaRoot -PathType Container)) { return @() }
-    $corePackages = @('cache', 'config', 'service', 'style', 'translate')
-    $literal = '"' + $requestSwitchUiKey + '"'
-    return @(Get-ChildItem -LiteralPath $javaRoot -Recurse -File -Filter '*.java' -Force |
-        Where-Object {
-            $relative = $_.FullName.Substring($javaRoot.Length).TrimStart('\', '/')
-            $segments = $relative -split '[\\/]'
-            -not ($segments.Count -gt 4 -and $segments[0] -ceq 'com' -and
-                $segments[1] -ceq 'dragonmeow' -and $segments[2] -ceq 'nyanlex' -and
-                $corePackages -contains $segments[3])
-        } | Where-Object {
-            $code = [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8)
-            $code = [regex]::Replace($code, '(?s)/\*.*?\*/', '')
-            $code = [regex]::Replace($code, '(?m)^[ \t]*//.*$', '')
-            $code.Contains($literal)
-        } | ForEach-Object { $_.Name })
+function Get-SettingsModelPath {
+    param($Row)
+    $name = switch ($Row.HarnessKind) {
+        'modern' { 'com.dragonmeow.nyanlex.config.SettingsCatalog' }
+        'legacy' { 'com.dragonmeow.nyanlex.legacy.LegacyUiModel' }
+        'forgelegacy' { 'com.dragonmeow.nyanlex.forgelegacy.LegacyUiModel' }
+    }
+    return Get-ClassSourcePath $Row $name
 }
 
 foreach ($row in $rows) {
-    $settingsSource = Get-ClassSourcePath $row $row.SettingsClass
-    $deliveryKeys = @($requiredDeliveryKeys)
-    $uiDeliveryKeys = @()
-    if (Test-Path -LiteralPath $settingsSource -PathType Leaf) {
-        $settingsText = [System.IO.File]::ReadAllText(
-            $settingsSource, [System.Text.Encoding]::UTF8)
-        $keyMatches = [regex]::Matches(
-            $settingsText,
-            '"(?<key>config\.nyanlex\.chat_delivery(?:\.[a-z_]+)?)"')
-        $uiDeliveryKeys = @($keyMatches | ForEach-Object {
-            $_.Groups['key'].Value
-        } | Select-Object -Unique)
-        $deliveryKeys += $uiDeliveryKeys
+    $keys = if ($row.HarnessKind -ceq 'modern') {
+        @('nyanlex.settings.chat_delivery', 'nyanlex.settings.state.ordered',
+          'nyanlex.settings.state.ready_first', 'nyanlex.settings.master', 'nyanlex.settings.master.tip')
+    } else {
+        @('config.nyanlex.chat_delivery.short', 'config.nyanlex.chat_delivery.ordered',
+          'config.nyanlex.chat_delivery.ready_first', 'config.nyanlex.online', 'config.nyanlex.online.desc')
     }
-    if ($row.HarnessKind -ceq 'legacy') {
-        $deliveryKeys += 'config.nyanlex.chat_delivery.short'
-    }
-    $row | Add-Member -NotePropertyName UiDeliveryKeys `
-        -NotePropertyValue $uiDeliveryKeys
-    $row | Add-Member -NotePropertyName DeliveryKeys `
-        -NotePropertyValue @($deliveryKeys | Select-Object -Unique)
+    $row | Add-Member -NotePropertyName DeliveryKeys -NotePropertyValue $keys
 }
 
 function Get-LanguageValues {
@@ -850,24 +816,25 @@ function Get-SourceReadiness {
             }
         }
     }
-    $requiredUiKeys = @(
-        'config.nyanlex.chat_delivery.ordered',
-        'config.nyanlex.chat_delivery.ready_first',
-        $(if ($Row.HarnessKind -ceq 'legacy') {
-            'config.nyanlex.chat_delivery.short'
-        } else {
-            'config.nyanlex.chat_delivery'
-        })
-    )
-    foreach ($key in $requiredUiKeys) {
-        if (@($Row.UiDeliveryKeys | Where-Object { $_ -ceq $key }).Count -ne 1) {
-            $issues += "settings UI does not reference $key"
+    $settingsModel = Get-SettingsModelPath $Row
+    if (-not (Test-Path -LiteralPath $settingsModel)) {
+        $issues += "missing settings model $settingsModel"
+    } else {
+        $modelCode = [System.IO.File]::ReadAllText($settingsModel)
+        $modelCode = [regex]::Replace($modelCode, '(?s)/\*.*?\*/', '')
+        $modelCode = [regex]::Replace($modelCode, '(?m)^[ \t]*//.*$', '')
+        foreach ($anchor in @('translationRequestsEnabled', 'deliverChatTranslationsInOrder')) {
+            if (-not $modelCode.Contains($anchor)) { $issues += "settings model does not wire $anchor" }
         }
-    }
-    # 1.0.7: the requests/terms settings screen must expose the request switch.
-    $requestUiFiles = @(Get-RequestSwitchUiReferences $Row)
-    if ($requestUiFiles.Count -eq 0) {
-        $issues += "settings UI does not reference $requestSwitchUiKey"
+        $uiAnchors = if ($Row.HarnessKind -ceq 'modern') {
+            @('"master"', '"chat_delivery"', 'STATE_ORDERED', 'STATE_READY_FIRST')
+        } else {
+            @('"config.nyanlex.online"', '"config.nyanlex.chat_delivery.short"',
+              '"config.nyanlex.chat_delivery.ordered"', '"config.nyanlex.chat_delivery.ready_first"')
+        }
+        foreach ($anchor in $uiAnchors) {
+            if (-not $modelCode.Contains($anchor)) { $issues += "settings model does not reference $anchor" }
+        }
     }
 
     $resourceRoot = Join-Path $Row.SourceRoot 'src\main\resources'
@@ -906,7 +873,7 @@ function Get-SourceReadiness {
         Issues = $issues
         VersionIssues = $versionIssues
         LangCount = $langFiles.Count
-        RequestUiFiles = $requestUiFiles.Count
+        RequestUiFiles = [int](Test-Path -LiteralPath $settingsModel)
     }
 }
 

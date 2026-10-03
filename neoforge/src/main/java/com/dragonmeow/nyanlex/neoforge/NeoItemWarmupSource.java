@@ -1,5 +1,7 @@
 package com.dragonmeow.nyanlex.neoforge;
 
+import com.dragonmeow.nyanlex.warmup.WarmupCategory;
+
 import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.warmup.ItemWarmupBackend;
 import com.dragonmeow.nyanlex.warmup.ItemWarmupSource;
@@ -20,6 +22,16 @@ import java.util.function.BooleanSupplier;
  * same paragraph plan the hover path uses. Everything here runs on the client thread.
  */
 final class NeoItemWarmupSource implements ItemWarmupSource {
+    static ItemWarmupSource contentSource() {
+        return new com.dragonmeow.nyanlex.warmup.ContentWarmupSource(new NeoItemWarmupSource(),
+                new com.dragonmeow.nyanlex.warmup.QuestWarmupSource(
+                        () -> net.minecraft.client.Minecraft.getInstance().level == null ? null
+                                : com.dragonmeow.nyanlex.warmup.QuestWarmupSource.loadedClientFile(),
+                        value -> value instanceof net.minecraft.network.chat.Component text
+                                ? NeoTextStyle.requestLines(NeoTextStyle.resolveLegacyCodes(text)) : List.of()),
+                NyanLexNeoForge::config);
+    }
+
     private List<Item> items;
     private int cursor;
 
@@ -80,7 +92,7 @@ final class NeoItemWarmupSource implements ItemWarmupSource {
         @Override
         public boolean isAiEngine() {
             TranslationService s = NyanLexNeoForge.service();
-            return s != null && s.isItemWarmupEngine();
+            return s != null && s.isContentWarmupEngine();
         }
 
         @Override
@@ -95,15 +107,15 @@ final class NeoItemWarmupSource implements ItemWarmupSource {
         }
 
         @Override
-        public boolean isReady(String source) {
+        public boolean isReady(WarmupCategory category, String source) {
             TranslationService s = NyanLexNeoForge.service();
-            return s == null || s.isTooltipTranslationReady(source);
+            return s == null || s.isWarmupTranslationReady(category, source);
         }
 
         @Override
-        public boolean isPending(String source) {
+        public boolean isPending(WarmupCategory category, String source) {
             TranslationService s = NyanLexNeoForge.service();
-            return s != null && s.isTooltipTranslationPending(source);
+            return s != null && s.isWarmupTranslationPending(category, source);
         }
 
         @Override
@@ -119,15 +131,15 @@ final class NeoItemWarmupSource implements ItemWarmupSource {
         }
 
         @Override
-        public boolean needsNoTranslation(String source) {
+        public boolean needsNoTranslation(WarmupCategory category, String source) {
             TranslationService s = NyanLexNeoForge.service();
-            return s != null && s.isItemTextNativeOrUntranslatable(source);
+            return s != null && s.isWarmupTextNativeOrUntranslatable(category, source);
         }
 
         @Override
-        public void warm(List<String> sources) {
+        public void warm(WarmupCategory category, List<String> sources) {
             TranslationService s = NyanLexNeoForge.service();
-            if (s != null) s.warmTooltipBatchBackground(sources);
+            if (s != null) s.warmContentBatchBackground(category, sources);
         }
     }
 }

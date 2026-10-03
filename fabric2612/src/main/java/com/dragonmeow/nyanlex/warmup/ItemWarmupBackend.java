@@ -14,13 +14,13 @@ public interface ItemWarmupBackend {
     boolean isRateLimited();
 
     /** The unit already reached a terminal cache state (translated or kept original). */
-    boolean isReady(String source);
+    boolean isReady(WarmupCategory category, String source);
 
     /** The unit currently has a request queued or in flight. */
-    boolean isPending(String source);
+    boolean isPending(WarmupCategory category, String source);
 
     /** Submit the units at background (lowest) priority; never blocks. */
-    void warm(List<String> sources);
+    void warm(WarmupCategory category, List<String> sources);
 
     /**
      * Chat, tooltip or key-triggered translation is queued or in flight: the warm-up holds
@@ -39,7 +39,7 @@ public interface ItemWarmupBackend {
      * The unit needs no translation at all (already in the target language, a number, a
      * machine code): the core's own verdict, never sent.
      */
-    default boolean needsNoTranslation(String source) {
+    default boolean needsNoTranslation(WarmupCategory category, String source) {
         return false;
     }
 }

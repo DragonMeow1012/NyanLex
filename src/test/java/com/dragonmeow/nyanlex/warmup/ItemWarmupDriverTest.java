@@ -62,6 +62,7 @@ class ItemWarmupDriverTest {
         final Set<String> pending = new HashSet<>();
         final Set<String> nativeUnits = new HashSet<>();
         final List<List<String>> warmed = new ArrayList<>();
+        final List<WarmupCategory> categories = new ArrayList<>();
         /** true: the request is answered at once; false: it stays pending until {@link #answer}. */
         boolean readyAfterWarm = true;
         int maxPendingBatches;
@@ -69,12 +70,13 @@ class ItemWarmupDriverTest {
         public boolean isAiEngine() { return ai; }
         public boolean requestsEnabled() { return requests; }
         public boolean isRateLimited() { return limited; }
-        public boolean isReady(String s) { return ready.contains(s) || nativeUnits.contains(s); }
-        public boolean isPending(String s) { return pending.contains(s); }
+        public boolean isReady(com.dragonmeow.nyanlex.warmup.WarmupCategory category, String s) { return ready.contains(s) || nativeUnits.contains(s); }
+        public boolean isPending(com.dragonmeow.nyanlex.warmup.WarmupCategory category, String s) { return pending.contains(s); }
         public boolean interactiveBusy() { return interactive; }
         public boolean usesCodex() { return codex; }
-        public boolean needsNoTranslation(String s) { return nativeUnits.contains(s); }
-        public void warm(List<String> sources) {
+        public boolean needsNoTranslation(com.dragonmeow.nyanlex.warmup.WarmupCategory category, String s) { return nativeUnits.contains(s); }
+        public void warm(com.dragonmeow.nyanlex.warmup.WarmupCategory category, List<String> sources) {
+            categories.add(category);
             warmed.add(new ArrayList<>(sources));
             if (readyAfterWarm) ready.addAll(sources);
             else pending.addAll(sources);
@@ -104,6 +106,46 @@ class ItemWarmupDriverTest {
         units.add("Body of " + i);
         units.addAll(List.of(extra));
         return new ItemWarmupTarget("mod:item" + i, "mod", units);
+    }
+
+    @Test
+    void manualContinueRechecksTheCurrentGateWithoutBypassingAnActiveLimit() {
+        FakeSource source = new FakeSource(items(2));
+        FakeBackend backend = new FakeBackend();
+        AtomicLong clock = new AtomicLong();
+        ItemWarmupDriver d = driver(source, backend, cfg(), clock);
+        d.start();
+        backend.limited = true;
+        d.tick();
+        d.resume();
+        assertEquals(ItemWarmupDriver.State.PAUSED, d.state());
+        assertEquals(ItemWarmupDriver.PauseReason.RATE_LIMITED, d.progress().pauseReason());
+        assertTrue(backend.warmed.isEmpty());
+        backend.limited = false; // the selected model has no active rate limit
+        d.resume();
+        assertEquals(ItemWarmupDriver.State.RUNNING, d.state());
+        d.tick();
+        assertEquals(1, backend.warmed.size());
+        assertEquals(2, d.progress().scanned());
+    }
+
+    @Test
+    void eachCategoryUsesItsOwnRequestPlannerAndCompletionChecks() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        AtomicLong clock = new AtomicLong();
+        FakeBackend backend = new FakeBackend();
+        FakeSource source = new FakeSource(List.of(item(1),
+                new ItemWarmupTarget("quest:1", "screen", List.of("Quest title", "Quest description"),
+                        false, WarmupCategory.SCREEN)));
+        ItemWarmupDriver driver = new ItemWarmupDriver(source, backend, () -> cfg, clock::get);
+        assertTrue(driver.start());
+        for (int i = 0; i < 8; i++) {
+            driver.tick();
+            clock.addAndGet(5_000);
+        }
+        assertEquals(List.of(WarmupCategory.ITEMS, WarmupCategory.SCREEN), backend.categories);
+        assertEquals(ItemWarmupDriver.State.DONE, driver.state());
+        assertEquals(2, driver.progress().translatedItems());
     }
 
     private static List<ItemWarmupTarget> items(int n) {

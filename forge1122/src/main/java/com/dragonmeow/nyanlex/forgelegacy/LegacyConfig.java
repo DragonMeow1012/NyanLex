@@ -36,7 +36,7 @@ final class LegacyConfig {
     java.util.Map<String, String> aiKeysByEndpoint = new java.util.LinkedHashMap<String, String>();
     /** One-time migration marker for the safer Gemini 3.1 Flash-Lite pacing default. */
     int pacingDefaultsVersion = 0;
-    int requestCooldownMs = 10000;
+    int requestCooldownMs = 5000;
     /** Ordinary misses collect for this long; zero flushes on the next client tick. */
     int batchWindowMs = 5000;
     int failureBackoffMs = 10000;
@@ -133,10 +133,10 @@ final class LegacyConfig {
         }
         loaded.machineTranslationProvider = normalizeMachineProvider(loaded.machineTranslationProvider);
         if (loaded.pacingDefaultsVersion < 1) {
-            if (loaded.requestCooldownMs == 6000) loaded.requestCooldownMs = 10000;
+            if (loaded.requestCooldownMs == 6000) loaded.requestCooldownMs = 5000;
             loaded.pacingDefaultsVersion = 1;
         }
-        if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 10000;
+        if (loaded.requestCooldownMs < 0) loaded.requestCooldownMs = 5000;
         if (loaded.batchWindowMs < 0) loaded.batchWindowMs = 5000;
         if (loaded.failureBackoffMs < 0) loaded.failureBackoffMs = 10000;
         return loaded;

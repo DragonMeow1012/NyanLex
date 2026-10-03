@@ -1,5 +1,7 @@
 package com.dragonmeow.nyanlex.service;
 
+import com.dragonmeow.nyanlex.warmup.WarmupCategory;
+
 import com.dragonmeow.nyanlex.cache.TranslationCache;
 import com.dragonmeow.nyanlex.config.DisplayMode;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
@@ -7,6 +9,7 @@ import com.dragonmeow.nyanlex.translate.ChurnGuard;
 import com.dragonmeow.nyanlex.translate.DoNotTranslateMatcher;
 import com.dragonmeow.nyanlex.translate.EnchantListComposer;
 import com.dragonmeow.nyanlex.translate.ItemEntityRegistry;
+import com.dragonmeow.nyanlex.translate.KnownNameLabels;
 import com.dragonmeow.nyanlex.translate.LayoutPreserver;
 import com.dragonmeow.nyanlex.translate.LocalTokenRenumberer;
 import com.dragonmeow.nyanlex.translate.NameMasker;
@@ -84,6 +87,7 @@ public final class TranslationService {
     private volatile Supplier<? extends Collection<String>> protectedNames = List::of;
     /** Compiled form of {@code config.doNotTranslateTerms}, rebuilt when the list changes. */
     private volatile DoNotTranslateMatcher doNotTranslate = DoNotTranslateMatcher.EMPTY;
+    private volatile KnownNameLabels knownNameLabels = new KnownNameLabels(List.of());
     private volatile Supplier<String> itemSourceLanguage = () -> null;
     /** Repository ("GitHub AI translation hub") read-through, consulted on a cache miss of
      *  either engine (see {@link #lookup}); {@code null} = no hub wired in (default,
@@ -179,6 +183,15 @@ public final class TranslationService {
 
     public void setProtectedNames(Supplier<? extends Collection<String>> supplier) {
         if (supplier != null) protectedNames = supplier;
+    }
+
+    /** Loader metadata is stable for this session; compile once, outside render callbacks. */
+    public void setKnownNames(Collection<String> names) {
+        knownNameLabels = new KnownNameLabels(names);
+    }
+
+    private boolean keepsKnownName(String key) {
+        return !forceFreshKeys.contains(key) && knownNameLabels.keepsOriginal(key, activeTargetLang);
     }
 
     /**
@@ -332,14 +345,30 @@ public final class TranslationService {
         return ai.peekFinal(key, exactStyle);
     }
 
-    /** Cached wording of {@code key} for a surface whose engine is {@code useAi}: for a
-     *  machine-translation surface the AI cache's final wording first. No repository. */
+    /** Same cache precedence for item composition, readiness and blocking warmups as
+     *  the render path: AI -> repository, or AI -> repository -> machine cache. */
     private String cachedValue(boolean useAi, String key) {
         if (!useAi) {
             String aiHit = aiFinalOf(key);
             if (aiHit != null) return aiHit;
+            String hubHit = hubValue(key);
+            if (hubHit != null) return hubHit;
+            String own = google.getCached(key);
+            return own != null ? own : keepsKnownName(key) ? key : null;
         }
-        return cache(useAi).getCached(key);
+        String own = ai.getCached(key);
+        if (own != null) {
+            forceFreshKeys.remove(key);
+            // A learned identity echo must not hide an existing translated product name.
+            if (!own.equals(key) || !keepsKnownName(key)) return own;
+        }
+        String hubHit = hubValue(key);
+        if (hubHit != null) return hubHit;
+        if (keepsKnownName(key)) {
+            String machineHit = google.getCached(key);
+            return machineHit != null ? machineHit : key;
+        }
+        return own;
     }
 
     /** Repository read-through that an explicit R/P retranslate of {@code key} switched off. */
@@ -347,22 +376,20 @@ public final class TranslationService {
         return forceFreshKeys.contains(key) ? null : hubCachedValue(key);
     }
 
-    /** Whether a machine-translation request for {@code key} would be redundant because the
-     *  AI cache, or the repository, already answers it (see the order above). Always
-     *  {@code false} for an AI-engine key, whose behaviour is unchanged. */
-    private boolean answeredBeforeMachine(boolean useAi, String key) {
-        if (useAi) return false;
-        return aiFinalOf(key) != null || hubValue(key) != null;
+    /** Shared request admission for cache tiers outside the selected engine. The engine
+     *  deduplicates its own rows; both engines must also respect repository hits. */
+    private boolean answeredBeforeRequest(boolean useAi, String key) {
+        return (!useAi && aiFinalOf(key) != null) || hubValue(key) != null || keepsKnownName(key);
     }
 
     /** Drops from {@code keys} (masked cache keys about to be sent) the ones that
-     *  {@link #answeredBeforeMachine} already covers. */
-    private List<String> dropAnsweredBeforeMachine(boolean useAi, List<String> keys) {
-        if (useAi || keys == null || keys.isEmpty()) return keys;
+     *  {@link #answeredBeforeRequest} already covers. */
+    private List<String> dropAnsweredBeforeRequest(boolean useAi, List<String> keys) {
+        if (keys == null || keys.isEmpty()) return keys;
         List<String> kept = null;
         for (int i = 0; i < keys.size(); i++) {
             String key = keys.get(i);
-            if (answeredBeforeMachine(false, key)) {
+            if (answeredBeforeRequest(useAi, key)) {
                 if (kept == null) kept = new ArrayList<>(keys.subList(0, i));
             } else if (kept != null) {
                 kept.add(key);
@@ -399,6 +426,16 @@ public final class TranslationService {
     private void requestByEngineDetailed(boolean useAi, String source, boolean exactStyle,
                                          EngineResultConsumer callback, boolean always,
                                          boolean followAiRecovery) {
+        if (keepsKnownName(source)) {
+            callback.accept(cachedValue(useAi, source), true);
+            return;
+        }
+        String hubHit = hubValue(source);
+        if (hubHit != null && aiFinalOf(source) == null
+                && (!useAi || ai.getCached(source) == null)) {
+            callback.accept(hubHit, true);
+            return;
+        }
         if (!useAi) {
             // AI cache first (see the lookup order above): an AI answer is final, sends no
             // Google request and writes nothing into the machine cache. A chat line whose
@@ -919,7 +956,7 @@ public final class TranslationService {
         if (!translatableMasked(masked, true)) return unit;
         TranslationCache selected = cache(useAi);
         String aiHit = useAi ? null : aiFinalOf(masked.text());
-        String cached = aiHit != null ? aiHit : selected.getCached(masked.text());
+        String cached = aiHit != null ? aiHit : cachedValue(useAi, masked.text());
         if (cached == null) return null;
         String semantic = TextFilter.stripStyleFallback(cached);
         if (semantic.strip().equals(masked.text().strip())) return unit; // kept original
@@ -943,7 +980,7 @@ public final class TranslationService {
     private void requestItemNameUnit(ItemEntityRegistry.Entry entry, List<String> context,
                                      boolean highPriority) {
         String key = itemUnitKey(entry);
-        if (key == null || answeredBeforeMachine(itemEngine(), key)) return;
+        if (key == null || answeredBeforeRequest(itemEngine(), key)) return;
         TranslationCache selected = cache(itemEngine());
         if (highPriority) selected.warmBatchAsyncHigh(List.of(key), context);
         else selected.warmBatchAsync(List.of(key), context);
@@ -967,7 +1004,7 @@ public final class TranslationService {
         if (!translatableMasked(plain, itemText)) return TranslationDecision.unchanged(original);
         TranslationCache selected = cache(useAi);
         String aiHit = useAi ? null : aiFinalOf(plain.text());
-        String cached = aiHit != null ? aiHit : selected.getCached(plain.text());
+        String cached = aiHit != null ? aiHit : cachedValue(useAi, plain.text());
         return cached == null ? TranslationDecision.unchanged(original)
                 : decide(original, plain, cached, mode, aiHit != null ? ai : selected, allowRequest);
     }
@@ -1056,7 +1093,7 @@ public final class TranslationService {
         if (!translatableMasked(masked, true)) return null;
         TranslationCache selected = cache(useAi);
         String aiHit = useAi ? null : aiFinalOf(masked.text());
-        String cached = aiHit != null ? aiHit : selected.getCached(masked.text());
+        String cached = aiHit != null ? aiHit : cachedValue(useAi, masked.text());
         if (cached == null) return null;
         TranslationDecision decision =
                 decide(upperCaseWord, masked, cached, DisplayMode.TRANSLATION,
@@ -1069,7 +1106,7 @@ public final class TranslationService {
      *  (the cache's own {@code requestBatchedPassive} dedups both). */
     private void requestLearnedTerm(String upperCaseWord, boolean useAi) {
         NameMasker.Masked masked = maskPlain(upperCaseWord);
-        if (!translatableMasked(masked, true) || answeredBeforeMachine(useAi, masked.text())) return;
+        if (!translatableMasked(masked, true) || answeredBeforeRequest(useAi, masked.text())) return;
         cache(useAi).requestBatchedPassive(masked.text());
     }
 
@@ -1240,32 +1277,9 @@ public final class TranslationService {
         if (!translatableMasked(masked, true)) return name;
         TranslationCache selected = cache(useAi);
         String key = masked.text();
-        String cached = useAi ? selected.getCached(key) : null;
-        if (!useAi) {
-            // Machine service: AI cache -> repository -> machine cache (see the order above).
-            // The flag of an explicit retranslate stays set here: it keeps the repository from
-            // shadowing the machine wording the retranslate has just bought.
-            cached = aiFinalOf(key);
-            if (cached != null) {
-                selected = ai;
-            } else {
-                cached = hubValue(key);
-                if (cached == null) cached = selected.getCached(key);
-            }
-        } else if (cached != null) {
-            forceFreshKeys.remove(key);
-        } else {
-            // Repository read-through (any engine), same as the generic lookup() path: a hub hit
-            // resolves this independent unit (an enchant name, a scroll/ability name, a
-            // trade field or a stat row) immediately, 0 requests, BEFORE the caller ever
-            // considers queuing it — segment-level cache keys hit the hub exactly like any
-            // other translation unit (design-segment-cache.md §4/§6 "倉庫查詢在段級也要能命中").
-            // Skipped while an explicit R/P retranslate just invalidated THIS key (see
-            // forceFreshKeys): otherwise the hub immediately re-covers the row retranslate
-            // just cleared, with the very wording retranslate was supposed to replace,
-            // before the fresh request below ever gets a chance to land.
-            cached = forceFreshKeys.contains(key) ? null : hubCachedValue(key);
-        }
+        String cached = cachedValue(useAi, key);
+        if (!useAi && aiFinalOf(key) != null) selected = ai;
+        if (key.equals(cached) && keepsKnownName(key)) return name;
         if (cached == null) return null;
         TranslationDecision decision = decide(localName, masked, cached, DisplayMode.TRANSLATION, selected);
         if (!decision.changed()) return null;
@@ -1317,7 +1331,7 @@ public final class TranslationService {
                                     boolean highPriority) {
         String localName = LocalTokenRenumberer.localize(name).text();
         NameMasker.Masked masked = maskPlain(localName);
-        if (!translatableMasked(masked, true) || answeredBeforeMachine(useAi, masked.text())) return;
+        if (!translatableMasked(masked, true) || answeredBeforeRequest(useAi, masked.text())) return;
         TranslationCache selected = cache(useAi);
         if (highPriority) selected.warmBatchAsyncHigh(List.of(masked.text()), context);
         else selected.warmBatchAsync(List.of(masked.text()), context);
@@ -2500,29 +2514,9 @@ public final class TranslationService {
 
         TranslationCache selected = cache(useAi);
         String key = masked.text();
-        String translated = useAi ? selected.getCached(key) : null;
-        if (!useAi) {
-            // Machine service: AI cache -> repository -> machine cache (see the order above).
-            // The repository is still skipped while an explicit R/P retranslate of this key
-            // is outstanding, and the flag then stays set so the repository can never cover
-            // the machine wording that retranslate bought.
-            translated = aiFinalOf(key);
-            if (translated != null) {
-                selected = ai;
-            } else {
-                translated = hubValue(key);
-                if (translated == null) translated = selected.getCached(key);
-            }
-        } else if (translated != null) {
-            forceFreshKeys.remove(key);
-        } else {
-            // Repository read-through (any engine, requests on or off): checked BEFORE the "send a request" decision below,
-            // so a hub hit displays immediately even when allowRequest is false (manual
-            // item/screen mode) — exactly like an ordinary cache hit, 0 requests either way.
-            // Skipped while an explicit R/P retranslate just invalidated THIS key — see
-            // forceFreshKeys/resolveEnchantName.
-            translated = forceFreshKeys.contains(key) ? null : hubCachedValue(key);
-        }
+        String translated = cachedValue(useAi, key);
+        if (!useAi && aiFinalOf(key) != null) selected = ai;
+        if (key.equals(translated) && keepsKnownName(key)) return TranslationDecision.unchanged(original);
         if (translated == null) {
             if (allowRequest) {
                 if (itemText) selected.requestBatchedPassive(masked.text());
@@ -2595,6 +2589,69 @@ public final class TranslationService {
     /** Whether the item warm-up can run at all: the AI engine owns item text. */
     public boolean isItemWarmupEngine() {
         return config.aiTooltip && config.tooltipMode != DisplayMode.ORIGINAL_ONLY;
+    }
+
+    /** Only selected surfaces participate; warm-up never silently switches their engine. */
+    public boolean isContentWarmupEngine() {
+        return (config.warmupItems || config.warmupScreenText)
+                && (!config.warmupItems || isItemWarmupEngine())
+                && (!config.warmupScreenText || config.aiScreenText
+                    && config.screenTextMode != DisplayMode.ORIGINAL_ONLY);
+    }
+
+    public boolean isWarmupTextNativeOrUntranslatable(
+            WarmupCategory category, String source) {
+        return category == WarmupCategory.ITEMS
+                ? isItemTextNativeOrUntranslatable(source)
+                : source == null || !TextFilter.shouldTranslate(source, activeTargetLang);
+    }
+
+    public void warmContentBatchBackground(WarmupCategory category,
+                                           List<String> sources) {
+        if (category == WarmupCategory.ITEMS) {
+            warmTooltipBatchBackground(sources);
+        } else if (config.aiScreenText) {
+            TranslationCache.collectWarmLane(() -> warmMasked(sources, true,
+                    config.screenTextMode, config.aiScreenText, false, false, true));
+        }
+    }
+
+    public boolean isWarmupTranslationReady(WarmupCategory category,
+                                             String source) {
+        if (category == WarmupCategory.ITEMS) {
+            return isTooltipTranslationReady(source);
+        }
+        if (!wantsScreenTextTranslation(source)) return true;
+        EnchantListComposer.Match enchant = EnchantListComposer.match(source);
+        if (enchant != null) return enchantListReady(enchant, config.aiScreenText);
+        NameMasker.Masked masked = mask(source);
+        if (!translatableMasked(masked, false)) {
+            return !masked.hasEntities() || restore(masked, source, false).complete
+                    || cachedValue(config.aiScreenText, maskPlain(source).text()) != null;
+        }
+        return cachedValue(config.aiScreenText, masked.text()) != null;
+    }
+
+    public boolean isWarmupTranslationPending(WarmupCategory category,
+                                               String source) {
+        if (category == WarmupCategory.ITEMS) {
+            return isTooltipTranslationPending(source);
+        }
+        if (!wantsScreenTextTranslation(source)) return false;
+        EnchantListComposer.Match enchant = EnchantListComposer.match(source);
+        if (enchant != null) {
+            for (String name : enchant.names()) {
+                if (cache(config.aiScreenText).isPending(maskPlain(name).text())) return true;
+            }
+        }
+        NameMasker.Masked masked = mask(source);
+        if (cache(config.aiScreenText).isPending(masked.text())) return true;
+        for (int index : masked.entitySlots()) {
+            ItemEntityRegistry.Entry entry = itemEntities.forCore(masked.names().get(index));
+            String key = entry == null ? null : itemUnitKey(entry);
+            if (key != null && cache(itemEngine()).isPending(key)) return true;
+        }
+        return false;
     }
 
     /**
@@ -3057,9 +3114,9 @@ public final class TranslationService {
         // makes the two lists compare equal again whenever their DISTINCT content already
         // matched.
         List<String> dedupedContext = dedupePreservingOrder(context);
-        // A machine-translation engine buys only what neither the AI cache nor the repository
-        // already answers (see the lookup order above): such a text is shown from there.
-        todo = dropAnsweredBeforeMachine(useAi, todo);
+        // The warm path must consult the same external cache tiers as the render path
+        // before the selected engine collects its misses.
+        todo = dropAnsweredBeforeRequest(useAi, todo);
         if (!todo.isEmpty()) {
             TranslationCache selected = cache(useAi);
             if (highPriority) selected.warmBatchAsyncHigh(todo, dedupedContext);
@@ -3067,7 +3124,7 @@ public final class TranslationService {
         }
         if (itemUnits != null) {
             TranslationCache units = cache(itemEngine());
-            List<String> unitList = dropAnsweredBeforeMachine(itemEngine(), new ArrayList<>(itemUnits));
+            List<String> unitList = dropAnsweredBeforeRequest(itemEngine(), new ArrayList<>(itemUnits));
             if (unitList.isEmpty()) return;
             if (highPriority) units.warmBatchAsyncHigh(unitList, dedupedContext);
             else units.warmBatchAsync(unitList, dedupedContext);

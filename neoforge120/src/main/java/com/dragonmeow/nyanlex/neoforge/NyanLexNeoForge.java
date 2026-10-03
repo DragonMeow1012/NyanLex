@@ -479,7 +479,7 @@ public final class NyanLexNeoForge {
     public static synchronized com.dragonmeow.nyanlex.warmup.ItemWarmupDriver itemWarmupDriver() {
         if (itemWarmupDriver == null) {
             itemWarmupDriver = new com.dragonmeow.nyanlex.warmup.ItemWarmupDriver(
-                    new NeoItemWarmupSource(),
+                    NeoItemWarmupSource.contentSource(),
                     new NeoItemWarmupSource.Backend(() -> aiRateLimitedProbe.getAsBoolean()),
                     NyanLexNeoForge::config, System::currentTimeMillis);
             itemWarmupDriver.setProgressSaver(NyanLexNeoForge::saveConfig);
@@ -593,6 +593,15 @@ public final class NyanLexNeoForge {
         Thread thread = new Thread(task, MOD_ID + "-hub");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private static List<String> loadedModNames() {
+        List<String> names = new ArrayList<>();
+        for (net.minecraftforge.forgespi.language.IModInfo info : net.minecraftforge.fml.ModList.get().getMods()) {
+            names.add(info.getDisplayName());
+            names.add(info.getModId());
+        }
+        return names;
     }
 
     private static List<String> loadedModIds() {
@@ -1286,6 +1295,7 @@ public final class NyanLexNeoForge {
             return mc == null || mc.options == null ? null : mc.options.languageCode;
         });
         service.setProtectedNames(() -> onlineNames);
+        service.setKnownNames(loadedModNames());
 
         Path hubDir = FMLPaths.CONFIGDIR.get();
         hubLocalCache = new HubLocalCache(hubDir, config.targetLang);

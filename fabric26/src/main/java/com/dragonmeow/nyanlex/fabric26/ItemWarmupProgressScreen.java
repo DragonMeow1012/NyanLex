@@ -42,7 +42,7 @@ public final class ItemWarmupProgressScreen extends Screen {
     private void togglePause() {
         ItemWarmupDriver d = NyanLexFabric26.itemWarmupDriver();
         ItemWarmupDriver.Progress p = d.progress();
-        if (p.state() == ItemWarmupDriver.State.PAUSED && p.pauseReason() != ItemWarmupDriver.PauseReason.RATE_LIMITED) {
+        if (p.state() == ItemWarmupDriver.State.PAUSED) {
             d.resume();
         } else if (p.state() == ItemWarmupDriver.State.RUNNING) {
             d.pause();
@@ -57,11 +57,11 @@ public final class ItemWarmupProgressScreen extends Screen {
         int centerY = this.height / 2;
         g.centeredText(this.font, this.title, centerX, 12, 0xFFFFFFFF);
 
-        boolean userPaused = p.state() == ItemWarmupDriver.State.PAUSED
-                && p.pauseReason() != ItemWarmupDriver.PauseReason.RATE_LIMITED;
+        boolean paused = p.state() == ItemWarmupDriver.State.PAUSED
+               ;
         pauseButton.setMessage(Component.translatable(
-                userPaused ? "screen.nyanlex.warmup.resume" : "screen.nyanlex.warmup.pause"));
-        pauseButton.active = p.state() == ItemWarmupDriver.State.RUNNING || userPaused;
+                paused ? "screen.nyanlex.warmup.resume" : "screen.nyanlex.warmup.pause"));
+        pauseButton.active = p.state() == ItemWarmupDriver.State.RUNNING || paused;
         stopButton.active = p.state() == ItemWarmupDriver.State.RUNNING
                 || p.state() == ItemWarmupDriver.State.PAUSED;
 

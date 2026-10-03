@@ -97,11 +97,13 @@ public final class ItemWarmupDriver {
 
     /** One request in flight. */
     private static final class Batch {
+        final WarmupCategory category;
         final List<String> units;
         final List<List<String>> itemUnits;
         final long sentAt;
 
-        Batch(List<String> units, List<List<String>> itemUnits, long sentAt) {
+        Batch(WarmupCategory category, List<String> units, List<List<String>> itemUnits, long sentAt) {
+            this.category = category;
             this.units = units;
             this.itemUnits = itemUnits;
             this.sentAt = sentAt;
@@ -143,6 +145,7 @@ public final class ItemWarmupDriver {
     private final List<List<String>> stagedItemUnits = new ArrayList<>();
     private BatchBudget budget = BatchBudget.windowed();
     private boolean batchFull;
+    private WarmupCategory stagedCategory;
 
     // Throughput window: (finish time, items) of recent requests.
     private final ArrayDeque<long[]> finished = new ArrayDeque<>();
@@ -226,6 +229,12 @@ public final class ItemWarmupDriver {
 
     public synchronized void resume() {
         if (state != State.PAUSED) return;
+        PauseReason blocked = blocker();
+        if (blocked != PauseReason.NONE) {
+            pauseReason = blocked;
+            notifyChanged();
+            return;
+        }
         state = State.RUNNING;
         pauseReason = PauseReason.NONE;
         restartRateWindow();
@@ -363,7 +372,7 @@ public final class ItemWarmupDriver {
             Batch batch = it.next();
             boolean pending = false;
             for (String unit : batch.units) {
-                if (backend.isPending(unit)) {
+                if (backend.isPending(batch.category, unit)) {
                     pending = true;
                     break;
                 }
@@ -373,7 +382,7 @@ public final class ItemWarmupDriver {
             changed = true;
             int ok = 0;
             for (List<String> unitsOfItem : batch.itemUnits) {
-                if (itemStored(unitsOfItem)) ok++;
+                if (itemStored(batch.category, unitsOfItem)) ok++;
             }
             translated += ok;
             failedItems += batch.itemUnits.size() - ok;
@@ -391,9 +400,9 @@ public final class ItemWarmupDriver {
         if (changed) notifyChanged();
     }
 
-    private boolean itemStored(List<String> units) {
+    private boolean itemStored(WarmupCategory category, List<String> units) {
         for (String unit : units) {
-            if (!backend.isReady(unit)) return false;
+            if (!backend.isReady(category, unit)) return false;
         }
         return true;
     }
@@ -426,8 +435,8 @@ public final class ItemWarmupDriver {
         if (!stagedItemUnits.isEmpty() && (batchFull || ending)) {
             List<String> sources = new ArrayList<>(staged);
             List<List<String>> items = new ArrayList<>(stagedItemUnits);
-            backend.warm(sources);
-            inflight.add(new Batch(sources, items, now));
+            backend.warm(stagedCategory, sources);
+            inflight.add(new Batch(stagedCategory, sources, items, now));
             nextDispatchAt = now + Math.max(0, cfg.itemWarmupChunkDelayMs);
             submitted += items.size();
             submittedThisSession += items.size();
@@ -451,6 +460,11 @@ public final class ItemWarmupDriver {
      *         be offered again after that batch left
      */
     private boolean considerItem(ItemWarmupTarget target) {
+        if (!stagedItemUnits.isEmpty() && stagedCategory != target.category()) {
+            batchFull = true;
+            return false;
+        }
+        stagedCategory = target.category();
         if (target.failed()) {
             scanned++;
             skippedFailed++;
@@ -462,8 +476,8 @@ public final class ItemWarmupDriver {
         for (String unit : target.sources()) {
             if (unit == null || unit.isBlank()) continue;
             anyUnit = true;
-            if (!backend.needsNoTranslation(unit)) allNative = false;
-            if (!backend.isReady(unit)) needed.add(unit);
+            if (!backend.needsNoTranslation(target.category(), unit)) allNative = false;
+            if (!backend.isReady(target.category(), unit)) needed.add(unit);
         }
         if (needed.isEmpty()) {
             scanned++;

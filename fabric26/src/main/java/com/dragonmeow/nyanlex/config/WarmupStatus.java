@@ -50,11 +50,11 @@ public record WarmupStatus(boolean available, ItemWarmupDriver.State state,
     }
 
     /**
-     * Paused and waiting for the player: every pause but a 429 (which lifts by itself when the
-     * gate reopens) is resumed only by pressing Continue.
+     * Every pause offers Continue. The driver rechecks the current engine and rate-limit
+     * gate before sending; this button never bypasses a still-active limit.
      */
     public boolean canResume() {
-        return state == ItemWarmupDriver.State.PAUSED && reason != ItemWarmupDriver.PauseReason.RATE_LIMITED;
+        return state == ItemWarmupDriver.State.PAUSED;
     }
 
     /** Scan fraction 0..1 (1 when finished without hitting the per-launch limit). */

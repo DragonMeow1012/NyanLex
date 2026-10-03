@@ -189,6 +189,8 @@ public final class TranslatorConfig {
     public boolean itemWarmupWarningAcknowledged = false;
 
     /** Show the small warm-up progress readout in the HUD corner while a run is active. */
+    public boolean warmupItems = true;
+    public boolean warmupScreenText = true;
     public boolean itemWarmupHud = true;
 
     /** Minimum pause between two warm-up requests, in milliseconds (independent of the interactive cooldown). */
@@ -208,7 +210,7 @@ public final class TranslatorConfig {
      * requests of the SAME engine (Google and AI each pace independently). Proactive
      * spacing so the free endpoints don't see request bursts; 0 disables pacing.
      */
-    public int requestCooldownMs = 10000;
+    public int requestCooldownMs = 5000;
 
     /** Persisted migration marker for pacing defaults. */
     public int pacingDefaultsVersion = PACING_DEFAULTS_VERSION;
@@ -358,10 +360,10 @@ public final class TranslatorConfig {
         if (itemWarmupLastTotal < 0) itemWarmupLastTotal = 0;
         if (itemWarmupLastSkipped < 0) itemWarmupLastSkipped = 0;
         if (pacingDefaultsVersion < PACING_DEFAULTS_VERSION) {
-            if (requestCooldownMs == LEGACY_REQUEST_COOLDOWN_MS) requestCooldownMs = 10000;
+            if (requestCooldownMs == LEGACY_REQUEST_COOLDOWN_MS) requestCooldownMs = 5000;
             pacingDefaultsVersion = PACING_DEFAULTS_VERSION;
         }
-        if (requestCooldownMs < 0) requestCooldownMs = 10000; // 0 is valid: pacing off
+        if (requestCooldownMs < 0) requestCooldownMs = 5000; // 0 is valid: pacing off
         if (batchWindowMs < 0) batchWindowMs = 5000; // 0 is valid: batching off
         if (batchWindowMs > 60_000) batchWindowMs = 60_000;
         if (failureBackoffMs < 0) failureBackoffMs = 10000;

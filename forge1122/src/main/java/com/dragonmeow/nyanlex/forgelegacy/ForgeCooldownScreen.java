@@ -28,10 +28,10 @@ final class ForgeCooldownScreen extends GuiScreen{
             return;
         }
         if(b.id==1)c.requestCooldownMs=ForgeSettingsScreen.next(c.requestCooldownMs,new int[]{
-            0,1000,2000,4000,6000,8000,10000
+            0,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000
         });
         if(b.id==2)c.batchWindowMs=ForgeSettingsScreen.next(c.batchWindowMs,new int[]{
-            0,1000,2000,3000,5000,8000,10000
+            0,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000
         });
         buttonList.clear();
         initGui();

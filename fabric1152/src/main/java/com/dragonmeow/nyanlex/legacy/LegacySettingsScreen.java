@@ -77,13 +77,13 @@ final class LegacySettingsScreen extends LegacyFormScreen {
     }
 
     static int nextCooldown(int current) {
-        int[] values = {0, 1000, 2000, 4000, 6000, 8000, 10000};
+        int[] values = {0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
         for (int value : values) if (value > current) return value;
         return 0;
     }
 
     static int nextBatchWindow(int current) {
-        int[] values = {0, 1000, 2000, 3000, 5000, 8000, 10000};
+        int[] values = {0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
         for (int value : values) if (value > current) return value;
         return 0;
     }

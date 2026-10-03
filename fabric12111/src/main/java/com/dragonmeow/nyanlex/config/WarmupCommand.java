@@ -10,5 +10,8 @@ public enum WarmupCommand {
     /** Open the full progress screen. */
     OPEN_PROGRESS,
     /** The items are not on AI: take the player to 翻譯服務 (handled by the panel itself). */
+    TOGGLE_CATEGORIES,
+    TOGGLE_ITEMS,
+    TOGGLE_SCREEN,
     OPEN_SERVICE
 }

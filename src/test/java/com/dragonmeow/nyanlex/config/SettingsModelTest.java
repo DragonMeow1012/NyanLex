@@ -128,7 +128,7 @@ class SettingsModelTest {
     void titlesDropTheStatePartAndEllipsis() throws Exception {
         Function<String, String> lang = zhTw();
         assertEquals("線上翻譯", SettingsModel.title(SettingsModel.byId("master"), lang));
-        assertEquals("預先翻譯全部物品", SettingsModel.title(SettingsModel.byId("warmup"), lang));
+        assertEquals("全內容預熱", SettingsModel.title(SettingsModel.byId("warmup"), lang));
         assertEquals("清除已存的翻譯", SettingsModel.title(SettingsModel.byId("clear_cache"), lang));
         assertEquals("快速設定", SettingsModel.title(SettingsModel.byId("quick"), lang));
         assertEquals("聊天", SettingsModel.title(SettingsModel.byId("chat"), lang));
@@ -200,8 +200,8 @@ class SettingsModelTest {
         assertEquals(0, s.min());
         assertEquals(10000, s.max());
         assertEquals(0, s.indexOf(-5));
-        assertEquals(3, s.indexOf(3900));
-        assertEquals(6, s.indexOf(99999));
+        assertEquals(4, s.indexOf(3900));
+        assertEquals(10, s.indexOf(99999));
         TranslatorConfig cfg = new TranslatorConfig();
         s.set().accept(cfg, 6000);
         assertEquals(6000, cfg.requestCooldownMs);

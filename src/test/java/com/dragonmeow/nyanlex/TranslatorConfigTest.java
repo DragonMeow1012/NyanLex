@@ -38,16 +38,16 @@ class TranslatorConfigTest {
         assertEquals(60, cfg.churnWindowSeconds);
         assertEquals(300, cfg.churnCooldownSeconds);
         assertEquals(5000, cfg.batchWindowMs);
-        assertEquals(10000, cfg.requestCooldownMs, "事前冷卻安全預設 10000ms");
+        assertEquals(5000, cfg.requestCooldownMs, "送出間隔預設 5 秒");
         assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, cfg.pacingDefaultsVersion);
     }
 
     @Test
     void requestCooldownNormalizesNegativeButKeepsZero() {
-        // Negative is invalid → back to the 10000ms safe default; 0 is a VALID value (pacing off).
+        // Negative is invalid → back to the 5000ms default; 0 is a VALID value (pacing off).
         TranslatorConfig negative = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": -1 }"));
-        assertEquals(10000, negative.requestCooldownMs);
+        assertEquals(5000, negative.requestCooldownMs);
 
         TranslatorConfig off = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": 0 }"));
@@ -58,7 +58,7 @@ class TranslatorConfigTest {
     void oldUntouchedPacingDefaultMigratesExactlyOnce() {
         TranslatorConfig migrated = TranslatorConfig.fromReader(
                 new StringReader("{ \"requestCooldownMs\": 6000 }"));
-        assertEquals(10000, migrated.requestCooldownMs);
+        assertEquals(5000, migrated.requestCooldownMs);
         assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, migrated.pacingDefaultsVersion);
 
         TranslatorConfig userSelectedSixSeconds = TranslatorConfig.fromReader(new StringReader(
@@ -75,10 +75,10 @@ class TranslatorConfigTest {
         Files.writeString(path, "{ \"requestCooldownMs\": 6000 }", StandardCharsets.UTF_8);
 
         TranslatorConfig migrated = TranslatorConfig.load(path);
-        assertEquals(10000, migrated.requestCooldownMs);
+        assertEquals(5000, migrated.requestCooldownMs);
         assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, migrated.pacingDefaultsVersion);
         String migratedJson = Files.readString(path, StandardCharsets.UTF_8);
-        assertTrue(migratedJson.contains("\"requestCooldownMs\": 10000"));
+        assertTrue(migratedJson.contains("\"requestCooldownMs\": 5000"));
         assertTrue(migratedJson.contains("\"pacingDefaultsVersion\": 1"),
                 "the one-time marker must be durable before load returns");
 

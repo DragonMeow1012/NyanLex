@@ -5,10 +5,12 @@ import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.service.TranslationDecision;
 import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.translate.TranslationResult;
+import com.dragonmeow.nyanlex.translate.TranslationDebugLog;
 import com.dragonmeow.nyanlex.translate.Translator;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -29,6 +31,61 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HubCacheLookupTest {
 
     private static final Executor DIRECT = Runnable::run;
+
+    @Test
+    void repeatedInventoryWarmupsUseHubWithoutBuyingOrPersistingTranslations() {
+        Map<String, String> hub = Map.of(
+                "Birch Flower Box", "樺木花箱", "Spruce Flower Box", "杉木花箱",
+                "Oak Flower Box", "橡木花箱", "Warped Shutter", "扭曲木百葉窗",
+                "Bamboo Shutter", "竹百葉窗", "Acacia Shutter", "相思木百葉窗");
+        for (boolean registered : new boolean[] {false, true}) {
+            AtomicInteger calls = new AtomicInteger();
+            TranslatorConfig cfg = TestConfigs.translating();
+            cfg.aiTooltip = true;
+            TranslationCache gt = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
+            TranslationCache ai = new TranslationCache(counting(calls), cfg.targetLang, DIRECT, 1000);
+            TranslationDebugLog debug = new TranslationDebugLog(() -> true);
+            ai.setDebugLog("AI", debug);
+            TranslationService service = new TranslationService(cfg, gt, ai);
+            service.setHubLookup(hub::get);
+            List<String> names = List.copyOf(hub.keySet());
+            if (registered) names.forEach(name -> service.registerItemEntity(name, null, null));
+
+            for (int scan = 0; scan < 4; scan++) {
+                service.warmTooltipBatchBackground(names);
+                service.warmNamesBatch(names);
+                service.warmTooltipBatch(names);
+                service.flushBatches();
+                service.flushBatches();
+                for (String name : names) {
+                    assertEquals(hub.get(name), service.translateItemLine(name).translated());
+                    assertTrue(service.isTooltipTranslationReady(name));
+                }
+                assertEquals(0, service.pendingCount());
+            }
+            assertEquals(0, calls.get(), "hub hits must cover background and hover warmups");
+            assertTrue(debug.snapshot(100).isEmpty(), "cache hits must not create debug requests");
+            assertTrue(ai.exportTranslations().isEmpty(), "hub wording must stay in its own cache");
+            assertTrue(gt.exportTranslations().isEmpty());
+        }
+    }
+
+    @Test
+    void mixedWarmupRequestsOnlyMissingNamesAndExplicitRetranslateStillBypassesHub() {
+        AtomicInteger calls = new AtomicInteger();
+        TranslatorConfig cfg = TestConfigs.translating();
+        cfg.aiTooltip = true;
+        TranslationService service = service(cfg, calls, Map.of("Birch Flower Box", "樺木花箱"));
+        service.warmNamesBatch(List.of("Birch Flower Box", "Leafcutter Ant"));
+        service.flushBatches();
+        service.flushBatches();
+        assertEquals(1, calls.get(), "only the hub miss needs a request");
+
+        service.retranslate(List.of("Birch Flower Box"));
+        service.flushBatches();
+        service.flushBatches();
+        assertEquals(2, calls.get(), "an explicit retranslate must bypass the hub");
+    }
 
     private static Translator counting(AtomicInteger calls) {
         return (text, target) -> {

@@ -48,19 +48,19 @@ class WarmupSpeedTextTest {
 
     @Test
     void englishUsesTheSingularOnlyForExactlyOne() {
-        assertEquals("About 42 items per minute, about 3 minutes left",
+        assertEquals("About 42 entries per minute, about 3 minutes left",
                 render("en_us", WarmupSpeedText.progressKey(42, 3), 42, 3));
-        assertEquals("About 42 items per minute, about 1 minute left",
+        assertEquals("About 42 entries per minute, about 1 minute left",
                 render("en_us", WarmupSpeedText.progressKey(42, 1), 42, 1));
-        assertEquals("About 1 item per minute, about 3 minutes left",
+        assertEquals("About 1 entry per minute, about 3 minutes left",
                 render("en_us", WarmupSpeedText.progressKey(1, 3), 1, 3));
-        assertEquals("About 1 item per minute, about 1 minute left",
+        assertEquals("About 1 entry per minute, about 1 minute left",
                 render("en_us", WarmupSpeedText.progressKey(1, 1), 1, 1));
-        assertEquals("Running, about 42 items per minute, about 1 minute left",
+        assertEquals("Running, about 42 entries per minute, about 1 minute left",
                 render("en_us", WarmupSpeedText.stateKey(42, 1), 42, 1));
-        assertEquals("Running, about 1 item per minute, about 1 minute left",
+        assertEquals("Running, about 1 entry per minute, about 1 minute left",
                 render("en_us", WarmupSpeedText.stateKey(1, 1), 1, 1));
-        assertEquals("Running, about 1 item per minute, about 12 minutes left",
+        assertEquals("Running, about 1 entry per minute, about 12 minutes left",
                 render("en_us", WarmupSpeedText.stateKey(1, 12), 1, 12));
     }
 
@@ -74,7 +74,7 @@ class WarmupSpeedTextTest {
                     for (String text : new String[] {progress, state}) {
                         assertFalse(text.contains(" 1 items"), code + ": " + text);
                         assertFalse(text.contains(" 1 minutes"), code + ": " + text);
-                        assertFalse(text.matches(".* (about )?1 item per minute.*") && rate != 1, code + ": " + text);
+                        assertFalse(text.matches(".* (about )?1 entry per minute.*") && rate != 1, code + ": " + text);
                     }
                 }
             }

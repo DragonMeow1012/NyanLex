@@ -165,14 +165,14 @@ class SettingsCatalogTest {
         TranslatorConfig cfg = new TranslatorConfig();
         SettingEntry cooldown = SettingsCatalog.byId("cooldown");
         cfg.requestCooldownMs = 0;
-        for (int i = 1; i < SettingsCatalog.COOLDOWN_STEPS.length; i++) {
+        for (int i = 1; i < SettingsCatalog.TIMING_STEPS.length; i++) {
             cooldown.press(cfg);
-            assertEquals(SettingsCatalog.COOLDOWN_STEPS[i], cfg.requestCooldownMs);
+            assertEquals(SettingsCatalog.TIMING_STEPS[i], cfg.requestCooldownMs);
         }
         cooldown.press(cfg);
         assertEquals(0, cfg.requestCooldownMs);
 
-        cfg.requestCooldownMs = 3000; // off-list value snaps up
+        cfg.requestCooldownMs = 3500; // off-list value snaps up
         cooldown.press(cfg);
         assertEquals(4000, cfg.requestCooldownMs);
 

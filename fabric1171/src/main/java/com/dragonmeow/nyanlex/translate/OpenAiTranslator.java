@@ -40,17 +40,25 @@ public final class OpenAiTranslator implements Translator {
 
     private final HttpTransport transport;
     private final Supplier<AiSettings> settings;
-    private final AtomicInteger keyCursor = new AtomicInteger();
     private final LongSupplier clock;
     private final RequestPacer pacer;
     private volatile SessionTokenUsage tokenUsage;
 
-    // Per-key health is kept separately from the all-keys gate. A dead/limited key
-    // must not be retried on every other round-robin request while another key is
-    // healthy. Changing endpoint/model/key list invalidates all old health state.
-    private final Object keyStateLock = new Object();
-    private final Map<String, KeyState> keyStates = new HashMap<>();
-    private String settingsSignature;
+    // Each request retains its settings' health state. An older in-flight response
+    // cannot change the active model's key health or rate-limit gate after a switch.
+    private SettingsState settingsState;
+
+    private static final class SettingsState {
+        final String signature;
+        final AtomicInteger keyCursor = new AtomicInteger();
+        final Map<String, KeyState> keyStates = new HashMap<>();
+        volatile long rateLimitedUntil;
+        long penaltyMs; // guarded by this state
+
+        SettingsState(String signature) {
+            this.signature = signature;
+        }
+    }
 
     private static final long KEY_RATE_LIMIT_COOLDOWN_MS = 60_000L;
     private static final long KEY_TRANSIENT_COOLDOWN_MS = 10_000L;
@@ -72,9 +80,6 @@ public final class OpenAiTranslator implements Translator {
     // consecutive trips double the penalty, any success resets it.
     private static final long RATE_LIMIT_BASE_PENALTY_MS = 60_000L;
     private static final long RATE_LIMIT_MAX_PENALTY_MS = 600_000L;
-    private final Object gateLock = new Object();
-    private volatile long rateLimitedUntil;
-    private long penaltyMs; // guarded by gateLock
 
     public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings) {
         this(transport, settings, System::currentTimeMillis, RequestPacer.disabled());
@@ -111,7 +116,9 @@ public final class OpenAiTranslator implements Translator {
     /** Whether the global 429 gate is currently CLOSED (still backing off). Consulted by the
      *  provisional-retry gate: a GT stand-in is only re-asked of the AI once this is false. */
     public boolean isRateLimited() {
-        long until = rateLimitedUntil;
+        AiSettings current = settings.get();
+        if (current == null || !current.isConfigured()) return false;
+        long until = refreshSettingsState(current).rateLimitedUntil;
         return until != 0 && clock.getAsLong() < until;
     }
 
@@ -146,8 +153,8 @@ public final class OpenAiTranslator implements Translator {
         if (s == null || !s.isConfigured()) {
             throw new TranslationException("AI translator not configured (base URL / model missing)");
         }
-        refreshSettingsState(s);
-        long gateUntil = rateLimitedUntil;
+        SettingsState health = refreshSettingsState(s);
+        long gateUntil = health.rateLimitedUntil;
         if (clock.getAsLong() < gateUntil) {
             // Fail fast without HTTP: the caller's DispatchingTranslator falls back to Google.
             throw new TranslationException("AI rate-limited (429 on all keys): backing off");
@@ -157,7 +164,7 @@ public final class OpenAiTranslator implements Translator {
         int[] order = groupedOrder(contexts, texts.size());
         List<TranslationResult> out = new ArrayList<>(texts.size());
         if (order == null) {
-            translateChunk(texts, targetLang, contexts, s, out);
+            translateChunk(texts, targetLang, contexts, s, health, out);
             return out;
         }
         List<String> orderedTexts = new ArrayList<>(texts.size());
@@ -166,7 +173,7 @@ public final class OpenAiTranslator implements Translator {
             orderedTexts.add(texts.get(index));
             orderedContexts.add(contexts.get(index));
         }
-        translateChunk(orderedTexts, targetLang, orderedContexts, s, out);
+        translateChunk(orderedTexts, targetLang, orderedContexts, s, health, out);
         TranslationResult[] restored = new TranslationResult[texts.size()];
         for (int position = 0; position < order.length; position++) {
             restored[order[position]] = out.get(position);
@@ -229,7 +236,7 @@ public final class OpenAiTranslator implements Translator {
 
     /** One normal chunk is one physical request; damaged boundaries are bisected safely. */
     private void translateChunk(List<String> texts, String targetLang,
-                                List<List<String>> contexts, AiSettings settings,
+                                List<List<String>> contexts, AiSettings settings, SettingsState health,
                                 List<TranslationResult> out) throws TranslationException {
         int base = anchorBase(texts, contexts);
         List<AiWireItem> wire = new ArrayList<>(texts.size());
@@ -247,7 +254,7 @@ public final class OpenAiTranslator implements Translator {
         String requestBody = buildRequestBody(settings, targetLang, wireCodec.wire(), promptTokens, true);
         String plainBody = wantsNoReasoning(settings.model())
                 ? buildRequestBody(settings, targetLang, wireCodec.wire(), promptTokens, false) : null;
-        String content = postWithKeyRotation(settings, requestBody, plainBody);
+        String content = postWithKeyRotation(settings, health, requestBody, plainBody);
         String rawResponseBody = content; // exactly what the model sent, for the debug dump below
         // Back to internal ⟦...⟧ format before anything below (anchor extraction,
         // restoreHardLines, tokensMatch) touches it — all of that keeps working exactly
@@ -273,9 +280,9 @@ public final class OpenAiTranslator implements Translator {
             dumpExchange(requestBody, rawResponseBody, texts, null);
             int mid = texts.size() / 2;
             translateChunk(texts.subList(0, mid), targetLang,
-                    contexts == null ? null : contexts.subList(0, mid), settings, out);
+                    contexts == null ? null : contexts.subList(0, mid), settings, health, out);
             translateChunk(texts.subList(mid, texts.size()), targetLang,
-                    contexts == null ? null : contexts.subList(mid, texts.size()), settings, out);
+                    contexts == null ? null : contexts.subList(mid, texts.size()), settings, health, out);
             return;
         }
         List<TranslationResult> chunkResults = new ArrayList<>(parts.size());
@@ -297,7 +304,7 @@ public final class OpenAiTranslator implements Translator {
             }
         }
         dumpExchange(requestBody, rawResponseBody, texts, chunkResults);
-        retryIsolatedFailures(texts, targetLang, contexts, settings, chunkResults);
+        retryIsolatedFailures(texts, targetLang, contexts, settings, health, chunkResults);
         out.addAll(chunkResults);
     }
 
@@ -352,7 +359,7 @@ public final class OpenAiTranslator implements Translator {
      * {@code $fabric1171Excluded} list).</p>
      */
     private void retryIsolatedFailures(List<String> texts, String targetLang,
-                                       List<List<String>> contexts, AiSettings settings,
+                                       List<List<String>> contexts, AiSettings settings, SettingsState health,
                                        List<TranslationResult> chunkResults) {
         if (texts.size() <= 1) return;
         for (int i = 0; i < chunkResults.size(); i++) {
@@ -365,7 +372,7 @@ public final class OpenAiTranslator implements Translator {
                 List<List<String>> singleContext = contexts == null
                         ? null : java.util.Collections.singletonList(contexts.get(i));
                 translateChunk(java.util.Collections.singletonList(texts.get(i)), targetLang,
-                        singleContext, settings, single);
+                        singleContext, settings, health, single);
                 if (!single.isEmpty() && single.get(0).failureReason() == null) {
                     chunkResults.set(i, single.get(0));
                 }
@@ -796,7 +803,7 @@ public final class OpenAiTranslator implements Translator {
     private static final int RETRIES_PER_KEY = 2;
     private static final long RETRY_BACKOFF_MS = 700L;
 
-    private String postWithKeyRotation(AiSettings s, String body, String fallbackBody) throws TranslationException {
+    private String postWithKeyRotation(AiSettings s, SettingsState health, String body, String fallbackBody) throws TranslationException {
         List<String> keys = s.apiKeys();
         String url = chatCompletionsUrl(s.baseUrl());
         IOException last = null;
@@ -808,21 +815,21 @@ public final class OpenAiTranslator implements Translator {
             try {
                 pacer.acquireForAi();
                 String content = parseContent(transport.post(url, body, Map.of()));
-                resetRateLimitGate();
+                resetRateLimitGate(health);
                 return content;
             } catch (IOException e) {
-                if (isRateLimited(e)) tripRateLimitGate();
+                if (isRateLimited(e)) tripRateLimitGate(health);
                 throw new TranslationException("AI request failed (no API key): " + e.getMessage(), e);
             }
         }
         // Start at a rotating offset so load spreads across keys.
-        int start = Math.floorMod(keyCursor.getAndIncrement(), keys.size());
+        int start = Math.floorMod(health.keyCursor.getAndIncrement(), keys.size());
         for (int n = 0; n < keys.size(); n++) {
             String key = keys.get((start + n) % keys.size());
             if (key == null || key.isBlank()) continue;
             usableKeys++;
             key = key.trim();
-            if (isKeyUnavailable(key)) continue;
+            if (isKeyUnavailable(health, key)) continue;
             attemptedKeys++;
             Map<String, String> headers = new HashMap<>();
             headers.put("Authorization", "Bearer " + key);
@@ -830,8 +837,8 @@ public final class OpenAiTranslator implements Translator {
                 try {
                     pacer.acquireForAi(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
                     String content = parseContent(transport.post(url, body, headers));
-                    clearKeyState(key);
-                    resetRateLimitGate(); // any success proves the quota is back
+                    clearKeyState(health, key);
+                    resetRateLimitGate(health); // any success proves the quota is back
                     return content;
                 } catch (IOException e) {
                     last = e;
@@ -839,13 +846,13 @@ public final class OpenAiTranslator implements Translator {
                     // hole deeper. Move straight to the next key.
                     if (isRateLimited(e)) {
                         rateLimitedKeys++;
-                        markKeyUnavailable(key, clock.getAsLong() + KEY_RATE_LIMIT_COOLDOWN_MS, true);
+                        markKeyUnavailable(health, key, clock.getAsLong() + KEY_RATE_LIMIT_COOLDOWN_MS, true);
                         break;
                     }
                     // Invalid credentials should stay quarantined until the user edits
                     // the provider settings; retrying them only adds latency/noise.
                     if (isAuthenticationFailure(e)) {
-                        markKeyUnavailable(key, Long.MAX_VALUE, false);
+                        markKeyUnavailable(health, key, Long.MAX_VALUE, false);
                         break;
                     }
                     // A 400 most likely means this endpoint rejects an optional field
@@ -861,15 +868,15 @@ public final class OpenAiTranslator implements Translator {
                         continue;
                     }
                     if (isTransient(e)) {
-                        markKeyUnavailable(key, clock.getAsLong() + KEY_TRANSIENT_COOLDOWN_MS, false);
+                        markKeyUnavailable(health, key, clock.getAsLong() + KEY_TRANSIENT_COOLDOWN_MS, false);
                     }
                     break;
                 }
             }
         }
         // A FULL rotation of 429s means the whole quota is exhausted: trip the gate.
-        if (attemptedKeys > 0 && rateLimitedKeys == attemptedKeys && allKeysUnavailable(keys)) {
-            tripRateLimitGate();
+        if (attemptedKeys > 0 && rateLimitedKeys == attemptedKeys && allKeysUnavailable(health, keys)) {
+            tripRateLimitGate(health);
         }
         if (usableKeys > 0 && attemptedKeys == 0) {
             throw new TranslationException("AI request deferred: all API keys are cooling down");
@@ -878,20 +885,20 @@ public final class OpenAiTranslator implements Translator {
                 + (last == null ? "no usable key" : last.getMessage()), last);
     }
 
-    private void tripRateLimitGate() {
-        synchronized (gateLock) {
-            penaltyMs = (penaltyMs == 0)
+    private void tripRateLimitGate(SettingsState health) {
+        synchronized (health) {
+            health.penaltyMs = (health.penaltyMs == 0)
                     ? RATE_LIMIT_BASE_PENALTY_MS
-                    : Math.min(penaltyMs * 2, RATE_LIMIT_MAX_PENALTY_MS);
-            rateLimitedUntil = clock.getAsLong() + penaltyMs;
+                    : Math.min(health.penaltyMs * 2, RATE_LIMIT_MAX_PENALTY_MS);
+            health.rateLimitedUntil = clock.getAsLong() + health.penaltyMs;
         }
     }
 
-    private void resetRateLimitGate() {
-        if (rateLimitedUntil == 0) return; // fast path: gate never tripped
-        synchronized (gateLock) {
-            penaltyMs = 0;
-            rateLimitedUntil = 0;
+    private void resetRateLimitGate(SettingsState health) {
+        if (health.rateLimitedUntil == 0) return; // fast path: gate never tripped
+        synchronized (health) {
+            health.penaltyMs = 0;
+            health.rateLimitedUntil = 0;
         }
     }
 
@@ -910,54 +917,48 @@ public final class OpenAiTranslator implements Translator {
         return m != null && (m.contains("HTTP 401") || m.contains("HTTP 403"));
     }
 
-    private void refreshSettingsState(AiSettings s) {
+    private synchronized SettingsState refreshSettingsState(AiSettings s) {
         String signature = (s.baseUrl() == null ? "" : s.baseUrl().trim()) + '\n'
                 + (s.model() == null ? "" : s.model().trim()) + '\n'
                 + String.join("\n", s.apiKeys().stream()
                 .filter(java.util.Objects::nonNull).map(String::trim).toList());
-        synchronized (keyStateLock) {
-            if (signature.equals(settingsSignature)) return;
-            settingsSignature = signature;
-            keyStates.clear();
-            keyCursor.set(0);
+        if (settingsState == null || !signature.equals(settingsState.signature)) {
+            settingsState = new SettingsState(signature);
         }
-        synchronized (gateLock) {
-            penaltyMs = 0;
-            rateLimitedUntil = 0;
-        }
+        return settingsState;
     }
 
-    private boolean isKeyUnavailable(String key) {
-        synchronized (keyStateLock) {
-            KeyState state = keyStates.get(key);
+    private boolean isKeyUnavailable(SettingsState health, String key) {
+        synchronized (health) {
+            KeyState state = health.keyStates.get(key);
             if (state == null) return false;
             if (state.unavailableUntil == Long.MAX_VALUE) return true;
             if (clock.getAsLong() < state.unavailableUntil) return true;
-            keyStates.remove(key);
+            health.keyStates.remove(key);
             return false;
         }
     }
 
-    private void markKeyUnavailable(String key, long until, boolean rateLimited) {
-        synchronized (keyStateLock) {
-            keyStates.put(key, new KeyState(until, rateLimited));
+    private void markKeyUnavailable(SettingsState health, String key, long until, boolean rateLimited) {
+        synchronized (health) {
+            health.keyStates.put(key, new KeyState(until, rateLimited));
         }
     }
 
-    private void clearKeyState(String key) {
-        synchronized (keyStateLock) {
-            keyStates.remove(key);
+    private void clearKeyState(SettingsState health, String key) {
+        synchronized (health) {
+            health.keyStates.remove(key);
         }
     }
 
-    private boolean allKeysUnavailable(List<String> keys) {
+    private boolean allKeysUnavailable(SettingsState health, List<String> keys) {
         boolean found = false;
-        synchronized (keyStateLock) {
+        synchronized (health) {
             long now = clock.getAsLong();
             for (String raw : keys) {
                 if (raw == null || raw.isBlank()) continue;
                 found = true;
-                KeyState state = keyStates.get(raw.trim());
+                KeyState state = health.keyStates.get(raw.trim());
                 if (state == null || (state.unavailableUntil != Long.MAX_VALUE
                         && now >= state.unavailableUntil)) return false;
             }

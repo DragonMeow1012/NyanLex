@@ -23,7 +23,7 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 ## Compatibility
 
 - Fabric, NeoForge, and Forge targets are listed below (Minecraft 1.12.2 to 26.3).
-- The legacy targets (Fabric 1.14.4-1.16.5 and Forge 1.12.2-1.13.2) have a simpler interface: a short Quick setup, the on-the-spot confirmation window and a categorized settings screen, but no translation packs and no pre-translation.
+- The legacy targets (Fabric 1.14.4-1.16.5 and Forge 1.12.2-1.13.2) have a simpler interface: a short Quick setup, the on-the-spot confirmation window and a categorized settings screen, but no translation packs and no full-content warmup.
 - Quest and task-book screens in modpacks get extra optimization (long paragraphs, colored text, tooltips).
 - This is a client-side mod; it does not modify servers and does not send chat for you.
 
@@ -33,13 +33,13 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 - Each surface can show original text, translated text, or both.
 - Supports Google machine translation (unofficial endpoint) and OpenAI-compatible APIs such as Gemini, OpenAI, DeepSeek, OpenRouter, Ollama and LM Studio.
 - Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-5.6-terra` / `medium`.
-- Async batching, priority queues, disk caches, and failure backoff reduce stalls and duplicate requests.
-- Player names are masked only from the TAB list; ordinary item text such as `with Chest` is no longer guessed as a player name.
+- Async batching, priority queues, disk caches, and failure backoff reduce main-thread work and duplicate requests. The send interval and collection window both default to 5 seconds, with 11 settings: Off or 1–10 seconds.
+- Player names are masked from the TAB list. Modern targets skip labels consisting of known mod, shader or technical names and their versions; existing translations still take precedence.
 - **Everything except chat follows the translation service you pick for it**: with AI it translates automatically like chat; with machine translation (Google) only chat translates on its own and the rest is on demand, so joining a server never floods it with text: press `R` on the item under your cursor, `P` with a screen open to translate that screen, or `P` in the world to translate the scoreboard, name tags, boss bars, titles and action bar you can see (sent as one batch). Anything already translated is shown straight from your saved translations either way (a text the AI already translated first, then translation packs, then saved machine translations); with AI, `R`/`P` force a fresh translation.
 - **Segmented tooltip cache**: long tooltips (title plus multi-line body) cache and restore per segment, so only the segment that actually changed needs a fresh request.
 - **Translation packs** (ready-made AI translations prepared by the maintainers and hosted on GitHub): the mod does not check for them at startup. There are two ways to get them: the last page of the Quick setup detects them automatically (it only appears when packs for your installed mods are found), and the "Detect and download translation packs" button under Translation settings > Packs. Both list each pack with its size and the expected total, download only after you confirm, and merge the files into your saved translations. "Clear downloaded translation packs" in the same category removes only what came from packs; translations you made yourself are kept. It only reads the hub's `index.json` and the files you confirm - nothing local is ever uploaded. Pack content holds only translated text and hashes (never the original text) and is licensed CC BY-NC-SA 4.0; see [translation-hub/README.md](translation-hub/README.md).
 - **Settings in seven categories** (Esc > Options > Translation settings...): General, Display, Service, Packs, Translations, Advanced and About, with a search box and an in-game manual. The Quick setup can be run again from General. "Do-not-translate terms" keeps server or brand names in the original language (case-insensitive, whole-word).
-- **Pre-translate all items** (Translation settings > Translations): translates every item name and description in the background, starting from the title screen. It needs the AI service and asks first when online translation is off. The confirmation screen lists the estimated number of sends and tokens and every warning; once started, progress shows in a screen corner and you can pause or stop it at any time.
+- **Full-content warmup** (Translation settings > Translations): expand Categories to choose Item names and descriptions and Screen text, both selected by default. Quest titles and descriptions belong to Screen text. Warmup runs only when you press Start or Continue, skips existing translations, and can be paused or stopped. It requires AI translation and asks first if online translation is off. Some screen content loads only after entering a world; enter the world before starting warmup for that content.
 - Under Translation settings > Translations you can export and import saved translations as JSON to merge a friend's translations locally while keeping your own, and clear the saved translations of the current language.
 
 ## In-game screenshots
@@ -110,15 +110,24 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 
 ## Translation sources
 
-| Source | API key | Notes |
+| Source | API key / sign-in | Notes |
 | --- | --- | --- |
-| Google | Not required | The only machine translation source. **Unofficial endpoint** that may be limited or stop working at any time. |
-| OpenAI-compatible API | Depends on service; may be left empty for a local server | Works with Gemini, OpenAI and DeepSeek (preset buttons), or any OpenAI-compatible service such as OpenRouter, Ollama, LM Studio or one you host yourself. You can set the Base URL, the model, several API keys that are used in rotation, and a glossary, and choose whether machine translation (Google) fills in when the AI fails. When the key is left empty, no `Authorization` header is sent. |
-| ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, effort, and token controls. |
+| Google machine translation | Not required | Uses an unofficial web endpoint that may be limited or stop working. Retains the 429 pause and backoff protection. |
+| Gemini | Your API key | Includes a preset button; connects through the OpenAI-compatible interface with a configurable model. |
+| OpenAI | Your API key | Includes a preset button, configurable model and service URL. |
+| DeepSeek | Your API key | Includes a preset button, configurable model and service URL. |
+| OpenRouter | Your API key | Enter its OpenAI-compatible service URL and model in the AI settings. |
+| Ollama / LM Studio | Depends on your local server; may be empty | Connects to an OpenAI-compatible server you run. You provide the model. |
+| Other OpenAI-compatible services | Depends on the service | Custom Base URL, model, rotating API keys and glossary. An empty key sends no `Authorization` header. |
+| ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, reasoning effort and token controls, and uses your account's Codex quota. |
+
+You can choose whether Google machine translation fills in after an AI failure. With this fallback enabled, the text may also be sent to Google.
+
+Local caches, imported translations, downloaded packs and the built-in glossary provide existing translations without a new translation request. See the [translation hub documentation](translation-hub/README.md) for pack sources, format and licensing.
 
 ## Sharing translations
 
-Use **Export translations** in Translation Settings. **1.0.5 supports automatic split exports and batch imports**: small exports produce one JSON file; larger exports produce `translations.part-0001.json`, `translations.part-0002.json`, and so on. Share the entire set. Your friend selects the same target language, then uses Ctrl/Shift to select multiple JSON files in **Import translations**. Import merges valid missing entries, keeps existing translations, and makes no translation requests. Files contain translation rows only, without API keys, login credentials, or settings.
+Use **Export translations** in Translation Settings. **Supports automatic split exports and batch imports**: small exports produce one JSON file; larger exports produce `translations.part-0001.json`, `translations.part-0002.json`, and so on. Share the entire set. Your friend selects the same target language, then uses Ctrl/Shift to select multiple JSON files in **Import translations**. Import merges valid missing entries, keeps existing translations, and makes no translation requests. Files contain translation rows only, without API keys, login credentials, or settings.
 
 Fabric 1.17.1+ and NeoForge share one compatible format. Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2 share the legacy format. Files cannot be imported across these two format families. Each part is limited to 32 MiB and 100,000 entries; this is **not a limit on the total export**, which splits automatically. Existing single-file exports remain compatible. For an older oversized JSON, re-export from the client holding the cached translations.
 
@@ -155,42 +164,7 @@ If your keybinds look reset after upgrading: this release changes the mod id fro
 - With machine translation, everything except chat is triggered on demand (`R`/`P`), so nothing you haven't looked at is sent ahead of time; with AI it translates automatically like chat. A text the AI has already translated is shown first even when machine translation is selected.
 - Tooltips now cache per segment, cutting down on re-requesting an entire long tooltip for one changed line.
 - Adds translation packs: ready-made translations prepared by the maintainers. There is no startup check; you find them from the last page of the Quick setup (shown only when packs for your installed mods exist) or with "Translation settings > Packs > Detect and download translation packs", and nothing downloads until you confirm. "Clear downloaded translation packs" removes them again.
-- Rebuilds the settings into seven categories with search and an in-game manual, adds a Quick setup that opens by itself on the first start, and adds "Pre-translate all items".
-
-## 1.0.6 highlights
-
-- Three performance-only fixes aimed at occasional in-game hitches; translation output, cache files, and settings are unchanged:
-  - Late chat translations that arrive as a batch now re-layout the chat box once instead of once per message.
-  - Name-tag matching against the online player list is memoized and invalidated whenever the list refreshes.
-  - Number-slot regular expressions used when restoring translation templates are precompiled and cached instead of being rebuilt on every cache hit.
-- All 18 Minecraft/loader targets are updated together. Real-world hitch reduction still needs in-game comparison; this release does not claim to eliminate it.
-
-## 1.0.5 highlights
-
-- `P` retranslates visible current-screen text, including mod quest paragraphs and hovered tooltips.
-- Adds translation-file export/import to share existing translations while keeping local entries.
-- Removes repeated validation of modern in-memory cache hits; long-session stutter improvements still need in-game comparison.
-- Includes all 18 Minecraft/loader targets, with 26.3 included in the all-versions ZIP.
-
-## 1.0.4 highlights
-
-- Fixes runaway CPU, memory, and disk I/O when opening inventories or containers after a long session. Modern targets now use a bounded append journal instead of sorting and rewriting the entire cache for each item translation on the render thread.
-- Changes inventory, container, hotbar, and off-hand warming to a 350 ms delta scan. Legacy targets also use callback-free prefetching, preventing every slot from being resubmitted each tick or accumulating waiters.
-- Bounds translation queues, executor work, in-flight requests, callbacks, retries, Codex state, and memory caches, and releases completed state so resource use does not grow with play time.
-- Adds cache-hit fast paths and on-demand retry scans, reduces repeated player-name, regex, and context allocations, caps raw HTTP responses at 4 MiB on modern targets, and retains a streaming character cap on legacy targets.
-- Ports the same fixes to all 16 Minecraft/loader targets ever offered by the project releases, with per-target builds and final-JAR regression checks.
-
-## 1.0.3 highlights
-
-- Keeps the stable 1.0.2 translation architecture.
-- Adds ChatGPT/Codex sign-in, model selection, and token display.
-- Speeds up Codex by disabling unused tools and summaries, avoiding cleanup waits, and using the advertised priority tier.
-- Masks player names only from TAB and removes name guessing from templates and caches.
-- Fixes `Bloom Boat with Chest` being sent as `Bloom Boat with {value}`.
-
-## Credits
-
-The icon was made with AI assistance.
+- Rebuilds the settings into seven categories with search and an in-game manual, adds a Quick setup that opens by itself on the first start, and adds "Full-content warmup" with selectable categories.
 
 ## Source and issues
 

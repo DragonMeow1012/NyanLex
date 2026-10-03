@@ -593,6 +593,57 @@ class OpenAiTranslatorTest {
 
     // ---- 429 global backoff gate ----
 
+    @Test
+    void rateLimitProbeSeesAModelChangeWithoutSendingAnotherRequest() {
+        AtomicReference<AiSettings> settings = new AtomicReference<>(
+                new AiSettings("https://x/v1", "old-model", List.of("same-key")));
+        AtomicInteger calls = new AtomicInteger();
+        HttpTransport transport = new HttpTransport() {
+            public String get(String url) { throw new UnsupportedOperationException(); }
+            public String post(String url, String body, Map<String, String> headers) throws IOException {
+                calls.incrementAndGet();
+                throw new IOException("HTTP 429");
+            }
+        };
+        OpenAiTranslator t = new OpenAiTranslator(transport, settings::get, () -> 0L);
+        assertThrows(TranslationException.class, () -> t.translate("Hi", "zh-TW"));
+        assertTrue(t.isRateLimited());
+        settings.set(new AiSettings("https://x/v1", "old-model", List.of("same-key"), List.of("Aether=天堂")));
+        assertTrue(t.isRateLimited(), "a glossary edit must not reset the same model's limit");
+        settings.set(new AiSettings("https://x/v1", "new-model", List.of("same-key")));
+        assertFalse(t.isRateLimited(), "warm-up only probes the gate while paused; no request can trigger refresh");
+        assertEquals(1, calls.get(), "checking the new model must not send a probe request");
+    }
+
+    @Test
+    void anOldModelsLateResponseCannotChangeTheNewModelsGate() throws Exception {
+        for (boolean oldFails : List.of(true, false)) {
+            AtomicReference<AiSettings> settings = new AtomicReference<>(
+                    new AiSettings("https://x/v1", "old-model", List.of("same-key")));
+            AtomicReference<OpenAiTranslator> translator = new AtomicReference<>();
+            HttpTransport transport = new HttpTransport() {
+                public String get(String url) { throw new UnsupportedOperationException(); }
+                public String post(String url, String body, Map<String, String> headers) throws IOException {
+                    if (body.contains("\"model\":\"old-model\"")) {
+                        settings.set(new AiSettings("https://x/v1", "new-model", List.of("same-key")));
+                        assertFalse(translator.get().isRateLimited());
+                        if (oldFails) throw new IOException("HTTP 429 from old model");
+                        assertThrows(TranslationException.class,
+                                () -> translator.get().translate("New request", "zh-TW"));
+                        return chatJson("1. 嗨");
+                    }
+                    throw new IOException("HTTP 429 from new model");
+                }
+            };
+            OpenAiTranslator t = new OpenAiTranslator(transport, settings::get, () -> 0L);
+            translator.set(t);
+            if (oldFails) assertThrows(TranslationException.class, () -> t.translate("Hi", "zh-TW"));
+            else assertEquals("嗨", t.translate("Hi", "zh-TW").translatedText());
+            assertEquals(!oldFails, t.isRateLimited(),
+                    "the old response must neither close nor reopen the new model's gate");
+        }
+    }
+
     /** Transport that 429s every key until told otherwise; counts calls; fake clock. */
     private static final class RateLimitRig {
         final AtomicInteger calls = new AtomicInteger();

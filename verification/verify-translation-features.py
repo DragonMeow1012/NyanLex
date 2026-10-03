@@ -1,8 +1,7 @@
 """Check the feature entry points in all 18 distributable JARs.
 
-1.0.5: translation sharing (export/import), native file picker, screen scan.
-1.0.7: request master switch (translationRequestsEnabled), do-not-translate terms
-(doNotTranslateTerms) and the requests/terms settings screen.
+Translation sharing, native file picker, screen scan, request consent and
+do-not-translate terms are checked against the current modern/legacy settings UI.
 """
 from pathlib import Path
 from zipfile import ZipFile
@@ -17,17 +16,19 @@ TARGETS = ["forge1122", "forge1132", "fabric1144", "fabric1152", "fabric1165",
            "fabric2612", "fabric26", "fabric263", "neoforge120", "neoforge", "neoforge26", "neoforge263"]
 LEGACY_TARGETS = TARGETS[:5]
 PREFIX = "com/dragonmeow/nyanlex/"
-# design-1.0.7 section 5: every key exactly once in en_us/zh_tw (all targets) and in
-# zh_cn/zh_hk (non-Forge). Optional legacy ".short" variants are not required.
 REQUEST_KEYS = [
-    "config.nyanlex.requests.open",
-    "config.nyanlex.requests.open.paused",
     "screen.nyanlex.requests.title",
-    "screen.nyanlex.requests.toggle",
-    "screen.nyanlex.requests.toggle.hint",
     "screen.nyanlex.requests.terms",
     "screen.nyanlex.requests.terms.hint",
 ]
+MODERN_SETTINGS_KEYS = ["nyanlex.settings.master", "nyanlex.settings.master.tip",
+                        "nyanlex.settings.export", "nyanlex.settings.import",
+                        "nyanlex.settings.chat_delivery", "nyanlex.settings.state.ordered",
+                        "nyanlex.settings.state.ready_first"]
+LEGACY_SETTINGS_KEYS = ["config.nyanlex.online", "config.nyanlex.online.desc",
+                        "config.nyanlex.requests.open", "config.nyanlex.translations.export",
+                        "config.nyanlex.translations.import", "config.nyanlex.chat_delivery.short",
+                        "config.nyanlex.chat_delivery.ordered", "config.nyanlex.chat_delivery.ready_first"]
 # The requests screen class name is chosen per tree, so find it by its title key.
 REQUEST_UI_STRING = b"screen.nyanlex.requests.title"
 CONFIG_FIELDS = [b"translationRequestsEnabled", b"doNotTranslateTerms"]
@@ -109,9 +110,8 @@ def check_jar(target, path):
         extension = "lang" if target == "forge1122" else "json"
         for language in languages:
             text = read_entry(jar, "assets/nyanlex/lang/" + language + "." + extension, target).decode("utf-8")
-            for key in ["config.nyanlex.translations.export", "config.nyanlex.translations.import", "key.nyanlex.screenscan"]:
-                assert text.count(key) == 1, (target, language, key)
-            for key in REQUEST_KEYS:
+            settings_keys = LEGACY_SETTINGS_KEYS if legacy else MODERN_SETTINGS_KEYS
+            for key in REQUEST_KEYS + settings_keys + ["key.nyanlex.screenscan"]:
                 values = key_values(text, extension, key)
                 assert len(values) == 1, (target, language, key, len(values))
                 assert values[0].strip(), (target, language, key, "empty value")
@@ -121,6 +121,13 @@ def check_jar(target, path):
                             if name.startswith(PREFIX) and name.endswith(".class")
                             and REQUEST_UI_STRING in jar.read(name))
         assert request_ui, (target, "no class references " + REQUEST_UI_STRING.decode())
+
+        ui_class = ("forgelegacy/LegacyUiModel" if forge else "legacy/LegacyUiModel") if legacy else "config/SettingsCatalog"
+        ui = read_class(jar, PREFIX + ui_class + ".class", target, legacy)
+        for member in [b"translationRequestsEnabled", b"deliverChatTranslationsInOrder"]:
+            assert member in ui, (target, ui_class, "unwired setting", member)
+        for member in ([b"A_EXPORT", b"A_IMPORT", b"A_ONLINE"] if legacy else [b"EXPORT", b"IMPORT", b"master", b"chat_delivery"]):
+            assert member in ui, (target, ui_class, member)
 
         if target == "forge1122":
             assert b"FMLCorePlugin:" in read_entry(jar, "META-INF/MANIFEST.MF", target), target

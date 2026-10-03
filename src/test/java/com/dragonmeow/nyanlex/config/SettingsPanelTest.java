@@ -565,7 +565,7 @@ class SettingsPanelTest {
         assertEquals(0, host.cfg.requestCooldownMs);
         int mid = ctl[0] + 4 + (ctl[2] - 8) / 2;
         p.mouseDragged(mid, trackY);
-        assertEquals(SettingsCatalog.COOLDOWN_STEPS[3], host.cfg.requestCooldownMs);
+        assertEquals(SettingsCatalog.TIMING_STEPS[5], host.cfg.requestCooldownMs);
         int before = host.saves;
         p.mouseReleased(mid, trackY, 0);
         assertTrue(host.saves > before);
@@ -862,6 +862,35 @@ class SettingsPanelTest {
     // ------------------------------------------------------------------ warm-up card
 
     @Test
+    void warmupCategoriesExpandOnTheRightPersistChoicesAndDisableAnEmptyRun() {
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 480, 400);
+        p.setCategory(SettingsCategory.MINE);
+        p.keyPressed(SettingsPanel.KEY_END, false, false);
+        assertTrue(host.cfg.warmupItems && host.cfg.warmupScreenText);
+        assertTrue(p.warmButtonBounds(1)[0] > p.warmButtonBounds(0)[0]);
+        click(p, p.warmButtonBounds(1));
+        assertTrue(p.isExpanded("warmup.categories"));
+        p.keyPressed(SettingsPanel.KEY_END, false, false);
+        click(p, p.warmButtonBounds(2));
+        assertFalse(host.cfg.warmupItems);
+        assertTrue(host.cfg.warmupScreenText);
+        click(p, p.warmButtonBounds(3));
+        assertFalse(host.cfg.warmupScreenText);
+        assertEquals(2, host.saves);
+        click(p, p.warmButtonBounds(0));
+        assertTrue(host.commands.isEmpty(), "nothing selected must never start a run");
+        for (String lang : List.of("zh_tw", "zh_hk", "zh_cn", "en_us")) {
+            host.lang = lang;
+            for (int width : new int[] {256, 320, 480}) {
+                p.resize(width, 400);
+                p.invalidate();
+                check(p, lang + " expanded categories " + width, new int[] {width, 400});
+            }
+        }
+    }
+
+    @Test
     void warmupCardStartsThroughTheHostAndShowsStateButtons() {
         FakeHost host = new FakeHost();
         SettingsPanel p = panel(host, 480, 270);
@@ -869,7 +898,7 @@ class SettingsPanelTest {
         p.keyPressed(SettingsPanel.KEY_END, false, false);
         // idle: one start button
         assertNotNull(p.warmButtonBounds(0));
-        assertEquals(null, p.warmButtonBounds(1));
+        assertNotNull(p.warmButtonBounds(1)); // category disclosure
         click(p, p.warmButtonBounds(0));
         assertEquals(List.of(WarmupCommand.START), host.commands);
 
@@ -1203,16 +1232,24 @@ class SettingsPanelTest {
         Rec c = new Rec();
         p.render(c, -1, -1);
         String all = String.join("", c.texts.stream().map(t -> t.s().replace(" ", "")).toList());
-        assertTrue(all.contains("12個物品需要進入世界後才能翻譯"), all);
+        assertTrue(all.contains("12項內容需要進入世界後才能翻譯"), all);
         assertTrue(all.contains("可以再按一次「開始」"), all);
     }
 
     @Test
-    void everyPauseButARateLimitWaitsForTheContinueButton() {
+    void everyPauseOffersTheContinueButtonIncludingRateLimits() {
         for (ItemWarmupDriver.PauseReason reason : ItemWarmupDriver.PauseReason.values()) {
             if (reason == ItemWarmupDriver.PauseReason.NONE) continue;
             WarmupStatus paused = new WarmupStatus(true, ItemWarmupDriver.State.PAUSED, reason, 120, 400, 30, false);
-            assertEquals(reason != ItemWarmupDriver.PauseReason.RATE_LIMITED, paused.canResume(), reason.name());
+            assertTrue(paused.canResume(), reason.name());
         }
+        FakeHost host = new FakeHost();
+        SettingsPanel p = panel(host, 480, 400);
+        host.warm = new WarmupStatus(true, ItemWarmupDriver.State.PAUSED,
+                ItemWarmupDriver.PauseReason.RATE_LIMITED, 120, 400, 30, false);
+        p.setCategory(SettingsCategory.MINE);
+        p.keyPressed(SettingsPanel.KEY_END, false, false);
+        click(p, p.warmButtonBounds(0));
+        assertEquals(List.of(WarmupCommand.RESUME), host.commands);
     }
 }

@@ -132,7 +132,7 @@ public final class TranslationConfigScreen extends Screen {
         @Override
         public WarmupStatus warmupStatus() {
             var service = NyanLexFabric.service();
-            boolean available = service != null && service.isItemWarmupEngine();
+            boolean available = service != null && service.isContentWarmupEngine();
             return WarmupStatus.of(available, NyanLexFabric.itemWarmupDriver().progress());
         }
 

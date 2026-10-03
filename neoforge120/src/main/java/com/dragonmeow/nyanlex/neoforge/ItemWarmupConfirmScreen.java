@@ -42,7 +42,7 @@ public final class ItemWarmupConfirmScreen extends Screen {
 
     private static boolean eligibleEngine() {
         TranslationService s = NyanLexNeoForge.service();
-        return s != null && s.isItemWarmupEngine();
+        return s != null && s.isContentWarmupEngine();
     }
 
     private boolean inWorld() {
@@ -52,7 +52,7 @@ public final class ItemWarmupConfirmScreen extends Screen {
     @Override
     protected void init() {
         if (eligibleEngine() && scanner == null) {
-            scanner = new ItemWarmupScanner(new NeoItemWarmupSource(),
+            scanner = new ItemWarmupScanner(NeoItemWarmupSource.contentSource(),
                     new NeoItemWarmupSource.Backend(() -> false));
         }
         panel.setNarration(DialogContent.narration(LANG));

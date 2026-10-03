@@ -253,7 +253,7 @@ class WarmupConfirmDialogTest {
             assertTrue(text.contains("7"), code + ": " + text);
         }
         DialogContent.Lang tw = DialogPanelTest.lang("zh_tw");
-        assertEquals("有 7 個物品需要進入世界後才能翻譯，進入世界後可以再按一次「開始」",
+        assertEquals("有 7 項內容需要進入世界後才能翻譯，進入世界後可以再按一次「開始」",
                 tw.get("screen.nyanlex.warmup.skipped", 7));
     }
 }

@@ -42,10 +42,10 @@ public final class SettingsCatalog {
     public static final String KEY_CLEAR_PACKS_DONE = "message.nyanlex.hub.cleared";
     public static final String KEY_CLEAR_PACKS_NONE = "message.nyanlex.hub.nothing_to_clear";
 
-    /** Cooldown values the button cycles through, in ms; 0 = pacing off (a valid value). */
-    public static final int[] COOLDOWN_STEPS = {0, 1000, 2000, 4000, 6000, 8000, 10000};
-    /** Batch collection windows, in ms; 0 disables batching. */
-    public static final int[] BATCH_WINDOW_STEPS = {0, 1000, 2000, 3000, 5000, 8000, 10000};
+    /** Shared send-interval and batch-window slider: off, then 1–10 seconds. */
+    public static final int[] TIMING_STEPS = {
+            0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000
+    };
 
     private static final Map<SettingsPage, List<SettingsRow>> ROWS = build();
 
@@ -201,14 +201,14 @@ public final class SettingsCatalog {
         map.put(SettingsPage.ADVANCED, pairs(List.of(
                 cycle(SettingsPage.ADVANCED, "cooldown",
                         c -> millisState(c.requestCooldownMs),
-                        c -> c.requestCooldownMs = nextStep(COOLDOWN_STEPS, c.requestCooldownMs))
-                        .withSlider(new SettingEntry.Slider(COOLDOWN_STEPS,
+                        c -> c.requestCooldownMs = nextStep(TIMING_STEPS, c.requestCooldownMs))
+                        .withSlider(new SettingEntry.Slider(TIMING_STEPS,
                                 c -> c.requestCooldownMs, (c, v) -> c.requestCooldownMs = v))
                         .withKeywords("cooldown", "429", "rate limit", "delay", "請求", "请求", "請求冷卻", "请求冷却", "冷卻", "冷却"),
                 cycle(SettingsPage.ADVANCED, "batch",
                         c -> millisState(c.batchWindowMs),
-                        c -> c.batchWindowMs = nextStep(BATCH_WINDOW_STEPS, c.batchWindowMs))
-                        .withSlider(new SettingEntry.Slider(BATCH_WINDOW_STEPS,
+                        c -> c.batchWindowMs = nextStep(TIMING_STEPS, c.batchWindowMs))
+                        .withSlider(new SettingEntry.Slider(TIMING_STEPS,
                                 c -> c.batchWindowMs, (c, v) -> c.batchWindowMs = v))
                         .withKeywords("batch", "window", "請求", "请求"),
                 toggle(SettingsPage.ADVANCED, "chat_delivery", c -> c.deliverChatTranslationsInOrder,

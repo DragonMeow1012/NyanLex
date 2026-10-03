@@ -479,7 +479,7 @@ public final class NyanLexFabric implements ClientModInitializer {
     public static synchronized com.dragonmeow.nyanlex.warmup.ItemWarmupDriver itemWarmupDriver() {
         if (itemWarmupDriver == null) {
             itemWarmupDriver = new com.dragonmeow.nyanlex.warmup.ItemWarmupDriver(
-                    new FabricItemWarmupSource(),
+                    FabricItemWarmupSource.contentSource(),
                     new FabricItemWarmupSource.Backend(() -> aiRateLimitedProbe.getAsBoolean()),
                     NyanLexFabric::config, System::currentTimeMillis);
             itemWarmupDriver.setProgressSaver(NyanLexFabric::saveConfig);
@@ -584,6 +584,15 @@ public final class NyanLexFabric implements ClientModInitializer {
         Thread thread = new Thread(task, MOD_ID + "-hub");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private static List<String> loadedModNames() {
+        List<String> names = new ArrayList<>();
+        for (net.fabricmc.loader.api.ModContainer container : FabricLoader.getInstance().getAllMods()) {
+            names.add(container.getMetadata().getName());
+            names.add(container.getMetadata().getId());
+        }
+        return names;
     }
 
     private static List<String> loadedModIds() {
@@ -1290,6 +1299,7 @@ public final class NyanLexFabric implements ClientModInitializer {
             return mc == null || mc.options == null ? null : mc.options.languageCode;
         });
         service.setProtectedNames(() -> onlineNames);
+        service.setKnownNames(loadedModNames());
 
         Path hubDir = FabricLoader.getInstance().getConfigDir();
         hubLocalCache = new HubLocalCache(hubDir, config.targetLang);

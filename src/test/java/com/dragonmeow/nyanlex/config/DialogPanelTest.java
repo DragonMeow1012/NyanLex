@@ -177,7 +177,7 @@ class DialogPanelTest {
         assertTrue(String.join("", p.shownTexts()).contains("這個畫面的文字會送到"));
         p.set(DialogContent.consent(ConsentGate.Kind.WARMUP, cfg, tw));
         String warm = String.join("", p.shownTexts());
-        assertTrue(warm.contains("所有物品的名稱和說明會送到 AI 服務（Gemini）"), warm);
+        assertTrue(warm.contains("勾選分類中的文字會送到 AI 服務（Gemini）"), warm);
         assertTrue(warm.contains("按下「開始翻譯」會開啟線上翻譯，之後隨時可以在設定裡關閉"), "the grey line says what the button does");
     }
 
