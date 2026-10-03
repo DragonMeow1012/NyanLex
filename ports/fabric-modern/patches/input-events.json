@@ -1,0 +1,26 @@
+{
+  "com/dragonmeow/nyanlex/fabric/AiConfigScreen.java": [
+    {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+    {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+    {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationConfigScreen.java": [
+    {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {"from":"Identifier", "to":"ResourceLocation"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/BookPageMixin.java": [
+    {"from":"method = \"visitText\"", "to":"method = \"render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V\""},
+    {"from":"BookViewScreen.visitText", "to":"BookViewScreen.render"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/ChatComponentMixin.java": [
+    {"from":"render(Lnet/minecraft/client/gui/GuiGraphics;Lnet/minecraft/client/gui/Font;IIIZZ)V", "to":"render(Lnet/minecraft/client/gui/GuiGraphics;IIIZ)V"},
+    {"from":"GuiGraphics graphics, net.minecraft.client.gui.Font font,", "to":"GuiGraphics graphics,"},
+    {"from":"boolean focused, boolean showBackground,", "to":"boolean focused,"}
+  ]
+}

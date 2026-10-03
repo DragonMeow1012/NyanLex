@@ -1,0 +1,36 @@
+{
+  "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {
+      "from": "net.minecraft.client.GuiMessage<Component>",
+      "to": "net.minecraft.client.GuiMessage"
+    },
+    {
+      "from": "old.getMessage()",
+      "to": "old.content()"
+    },
+    {
+      "from": "new net.minecraft.client.GuiMessage<>(\n                        old.getAddedTime(), replacement, old.getId())",
+      "to": "new net.minecraft.client.GuiMessage(\n                        old.addedTime(), replacement, old.headerSignature(), old.tag())"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/ChatComponentMixin.java": [
+    {
+      "from": "GuiMessage<Component>",
+      "to": "GuiMessage"
+    },
+    {
+      "from": "addMessage(Lnet/minecraft/network/chat/Component;)V",
+      "to": "addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/GuiMessageTag;)V"
+    },
+    {
+      "from": "nyanlex$translateLegacyChat(Component message, CallbackInfo ci)",
+      "to": "nyanlex$translateLegacyChat(Component message, net.minecraft.network.chat.MessageSignature signature, net.minecraft.client.GuiMessageTag tag, CallbackInfo ci)"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/ScreenTextInput.java": [
+    {
+      "from": "return listener instanceof EditBox && ((EditBox) listener).canConsumeInput();",
+      "to": "return (listener instanceof EditBox box && box.canConsumeInput())\n                || (listener instanceof net.minecraft.client.gui.components.MultiLineEditBox multiLine && multiLine.visible && multiLine.isFocused());"
+    }
+  ]
+}

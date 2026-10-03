@@ -1,0 +1,235 @@
+{
+  "com/dragonmeow/nyanlex/neoforge/CodexEffortScreen.java": [
+    {
+      "from": "\n            CodexEffortScreen.this.renderBackground(graphics);\n",
+      "to": "\n            CodexEffortScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        @Override protected void renderBackground(GuiGraphics graphics) {\n",
+      "to": "\n        @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n",
+      "to": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60); super.render(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/CodexModelScreen.java": [
+    {
+      "from": "\n            CodexModelScreen.this.renderBackground(graphics);\n",
+      "to": "\n            CodexModelScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        @Override protected void renderBackground(GuiGraphics graphics) {\n",
+      "to": "\n        @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n",
+      "to": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60); super.render(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/ItemWarmupConfirmScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/NyanLexNeoForge.java": [
+    {
+      "from": "\nimport net.minecraftforge.api.distmarker.Dist;\n",
+      "to": "\nimport net.neoforged.api.distmarker.Dist;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.eventbus.api.IEventBus;\n",
+      "to": "\nimport net.neoforged.bus.api.IEventBus;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.eventbus.api.EventPriority;\n",
+      "to": "\nimport net.neoforged.bus.api.EventPriority;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.eventbus.api.SubscribeEvent;\n",
+      "to": "\nimport net.neoforged.bus.api.SubscribeEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;\n",
+      "to": "\nimport net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.fml.common.Mod;\n",
+      "to": "\nimport net.neoforged.fml.common.Mod;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.fml.loading.FMLPaths;\n",
+      "to": "\nimport net.neoforged.fml.loading.FMLPaths;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.client.event.ClientChatReceivedEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.client.event.ClientChatReceivedEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.event.TickEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.event.TickEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.client.event.RegisterKeyMappingsEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.common.MinecraftForge;\n",
+      "to": "\nimport net.neoforged.neoforge.common.NeoForge;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.event.entity.player.ItemTooltipEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        return net.minecraftforge.fml.ModList.get().getModContainerById(MOD_ID)\n",
+      "to": "\n        return net.neoforged.fml.ModList.get().getModContainerById(MOD_ID)\n",
+      "count": 1
+    },
+    {
+      "from": "\n        for (net.minecraftforge.forgespi.language.IModInfo info : net.minecraftforge.fml.ModList.get().getMods()) {\n",
+      "to": "\n        for (net.neoforged.neoforgespi.language.IModInfo info : net.neoforged.fml.ModList.get().getMods()) {\n",
+      "count": 2
+    },
+    {
+      "from": "\n        MinecraftForge.EVENT_BUS.register(this);\n",
+      "to": "\n        NeoForge.EVENT_BUS.register(this);\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onRenderNameTag(net.minecraftforge.client.event.RenderNameTagEvent event) {\n",
+      "to": "\n    public void onRenderNameTag(net.neoforged.neoforge.client.event.RenderNameTagEvent event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onScreenRenderPre(net.minecraftforge.client.event.ScreenEvent.Render.Pre event) {\n",
+      "to": "\n    public void onScreenRenderPre(net.neoforged.neoforge.client.event.ScreenEvent.Render.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onScreenRenderPost(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {\n",
+      "to": "\n    public void onScreenRenderPost(net.neoforged.neoforge.client.event.ScreenEvent.Render.Post event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentMousePressed(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {\n",
+      "to": "\n    public void onConsentMousePressed(net.neoforged.neoforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentMouseReleased(net.minecraftforge.client.event.ScreenEvent.MouseButtonReleased.Pre event) {\n",
+      "to": "\n    public void onConsentMouseReleased(net.neoforged.neoforge.client.event.ScreenEvent.MouseButtonReleased.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentMouseScrolled(net.minecraftforge.client.event.ScreenEvent.MouseScrolled.Pre event) {\n",
+      "to": "\n    public void onConsentMouseScrolled(net.neoforged.neoforge.client.event.ScreenEvent.MouseScrolled.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (ConsentOverlay.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDelta())) {\n",
+      "to": "\n            if (ConsentOverlay.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDeltaY())) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentKeyPressed(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre event) {\n",
+      "to": "\n    public void onConsentKeyPressed(net.neoforged.neoforge.client.event.ScreenEvent.KeyPressed.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentKeyReleased(net.minecraftforge.client.event.ScreenEvent.KeyReleased.Pre event) {\n",
+      "to": "\n    public void onConsentKeyReleased(net.neoforged.neoforge.client.event.ScreenEvent.KeyReleased.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentCharTyped(net.minecraftforge.client.event.ScreenEvent.CharacterTyped.Pre event) {\n",
+      "to": "\n    public void onConsentCharTyped(net.neoforged.neoforge.client.event.ScreenEvent.CharacterTyped.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onWarmupHud(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {\n",
+      "to": "\n    public void onWarmupHud(net.neoforged.neoforge.client.event.RenderGuiOverlayEvent.Post event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (event.getOverlay() == net.minecraftforge.client.gui.overlay.VanillaGuiOverlay.HOTBAR.type()) {\n",
+      "to": "\n            if (event.getOverlay() == net.neoforged.neoforge.client.gui.overlay.VanillaGuiOverlay.HOTBAR.type()) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onScreenKeyPressed(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre event) {\n",
+      "to": "\n    public void onScreenKeyPressed(net.neoforged.neoforge.client.event.ScreenEvent.KeyPressed.Pre event) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/QuickSetupScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationConfigScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        return super.mouseScrolled(mouseX, mouseY, delta);\n",
+      "to": "\n        return super.mouseScrolled(mouseX, mouseY, horizontalDelta, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationLanguageScreen.java": [
+    {
+      "from": "\n            TranslationLanguageScreen.this.renderBackground(graphics);\n",
+      "to": "\n            TranslationLanguageScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        @Override protected void renderBackground(GuiGraphics graphics) {\n",
+      "to": "\n        @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n",
+      "to": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60); super.render(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationManualScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/ChatComposerMixin.java": [
+    {
+      "from": "\n    private void nyanlex$scrollComposer(double mx, double my, double amount, CallbackInfoReturnable<Boolean> ci) {\n",
+      "to": "\n    private void nyanlex$scrollComposer(double mx, double my, double horizontal, double amount, CallbackInfoReturnable<Boolean> ci) {\n",
+      "count": 1
+    }
+  ]
+}

@@ -1,0 +1,1172 @@
+{
+  "com/dragonmeow/nyanlex/neoforge26/ConfirmDialogScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(g, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(g, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/ConsentOverlay.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        Screen current = mc.gui.screen();\n",
+      "to": "\n        Screen current = mc.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    static void render(Screen screen, GuiGraphicsExtractor g, int mouseX, int mouseY) {\n",
+      "to": "\n    static void render(Screen screen, GuiGraphics g, int mouseX, int mouseY) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc == null || mc.gui.screen() != anchor) {\n",
+      "to": "\n        if (mc == null || mc.screen != anchor) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc != null && was instanceof ConsentScreen && mc.gui.screen() == was) mc.setScreenAndShow(null);\n",
+      "to": "\n        if (mc != null && was instanceof ConsentScreen && mc.screen == was) mc.setScreenAndShow(null);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/GuiCanvas.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n/** {@link UiCanvas} over a {@link GuiGraphicsExtractor}: how the core dialogs are drawn on any screen. */\n",
+      "to": "\n/** {@link UiCanvas} over a {@link GuiGraphics}: how the core dialogs are drawn on any screen. */\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private final GuiGraphicsExtractor g;\n",
+      "to": "\n    private final GuiGraphics g;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public GuiCanvas(GuiGraphicsExtractor g, Font font) {\n",
+      "to": "\n    public GuiCanvas(GuiGraphics g, Font font) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.text(font, text, x, y, argb, false);\n",
+      "to": "\n        g.drawString(font, text, x, y, argb, false);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/HubDownloadConfirmScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(g, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(g, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.centeredText(this.font, this.title, centerX, 12, 0xFFFFFFFF);\n",
+      "to": "\n        g.drawCenteredString(this.font, this.title, centerX, 12, 0xFFFFFFFF);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.centeredText(this.font, serverLine, centerX, y, 0xFFE0E0E0);\n",
+      "to": "\n        g.drawCenteredString(this.font, serverLine, centerX, y, 0xFFE0E0E0);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.centeredText(this.font, modpackLine, centerX, y, 0xFFE0E0E0);\n",
+      "to": "\n        g.drawCenteredString(this.font, modpackLine, centerX, y, 0xFFE0E0E0);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.centeredText(this.font, Component.translatable(\"screen.nyanlex.hub.confirm.mods\",\n",
+      "to": "\n        g.drawCenteredString(this.font, Component.translatable(\"screen.nyanlex.hub.confirm.mods\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n            g.centeredText(this.font, Component.translatable(\"screen.nyanlex.hub.confirm.empty\"),\n",
+      "to": "\n            g.drawCenteredString(this.font, Component.translatable(\"screen.nyanlex.hub.confirm.empty\"),\n",
+      "count": 1
+    },
+    {
+      "from": "\n            g.text(this.font, label, listLeft, y, 0xFFFFFFFF, false);\n",
+      "to": "\n            g.drawString(this.font, label, listLeft, y, 0xFFFFFFFF, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            g.text(this.font, status, listRight - statusWidth, y, statusColor(item), false);\n",
+      "to": "\n            g.drawString(this.font, status, listRight - statusWidth, y, statusColor(item), false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            g.text(this.font, Component.translatable(\"screen.nyanlex.hub.confirm.others\", othersWithoutPack), listLeft, y, 0xFF808080, false);\n",
+      "to": "\n            g.drawString(this.font, Component.translatable(\"screen.nyanlex.hub.confirm.others\", othersWithoutPack), listLeft, y, 0xFF808080, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.text(this.font, total, listLeft, y, 0xFFFFD700, false);\n",
+      "to": "\n        g.drawString(this.font, total, listLeft, y, 0xFFFFD700, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            g.text(this.font, line, listLeft, y, 0xFFB0C8E0, false);\n",
+      "to": "\n            g.drawString(this.font, line, listLeft, y, 0xFFB0C8E0, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.centeredText(this.font,\n",
+      "to": "\n        g.drawCenteredString(this.font,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/HubDownloadProgressScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(graphics, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(graphics, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.centeredText(this.font, this.title, centerX, 12, 0xFFFFFFFF);\n",
+      "to": "\n        graphics.drawCenteredString(this.font, this.title, centerX, 12, 0xFFFFFFFF);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.centeredText(this.font,\n",
+      "to": "\n        graphics.drawCenteredString(this.font,\n",
+      "count": 2
+    },
+    {
+      "from": "\n            graphics.centeredText(this.font,\n",
+      "to": "\n            graphics.drawCenteredString(this.font,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    graphics.centeredText(this.font, Component.translatable(\"screen.nyanlex.hub.progress.done\",\n",
+      "to": "\n                    graphics.drawCenteredString(this.font, Component.translatable(\"screen.nyanlex.hub.progress.done\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.centeredText(this.font, Component.translatable(\"screen.nyanlex.hub.progress.failed\",\n",
+      "to": "\n                graphics.drawCenteredString(this.font, Component.translatable(\"screen.nyanlex.hub.progress.failed\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.centeredText(this.font, Component.translatable(\"screen.nyanlex.hub.progress.cancelled\",\n",
+      "to": "\n                graphics.drawCenteredString(this.font, Component.translatable(\"screen.nyanlex.hub.progress.cancelled\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n            case IDLE -> graphics.centeredText(this.font,\n",
+      "to": "\n            case IDLE -> graphics.drawCenteredString(this.font,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/ItemWarmupConfirmScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(g, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(g, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/ItemWarmupProgressScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(g, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(g, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.centeredText(this.font, this.title, centerX, 12, 0xFFFFFFFF);\n",
+      "to": "\n        g.drawCenteredString(this.font, this.title, centerX, 12, 0xFFFFFFFF);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.centeredText(this.font,\n",
+      "to": "\n        g.drawCenteredString(this.font,\n",
+      "count": 3
+    },
+    {
+      "from": "\n            g.centeredText(this.font, speed, centerX, barY + 56, 0xFFE0E0E0);\n",
+      "to": "\n            g.drawCenteredString(this.font, speed, centerX, barY + 56, 0xFFE0E0E0);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            g.centeredText(this.font,\n",
+      "to": "\n            g.drawCenteredString(this.font,\n",
+      "count": 3
+    },
+    {
+      "from": "\n            g.centeredText(this.font, Component.translatable(inWorld\n",
+      "to": "\n            g.drawCenteredString(this.font, Component.translatable(inWorld\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.centeredText(this.font, state, centerX, barY - 14, color);\n",
+      "to": "\n        g.drawCenteredString(this.font, state, centerX, barY - 14, color);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            g.centeredText(this.font, Component.translatable(\"screen.nyanlex.warmup.reason.\"\n",
+      "to": "\n            g.drawCenteredString(this.font, Component.translatable(\"screen.nyanlex.warmup.reason.\"\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26AiScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        return this.minecraft != null && this.minecraft.gui.screen() == this;\n",
+      "to": "\n        return this.minecraft != null && this.minecraft.screen == this;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(graphics, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(graphics, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.centeredText(this.font, this.title, this.width / 2, 4, 0xFFFFFFFF);\n",
+      "to": "\n        graphics.drawCenteredString(this.font, this.title, this.width / 2, 4, 0xFFFFFFFF);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.centeredText(this.font, Component.translatable(\n",
+      "to": "\n            graphics.drawCenteredString(this.font, Component.translatable(\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.centeredText(this.font, Component.literal(this.status),\n",
+      "to": "\n                graphics.drawCenteredString(this.font, Component.literal(this.status),\n",
+      "count": 2
+    },
+    {
+      "from": "\n            graphics.text(this.font, Component.translatable(\"screen.nyanlex.ai.endpoint\"), x, layBaseLabel, 0xFFA0A0A0, false);\n",
+      "to": "\n            graphics.drawString(this.font, Component.translatable(\"screen.nyanlex.ai.endpoint\"), x, layBaseLabel, 0xFFA0A0A0, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.text(this.font, Component.translatable(\"screen.nyanlex.ai.model\"), x, layModelLabel, 0xFFA0A0A0, false);\n",
+      "to": "\n            graphics.drawString(this.font, Component.translatable(\"screen.nyanlex.ai.model\"), x, layModelLabel, 0xFFA0A0A0, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.text(this.font, Component.translatable(\"screen.nyanlex.ai.keys\"), x, layKeysLabel, 0xFFA0A0A0, false);\n",
+      "to": "\n            graphics.drawString(this.font, Component.translatable(\"screen.nyanlex.ai.keys\"), x, layKeysLabel, 0xFFA0A0A0, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void drawKeyNotice(GuiGraphicsExtractor graphics) {\n",
+      "to": "\n    private void drawKeyNotice(GuiGraphics graphics) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.text(this.font, line, 6, y, 0xFFA4A9B8, false);\n",
+      "to": "\n            graphics.drawString(this.font, line, 6, y, 0xFFA4A9B8, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void drawCodexAccount(GuiGraphicsExtractor graphics) {\n",
+      "to": "\n    private void drawCodexAccount(GuiGraphics graphics) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.centeredText(this.font, line, this.width / 2, layAccount, 0xFF909090);\n",
+      "to": "\n            graphics.drawCenteredString(this.font, line, this.width / 2, layAccount, 0xFF909090);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.text(this.font, line1, x, layAccount, 0xFF80FF80, false);\n",
+      "to": "\n        graphics.drawString(this.font, line1, x, layAccount, 0xFF80FF80, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.text(this.font, line2, x, layAccount, 0xFFFFFFFF, false);\n",
+      "to": "\n        graphics.drawString(this.font, line2, x, layAccount, 0xFFFFFFFF, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.text(this.font, line3, x, layAccount, 0xFFA0A0A0, false);\n",
+      "to": "\n        graphics.drawString(this.font, line3, x, layAccount, 0xFFA0A0A0, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void drawRight(GuiGraphicsExtractor graphics, Component text, int y, int color) {\n",
+      "to": "\n    private void drawRight(GuiGraphics graphics, Component text, int y, int color) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.text(this.font, text, this.width - this.font.width(text) - 6, y, color, false);\n",
+      "to": "\n        graphics.drawString(this.font, text, this.width - this.font.width(text) - 6, y, color, false);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26CodexEffortScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        protected void extractListBackground(GuiGraphicsExtractor graphics) {\n",
+      "to": "\n        protected void renderListBackground(GuiGraphics graphics) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            super.extractListBackground(graphics);\n",
+      "to": "\n            super.renderListBackground(graphics);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY,\n",
+      "to": "\n            public void renderContent(GuiGraphics graphics, int mouseX, int mouseY,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.centeredText(Neo26CodexEffortScreen.this.font, this.label,\n",
+      "to": "\n                graphics.drawCenteredString(Neo26CodexEffortScreen.this.font, this.label,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26CodexModelScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        protected void extractListBackground(GuiGraphicsExtractor graphics) {\n",
+      "to": "\n        protected void renderListBackground(GuiGraphics graphics) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            super.extractListBackground(graphics);\n",
+      "to": "\n            super.renderListBackground(graphics);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY,\n",
+      "to": "\n            public void renderContent(GuiGraphics graphics, int mouseX, int mouseY,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.centeredText(Neo26CodexModelScreen.this.font, this.label,\n",
+      "to": "\n                graphics.drawCenteredString(Neo26CodexModelScreen.this.font, this.label,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26ConfigScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        GuiGraphicsExtractor g;\n",
+      "to": "\n        GuiGraphics g;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            g.text(font, text, x, y, argb, false);\n",
+      "to": "\n            g.drawString(font, text, x, y, argb, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(g, mouseX, mouseY, partialTick); // dims the world behind the panel\n",
+      "to": "\n        super.render(g, mouseX, mouseY, partialTick); // dims the world behind the panel\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26KeybindScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {\n",
+      "to": "\n    public void render(GuiGraphics graphics, int mouseX, int mouseY, float a) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(graphics, mouseX, mouseY, a);\n",
+      "to": "\n        super.render(graphics, mouseX, mouseY, a);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.centeredText(this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);\n",
+      "to": "\n        graphics.drawCenteredString(this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.centeredText(this.font, hint, this.width / 2, this.height - 30, 0xFFA0A0A0);\n",
+      "to": "\n        graphics.drawCenteredString(this.font, hint, this.width / 2, this.height - 30, 0xFFA0A0A0);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26LanguageScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        @Override protected void extractListBackground(GuiGraphicsExtractor graphics) {\n",
+      "to": "\n        @Override protected void renderListBackground(GuiGraphics graphics) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            super.extractListBackground(graphics);\n",
+      "to": "\n            super.renderListBackground(graphics);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            @Override public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY,\n",
+      "to": "\n            @Override public void renderContent(GuiGraphics graphics, int mouseX, int mouseY,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.centeredText(Neo26LanguageScreen.this.font, this.language,\n",
+      "to": "\n                graphics.drawCenteredString(Neo26LanguageScreen.this.font, this.language,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26ManualScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(g, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(g, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26RequestsScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {\n",
+      "to": "\n    public void render(GuiGraphics graphics, int mouseX, int mouseY, float a) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(graphics, mouseX, mouseY, a);\n",
+      "to": "\n        super.render(graphics, mouseX, mouseY, a);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.centeredText(this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);\n",
+      "to": "\n        graphics.drawCenteredString(this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        graphics.text(this.font, Component.translatable(\"screen.nyanlex.requests.terms\"),\n",
+      "to": "\n        graphics.drawString(this.font, Component.translatable(\"screen.nyanlex.requests.terms\"),\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void drawCentered(GuiGraphicsExtractor graphics, List<FormattedCharSequence> lines, int y) {\n",
+      "to": "\n    private void drawCentered(GuiGraphics graphics, List<FormattedCharSequence> lines, int y) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.centeredText(this.font, line, this.width / 2, y, 0xFF909090);\n",
+      "to": "\n            graphics.drawCenteredString(this.font, line, this.width / 2, y, 0xFF909090);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/NyanLexNeoForge26.java": [
+    {
+      "from": "\n        if (keybindMigrationChecked || mc == null || mc.gui.screen() == null) return;\n",
+      "to": "\n        if (keybindMigrationChecked || mc == null || mc.screen == null) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (!(mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen)) return;\n",
+      "to": "\n        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;\n",
+      "count": 2
+    },
+    {
+      "from": "\n        if (firstStartTried || mc == null || config == null || mc.gui.overlay() != null) return;\n",
+      "to": "\n        if (firstStartTried || mc == null || config == null || mc.getOverlay() != null) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.setScreenAndShow(new QuickSetupScreen(mc.gui.screen()));\n",
+      "to": "\n        mc.setScreenAndShow(new QuickSetupScreen(mc.screen));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return c;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return c;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (widget == null || mc == null || mc.gui.screen() == null) return false;\n",
+      "to": "\n        if (widget == null || mc == null || mc.screen == null) return false;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (widgetGui == mc.gui.screen()) return true;\n",
+      "to": "\n            if (widgetGui == mc.screen) return true;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            java.lang.reflect.Method screenGetter = mc.gui.screen().getClass().getMethod(\"getGui\");\n",
+      "to": "\n            java.lang.reflect.Method screenGetter = mc.screen.getClass().getMethod(\"getGui\");\n",
+      "count": 1
+    },
+    {
+      "from": "\n            return screenGetter.invoke(mc.gui.screen()) == widgetGui;\n",
+      "to": "\n            return screenGetter.invoke(mc.screen) == widgetGui;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return str;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return str;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().gui.screen();\n",
+      "to": "\n        net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (fcs != null && Minecraft.getInstance().gui.screen() != null\n",
+      "to": "\n        if (fcs != null && Minecraft.getInstance().screen != null\n",
+      "count": 1
+    },
+    {
+      "from": "\n                && Minecraft.getInstance().gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "to": "\n                && Minecraft.getInstance().screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "to": "\n        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return text;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return text;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return text;\n",
+      "to": "\n        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return text;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;\n",
+      "to": "\n        if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        return mc != null && mc.gui.screen() != null\n",
+      "to": "\n        return mc != null && mc.screen != null\n",
+      "count": 1
+    },
+    {
+      "from": "\n                && screenTranslationAllowed(mc.gui.screen())\n",
+      "to": "\n                && screenTranslationAllowed(mc.screen)\n",
+      "count": 1
+    },
+    {
+      "from": "\n                && SCREEN_RENDER_STACK.get().peek() == mc.gui.screen();\n",
+      "to": "\n                && SCREEN_RENDER_STACK.get().peek() == mc.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc == null || mc.gui.screen() == null) return;\n",
+      "to": "\n        if (mc == null || mc.screen == null) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            Object gui = mc.gui.screen().getClass().getMethod(\"getGui\").invoke(mc.gui.screen());\n",
+      "to": "\n            Object gui = mc.screen.getClass().getMethod(\"getGui\").invoke(mc.screen);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.gui.hud.setOverlayMessage(shown, false);\n",
+      "to": "\n        mc.gui.setOverlayMessage(shown, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                mc.gui.hud.getChat().addClientSystemMessage(original);\n",
+      "to": "\n                mc.gui.getChat().addMessage(original);\n",
+      "count": 2
+    },
+    {
+      "from": "\n            if (replaceChatMessage(mc.gui.hud.getChat(), pending.displayedMessage, replacement)) {\n",
+      "to": "\n            if (replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, replacement)) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            mc.gui.hud.getChat().addClientSystemMessage(shown);\n",
+      "to": "\n            mc.gui.getChat().addMessage(shown);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.gui.hud.getChat().addClientSystemMessage(shown);\n",
+      "to": "\n        mc.gui.getChat().addMessage(shown);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                mc.gui.hud.getChat().rescaleChat();\n",
+      "to": "\n                mc.gui.getChat().rescaleChat();\n",
+      "count": 1
+    },
+    {
+      "from": "\n            java.util.List<net.minecraft.client.multiplayer.chat.GuiMessage> messages =\n",
+      "to": "\n            java.util.List<net.minecraft.client.GuiMessage> messages =\n",
+      "count": 1
+    },
+    {
+      "from": "\n                net.minecraft.client.multiplayer.chat.GuiMessage old = messages.get(i);\n",
+      "to": "\n                net.minecraft.client.GuiMessage old = messages.get(i);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                messages.set(i, new net.minecraft.client.multiplayer.chat.GuiMessage(\n",
+      "to": "\n                messages.set(i, new net.minecraft.client.GuiMessage(\n",
+      "count": 1
+    },
+    {
+      "from": "\n                        old.addedTime(), replacement, old.signature(), old.source(), old.tag()));\n",
+      "to": "\n                        old.addedTime(), replacement, old.signature(), old.tag()));\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (TOOLTIP_CAPTURE.active(tooltipClient.gui.screen())) {\n",
+      "to": "\n            if (TOOLTIP_CAPTURE.active(tooltipClient.screen)) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    TOOLTIP_CAPTURE.record(tooltipClient.gui.screen(), source);\n",
+      "to": "\n                    TOOLTIP_CAPTURE.record(tooltipClient.screen, source);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            lastTooltipScreen = tooltipClient.gui.screen();\n",
+      "to": "\n            lastTooltipScreen = tooltipClient.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.gui.screen()));\n",
+      "to": "\n                    if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.screen));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    if (Neo26TextInput.isTyping(mc == null ? null : mc.gui.screen())) continue;\n",
+      "to": "\n                    if (Neo26TextInput.isTyping(mc == null ? null : mc.screen)) continue;\n",
+      "count": 2
+    },
+    {
+      "from": "\n                    if (mc == null || mc.level == null || mc.gui.screen() != null) continue;\n",
+      "to": "\n                    if (mc == null || mc.level == null || mc.screen != null) continue;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (Minecraft.getInstance().gui.screen() == screen) scanAndTranslateScreenNow(screen);\n",
+      "to": "\n            if (Minecraft.getInstance().screen == screen) scanAndTranslateScreenNow(screen);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc == null || source == null || !SCREEN_CAPTURE.active(mc.gui.screen())) return false;\n",
+      "to": "\n        if (mc == null || source == null || !SCREEN_CAPTURE.active(mc.screen)) return false;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.gui.screen(), request);\n",
+      "to": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.screen, request);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        SCREEN_CAPTURE.cancelUnless(mc.gui.screen());\n",
+      "to": "\n        SCREEN_CAPTURE.cancelUnless(mc.screen);\n",
+      "count": 2
+    },
+    {
+      "from": "\n        TOOLTIP_CAPTURE.cancelUnless(mc.gui.screen());\n",
+      "to": "\n        TOOLTIP_CAPTURE.cancelUnless(mc.screen);\n",
+      "count": 2
+    },
+    {
+      "from": "\n        boolean current = screenRefreshRequested == mc.gui.screen();\n",
+      "to": "\n        boolean current = screenRefreshRequested == mc.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        net.minecraft.client.gui.screens.Screen currentScreen = mc.gui.screen();\n",
+      "to": "\n        net.minecraft.client.gui.screens.Screen currentScreen = mc.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            mc.gui.hud.setOverlayMessage(message.copy().withStyle(style -> style.withInsertion(OWN_FEEDBACK_MARK)), false);\n",
+      "to": "\n            mc.gui.setOverlayMessage(message.copy().withStyle(style -> style.withInsertion(OWN_FEEDBACK_MARK)), false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),\n",
+      "to": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/QuickSetupScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        GuiGraphicsExtractor g;\n",
+      "to": "\n        GuiGraphics g;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        @Override public void text(String text, int x, int y, int argb) { g.text(font, text, x, y, argb, false); }\n",
+      "to": "\n        @Override public void text(String text, int x, int y, int argb) { g.drawString(font, text, x, y, argb, false); }\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(g, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(g, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/WarmupHudOverlay.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    static void render(GuiGraphicsExtractor g) {\n",
+      "to": "\n    static void render(GuiGraphics g) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc == null || mc.gui.screen() != null) return;\n",
+      "to": "\n        if (mc == null || mc.screen != null) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    static void renderOnScreen(net.minecraft.client.gui.screens.Screen screen, GuiGraphicsExtractor g) {\n",
+      "to": "\n    static void renderOnScreen(net.minecraft.client.gui.screens.Screen screen, GuiGraphics g) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private static void draw(GuiGraphicsExtractor g, boolean onMenu) {\n",
+      "to": "\n    private static void draw(GuiGraphics g, boolean onMenu) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (cfg == null || mc == null || mc.gui.hud.isHidden()) return;\n",
+      "to": "\n        if (cfg == null || mc == null || mc.options.hideGui) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.text(font, view.text(), x + 5, y + 4, 0xFFFFFFFF, true);\n",
+      "to": "\n        g.drawString(font, view.text(), x + 5, y + 4, 0xFFFFFFFF, true);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/BookPageMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    @Inject(method = \"extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V\", at = @At(\"HEAD\"))\n",
+      "to": "\n    @Inject(method = \"render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V\", at = @At(\"HEAD\"))\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$forceResplit(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial, CallbackInfo ci) {\n",
+      "to": "\n    private void nyanlex$forceResplit(GuiGraphics g, int mouseX, int mouseY, float partial, CallbackInfo ci) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/BossBarMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n * inside 26.2's {@code BossHealthOverlay#extractRenderState}. The name is centred over the bar, so\n",
+      "to": "\n * inside 26.2's {@code BossHealthOverlay#render}. The name is centred over the bar, so\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"extractRenderState\",\n",
+      "to": "\n            method = \"render\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    target = \"Lnet/minecraft/client/gui/GuiGraphicsExtractor;text\"\n",
+      "to": "\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString\"\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$bossBar(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int color) {\n",
+      "to": "\n    private void nyanlex$bossBar(GuiGraphics g, Font font, Component text, int x, int y, int color) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.text(font, text, x, y, color));\n",
+      "to": "\n            com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.drawString(font, text, x, y, color));\n",
+      "count": 2
+    },
+    {
+      "from": "\n                                () -> g.text(font, translated, center - font.width(translated) / 2, y, color));\n",
+      "to": "\n                                () -> g.drawString(font, translated, center - font.width(translated) / 2, y, color));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                                () -> g.text(font, line, center - font.width(line) / 2, ly, color));\n",
+      "to": "\n                                () -> g.drawString(font, line, center - font.width(line) / 2, ly, color));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    () -> g.text(font, text, x, y, color));\n",
+      "to": "\n                    () -> g.drawString(font, text, x, y, color));\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/ChatComponentAccessor.java": [
+    {
+      "from": "\nimport net.minecraft.client.multiplayer.chat.GuiMessage;\n",
+      "to": "\nimport net.minecraft.client.GuiMessage;\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/ChatComposerMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    @Inject(method = \"extractRenderState\", at = @At(\"TAIL\"), require = 1)\n",
+      "to": "\n    @Inject(method = \"render\", at = @At(\"TAIL\"), require = 1)\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$renderComposer(GuiGraphicsExtractor g, int mx, int my, float delta, CallbackInfo ci) {\n",
+      "to": "\n    private void nyanlex$renderComposer(GuiGraphics g, int mx, int my, float delta, CallbackInfo ci) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            nyanlex$draft.extractRenderState(g, mx, my, delta);\n",
+      "to": "\n            nyanlex$draft.render(g, mx, my, delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            nyanlex$search.extractRenderState(g, mx, my, delta);\n",
+      "to": "\n            nyanlex$search.render(g, mx, my, delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n    @Unique @Override public boolean current() { return minecraft.gui.screen() == this; }\n",
+      "to": "\n    @Unique @Override public boolean current() { return minecraft.screen == this; }\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/EntityNameTagMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.renderer.state.level.CameraRenderState;\n",
+      "to": "\nimport net.minecraft.client.renderer.state.CameraRenderState;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    + \"Lnet/minecraft/client/renderer/state/level/CameraRenderState;I)V\",\n",
+      "to": "\n                    + \"Lnet/minecraft/client/renderer/state/CameraRenderState;)V\",\n",
+      "count": 2
+    },
+    {
+      "from": "\n                            + \"Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V\"),\n",
+      "to": "\n                            + \"Lnet/minecraft/client/renderer/state/CameraRenderState;)V\"),\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"submitNameDisplay(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;\"\n",
+      "to": "\n            method = \"submitNameTag(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;\"\n",
+      "count": 2
+    },
+    {
+      "from": "\n                                            CameraRenderState camera, int offset,\n",
+      "to": "\n                                            CameraRenderState camera,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                            + \"Lnet/minecraft/network/chat/Component;ZI\"\n",
+      "to": "\n                            + \"Lnet/minecraft/network/chat/Component;ZID\"\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/GuiGraphicsTextMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n * Translates arbitrary GUI text drawn through 26.2's {@link GuiGraphicsExtractor} — the general\n",
+      "to": "\n * Translates arbitrary GUI text drawn through 26.2's {@link GuiGraphics} — the general\n",
+      "count": 1
+    },
+    {
+      "from": "\n * 5-arg / {@code textWithBackdrop} / {@code centeredText} variants all delegate into these. So we\n",
+      "to": "\n * 5-arg / {@code drawStringWithBackdrop} / {@code drawCenteredString} variants all delegate into these. So we\n",
+      "count": 1
+    },
+    {
+      "from": "\n@Mixin(GuiGraphicsExtractor.class)\n",
+      "to": "\n@Mixin(GuiGraphics.class)\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"text(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)V\",\n",
+      "to": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)V\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"text(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V\",\n",
+      "to": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V\",\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/HudMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.Hud;\n",
+      "to": "\nimport net.minecraft.client.gui.Gui;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n * ({@code extractSelectedItemName}), title / subtitle ({@code extractTitle}) and the\n",
+      "to": "\n * ({@code renderSelectedItemName}), title / subtitle ({@code renderTitle}) and the\n",
+      "count": 1
+    },
+    {
+      "from": "\n * action-bar / overlay message ({@code extractOverlayMessage}). Each redirects the\n",
+      "to": "\n * action-bar / overlay message ({@code renderOverlayMessage}). Each redirects the\n",
+      "count": 1
+    },
+    {
+      "from": "\n * {@code GuiGraphicsExtractor.text}/{@code textWithBackdrop} call so the per-surface mode + engine\n",
+      "to": "\n * {@code GuiGraphics.text}/{@code drawStringWithBackdrop} call so the per-surface mode + engine\n",
+      "count": 1
+    },
+    {
+      "from": "\n@Mixin(Hud.class)\n",
+      "to": "\n@Mixin(Gui.class)\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$prepareScoreboard(GuiGraphicsExtractor graphics,\n",
+      "to": "\n    private void nyanlex$prepareScoreboard(GuiGraphics graphics,\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$clearScoreboard(GuiGraphicsExtractor graphics,\n",
+      "to": "\n    private void nyanlex$clearScoreboard(GuiGraphics graphics,\n",
+      "count": 1
+    },
+    {
+      "from": "\n    @Inject(method = \"extractRenderState\", at = @At(\"TAIL\"), require = 0)\n",
+      "to": "\n    @Inject(method = \"render\", at = @At(\"TAIL\"), require = 0)\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$debugRequests(GuiGraphicsExtractor graphics,\n",
+      "to": "\n    private void nyanlex$debugRequests(GuiGraphics graphics,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.text(font, Component.literal(header), x, y, 0xFFFFD060, false);\n",
+      "to": "\n                graphics.drawString(font, Component.literal(header), x, y, 0xFFFFD060, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.text(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);\n",
+      "to": "\n                graphics.drawString(font, Component.literal(tokenLine), x, y + 11, 0xFF80D8FF, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    graphics.text(font, Component.literal(prefix + body), x, row, color, false);\n",
+      "to": "\n                    graphics.drawString(font, Component.literal(prefix + body), x, row, color, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    target = \"Lnet/minecraft/client/gui/GuiGraphicsExtractor;text\"\n",
+      "to": "\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString\"\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$scoreboard(GuiGraphicsExtractor g, Font font, Component text,\n",
+      "to": "\n    private void nyanlex$scoreboard(GuiGraphics g, Font font, Component text,\n",
+      "count": 1
+    },
+    {
+      "from": "\n            com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.text(font, text, x, y, color, shadow));\n",
+      "to": "\n            com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.drawString(font, text, x, y, color, shadow));\n",
+      "count": 2
+    },
+    {
+      "from": "\n                    () -> g.text(font, rendered, x, y, color, shadow));\n",
+      "to": "\n                    () -> g.drawString(font, rendered, x, y, color, shadow));\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"extractSelectedItemName(Lnet/minecraft/client/gui/GuiGraphicsExtractor;I)V\",\n",
+      "to": "\n            method = \"renderSelectedItemName(Lnet/minecraft/client/gui/GuiGraphics;I)V\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    target = \"Lnet/minecraft/client/gui/GuiGraphicsExtractor;textWithBackdrop\"\n",
+      "to": "\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawStringWithBackdrop\"\n",
+      "count": 3
+    },
+    {
+      "from": "\n    private void nyanlex$heldName(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "to": "\n    private void nyanlex$heldName(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.textWithBackdrop(font, text, x, y, width, color));\n",
+      "to": "\n            com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(() -> g.drawStringWithBackdrop(font, text, x, y, width, color));\n",
+      "count": 7
+    },
+    {
+      "from": "\n            method = \"extractTitle\",\n",
+      "to": "\n            method = \"renderTitle\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$title(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "to": "\n    private void nyanlex$title(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"extractOverlayMessage\",\n",
+      "to": "\n            method = \"renderOverlayMessage\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$actionBar(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "to": "\n    private void nyanlex$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private static void nyanlex$backdrop(String surfaceId, GuiGraphicsExtractor g, Font font, Component text,\n",
+      "to": "\n    private static void nyanlex$backdrop(String surfaceId, GuiGraphics g, Font font, Component text,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                            () -> g.textWithBackdrop(font, translated, center - w / 2, y, w, color));\n",
+      "to": "\n                            () -> g.drawStringWithBackdrop(font, translated, center - w / 2, y, w, color));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                            () -> g.textWithBackdrop(font, line, center - w / 2, ly, w, color));\n",
+      "to": "\n                            () -> g.drawStringWithBackdrop(font, line, center - w / 2, ly, w, color));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                () -> g.textWithBackdrop(font, text, x, y, width, color));\n",
+      "to": "\n                () -> g.drawStringWithBackdrop(font, text, x, y, width, color));\n",
+      "count": 1
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "1.17": {
+    "fabricApi": "0.46.1+1.17",
+    "sourceProject": "fabric1171",
+    "java": 16,
+    "fabricApiId": "fabric"
+  },
+  "1.18": {
+    "fabricApi": "0.46.6+1.18",
+    "sourceProject": "fabric1182",
+    "java": 17,
+    "fabricApiId": "fabric"
+  },
+  "1.18.1": {
+    "fabricApi": "0.46.6+1.18",
+    "sourceProject": "fabric1182",
+    "java": 17,
+    "fabricApiId": "fabric"
+  },
+  "1.19": {
+    "fabricApi": "0.58.0+1.19",
+    "sourceProject": "fabric1182",
+    "java": 17,
+    "profile": "pre1193",
+    "fabricApiId": "fabric"
+  },
+  "1.19.1": {
+    "fabricApi": "0.58.5+1.19.1",
+    "sourceProject": "fabric1182",
+    "java": 17,
+    "profile": "pre1193",
+    "patchProfiles": [
+      "signed1191"
+    ],
+    "fabricApiId": "fabric"
+  },
+  "1.19.2": {
+    "fabricApi": "0.77.0+1.19.2",
+    "sourceProject": "fabric1182",
+    "java": 17,
+    "profile": "pre1193",
+    "patchProfiles": [
+      "signed1191"
+    ],
+    "fabricApiId": "fabric-api"
+  },
+  "1.19.3": {
+    "fabricApi": "0.76.1+1.19.3",
+    "sourceProject": "fabric1194",
+    "java": 17,
+    "profile": "pre1194",
+    "fabricApiId": "fabric-api"
+  },
+  "1.20": {
+    "fabricApi": "0.83.0+1.20",
+    "sourceProject": "fabric120",
+    "java": 17,
+    "fabricApiId": "fabric-api"
+  },
+  "1.20.2": {
+    "fabricApi": "0.91.6+1.20.2",
+    "sourceProject": "fabric120",
+    "java": 17,
+    "profile": "post1201",
+    "fabricApiId": "fabric-api"
+  },
+  "1.20.3": {
+    "fabricApi": "0.91.1+1.20.3",
+    "sourceProject": "fabric120",
+    "java": 17,
+    "profile": "post1201",
+    "patchProfiles": [
+      "post1202"
+    ],
+    "sourceOverrides": {
+      "com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java": "."
+    },
+    "fabricApiId": "fabric-api"
+  },
+  "1.20.4": {
+    "fabricApi": "0.97.3+1.20.4",
+    "sourceProject": "fabric120",
+    "java": 17,
+    "profile": "post1201",
+    "patchProfiles": [
+      "post1202"
+    ],
+    "sourceOverrides": {
+      "com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java": "."
+    },
+    "fabricApiId": "fabric-api"
+  }
+}

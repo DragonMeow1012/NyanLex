@@ -1,0 +1,10 @@
+{
+  "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {"from":"for (ItemStack stack : inventory.items) registerItemEntity(stack);\n        for (ItemStack stack : inventory.armor) registerItemEntity(stack);", "to":"for (int slot = 0; slot < inventory.getContainerSize(); slot++) registerItemEntity(inventory.getItem(slot));\n        for (var slot : new net.minecraft.world.entity.EquipmentSlot[] { net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.entity.EquipmentSlot.FEET }) registerItemEntity(mc.player.getItemBySlot(slot));"},
+    {"from":"tag.getCompound(\"ExtraAttributes\")", "to":"tag.getCompoundOrEmpty(\"ExtraAttributes\")"},
+    {"from":"tag.getString(\"id\")", "to":"tag.getStringOr(\"id\", \"\")"},
+    {"from":"extra.getString(\"id\")", "to":"extra.getStringOr(\"id\", \"\")"},
+    {"from":"tag.getString(\"modifier\")", "to":"tag.getStringOr(\"modifier\", \"\")"},
+    {"from":"extra.getString(\"modifier\")", "to":"extra.getStringOr(\"modifier\", \"\")"}
+  ]
+}

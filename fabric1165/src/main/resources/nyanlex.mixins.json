@@ -9,9 +9,11 @@
     "EntityNameTagMixin",
     "FontTextMixin",
     "OptionsScreenMixin",
+    "AdvancementToastMixin",
     "ScreenRenderScopeMixin",
     "ScreenKeyMixin",
-    "ChatComposerMixin"
+    "ChatComposerMixin",
+    "JadeObjectNameMixin"
   ],
   "injectors": {
     "defaultRequire": 0

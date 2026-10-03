@@ -30,7 +30,7 @@ import java.util.function.Function;
 /**
  * MC 1.20.1 HUD text translation. 1.20.1 has no {@code drawStringWithBackdrop}, and renders
  * title / subtitle / action-bar INLINE in {@code render()} (the dedicated renderTitle /
- * renderOverlayMessage methods were split out only in 1.20.2), so this covers the two surfaces
+ * renderOverlayMessage methods were split out only in 1.20.5), so this covers the two surfaces
  * that 1.20.1 draws in their own methods via {@code drawString}: the scoreboard sidebar
  * ({@code displayScoreboardSidebar}) and the held-item name ({@code renderSelectedItemName}).
  * The shared {@code render} redirect additionally identifies the title, subtitle and

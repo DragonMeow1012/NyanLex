@@ -1,0 +1,282 @@
+{
+  "com/dragonmeow/nyanlex/neoforge/CodexEffortScreen.java": [
+    {
+      "from": "\n            super(minecraft, CodexEffortScreen.this.width, CodexEffortScreen.this.height,\n",
+      "to": "\n            super(minecraft, CodexEffortScreen.this.width, CodexEffortScreen.this.height - 76,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    28, CodexEffortScreen.this.height - 48, 18);\n",
+      "to": "\n                    28, 18);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        @Override protected void renderBackground(GuiGraphics graphics) {\n",
+      "to": "\n        @Override public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            CodexEffortScreen.this.renderBackground(graphics);\n",
+      "to": "\n            CodexEffortScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n",
+      "to": "\n            graphics.fill(0, this.getY(), this.width, this.getBottom(), 0x20204A60); super.renderWidget(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/CodexModelScreen.java": [
+    {
+      "from": "\n            super(minecraft, CodexModelScreen.this.width, CodexModelScreen.this.height,\n",
+      "to": "\n            super(minecraft, CodexModelScreen.this.width, CodexModelScreen.this.height - 96,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    48, CodexModelScreen.this.height - 48, 18);\n",
+      "to": "\n                    48, 18);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        @Override protected void renderBackground(GuiGraphics graphics) {\n",
+      "to": "\n        @Override public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            CodexModelScreen.this.renderBackground(graphics);\n",
+      "to": "\n            CodexModelScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n",
+      "to": "\n            graphics.fill(0, this.getY(), this.width, this.getBottom(), 0x20204A60); super.renderWidget(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/ItemWarmupConfirmScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/NyanLexNeoForge.java": [
+    {
+      "from": "\nimport net.minecraftforge.api.distmarker.Dist;\n",
+      "to": "\nimport net.neoforged.api.distmarker.Dist;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.eventbus.api.IEventBus;\n",
+      "to": "\nimport net.neoforged.bus.api.IEventBus;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.eventbus.api.EventPriority;\n",
+      "to": "\nimport net.neoforged.bus.api.EventPriority;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.eventbus.api.SubscribeEvent;\n",
+      "to": "\nimport net.neoforged.bus.api.SubscribeEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;\n",
+      "to": "\nimport net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.fml.common.Mod;\n",
+      "to": "\nimport net.neoforged.fml.common.Mod;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.fml.loading.FMLPaths;\n",
+      "to": "\nimport net.neoforged.fml.loading.FMLPaths;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.client.event.ClientChatReceivedEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.client.event.ClientChatReceivedEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.event.TickEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.event.TickEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.client.event.RegisterKeyMappingsEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.common.MinecraftForge;\n",
+      "to": "\nimport net.neoforged.neoforge.common.NeoForge;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.event.entity.player.ItemTooltipEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        return net.minecraftforge.fml.ModList.get().getModContainerById(MOD_ID)\n",
+      "to": "\n        return net.neoforged.fml.ModList.get().getModContainerById(MOD_ID)\n",
+      "count": 1
+    },
+    {
+      "from": "\n        for (net.minecraftforge.forgespi.language.IModInfo info : net.minecraftforge.fml.ModList.get().getMods()) {\n",
+      "to": "\n        for (net.neoforged.neoforgespi.language.IModInfo info : net.neoforged.fml.ModList.get().getMods()) {\n",
+      "count": 2
+    },
+    {
+      "from": "\n        MinecraftForge.EVENT_BUS.register(this);\n",
+      "to": "\n        NeoForge.EVENT_BUS.register(this);\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onRenderNameTag(net.minecraftforge.client.event.RenderNameTagEvent event) {\n",
+      "to": "\n    public void onRenderNameTag(net.neoforged.neoforge.client.event.RenderNameTagEvent event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onScreenRenderPre(net.minecraftforge.client.event.ScreenEvent.Render.Pre event) {\n",
+      "to": "\n    public void onScreenRenderPre(net.neoforged.neoforge.client.event.ScreenEvent.Render.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onScreenRenderPost(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {\n",
+      "to": "\n    public void onScreenRenderPost(net.neoforged.neoforge.client.event.ScreenEvent.Render.Post event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentMousePressed(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {\n",
+      "to": "\n    public void onConsentMousePressed(net.neoforged.neoforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentMouseReleased(net.minecraftforge.client.event.ScreenEvent.MouseButtonReleased.Pre event) {\n",
+      "to": "\n    public void onConsentMouseReleased(net.neoforged.neoforge.client.event.ScreenEvent.MouseButtonReleased.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentMouseScrolled(net.minecraftforge.client.event.ScreenEvent.MouseScrolled.Pre event) {\n",
+      "to": "\n    public void onConsentMouseScrolled(net.neoforged.neoforge.client.event.ScreenEvent.MouseScrolled.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (ConsentOverlay.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDelta())) {\n",
+      "to": "\n            if (ConsentOverlay.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDeltaY())) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentKeyPressed(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre event) {\n",
+      "to": "\n    public void onConsentKeyPressed(net.neoforged.neoforge.client.event.ScreenEvent.KeyPressed.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentKeyReleased(net.minecraftforge.client.event.ScreenEvent.KeyReleased.Pre event) {\n",
+      "to": "\n    public void onConsentKeyReleased(net.neoforged.neoforge.client.event.ScreenEvent.KeyReleased.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onConsentCharTyped(net.minecraftforge.client.event.ScreenEvent.CharacterTyped.Pre event) {\n",
+      "to": "\n    public void onConsentCharTyped(net.neoforged.neoforge.client.event.ScreenEvent.CharacterTyped.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onWarmupHud(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {\n",
+      "to": "\n    public void onWarmupHud(net.neoforged.neoforge.client.event.RenderGuiOverlayEvent.Post event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (event.getOverlay() == net.minecraftforge.client.gui.overlay.VanillaGuiOverlay.HOTBAR.type()) {\n",
+      "to": "\n            if (event.getOverlay() == net.neoforged.neoforge.client.gui.overlay.VanillaGuiOverlay.HOTBAR.type()) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onScreenKeyPressed(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre event) {\n",
+      "to": "\n    public void onScreenKeyPressed(net.neoforged.neoforge.client.event.ScreenEvent.KeyPressed.Pre event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n                net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds.PERIODIC_NOTIFICATION,\n",
+      "to": "\n                net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.PERIODIC_NOTIFICATION,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/QuickSetupScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationConfigScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        return super.mouseScrolled(mouseX, mouseY, delta);\n",
+      "to": "\n        return super.mouseScrolled(mouseX, mouseY, horizontalDelta, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationLanguageScreen.java": [
+    {
+      "from": "\n            super(minecraft, TranslationLanguageScreen.this.width, TranslationLanguageScreen.this.height,\n",
+      "to": "\n            super(minecraft, TranslationLanguageScreen.this.width, TranslationLanguageScreen.this.height - 109,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    48, TranslationLanguageScreen.this.height - 61, 18);\n",
+      "to": "\n                    48, 18);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        @Override protected void renderBackground(GuiGraphics graphics) {\n",
+      "to": "\n        @Override public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            TranslationLanguageScreen.this.renderBackground(graphics);\n",
+      "to": "\n            TranslationLanguageScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n",
+      "to": "\n            graphics.fill(0, this.getY(), this.width, this.getBottom(), 0x20204A60); super.renderWidget(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationManualScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/ChatComposerMixin.java": [
+    {
+      "from": "\n    private void nyanlex$scrollComposer(double mx, double my, double amount, CallbackInfoReturnable<Boolean> ci) {\n",
+      "to": "\n    private void nyanlex$scrollComposer(double mx, double my, double horizontal, double amount, CallbackInfoReturnable<Boolean> ci) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/GuiScoreboardMixin.java": [
+    {
+      "from": "    public abstract Font getFont();\n",
+      "to": "    public abstract Font getFont();\n    @Shadow private Component overlayMessageString;\n    @Shadow private Component title;\n    @Shadow private Component subtitle;\n",
+      "count": 1
+    },
+    {
+      "from": "    @Redirect(\n            method = \"renderSelectedItemName\",\n            at = @At(value = \"INVOKE\",\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawStringWithBackdrop\"\n                            + \"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)I\"),\n            require = 0)\n    private int nyanlex$heldName(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n        if (!HookGuard.enter(\"GuiScoreboard.heldName\")) return g.drawStringWithBackdrop(font, text, x, y, width, color);\n        try {\n            TranslationService s = NyanLexNeoForge.service();\n            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();\n            if (mc != null && mc.player != null) {\n                NyanLexNeoForge.registerItemEntity(mc.player.getMainHandItem());\n            }\n            return nyanlex$backdrop(\"held\", g, font, text, x, y, width, color, s == null ? null : s::translateHeld);\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.heldName\", guardError);\n            return g.drawStringWithBackdrop(font, text, x, y, width, color);\n        }\n    }\n\n    @Redirect(\n            method = \"renderTitle\",\n            at = @At(value = \"INVOKE\",\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawStringWithBackdrop\"\n                            + \"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)I\"),\n            require = 0)\n    private int nyanlex$title(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n        if (!HookGuard.enter(\"GuiScoreboard.title\")) return g.drawStringWithBackdrop(font, text, x, y, width, color);\n        try {\n            TranslationService s = NyanLexNeoForge.service();\n            return nyanlex$backdrop(\"title\", g, font, text, x, y, width, color, s == null ? null : s::translateTitle);\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.title\", guardError);\n            return g.drawStringWithBackdrop(font, text, x, y, width, color);\n        }\n    }\n\n    @Redirect(\n            method = \"renderOverlayMessage\",\n            at = @At(value = \"INVOKE\",\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawStringWithBackdrop\"\n                            + \"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)I\"),\n            require = 0)\n    private int nyanlex$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n        if (NyanLexNeoForge.isOwnFeedback(text)) return g.drawStringWithBackdrop(font, text, x, y, width, color);\n        if (!HookGuard.enter(\"GuiScoreboard.actionBar\")) return g.drawStringWithBackdrop(font, text, x, y, width, color);\n        try {\n            TranslationService s = NyanLexNeoForge.service();\n            return nyanlex$backdrop(\"actionBar\", g, font, text, x, y, width, color, s == null ? null : s::translateActionBar);\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.actionBar\", guardError);\n            return g.drawStringWithBackdrop(font, text, x, y, width, color);\n        }\n    }\n\n    /** Centred backdrop draw shared by held name / title / subtitle / action bar; re-centres the\n     *  translation, and stacks 原文／譯文 upward when the surface produced a 2-line (\\n) component. */\n    private static int nyanlex$backdrop(String surfaceId, GuiGraphics g, Font font, Component text,\n                                             int x, int y, int width, int color,\n                                             Function<String, TranslationDecision> fn) {\n        if (fn != null && text != null) {\n            Component translated = NeoTextStyle.renderTranslated(surfaceId, text, fn);\n            if (translated != null) {\n                int center = x + font.width(text) / 2; // keep the original's centre\n                java.util.List<Component> lines = NeoTextStyle.splitLines(translated);\n                if (lines.size() <= 1) {\n                    int w = font.width(translated);\n                    return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(\n                            () -> g.drawStringWithBackdrop(font, translated, center - w / 2, y, w, color));\n                }\n                // 原文＋翻譯: stack lines upward (原文 on top, 譯文 at the baseline).\n                int n = lines.size();\n                int ret = 0;\n                for (int k = 0; k < n; k++) {\n                    Component line = lines.get(k);\n                    int w = font.width(line);\n                    int ly = y - (n - 1 - k) * NeoTextStyle.STACK_LINE_GAP;\n                    ret = com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(\n                            () -> g.drawStringWithBackdrop(font, line, center - w / 2, ly, w, color));\n                }\n                return ret;\n            }\n        }\n        return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(\n                () -> g.drawStringWithBackdrop(font, text, x, y, width, color));\n    }\n}\n",
+      "to": "    @Redirect(\n            method = \"renderSelectedItemName\",\n            at = @At(value = \"INVOKE\",\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString\"\n                            + \"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I\"),\n            require = 0)\n    private int nyanlex$heldName(GuiGraphics g, Font font, Component text, int x, int y, int color) {\n        if (!HookGuard.enter(\"GuiScoreboard.heldName\")) return g.drawString(font, text, x, y, color);\n        try {\n            TranslationService service = NyanLexNeoForge.service();\n            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();\n            if (mc != null && mc.player != null) {\n                NyanLexNeoForge.registerItemEntity(mc.player.getMainHandItem());\n            }\n            return nyanlex$drawTranslated(\"held\", service == null ? null : service::translateHeld,\n                    g, font, text, x, y, color);\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.heldName\", guardError);\n            return g.drawString(font, text, x, y, color);\n        }\n    }\n\n    @Redirect(method = \"render\", at = @At(value = \"INVOKE\",\n            target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I\"), require = 0)\n    private int nyanlex$inlineHud(GuiGraphics g, Font font, Component text, int x, int y, int color) {\n        if (!HookGuard.enter(\"GuiScoreboard.inlineHud\")) return g.drawString(font, text, x, y, color);\n        try {\n            TranslationService service = NyanLexNeoForge.service();\n            if (NyanLexNeoForge.isOwnFeedback(text)) {\n                return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(\n                        () -> g.drawString(font, text, x, y, color));\n            }\n            if (service != null && text == overlayMessageString) {\n                return nyanlex$drawTranslated(\"actionBar\", service::translateActionBar, g, font, text, x, y, color);\n            }\n            if (service != null && (text == title || text == subtitle)) {\n                return nyanlex$drawTranslated(\"title\", service::translateTitle, g, font, text, x, y, color);\n            }\n            return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(\n                    () -> g.drawString(font, text, x, y, color));\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.inlineHud\", guardError);\n            return g.drawString(font, text, x, y, color);\n        }\n    }\n\n    private static int nyanlex$drawTranslated(String id, Function<String, TranslationDecision> fn,\n                                                    GuiGraphics g, Font font, Component text,\n                                                    int x, int y, int color) {\n        Component shown = fn == null || text == null ? null : NeoTextStyle.renderTranslated(id, text, fn);\n        if (shown == null) shown = text;\n        int center = x + font.width(text) / 2;\n        List<Component> lines = NeoTextStyle.splitLines(shown);\n        int ret = 0;\n        for (int i = 0; i < lines.size(); i++) {\n            Component line = lines.get(i);\n            int ly = y - (lines.size() - 1 - i) * NeoTextStyle.STACK_LINE_GAP;\n            ret = com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(\n                    () -> g.drawString(font, line, center - font.width(line) / 2, ly, color));\n        }\n        return ret;\n    }\n}\n",
+      "count": 1
+    }
+  ]
+}

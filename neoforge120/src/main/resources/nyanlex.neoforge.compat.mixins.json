@@ -4,7 +4,8 @@
   "package": "com.dragonmeow.nyanlex.neoforge.mixin",
   "compatibilityLevel": "JAVA_17",
   "client": [
-    "TextFieldMixin"
+    "TextFieldMixin",
+    "JadeObjectNameMixin"
   ],
   "injectors": {
     "defaultRequire": 0

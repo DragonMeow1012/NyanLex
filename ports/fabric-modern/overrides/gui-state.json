@@ -1,0 +1,6 @@
+{
+  "com/dragonmeow/nyanlex/fabric/ConsentOverlay.java": "fabric12111/src/main/java/com/dragonmeow/nyanlex/fabric/ConsentOverlay.java",
+  "com/dragonmeow/nyanlex/fabric/mixin/BossBarMixin.java": "fabric12111/src/main/java/com/dragonmeow/nyanlex/fabric/mixin/BossBarMixin.java",
+  "com/dragonmeow/nyanlex/fabric/mixin/GuiGraphicsTextMixin.java": "fabric12111/src/main/java/com/dragonmeow/nyanlex/fabric/mixin/GuiGraphicsTextMixin.java",
+  "com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java": "fabric12111/src/main/java/com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java"
+}

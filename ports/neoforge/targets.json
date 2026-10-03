@@ -1,0 +1,143 @@
+{
+  "1.20.2": {
+    "sourceProject": "neoforge120",
+    "profile": "pre-components-1202",
+    "neoforge": "20.2.93",
+    "java": 17,
+    "toolchain": 21
+  },
+  "1.20.3": {
+    "sourceProject": "neoforge120",
+    "profile": "pre-components",
+    "neoforge": "20.3.8-beta",
+    "java": 17,
+    "toolchain": 21
+  },
+  "1.20.4": {
+    "sourceProject": "neoforge120",
+    "profile": "pre-components",
+    "neoforge": "20.4.251",
+    "java": 17,
+    "toolchain": 21
+  },
+  "1.20.5": {
+    "sourceProject": "neoforge",
+    "profile": "components-pre21",
+    "neoforge": "20.5.21-beta",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.20.6": {
+    "sourceProject": "neoforge",
+    "profile": "components-pre21",
+    "neoforge": "20.6.141",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21": {
+    "sourceProject": "neoforge",
+    "profile": "components",
+    "neoforge": "21.0.167",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21.2": {
+    "sourceProject": "neoforge",
+    "profile": "render-state",
+    "neoforge": "21.2.1-beta",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21.3": {
+    "sourceProject": "neoforge",
+    "profile": "render-state",
+    "neoforge": "21.3.97",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21.4": {
+    "sourceProject": "neoforge",
+    "profile": "render-state",
+    "neoforge": "21.4.158",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21.5": {
+    "sourceProject": "neoforge",
+    "profile": "text-state",
+    "neoforge": "21.5.98",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21.6": {
+    "sourceProject": "neoforge",
+    "profile": "gui-state",
+    "neoforge": "21.6.20-beta",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21.7": {
+    "sourceProject": "neoforge",
+    "profile": "gui-state",
+    "neoforge": "21.7.25-beta",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21.8": {
+    "sourceProject": "neoforge",
+    "profile": "gui-state",
+    "neoforge": "21.8.54",
+    "java": 21,
+    "toolchain": 21
+  },
+  "1.21.9": {
+    "sourceProject": "neoforge26",
+    "profile": "input-events",
+    "neoforge": "21.9.16-beta",
+    "java": 21,
+    "toolchain": 21,
+    "patchProfiles": [
+      "input-events",
+      "resource-identifiers"
+    ]
+  },
+  "1.21.10": {
+    "sourceProject": "neoforge26",
+    "profile": "input-events",
+    "neoforge": "21.10.64",
+    "java": 21,
+    "toolchain": 21,
+    "patchProfiles": [
+      "input-events",
+      "resource-identifiers"
+    ]
+  },
+  "1.21.11": {
+    "sourceProject": "neoforge26",
+    "profile": "input-events",
+    "neoforge": "21.11.45",
+    "java": 21,
+    "toolchain": 21
+  },
+  "26.1": {
+    "sourceProject": "neoforge26",
+    "profile": "unobfuscated",
+    "neoforge": "26.1.0.19-beta",
+    "java": 25,
+    "toolchain": 25
+  },
+  "26.1.1": {
+    "sourceProject": "neoforge26",
+    "profile": "unobfuscated",
+    "neoforge": "26.1.1.15-beta",
+    "java": 25,
+    "toolchain": 25
+  },
+  "26.1.2": {
+    "sourceProject": "neoforge26",
+    "profile": "unobfuscated",
+    "neoforge": "26.1.2.109",
+    "java": 25,
+    "toolchain": 25
+  }
+}

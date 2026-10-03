@@ -1,0 +1,151 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.17.21' apply false
+    id 'fabric-loom' version '1.17.21' apply false
+    id 'java'
+}
+
+def targets = new JsonSlurper().parse(file('targets.json'))
+def target = providers.gradleProperty('target').getOrElse('1.21')
+if (!targets.containsKey(target)) throw new GradleException("Unknown Fabric target: ${target}")
+def spec = targets[target]
+def unobfuscated = target.startsWith('26.')
+apply plugin: unobfuscated ? 'net.fabricmc.fabric-loom' : 'fabric-loom'
+
+def repositoryRoot = file('../..')
+def sourceProject = new File(repositoryRoot, spec.sourceProject).canonicalFile
+def releaseProperties = new Properties()
+new File(repositoryRoot, 'gradle.properties').withInputStream { releaseProperties.load(it) }
+version = releaseProperties.getProperty('mod_version')
+group = 'com.dragonmeow.nyanlex'
+base { archivesName = 'nyanlex' }
+layout.buildDirectory = file("build/${target}")
+
+repositories {
+    maven { url = 'https://maven.fabricmc.net/' }
+    mavenCentral()
+}
+dependencies {
+    minecraft "com.mojang:minecraft:${target}"
+    if (unobfuscated) {
+        implementation 'net.fabricmc:fabric-loader:0.19.3'
+        implementation "net.fabricmc.fabric-api:fabric-api:${spec.fabricApi}"
+    } else {
+        mappings loom.officialMojangMappings()
+        modImplementation 'net.fabricmc:fabric-loader:0.19.3'
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${spec.fabricApi}"
+    }
+}
+
+// API adapters replace only the affected platform classes. Translation logic and
+// resources remain shared with the maintained source profile above.
+def adapterRoots = [file("adapters/${spec.profile}/java"), file("adapters/${target}/java")]
+def patches = [:]
+def sourceOverrides = [:]
+def overrideFile = file("overrides/${spec.profile}.json")
+if (overrideFile.exists()) sourceOverrides.putAll(new JsonSlurper().parse(overrideFile))
+def patchFiles = (spec.patchProfiles ?: [spec.profile]).collect { file("patches/${it}.json") }
+patchFiles.add(file("patches/${target}.json"))
+patchFiles.findAll { it.exists() }.each { patchFile ->
+    new JsonSlurper().parse(patchFile).each { path, edits ->
+        // A maintained alternate class supersedes the base profile's edits.
+        if (sourceOverrides.containsKey(path) && patchFile.name != "${spec.profile}.json") return
+        patches.computeIfAbsent(path) { [] }.addAll(edits)
+    }
+}
+sourceOverrides.keySet().each { patches.computeIfAbsent(it) { [] } }
+def sourceFile = { path -> sourceOverrides.containsKey(path)
+    ? new File(repositoryRoot, sourceOverrides[path]) : new File(sourceProject, "src/main/java/${path}") }
+def generatedAdapters = layout.buildDirectory.dir('generated/api-adapters')
+def generateAdapters = tasks.register('generateApiAdapters') {
+    inputs.files(patches.keySet().collect { sourceFile(it) })
+    inputs.property 'edits', JsonOutput.toJson(patches)
+    inputs.property 'sourceOverrides', JsonOutput.toJson(sourceOverrides)
+    outputs.dir generatedAdapters
+    doLast {
+        delete generatedAdapters
+        patches.each { path, edits ->
+            def text = sourceFile(path).getText('UTF-8').replace('\r\n', '\n')
+            edits.each { edit ->
+                if (!text.contains(edit.from)) throw new GradleException("Stale API adapter ${path}: ${edit.from}")
+                text = text.replace(edit.from, edit.to)
+            }
+            def output = new File(generatedAdapters.get().asFile, path)
+            output.parentFile.mkdirs()
+            output.setText(text, 'UTF-8')
+        }
+    }
+}
+def replacements = adapterRoots.findAll { it.exists() }.collectMany { root ->
+    fileTree(root).matching { include '**/*.java' }.files.collect {
+        root.toPath().relativize(it.toPath()).toString().replace('\\', '/')
+    }
+}.toSet()
+replacements.addAll(patches.keySet())
+sourceSets {
+    main {
+        java {
+            srcDir new File(sourceProject, 'src/main/java')
+            adapterRoots.each { srcDir it }
+            srcDir generatedAdapters
+            exclude { entry ->
+                def isShared = entry.file.toPath().startsWith(new File(sourceProject, 'src/main/java').toPath())
+                isShared && replacements.contains(entry.relativePath.pathString)
+            }
+            exclude '**/hub/tool/**'
+        }
+        resources.srcDir new File(sourceProject, 'src/main/resources')
+    }
+}
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(spec.java as int) } }
+tasks.withType(JavaCompile).configureEach {
+    dependsOn generateAdapters
+    options.encoding = 'UTF-8'
+    options.release = spec.java as int
+}
+tasks.named('processResources') {
+    inputs.property 'version', project.version
+    inputs.property 'minecraftTarget', target
+    // Copy tasks otherwise retain resources removed from a maintained profile.
+    doFirst { delete destinationDir }
+    filesMatching('fabric.mod.json') { expand 'version': project.version }
+    doLast {
+        def metadataFile = new File(destinationDir, 'fabric.mod.json')
+        def metadata = new JsonSlurper().parse(metadataFile)
+        metadata.depends.minecraft = target
+        metadata.depends.java = ">=${spec.java}"
+        metadata.depends.fabricloader = '>=0.19.3'
+        metadataFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n'
+    }
+}
+tasks.named('jar') {
+    exclude 'assets/nyanslate/**', 'assets/mctranslator/**', '**/hub/tool/**'
+    from(new File(repositoryRoot, 'LICENSE')) { rename { 'LICENSE_NyanLex' } }
+    if (unobfuscated) archiveClassifier = "Fabric-${target}"
+}
+if (!unobfuscated) tasks.named('remapJar') { archiveClassifier = "Fabric-${target}" }
+
+def verifyPort = tasks.register('writePortVerification') {
+    dependsOn tasks.named('compileJava')
+    def report = layout.buildDirectory.file('port-verification.json')
+    inputs.property 'targetSpec', JsonOutput.toJson(spec)
+    inputs.files(sourceSets.main.compileClasspath)
+    outputs.file report
+    doLast {
+        report.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+            minecraft: target,
+            loader: 'Fabric',
+            fabricApi: spec.fabricApi,
+            sourceProject: spec.sourceProject,
+            profile: spec.profile,
+            java: spec.java,
+            classesDir: layout.buildDirectory.dir('classes/java/main').get().asFile.absolutePath,
+            compileClasspath: sourceSets.main.compileClasspath.files.collect { it.absolutePath },
+            sourceRoots: sourceSets.main.java.srcDirs.collect { it.absolutePath }
+        ])) + '\n'
+    }
+}
+tasks.named('build') { dependsOn verifyPort }

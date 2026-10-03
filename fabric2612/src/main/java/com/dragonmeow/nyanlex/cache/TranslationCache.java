@@ -3856,6 +3856,9 @@ public final class TranslationCache {
     }
 
     public int size() {
-        return memory.size();
+        // The in-memory map is deliberately an LRU and may contain only the most
+        // recent few thousand rows. UI totals describe the active durable cache,
+        // while max preserves newly accepted rows for non-persistent test/embed stores.
+        return store == null ? memory.size() : Math.max(memory.size(), store.size());
     }
 }

@@ -1,0 +1,286 @@
+{
+  "com/dragonmeow/nyanlex/neoforge26/ConsentOverlay.java": [
+    {
+      "from": "\n        Screen current = mc.gui.screen();\n",
+      "to": "\n        Screen current = mc.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc == null || mc.gui.screen() != anchor) {\n",
+      "to": "\n        if (mc == null || mc.screen != anchor) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc != null && was instanceof ConsentScreen && mc.gui.screen() == was) mc.setScreenAndShow(null);\n",
+      "to": "\n        if (mc != null && was instanceof ConsentScreen && mc.screen == was) mc.setScreenAndShow(null);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26AiScreen.java": [
+    {
+      "from": "\n        return this.minecraft != null && this.minecraft.gui.screen() == this;\n",
+      "to": "\n        return this.minecraft != null && this.minecraft.screen == this;\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/NyanLexNeoForge26.java": [
+    {
+      "from": "\n        if (keybindMigrationChecked || mc == null || mc.gui.screen() == null) return;\n",
+      "to": "\n        if (keybindMigrationChecked || mc == null || mc.screen == null) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (!(mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen)) return;\n",
+      "to": "\n        if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen)) return;\n",
+      "count": 2
+    },
+    {
+      "from": "\n        if (firstStartTried || mc == null || config == null || mc.gui.overlay() != null) return;\n",
+      "to": "\n        if (firstStartTried || mc == null || config == null || mc.getOverlay() != null) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.setScreenAndShow(new QuickSetupScreen(mc.gui.screen()));\n",
+      "to": "\n        mc.setScreenAndShow(new QuickSetupScreen(mc.screen));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return c;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return c;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (widget == null || mc == null || mc.gui.screen() == null) return false;\n",
+      "to": "\n        if (widget == null || mc == null || mc.screen == null) return false;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (widgetGui == mc.gui.screen()) return true;\n",
+      "to": "\n            if (widgetGui == mc.screen) return true;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            java.lang.reflect.Method screenGetter = mc.gui.screen().getClass().getMethod(\"getGui\");\n",
+      "to": "\n            java.lang.reflect.Method screenGetter = mc.screen.getClass().getMethod(\"getGui\");\n",
+      "count": 1
+    },
+    {
+      "from": "\n            return screenGetter.invoke(mc.gui.screen()) == widgetGui;\n",
+      "to": "\n            return screenGetter.invoke(mc.screen) == widgetGui;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return str;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return str;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().gui.screen();\n",
+      "to": "\n        net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (fcs != null && Minecraft.getInstance().gui.screen() != null\n",
+      "to": "\n        if (fcs != null && Minecraft.getInstance().screen != null\n",
+      "count": 1
+    },
+    {
+      "from": "\n                && Minecraft.getInstance().gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "to": "\n                && Minecraft.getInstance().screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "to": "\n        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.ChatScreen) return text;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return text;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return text;\n",
+      "to": "\n        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return text;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;\n",
+      "to": "\n        if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen) return text;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        return mc != null && mc.gui.screen() != null\n",
+      "to": "\n        return mc != null && mc.screen != null\n",
+      "count": 1
+    },
+    {
+      "from": "\n                && screenTranslationAllowed(mc.gui.screen())\n",
+      "to": "\n                && screenTranslationAllowed(mc.screen)\n",
+      "count": 1
+    },
+    {
+      "from": "\n                && SCREEN_RENDER_STACK.get().peek() == mc.gui.screen();\n",
+      "to": "\n                && SCREEN_RENDER_STACK.get().peek() == mc.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc == null || mc.gui.screen() == null) return;\n",
+      "to": "\n        if (mc == null || mc.screen == null) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            Object gui = mc.gui.screen().getClass().getMethod(\"getGui\").invoke(mc.gui.screen());\n",
+      "to": "\n            Object gui = mc.screen.getClass().getMethod(\"getGui\").invoke(mc.screen);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.gui.hud.setOverlayMessage(shown, false);\n",
+      "to": "\n        mc.gui.setOverlayMessage(shown, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                mc.gui.hud.getChat().addClientSystemMessage(original);\n",
+      "to": "\n                mc.gui.getChat().addClientSystemMessage(original);\n",
+      "count": 2
+    },
+    {
+      "from": "\n            if (replaceChatMessage(mc.gui.hud.getChat(), pending.displayedMessage, replacement)) {\n",
+      "to": "\n            if (replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, replacement)) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            mc.gui.hud.getChat().addClientSystemMessage(shown);\n",
+      "to": "\n            mc.gui.getChat().addClientSystemMessage(shown);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.gui.hud.getChat().addClientSystemMessage(shown);\n",
+      "to": "\n        mc.gui.getChat().addClientSystemMessage(shown);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                mc.gui.hud.getChat().rescaleChat();\n",
+      "to": "\n                mc.gui.getChat().rescaleChat();\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (TOOLTIP_CAPTURE.active(tooltipClient.gui.screen())) {\n",
+      "to": "\n            if (TOOLTIP_CAPTURE.active(tooltipClient.screen)) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    TOOLTIP_CAPTURE.record(tooltipClient.gui.screen(), source);\n",
+      "to": "\n                    TOOLTIP_CAPTURE.record(tooltipClient.screen, source);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            lastTooltipScreen = tooltipClient.gui.screen();\n",
+      "to": "\n            lastTooltipScreen = tooltipClient.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.gui.screen()));\n",
+      "to": "\n                    if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.screen));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    if (Neo26TextInput.isTyping(mc == null ? null : mc.gui.screen())) continue;\n",
+      "to": "\n                    if (Neo26TextInput.isTyping(mc == null ? null : mc.screen)) continue;\n",
+      "count": 2
+    },
+    {
+      "from": "\n                    if (mc == null || mc.level == null || mc.gui.screen() != null) continue;\n",
+      "to": "\n                    if (mc == null || mc.level == null || mc.screen != null) continue;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            if (Minecraft.getInstance().gui.screen() == screen) scanAndTranslateScreenNow(screen);\n",
+      "to": "\n            if (Minecraft.getInstance().screen == screen) scanAndTranslateScreenNow(screen);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc == null || source == null || !SCREEN_CAPTURE.active(mc.gui.screen())) return false;\n",
+      "to": "\n        if (mc == null || source == null || !SCREEN_CAPTURE.active(mc.screen)) return false;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.gui.screen(), request);\n",
+      "to": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.screen, request);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        SCREEN_CAPTURE.cancelUnless(mc.gui.screen());\n",
+      "to": "\n        SCREEN_CAPTURE.cancelUnless(mc.screen);\n",
+      "count": 2
+    },
+    {
+      "from": "\n        TOOLTIP_CAPTURE.cancelUnless(mc.gui.screen());\n",
+      "to": "\n        TOOLTIP_CAPTURE.cancelUnless(mc.screen);\n",
+      "count": 2
+    },
+    {
+      "from": "\n        boolean current = screenRefreshRequested == mc.gui.screen();\n",
+      "to": "\n        boolean current = screenRefreshRequested == mc.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        net.minecraft.client.gui.screens.Screen currentScreen = mc.gui.screen();\n",
+      "to": "\n        net.minecraft.client.gui.screens.Screen currentScreen = mc.screen;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            mc.gui.hud.setOverlayMessage(message.copy().withStyle(style -> style.withInsertion(OWN_FEEDBACK_MARK)), false);\n",
+      "to": "\n            mc.gui.setOverlayMessage(message.copy().withStyle(style -> style.withInsertion(OWN_FEEDBACK_MARK)), false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),\n",
+      "to": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/WarmupHudOverlay.java": [
+    {
+      "from": "\n        if (mc == null || mc.gui.screen() != null) return;\n",
+      "to": "\n        if (mc == null || mc.screen != null) return;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (cfg == null || mc == null || mc.gui.hud.isHidden()) return;\n",
+      "to": "\n        if (cfg == null || mc == null || mc.options.hideGui) return;\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/EntityNameTagMixin.java": [
+    {
+      "from": "\n                            + \"Lnet/minecraft/network/chat/Component;ZI\"\n",
+      "to": "\n                            + \"Lnet/minecraft/network/chat/Component;ZID\"\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/HudMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.Hud;\n",
+      "to": "\nimport net.minecraft.client.gui.Gui;\n",
+      "count": 1
+    },
+    {
+      "from": "\n@Mixin(Hud.class)\n",
+      "to": "\n@Mixin(Gui.class)\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/ChatComposerMixin.java": [
+    {
+      "from": "\n    @Unique @Override public boolean current() { return minecraft.gui.screen() == this; }\n",
+      "to": "\n    @Unique @Override public boolean current() { return minecraft.screen == this; }\n",
+      "count": 1
+    }
+  ]
+}

@@ -8,6 +8,25 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ContentWarmupSourceTest {
+    public static final class LegacyClientQuestFile {
+        public static Object INSTANCE = "legacy";
+        public static Object getInstance() { return "modern-should-not-win"; }
+    }
+
+    public static final class ModernClientQuestFile {
+        @SuppressWarnings("unused")
+        private static final Object INSTANCE = "private-modern";
+        public static Object getInstance() { return "modern"; }
+    }
+
+    public static final class TransitionalClientQuestFile {
+        public static Object INSTANCE;
+        public static Object getInstance() { return "accessor-fallback"; }
+    }
+
+    public static final class UnsupportedClientQuestFile {
+    }
+
     public record Quest(String title, String subtitle, List<String> description, List<Quest> children) {
         public String getTitle() { return title; }
         public String getSubtitle() { return subtitle; }
@@ -39,6 +58,15 @@ class ContentWarmupSourceTest {
         source.reset();
         assertEquals(0, source.totalItemCount());
         assertTrue(source.isExhausted());
+    }
+
+    @Test
+    void ftbQuestFileLookupSupportsLegacyAndModernApis() {
+        assertEquals("legacy", QuestWarmupSource.loadedClientFile(LegacyClientQuestFile.class));
+        assertEquals("modern", QuestWarmupSource.loadedClientFile(ModernClientQuestFile.class));
+        assertEquals("accessor-fallback",
+                QuestWarmupSource.loadedClientFile(TransitionalClientQuestFile.class));
+        assertNull(QuestWarmupSource.loadedClientFile(UnsupportedClientQuestFile.class));
     }
 
     @Test

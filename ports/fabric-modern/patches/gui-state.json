@@ -1,0 +1,11 @@
+{
+  "com/dragonmeow/nyanlex/fabric/mixin/EntityNameTagMixin.java": [
+    {"from":"Lnet/minecraft/client/gui/Font$DisplayMode;II)I", "to":"Lnet/minecraft/client/gui/Font$DisplayMode;II)V"},
+    {"from":"private int nyanlex$stackedNameTag", "to":"private void nyanlex$stackedNameTag"},
+    {"from":"if (!HookGuard.enter(\"EntityNameTag.stackedNameTag\")) return font.drawInBatch(text, x, y, color, dropShadow, matrix, buffers, mode, bgColor, light);", "to":"if (!HookGuard.enter(\"EntityNameTag.stackedNameTag\")) { font.drawInBatch(text, x, y, color, dropShadow, matrix, buffers, mode, bgColor, light); return; }"},
+    {"from":"return font.drawInBatch(text, x, y, color, dropShadow, matrix, buffers, mode, bgColor, light);", "to":"font.drawInBatch(text, x, y, color, dropShadow, matrix, buffers, mode, bgColor, light);\n            return;"},
+    {"from":"int ret = 0;", "to":""},
+    {"from":"ret = font.drawInBatch", "to":"font.drawInBatch"},
+    {"from":"return ret;", "to":"return;"}
+  ]
+}

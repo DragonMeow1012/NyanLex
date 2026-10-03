@@ -475,6 +475,29 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         return service;
     }
 
+    /**
+     * Translate only Jade's block/entity title. Other overlay providers (mod name,
+     * health, icons and numbers) never enter this boundary and remain untouched.
+     */
+    public static Component jadeObjectName(Component source) {
+        TranslationService current = service;
+        if (source == null || current == null
+                || current.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return source;
+        Component translated = Fabric26TextStyle.renderTranslated(
+                "jadeObjectName", source, current::translateItemLine);
+        return translated == null ? source : translated;
+    }
+
+    /** Advancement toast title, governed by the normal title surface settings. */
+    public static Component advancementText(Component source) {
+        TranslationService current = service;
+        if (source == null || current == null
+                || current.titleMode() == DisplayMode.ORIGINAL_ONLY) return source;
+        Component translated = Fabric26TextStyle.renderTranslated(
+                "advancementToast", source, current::translateTitle);
+        return translated == null ? source : translated;
+    }
+
     public static TranslatorConfig config() {
         return config;
     }
@@ -1008,14 +1031,15 @@ public final class NyanLexFabric26 implements ClientModInitializer {
                 }
                 Component ready = Fabric26TextStyle.renderTranslated(
                         "questText", resolved, s::translateScreenText);
+                if (ready == null) return;
                 Minecraft client = Minecraft.getInstance();
                 if (client != null) {
-                    Component display = ready != null ? ready : resolved;
                     client.execute(() -> {
                             synchronized (QUEST_WIDGET_PENDING) {
                                 if (!request.equals(QUEST_WIDGET_PENDING.get(widget))) return;
+                                QUEST_WIDGET_PENDING.remove(widget);
                             }
-                            if (questWidgetOnCurrentScreen(widget, client)) applyQuestWidgetText(widget, display);
+                            if (questWidgetOnCurrentScreen(widget, client)) refreshCurrentQuestScreen();
                         });
                 }
             });
@@ -1037,33 +1061,6 @@ public final class NyanLexFabric26 implements ClientModInitializer {
             return screenGetter.invoke(mc.screen) == widgetGui;
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             return false;
-        }
-    }
-
-    private static void applyQuestWidgetText(Object widget, Component translated) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.screen == null
-                || !mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return;
-        try {
-            Class<?> type = widget.getClass();
-            java.lang.reflect.Method setter = null;
-            while (type != null && setter == null) {
-                try { setter = type.getDeclaredMethod("setText", Component.class); }
-                catch (NoSuchMethodException ignored) { type = type.getSuperclass(); }
-            }
-            if (setter != null) {
-                setter.setAccessible(true);
-                com.dragonmeow.nyanlex.translate.InternalRenderGuard.enter();
-                try {
-                    setter.invoke(widget, translated);
-                } finally {
-                    com.dragonmeow.nyanlex.translate.InternalRenderGuard.exit();
-                }
-                Object gui = widget.getClass().getMethod("getGui").invoke(widget);
-                if (gui != null) gui.getClass().getMethod("refreshWidgets").invoke(gui);
-            }
-        } catch (ReflectiveOperationException | RuntimeException error) {
-            LOGGER.debug("Unable to reflow translated quest text widget", error);
         }
     }
 
@@ -1437,6 +1434,8 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         boolean originalsNow = service.toggleShowOriginal();
         Fabric26TextStyle.clearRenderMemo();
         if (originalsNow) flushPendingChatOriginals();
+        synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
+        refreshCurrentQuestScreen();
         feedback(Component.translatable(originalsNow ? "message.nyanlex.show_original" : "message.nyanlex.show_translation"));
     }
 
@@ -1526,6 +1525,47 @@ public final class NyanLexFabric26 implements ClientModInitializer {
 
 
 
+    private static Component advancementAnnouncementTitle(Component message) {
+        if (message == null
+                || !(message.getContents()
+                instanceof net.minecraft.network.chat.contents.TranslatableContents contents)
+                || !contents.getKey().startsWith("chat.type.advancement.")) return null;
+        Object[] args = contents.getArgs();
+        return args.length > 1 && args[1] instanceof Component ? (Component) args[1] : null;
+    }
+
+    private static Component withAdvancementAnnouncementTitle(Component source, Component title) {
+        net.minecraft.network.chat.contents.TranslatableContents contents =
+                (net.minecraft.network.chat.contents.TranslatableContents) source.getContents();
+        Object[] args = contents.getArgs().clone();
+        args[1] = title;
+        net.minecraft.network.chat.MutableComponent rebuilt =
+                Component.translatable(contents.getKey(), args).setStyle(source.getStyle());
+        for (Component sibling : source.getSiblings()) rebuilt.append(sibling.copy());
+        return rebuilt;
+    }
+
+    /** Translate the semantic advancement title, not the localized wrapper or player name. */
+    private boolean translateAdvancementAnnouncement(
+            Component message, Component renderedMessage, DisplayMode mode) {
+        Component title = advancementAnnouncementTitle(message);
+        if (title == null || !service.wantsChatTranslation(title.getString())) return false;
+        PendingChat pending = queueChat(renderedMessage, null);
+        pending.mode = mode;
+        pending.configureRecovery(1, config.aiChat);
+        Fabric26TextStyle.MarkedChat marked = Fabric26TextStyle.markChatContent(title, 0);
+        String request = marked.marked() ? marked.text() : title.getString();
+        service.translateChatAsyncDetailed(request, result -> {
+            String translated = result.text();
+            completeChat(pending.id, pending.epoch, mode, translated == null ? null : () -> {
+                Component translatedTitle = Fabric26TextStyle.rebuildRich(title, translated, marked);
+                return Fabric26TextStyle.resolveLegacyCodes(
+                        withAdvancementAnnouncementTitle(message, translatedTitle));
+            }, 0, result.finalResult());
+        });
+        return true;
+    }
+
     private boolean translateAndInject(Component message, net.minecraft.network.chat.ChatType.Bound params) {
         if (service == null || message == null) return false;
         observeChatDeliveryContext(Minecraft.getInstance());
@@ -1538,6 +1578,9 @@ public final class NyanLexFabric26 implements ClientModInitializer {
         if (params != null) params = null;
         DisplayMode mode = service.chatMode();
         if (mode == DisplayMode.ORIGINAL_ONLY) return false;
+        if (params == null && translateAdvancementAnnouncement(message, renderedMessage, mode)) {
+            return true;
+        }
         List<Component> hardLines = Fabric26TextStyle.splitStyledLines(renderedMessage);
         if (hardLines.size() > 1) {
             if (activeBlock != null || Fabric26TextStyle.isSeparatorText(hardLines.get(0).getString())) {

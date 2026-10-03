@@ -1,0 +1,33 @@
+{
+  "com/dragonmeow/nyanlex/neoforge26/mixin/BookPageMixin.java": [
+    {
+      "from": "\n            method = \"visitText\",\n",
+      "count": 1,
+      "to": "\n            method = \"render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V\",\n"
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/NyanLexNeoForge26.java": [
+    {
+      "from": "\nimport net.minecraft.resources.Identifier;\n",
+      "count": 1,
+      "to": "\nimport net.minecraft.resources.ResourceLocation;\n"
+    },
+    {
+      "from": "\n        Identifier id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);\n",
+      "count": 1,
+      "to": "\n        ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);\n"
+    },
+    {
+      "from": "\n                net.minecraft.resources.Identifier.parse(MOD_ID + \":warmup_hud\"),\n",
+      "count": 1,
+      "to": "\n                net.minecraft.resources.ResourceLocation.parse(MOD_ID + \":warmup_hud\"),\n"
+    }
+  ],
+  "com/dragonmeow/nyanlex/platform/BrowserLinks.java": [
+    {
+      "from": "\nimport net.minecraft.util.Util;\n",
+      "to": "\nimport net.minecraft.Util;\n",
+      "count": 1
+    }
+  ]
+}

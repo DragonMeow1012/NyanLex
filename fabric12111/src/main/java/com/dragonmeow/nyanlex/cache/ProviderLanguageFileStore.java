@@ -94,6 +94,7 @@ public final class ProviderLanguageFileStore implements PersistentStore {
     @Override public void removeBatch(java.util.Collection<String> keys) { current().removeBatch(keys); }
     @Override public Map<String, String> provisionalEntries() { return current().provisionalEntries(); }
     @Override public Map<String, String> entries() { return current().entries(); }
+    @Override public int size() { return current().size(); }
     @Override public void clear() { current().clear(); }
 
     private record ActivePartition(String providerId, LanguageFileStore store) {

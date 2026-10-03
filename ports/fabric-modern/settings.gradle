@@ -1,0 +1,15 @@
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.fabricmc.net/' }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+// The CLI must select the cache before Gradle initializes its task-history service.
+// Setting projectCacheDir here is too late (it only redirects Loom's own cache).
+def requestedTarget = gradle.startParameter.projectProperties.get('target', '1.21')
+if (!(requestedTarget ==~ /[0-9]+(\.[0-9]+){1,2}/)) throw new GradleException('Invalid Minecraft target')
+if (gradle.startParameter.projectCacheDir == null) {
+    throw new GradleException("Use --project-cache-dir ${file(".gradle/targets/${requestedTarget}")} so each target keeps its own task history")
+}
+rootProject.name = 'nyanlex-fabric-modern-ports'

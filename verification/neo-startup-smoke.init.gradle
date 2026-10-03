@@ -1,0 +1,33 @@
+// Isolated CLIENT-side FML transformation check. Invoke with -I this file,
+// -Ptarget=26.1.2 and clientTransformationSmoke. Optional -PsmokeJar=<path>
+// selects a previously built release for a negative control. Never uses loose
+// main classes, opens a game window, signs in, or modifies a user modpack.
+allprojects { project ->
+    afterEvaluate {
+        if (!plugins.hasPlugin('net.neoforged.moddev')) return
+        def script = gradle.startParameter.initScripts.find { it.name == 'neo-startup-smoke.init.gradle' }
+        if (script == null) throw new GradleException('Cannot locate the startup smoke init script')
+        def releaseJar = file(findProperty('smokeJar') ?: "build/${findProperty('target')}/libs/nyanlex-${version}-NeoForge-${findProperty('target')}.jar")
+        if (!releaseJar.isFile()) throw new GradleException("Build the release JAR first: ${releaseJar}")
+        def smoke = sourceSets.create('startupSmoke')
+        smoke.java.setSrcDirs([new File(script.parentFile, 'neo-startup-smoke/java')])
+        smoke.resources.setSrcDirs([])
+        smoke.compileClasspath = configurations.compileClasspath
+        def smokeRun = layout.buildDirectory.dir('client-transformation-smoke').get().asFile
+        tasks.register('clientTransformationSmoke', JavaExec) {
+            dependsOn tasks.named('compileStartupSmokeJava')
+            javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+            // FML discovers the packaged mod only through modFolders below. Putting
+            // it on this launcher classpath as well would discover the same mod twice.
+            classpath = files(smoke.output, configurations.runtimeClasspath)
+            mainClass = 'ChatScreenTransformationTest'
+            workingDir = smokeRun
+            doFirst { smokeRun.mkdirs() }
+            jvmArgs '--sun-misc-unsafe-memory-access=allow', '--enable-native-access=ALL-UNNAMED',
+                    '--add-opens', 'java.base/java.lang.invoke=ALL-UNNAMED',
+                    '--add-exports', 'jdk.naming.dns/com.sun.jndi.dns=java.naming'
+            jvmArgs "-Dfml.modFolders=nyanlex%%${releaseJar.absolutePath}"
+            systemProperty 'nyanlex.smoke.jar', releaseJar.absolutePath
+        }
+    }
+}

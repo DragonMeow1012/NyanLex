@@ -1,0 +1,23 @@
+{
+  "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {"from":"mc.options.setKey(mapping, InputConstants.getKey(e.getValue()))", "to":"mapping.setKey(InputConstants.getKey(e.getValue()))"},
+    {"from":"mc.tell(() ->", "to":"mc.schedule(() ->"},
+    {"from":"mc.getToasts()", "to":"mc.getToastManager()"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationKeybindScreen.java": [
+    {"from":"minecraft.options.setKey(row.key(), row.key().getDefaultKey())", "to":"row.key().setKey(row.key().getDefaultKey())"},
+    {"from":"minecraft.options.setKey(listening, InputConstants.getKey(keyCode, scanCode))", "to":"listening.setKey(InputConstants.getKey(keyCode, scanCode))"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/EntityNameTagMixin.java": [
+    {"from":"import net.minecraft.world.entity.Entity;", "to":"import net.minecraft.client.renderer.entity.state.EntityRenderState;"},
+    {"from":"renderNameTag(Lnet/minecraft/world/entity/Entity;", "to":"renderNameTag(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;"},
+    {"from":"Lnet/minecraft/client/renderer/MultiBufferSource;IF)V", "to":"Lnet/minecraft/client/renderer/MultiBufferSource;I)V"},
+    {"from":"Component name, Entity entity, Component original,", "to":"Component name, EntityRenderState state, Component original,"},
+    {"from":"int light, float partialTick)", "to":"int light)"},
+    {"from":"// Target-arg capture (appended after the modified variable) hands us the ENTITY, so\n            // the glue can skip real TAB-listed players' name tags (player IDs never translate).", "to":"// Render states no longer expose the entity here; the shared name-tag filter\n            // still protects names from the server player roster."},
+    {"from":"NyanLexFabric.nameTag(entity, name)", "to":"NyanLexFabric.nameTag(name)"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java": [
+    {"from":"// 1.21.1's drawManaged lambda body keeps Yarn's stable intermediary\n            // name in the layered Mojang mapping; targeting it directly avoids a\n            // wildcard selector that the annotation processor cannot verify.\n            method = \"method_55440\"", "to":"// Since 1.21.2 the sidebar draw calls are directly in this method.\n            method = \"displayScoreboardSidebar\""}
+  ]
+}

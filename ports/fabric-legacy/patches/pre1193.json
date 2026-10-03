@@ -1,0 +1,222 @@
+{
+  "com/dragonmeow/nyanlex/fabric/AiConfigScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/ConfirmDialogScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/ConsentOverlay.java": [
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/FabricTextStyle.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/HubDownloadConfirmScreen.java": [
+    {
+      "from": "import net.minecraft.network.chat.TextComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "import net.minecraft.network.chat.TranslatableComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    },
+    {
+      "from": "new TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/HubDownloadProgressScreen.java": [
+    {
+      "from": "import net.minecraft.network.chat.TextComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "import net.minecraft.network.chat.TranslatableComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "new TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/ItemWarmupConfirmScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/ItemWarmupProgressScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/LangText.java": [
+    {
+      "from": "import net.minecraft.network.chat.TranslatableComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "new TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    },
+    {
+      "from": "title instanceof net.minecraft.network.chat.TranslatableComponent translatable",
+      "to": "title.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents translatable"
+    },
+    {
+      "from": "message instanceof net.minecraft.network.chat.TranslatableComponent contents",
+      "to": "message.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents contents"
+    },
+    {
+      "from": "net.minecraft.network.chat.TranslatableComponent contents =\n                (net.minecraft.network.chat.TranslatableComponent) source;",
+      "to": "net.minecraft.network.chat.contents.TranslatableContents contents =\n                (net.minecraft.network.chat.contents.TranslatableContents) source.getContents();"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/QuickSetupScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/BookPageMixin.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationRequestsScreen.java": [
+    {
+      "from": "import net.minecraft.network.chat.TranslatableComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "new TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/OptionsScreenMixin.java": [
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationManualScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationLanguageScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    },
+    {
+      "from": "this.options.forceUnicodeFont = !this.options.forceUnicodeFont;",
+      "to": "this.options.forceUnicodeFont().set(!this.options.forceUnicodeFont().get());"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/ChatComposerMixin.java": [
+    {
+      "from": "import net.minecraft.network.chat.TranslatableComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "new TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationKeybindScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationConfigScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ]
+}

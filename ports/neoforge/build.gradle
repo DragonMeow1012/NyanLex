@@ -1,0 +1,161 @@
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+
+buildscript {
+    repositories {
+        maven { url = 'https://maven.neoforged.net/releases' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        def requestedTarget = project.findProperty('target') ?: '1.21'
+        classpath(requestedTarget in ['1.20.2', '1.20.3', '1.20.5']
+            ? 'net.neoforged.gradle:userdev:7.0.192'
+            : 'net.neoforged:moddev-gradle:2.0.147')
+    }
+}
+
+plugins {
+    id 'java'
+}
+
+def targets = new JsonSlurper().parse(file('targets.json'))
+def target = providers.gradleProperty('target').getOrElse('1.21')
+def spec = targets[target]
+if (spec == null) throw new GradleException("Unknown NeoForge target ${target}; choose ${targets.keySet()}")
+layout.buildDirectory = file("build/${target}")
+version = project.mod_version
+group = project.maven_group
+base { archivesName = 'nyanlex' }
+
+repositories { mavenCentral() }
+def neoGradleTarget = target in ['1.20.2', '1.20.3', '1.20.5']
+if (neoGradleTarget) {
+    apply plugin: 'net.neoforged.gradle.userdev'
+    dependencies { implementation "net.neoforged:neoforge:${spec.neoforge}" }
+} else {
+    apply plugin: 'net.neoforged.moddev'
+    neoForge {
+        enable {
+            version = spec.neoforge
+            disableRecompilation = true
+        }
+        mods { nyanlex { sourceSet sourceSets.main } }
+    }
+}
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(spec.toolchain as int) } }
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = spec.java as int
+}
+
+// Only API-boundary files are adapted; the translation core and unaffected platform
+// classes remain direct shared sources. Every edit names a file and asserts its
+// original occurrence count, so upstream changes fail loudly rather than drifting.
+def repositoryRoot = file('../..')
+def sourceProject = new File(repositoryRoot, spec.sourceProject).canonicalFile
+def sharedRoots = [new File(sourceProject, 'src/main/java')]
+if (spec.sourceProject == 'neoforge26') sharedRoots.add(new File(repositoryRoot, 'platform26/src/main/java'))
+def adapterDirectory = file("profiles/${spec.profile}/java")
+def legacyNamespace = spec.sourceProject == 'neoforge120'
+def pre21 = target.startsWith('1.20.')
+def sourceOverrides = [:]
+def overrideFile = file("overrides/${spec.profile}.json")
+if (overrideFile.exists()) sourceOverrides.putAll(new JsonSlurper().parse(overrideFile))
+def patches = [:]
+def patchFiles = (spec.patchProfiles ?: [spec.profile]).collect { file("patches/${it}.json") }
+patchFiles.add(file("patches/${target}.json"))
+patchFiles.findAll { it.exists() }.each { patchFile ->
+    new JsonSlurper().parse(patchFile).each { path, edits ->
+        patches.computeIfAbsent(path) { [] }.addAll(edits)
+    }
+}
+sourceOverrides.keySet().each { patches.computeIfAbsent(it) { [] } }
+def sourceFile = { path ->
+    if (sourceOverrides.containsKey(path)) return new File(repositoryRoot, sourceOverrides[path])
+    def found = sharedRoots.collect { new File(it, path) }.find { it.exists() }
+    if (found == null) throw new GradleException("Missing shared API source: ${path}")
+    found
+}
+def generatedDirectory = layout.buildDirectory.dir('generated/api-adapters')
+def generateAdapters = tasks.register('generateApiAdapters') {
+    inputs.files(patches.keySet().collect { sourceFile(it) })
+    inputs.property('edits', JsonOutput.toJson(patches))
+    inputs.property('sourceOverrides', JsonOutput.toJson(sourceOverrides))
+    outputs.dir(generatedDirectory)
+    doLast {
+        delete(generatedDirectory)
+        patches.each { path, edits ->
+            def source = sourceFile(path).getText('UTF-8').replace('\r\n', '\n')
+            edits.each { edit ->
+                int actual = source.count(edit.from)
+                if (actual != (edit.count as int)) {
+                    throw new GradleException("Stale API adapter ${path}: expected ${edit.count} matches, found ${actual}: ${edit.from.trim()}")
+                }
+                source = source.replace(edit.from, edit.to)
+            }
+            def output = new File(generatedDirectory.get().asFile, path)
+            output.parentFile.mkdirs()
+            output.setText(source, 'UTF-8')
+        }
+    }
+}
+def overridden = fileTree(adapterDirectory).matching { include '**/*.java' }.files.collect {
+    adapterDirectory.toPath().relativize(it.toPath()).toString().replace('\\', '/')
+}.toSet()
+overridden.addAll(patches.keySet())
+sourceSets.main {
+    java.setSrcDirs(sharedRoots)
+    java.exclude { entry ->
+        overridden.contains(entry.path) && sharedRoots.any { entry.file.toPath().startsWith(it.toPath()) }
+    }
+    java.srcDir(adapterDirectory)
+    java.srcDir(generatedDirectory)
+    resources.setSrcDirs([new File(sourceProject, 'src/main/resources')])
+}
+tasks.named('compileJava') { dependsOn(generateAdapters) }
+
+processResources {
+    inputs.property('target', target)
+    inputs.property('modVersion', project.version)
+    inputs.property('neoForgeVersion', spec.neoforge)
+    filesMatching(['META-INF/neoforge.mods.toml', 'META-INF/mods.toml']) {
+        expand(version: project.version, minecraft_range: "[${target}]", neoforge_range: "[${spec.neoforge},)")
+        filter { line ->
+            if (legacyNamespace) {
+                line = line.replace('loaderVersion = "[47,)"', 'loaderVersion = "[1,)"')
+                    .replace('modId = "forge"', 'modId = "neoforge"')
+                    .replace('[47,)', "[${spec.neoforge},)")
+                    .replace('[1.20.1,1.20.2)', "[${target}]")
+                if (target != '1.20.2') line = line.replace('mandatory = true', 'type = "required"')
+            }
+            if (pre21) line = line.replace('loaderVersion = "[4,)"', 'loaderVersion = "[1,)"')
+            line.replace('[1.21.1,1.21.2)', "[${target}]").replace('[21.1.0,)', "[${spec.neoforge},)")
+        }
+    }
+}
+
+tasks.named('jar') {
+    archiveClassifier = "NeoForge-${target}"
+    exclude 'assets/nyanslate/**', 'assets/mctranslator/**'
+    from('../../LICENSE') { rename { 'LICENSE_NyanLex' } }
+}
+
+tasks.register('exportPortVerification') {
+    dependsOn tasks.named('classes')
+    def output = layout.buildDirectory.file('port-verification.json')
+    outputs.file(output)
+    doLast {
+        output.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+            minecraft: target,
+            loader: 'NeoForge',
+            loaderVersion: spec.neoforge,
+            java: spec.java,
+            classesDir: layout.buildDirectory.dir('classes/java/main').get().asFile.absolutePath,
+            resourcesDir: layout.buildDirectory.dir('resources/main').get().asFile.absolutePath,
+            compileClasspath: sourceSets.main.compileClasspath.files.collect { it.absolutePath }
+        ]))
+    }
+}
+tasks.named('build') { dependsOn tasks.named('exportPortVerification') }

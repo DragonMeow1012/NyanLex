@@ -254,6 +254,7 @@ public final class FileStore implements PersistentStore {
         }
     }
 
+    @Override
     public int size() {
         return values.size();
     }

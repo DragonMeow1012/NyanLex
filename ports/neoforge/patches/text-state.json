@@ -1,0 +1,80 @@
+{
+  "com/dragonmeow/nyanlex/neoforge/NyanLexNeoForge.java": [
+    {
+      "from": "\n                mc.options.setKey(mapping, InputConstants.getKey(e.getValue()));\n",
+      "to": "\n                mapping.setKey(InputConstants.getKey(e.getValue()));\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onRenderNameTag(net.neoforged.neoforge.client.event.RenderNameTagEvent event) {\n",
+      "to": "\n    public void onRenderNameTag(net.neoforged.neoforge.client.event.RenderNameTagEvent.CanRender event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.tell(() -> {\n",
+      "to": "\n        mc.schedule(() -> {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        for (ItemStack stack : inventory.items) registerItemEntity(stack);\n",
+      "to": "\n        for (int slot = 0; slot < inventory.getContainerSize(); slot++) registerItemEntity(inventory.getItem(slot));\n",
+      "count": 1
+    },
+    {
+      "from": "\n        for (ItemStack stack : inventory.armor) registerItemEntity(stack);\n",
+      "to": "\n        for (net.minecraft.world.entity.EquipmentSlot slot : new net.minecraft.world.entity.EquipmentSlot[] {net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.entity.EquipmentSlot.FEET}) registerItemEntity(mc.player.getItemBySlot(slot));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                CompoundTag extra = tag.getCompound(\"ExtraAttributes\");\n",
+      "to": "\n                CompoundTag extra = tag.getCompoundOrEmpty(\"ExtraAttributes\");\n",
+      "count": 1
+    },
+    {
+      "from": "\n                id = firstNonEmpty(tag.getString(\"id\"), extra.getString(\"id\"));\n",
+      "to": "\n                id = firstNonEmpty(tag.getStringOr(\"id\", \"\"), extra.getStringOr(\"id\", \"\"));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                modifier = firstNonEmpty(tag.getString(\"modifier\"), extra.getString(\"modifier\"));\n",
+      "to": "\n                modifier = firstNonEmpty(tag.getStringOr(\"modifier\", \"\"), extra.getStringOr(\"modifier\", \"\"));\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToasts(),\n",
+      "to": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationKeybindScreen.java": [
+    {
+      "from": "\n            minecraft.options.setKey(row.key(), row.key().getDefaultKey());\n",
+      "to": "\n            row.key().setKey(row.key().getDefaultKey());\n",
+      "count": 1
+    },
+    {
+      "from": "\n                minecraft.options.setKey(listening, InputConstants.getKey(keyCode, scanCode));\n",
+      "to": "\n                listening.setKey(InputConstants.getKey(keyCode, scanCode));\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/EntityNameTagMixin.java": [
+    {
+      "from": "\n            method = \"renderNameTag(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/network/chat/Component;\"\n",
+      "to": "\n            method = \"renderNameTag(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;Lnet/minecraft/network/chat/Component;\"\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    + \"Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IF)V\",\n",
+      "to": "\n                    + \"Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V\",\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/GuiScoreboardMixin.java": [
+    {
+      "from": "\n            method = \"lambda$displayScoreboardSidebar$*\",\n",
+      "to": "\n            method = \"displayScoreboardSidebar\",\n",
+      "count": 1
+    }
+  ]
+}

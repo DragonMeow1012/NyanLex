@@ -47,10 +47,13 @@ class ChatComposerPanelTest {
         int requests, fills;
         BiConsumer<String, String> result;
         String clientLanguage = "en_us";
+        boolean formatTokensConsumed;
         public String text(String key) {
             if (key.equals("language.code")) return clientLanguage;
-            if (key.equals("nyanlex.composer.target_language"))
-                return clientLanguage.equals("zh_tw") ? "翻譯成：%s" : "Translate to: %s";
+            if (key.equals("nyanlex.composer.target_language")) {
+                String value = clientLanguage.equals("zh_tw") ? "翻譯成：%s" : "Translate to: %s";
+                return formatTokensConsumed ? value.replace("%s", "") : value;
+            }
             return key;
         }
         public int textWidth(String value) { return value.length(); }
@@ -97,6 +100,13 @@ class ChatComposerPanelTest {
         String translatedName = java.util.Locale.ENGLISH.getDisplayName(java.util.Locale.TAIWAN);
         assertTrue(labels.contains("翻譯成：" + translatedName + " ▾"));
         assertEquals("en", host.language);
+
+        // Real Minecraft resolves a no-argument translatable before this shared panel
+        // sees it, so an unmatched %s has already disappeared at this boundary.
+        host.formatTokensConsumed = true;
+        labels.clear();
+        panel.render(canvas);
+        assertTrue(labels.contains("翻譯成：" + translatedName + " ▾"));
     }
     @Test void languageSearchAcceptsCodesNativeEnglishAndClientLanguageNames() {
         Host host = new Host();

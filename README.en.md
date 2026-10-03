@@ -12,7 +12,7 @@
 </p>
 
 <p align="center"><b>English</b> · <a href="README.ja.md">日本語</a> · <a href="README.md">繁體中文</a> · <a href="README.zh-CN.md">简体中文</a></p>
-<p align="center"><a href="#features">Features</a> &nbsp;·&nbsp; <a href="#direct-downloads">Download</a> &nbsp;·&nbsp; <a href="#in-game-screenshots">See it in game</a> &nbsp;·&nbsp; <a href="#translation-sources">Translation sources</a> &nbsp;·&nbsp; <a href="#keyboard-shortcuts">Shortcuts</a> &nbsp;·&nbsp; <a href="#privacy">Privacy</a></p>
+<p align="center"><a href="#features">Features</a> &nbsp;·&nbsp; <a href="#download-matrix">Download</a> &nbsp;·&nbsp; <a href="#in-game-screenshots">See it in game</a> &nbsp;·&nbsp; <a href="#translation-sources">Translation sources</a> &nbsp;·&nbsp; <a href="#keyboard-shortcuts">Shortcuts</a> &nbsp;·&nbsp; <a href="#privacy">Privacy</a></p>
 
 > **Online translation starts off.** When enabled, selected text goes to your chosen provider; chat can include private messages. Saved translations remain available offline. [Read the privacy details](#privacy).
 
@@ -32,6 +32,8 @@
     <td width="50%" valign="top"><h3>💾 Share a good translation</h3><p>Get started with translation packs or share your own with friends. Keep the translations you have already made, ready for next time.</p></td>
   </tr>
 </table>
+
+The mod UI follows your Minecraft client language and supports English, Japanese, Traditional Chinese and Simplified Chinese; other client languages use English UI. This does not limit the translation target languages available for game content.
 
 ## In-game screenshots
 
@@ -68,7 +70,7 @@ All screenshots above were captured in the Better MC modpack. The translation te
 
 ## Get started
 
-1. **Pick your build.** [Download](#direct-downloads) the single JAR matching your Minecraft version and loader, then put it in that instance's `mods` folder. Fabric also needs the matching Fabric API.
+1. **Pick your build.** Use the [download matrix](#download-matrix) to select the single JAR matching your Minecraft version and loader, then put it in that instance's `mods` folder. Fabric also needs the matching Fabric API.
 2. **Choose your language and provider.** Start the game and use Quick setup. Online translation turns on only after you confirm your choice.
 3. **Start reading.** On modern targets, press <kbd>R</kbd> over an item, <kbd>P</kbd> for visible screen or HUD text, and <kbd>G</kbd> to switch between original and translated display.
 
@@ -80,66 +82,127 @@ All screenshots above were captured in the Better MC modpack. The translation te
 
 Choose original text, translation, or both for each surface. Existing AI translations take priority, followed by translation packs and saved machine translations. Legacy controls differ; see [keyboard shortcuts](#keyboard-shortcuts).
 
-## Direct downloads
+<!-- BEGIN GENERATED DOWNLOAD MATRIX -->
+## Download matrix
 
-Each JAR is for the exact Minecraft version and loader in its filename. **Install one matching JAR, not the whole bundle.**
+Use the tables below as the definitive support list. Fabric covers every stable Minecraft release from 1.16.5 through 26.3, and NeoForge covers every stable release from 1.20.1 through 26.3. Fabric 1.14.4 and 1.15.2, plus Forge 1.12.2 and 1.13.2, remain available. Each JAR works only with the Minecraft version and loader named in its filename.
 
-| Fabric · 12 builds | NeoForge · 4 builds | Forge · 2 builds |
-| :---: | :---: | :---: |
-| Selected versions from 1.14.4 to 26.3 | 1.20.1, 1.21.1, 26.2, 26.3 | 1.12.2, 1.13.2 |
-| [Fabric ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Fabric.zip) | [NeoForge ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-NeoForge.zip) | [Forge ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Forge.zip) |
+### Bundle downloads
 
-[Release page](https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0) · [All-versions ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip) · [SHA-256 checksums](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/SHA256SUMS.txt)
+| Fabric · 37 | NeoForge · 23 | Forge · 2 | All versions |
+| --- | --- | --- | --- |
+| [Download Fabric bundle](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Fabric.zip) | [Download NeoForge bundle](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-NeoForge.zip) | [Download Forge bundle](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Forge.zip) | [Download All versions](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip) |
 
-Expand a loader to find your build:
+Expand a Minecraft series to download an individual build:
 
 <details>
-<summary><b>Fabric · 12 builds — individual JARs and Java requirements</b></summary>
+<summary><b>Legacy 1.12–1.15</b></summary>
 
-Fabric targets require matching Fabric Loader and Fabric API versions.
-
-| Minecraft | Java | Download |
-| --- | ---: | --- |
-| 1.14.4 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) |
-| 1.15.2 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) |
-| 1.16.5 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) |
-| 1.17.1 | 16 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) |
-| 1.18.2 | 17 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) |
-| 1.19.4 | 17 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) |
-| 1.20.1 | 17 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) |
-| 1.21.1 | 21 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) |
-| 1.21.11 | 21 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) |
-| 26.1.2 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) |
-| 26.2 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) |
-| 26.3 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) |
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.12.2 | — | — | [Download Forge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) | 8 |
+| 1.13.2 | — | — | [Download Forge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) | 8 |
+| 1.14.4 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) | — | — | 8 |
+| 1.15.2 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) | — | — | 8 |
 
 </details>
 
 <details>
-<summary><b>NeoForge · 4 builds — individual JARs and Java requirements</b></summary>
+<summary><b>Minecraft 1.16</b></summary>
 
-| Minecraft | Java | Download |
-| --- | ---: | --- |
-| 1.20.1 | 17 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) |
-| 1.21.1 | 21 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) |
-| 26.2 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) |
-| 26.3 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) |
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.16.5 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) | — | — | 8 |
 
 </details>
 
 <details>
-<summary><b>Forge · 2 builds — individual JARs and Java requirements</b></summary>
+<summary><b>Minecraft 1.17</b></summary>
 
-| Minecraft | Java | Download |
-| --- | ---: | --- |
-| 1.12.2 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) |
-| 1.13.2 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) |
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.17 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.jar) | — | — | 16 |
+| 1.17.1 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) | — | — | 16 |
 
 </details>
+
+<details>
+<summary><b>Minecraft 1.18</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.18 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.jar) | — | — | 17 |
+| 1.18.1 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.1.jar) | — | — | 17 |
+| 1.18.2 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) | — | — | 17 |
+
+</details>
+
+<details>
+<summary><b>Minecraft 1.19</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.19 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.jar) | — | — | 17 |
+| 1.19.1 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.1.jar) | — | — | 17 |
+| 1.19.2 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.2.jar) | — | — | 17 |
+| 1.19.3 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.3.jar) | — | — | 17 |
+| 1.19.4 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) | — | — | 17 |
+
+</details>
+
+<details>
+<summary><b>Minecraft 1.20</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.20 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.jar) | — | — | 17 |
+| 1.20.1 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) | — | 17 |
+| 1.20.2 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.2.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.2.jar) | — | 17 |
+| 1.20.3 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.3.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.3.jar) | — | 17 |
+| 1.20.4 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.4.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.4.jar) | — | 17 |
+| 1.20.5 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.5.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.5.jar) | — | 21 |
+| 1.20.6 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.6.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.6.jar) | — | 21 |
+
+</details>
+
+<details>
+<summary><b>Minecraft 1.21</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.21 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.jar) | — | 21 |
+| 1.21.1 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) | — | 21 |
+| 1.21.2 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.2.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.2.jar) | — | 21 |
+| 1.21.3 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.3.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.3.jar) | — | 21 |
+| 1.21.4 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.4.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.4.jar) | — | 21 |
+| 1.21.5 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.5.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.5.jar) | — | 21 |
+| 1.21.6 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.6.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.6.jar) | — | 21 |
+| 1.21.7 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.7.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.7.jar) | — | 21 |
+| 1.21.8 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.8.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.8.jar) | — | 21 |
+| 1.21.9 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.9.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.9.jar) | — | 21 |
+| 1.21.10 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.10.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.10.jar) | — | 21 |
+| 1.21.11 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.11.jar) | — | 21 |
+
+</details>
+
+<details>
+<summary><b>Minecraft 26</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 26.1 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.jar) | — | 25 |
+| 26.1.1 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.1.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.1.jar) | — | 25 |
+| 26.1.2 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.2.jar) | — | 25 |
+| 26.2 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) | — | 25 |
+| 26.3 | [Download Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) | [Download NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) | — | 25 |
+
+</details>
+
+<!-- END GENERATED DOWNLOAD MATRIX -->
 
 ## Compatibility
 
-- Fabric, NeoForge, and Forge targets are listed in [Direct downloads](#direct-downloads) (Minecraft 1.12.2 to 26.3).
+- Fabric, NeoForge, and Forge targets are listed in the [download matrix](#download-matrix) (Minecraft 1.12.2 to 26.3).
 - The legacy targets (Fabric 1.14.4-1.16.5 and Forge 1.12.2-1.13.2) have a simpler interface: a short Quick setup, the on-the-spot confirmation window and a categorized settings screen, but no translation packs and no full-content warmup.
 - Quest and task-book screens in modpacks get extra optimization (long paragraphs, colored text, tooltips).
 - This is a client-side mod; it does not modify servers and does not send chat for you.
@@ -178,7 +241,7 @@ Use **Export translations** in Translation Settings. **Supports automatic split 
 <details>
 <summary>Format compatibility, split files and import limits</summary>
 
-Fabric 1.17.1+ and NeoForge share one compatible format. Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2 share the legacy format. Files cannot be imported across these two format families. Each part is limited to 32 MiB and 100,000 entries; this is **not a limit on the total export**, which splits automatically. Existing single-file exports remain compatible. For an older oversized JSON, re-export from the client holding the cached translations.
+Fabric 1.17+ and NeoForge share one compatible format. Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2 share the legacy format. Files cannot be imported across these two format families. Each part is limited to 32 MiB and 100,000 entries; this is **not a limit on the total export**, which splits automatically. Existing single-file exports remain compatible. For an older oversized JSON, re-export from the client holding the cached translations.
 
 Batch imports process files in filename order; the first valid translation wins. A damaged, incompatible, or over-capacity file does not stop other files. The completion message reports added translations, successful/total files, and failures. Successful imports are not rolled back. Exports never overwrite existing files; choose another name if a destination already exists.
 
@@ -188,7 +251,7 @@ Legacy clients retain their 8,192-entry shared cache limit. A file exceeding the
 
 ## Keyboard shortcuts
 
-Fabric 1.17.1+ and NeoForge:
+Fabric 1.17+ and NeoForge:
 
 | Key | Action |
 | --- | --- |
@@ -231,7 +294,7 @@ Player names are masked from the TAB list. Modern targets skip labels consisting
 <details>
 <summary>Using chat input translation</summary>
 
-Enable it in **General**, then open chat. Write your draft, choose a target language (English by default), and click **Translate & fill**. Review or edit the result in the chat bar, then press Enter to send. Drag the floating header to move it; its position is remembered.
+Enable it in **General**, then open chat. The composer starts at the bottom right unless you already saved a position; drag its header to move it. Search the language menu by name or code (English is the default target). Closing chat with Esc keeps your draft for the current game session, so you can continue next time. Click **Translate & fill**, review or edit the result in the chat bar, then press Enter to send.
 
 </details>
 
@@ -240,7 +303,7 @@ Enable it in **General**, then open chat. Write your draft, choose a target lang
 - **Online translation is off on a new install.** While it is off, no translation service receives any of your text.
 - You can turn it on in three ways: from the Quick setup that opens by itself the first time you reach the title screen (choose machine translation, AI translation, or "Not now"; nothing you choose is applied, and nothing is sent, until you press Done); by pressing the translate-item key (default `R`) or translate-screen key (default `P`) while it is off, which first opens a confirmation window and only sends after you press "Start translating"; or in Translation settings > General ("Online translation").
 - Things that work without turning it on, and send nothing: translations already in your local cache, translation packs you downloaded, the built-in glossary, and the vanilla text from the game's own language files.
-- Outgoing drafts are translated only when you click **Translate & fill** or press Enter in the composer. Drafts are not written to translation caches or included in translation exports. You still review and send the final chat message yourself.
+- Outgoing drafts are translated only when you click **Translate & fill** or press Enter in the composer. Closing chat keeps drafts in memory for the current game session only; they are not saved after quitting the game, written to translation caches, or included in translation exports. You still review and send the final chat message yourself.
 - Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
 - The text goes to the translation service you choose:
   - **Machine translation (Google, no key)** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.

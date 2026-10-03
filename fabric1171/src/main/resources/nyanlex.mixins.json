@@ -13,6 +13,7 @@
     "FontSplitMixin",
     "GuiScoreboardMixin",
     "OptionsScreenMixin",
+    "AdvancementToastMixin",
     "ChatComposerMixin"
   ],
   "injectors": {

@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Name tag / hologram translation. In 26.2 name tags are no longer drawn via
+ * Name tag / hologram translation. In 26.1 name tags are no longer drawn via
  * {@code Font.drawInBatch}; instead {@code EntityRenderer.submitNameDisplay} submits the name
  * {@code Component} to {@code SubmitNodeCollector.submitNameTag(pose, attachment, offset, component,
  * …)}. We modify that {@code component} argument (index 3) — translating the name (and, in BOTH
@@ -40,7 +40,7 @@ public abstract class EntityNameTagMixin {
             method = "submitNameDisplay(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;"
                     + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;"
                     + "Lnet/minecraft/client/renderer/state/level/CameraRenderState;I)V",
-            at = @At("HEAD"), require = 0)
+            at = @At("HEAD"), require = 1)
     private void nyanlex$captureState(EntityRenderState state, PoseStack poseStack,
                                             SubmitNodeCollector collector,
                                             CameraRenderState camera, int offset,
@@ -60,9 +60,9 @@ public abstract class EntityNameTagMixin {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitNameTag("
                             + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/phys/Vec3;I"
-                            + "Lnet/minecraft/network/chat/Component;ZI"
+                            + "Lnet/minecraft/network/chat/Component;ZID"
                             + "Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V"),
-            index = 3, require = 0)
+            index = 3, require = 1)
     private Component nyanlex$name(Component component) {
         if (!HookGuard.enter("EntityNameTag.name")) return component;
         try {

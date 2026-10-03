@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param()
+param(
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]+$')]
+    [string]$OutputName = '1.0.0-expanded'
+)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
@@ -12,14 +15,14 @@ $releaseVersion = '1.0.0'
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $modsJarRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'mods-jar'))
 $releaseRoot = [System.IO.Path]::GetFullPath(
-    (Join-Path $modsJarRoot $releaseVersion))
+    (Join-Path $modsJarRoot $OutputName))
 $transactionId = [guid]::NewGuid().ToString('N')
 $stageRoot = [System.IO.Path]::GetFullPath(
-    (Join-Path $modsJarRoot ".$releaseVersion.staging-$transactionId"))
+    (Join-Path $modsJarRoot ".$OutputName.staging-$transactionId"))
 $backupRoot = [System.IO.Path]::GetFullPath(
-    (Join-Path $modsJarRoot ".$releaseVersion.backup-$transactionId"))
+    (Join-Path $modsJarRoot ".$OutputName.backup-$transactionId"))
 $failedInstallRoot = [System.IO.Path]::GetFullPath(
-    (Join-Path $modsJarRoot ".$releaseVersion.failed-$transactionId"))
+    (Join-Path $modsJarRoot ".$OutputName.failed-$transactionId"))
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
 function Require {
@@ -244,8 +247,8 @@ function Assert-PackageMatchesChecksumLines {
         [Parameter(Mandatory = $true)][string]$Description
     )
 
-    Require ($ChecksumLines.Count -eq 22) `
-        "$Description expected exactly 22 checksum lines"
+    Require ($ChecksumLines.Count -eq $checksumCount) `
+        "$Description expected exactly $checksumCount checksum lines"
     $manifestPath = Get-PackagePath $Root 'SHA256SUMS.txt'
     $actualLines = [System.IO.File]::ReadAllLines($manifestPath, $Encoding)
     Require ([string]::Join("`n", $actualLines) -ceq
@@ -582,12 +585,8 @@ function Assert-SourceJar {
     Require ([System.IO.Path]::GetFileName($Artifact.Relative) -ceq $expectedName) `
         "Destination filename does not match source: $($Artifact.Relative)"
     if ($RequireBuildLibs) {
-        Require ($jarPath.IndexOf(
-                [System.IO.Path]::DirectorySeparatorChar + 'build' +
-                [System.IO.Path]::DirectorySeparatorChar + 'libs' +
-                [System.IO.Path]::DirectorySeparatorChar,
-                [System.StringComparison]::OrdinalIgnoreCase) -ge 0) `
-            "Source is not a build/libs artifact: $($Artifact.Source)"
+        Require ($jarPath.Replace('\', '/') -match '/build/(?:[0-9.]+/)?libs/[^/]+\.jar$') `
+            "Source is not a target build/libs artifact: $($Artifact.Source)"
     }
 
     $archive = [System.IO.Compression.ZipFile]::OpenRead($jarPath)
@@ -618,7 +617,8 @@ $forgeLegacyTestClasses = @(
     'com/dragonmeow/nyanlex/forgelegacy/LegacyTranslator$TestAiHttp.class')
 
 # The source and destination of every publishable JAR are intentionally explicit.
-# Adding a release target requires a reviewed row here and a matching ZIP count below.
+# Existing source projects retain their explicit metadata contracts. Expanded
+# targets are imported only from the complete, freshly validated port report.
 $artifacts = @(
     [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.12.2'; Source = "forge1122\build\libs\nyanlex-$releaseVersion-Forge-1.12.2.jar"; Relative = "forge/1.12.2/nyanlex-$releaseVersion-Forge-1.12.2.jar"; MetadataKind = 'forge1122'; MinecraftRange = '1.12.2'; MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge'; AllowedTestClasses = $forgeLegacyTestClasses },
     [pscustomobject]@{ Loader = 'forge'; Label = 'Forge'; Minecraft = '1.13.2'; Source = "forge1132\build\libs\nyanlex-$releaseVersion-Forge-1.13.2.jar"; Relative = "forge/1.13.2/nyanlex-$releaseVersion-Forge-1.13.2.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/mods.toml'; TomlVersion = ('$' + '{file.jarVersion}'); MinecraftRange = '[1.13.2]'; LoaderRange = '[25,)'; LoaderDependency = 'forge'; LoaderDependencyRange = '[25,)'; MainClass = 'com.dragonmeow.nyanlex.forgelegacy.NyanLexForge'; IconKey = 'logoFile'; AllowedTestClasses = $forgeLegacyTestClasses },
@@ -642,18 +642,64 @@ $artifacts = @(
     [pscustomobject]@{ Loader = 'neoforge'; Label = 'NeoForge'; Minecraft = '26.3'; Source = "neoforge263\build\libs\nyanlex-$releaseVersion-NeoForge-26.3.jar"; Relative = "neoforge/26.3/nyanlex-$releaseVersion-NeoForge-26.3.jar"; MetadataKind = 'toml'; MetadataEntry = 'META-INF/neoforge.mods.toml'; TomlVersion = "$releaseVersion"; MinecraftRange = '[26.3,26.4)'; LoaderRange = '[4,)'; LoaderDependency = 'neoforge'; LoaderDependencyRange = '[26.3,)'; MainClass = 'com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26'; IconKey = 'iconFile'; AllowedTestClasses = $noTestClasses }
 )
 
+# Validate before creating or replacing anything; bind metadata to checked hashes.
+& python (Join-Path $PSScriptRoot 'verify-translation-features.py')
+Require ($LASTEXITCODE -eq 0) 'All-target feature validation failed; nothing packaged'
+$featureReport = @(Get-Content -LiteralPath (Get-RepoPath 'build/translation-feature-artifacts.json') -Raw | ConvertFrom-Json | ForEach-Object { $_ })
+Require ($featureReport.Count -eq 62 -and @($featureReport.target | Select-Object -Unique).Count -eq 62) `
+    'Feature validation must cover all 62 distinct targets'
+foreach ($artifact in $artifacts) {
+    $key = "$($artifact.Loader)/$($artifact.Minecraft)"
+    $checked = @($featureReport | Where-Object { $_.target -ceq $key })
+    Require ($checked.Count -eq 1) "Missing feature validation for $key"
+    Require ((Get-RepoPath $checked[0].jar) -ceq (Get-RepoPath $artifact.Source)) `
+        "Feature validation used a different source path for $key"
+    $artifact | Add-Member -NotePropertyName VerifiedSha256 -NotePropertyValue $checked[0].sha256
+}
+& python (Join-Path $PSScriptRoot 'verify-port-artifacts.py')
+Require ($LASTEXITCODE -eq 0) 'Port artifact validation failed; nothing packaged'
+$portReport = Get-Content -LiteralPath (Get-RepoPath 'build/port-artifacts.json') -Raw | ConvertFrom-Json
+Require ($portReport.scope -ceq 'all-ports' -and $portReport.expected -eq 44 -and
+        $portReport.passed -eq 44 -and @($portReport.failures).Count -eq 0) `
+    'The release requires a complete passing 44-port report'
+foreach ($port in $portReport.artifacts) {
+    Require ((Get-FileSha256Lower (Get-RepoPath $port.jar)) -ceq $port.hashes.sha256) `
+        "Port changed after verification: $($port.target)"
+    $metadata = $port.metadata
+    $row = [ordered]@{
+        Loader = $port.loader; Label = $(if ($port.loader -ceq 'fabric') { 'Fabric' } else { 'NeoForge' })
+        Minecraft = $port.minecraft; Source = $port.jar; Relative = $port.relative
+        MetadataKind = $metadata.kind; MinecraftRange = $metadata.minecraft
+        LoaderRange = $metadata.loader; MainClass = $metadata.mainClass
+        AllowedTestClasses = $noTestClasses; VerifiedSha256 = $port.hashes.sha256
+    }
+    if ($port.loader -ceq 'fabric') {
+        $row.JavaRange = $metadata.java
+        $row.FabricApiId = $metadata.fabricApiId
+    } else {
+        $row.MetadataEntry = $metadata.entry
+        $row.TomlVersion = $releaseVersion
+        $row.LoaderDependency = 'neoforge'
+        $row.LoaderDependencyRange = $metadata.loaderDependencyRange
+        $row.IconKey = $metadata.iconKey
+    }
+    $artifacts += [pscustomobject]$row
+}
+$artifactCount = $artifacts.Count
+$checksumCount = $artifactCount + 4
+
 $zipSpecs = @(
-    [pscustomobject]@{ Relative = "NyanLex-$releaseVersion-Fabric.zip"; Loaders = @('fabric'); ExpectedCount = 12 },
-    [pscustomobject]@{ Relative = "NyanLex-$releaseVersion-NeoForge.zip"; Loaders = @('neoforge'); ExpectedCount = 4 },
+    [pscustomobject]@{ Relative = "NyanLex-$releaseVersion-Fabric.zip"; Loaders = @('fabric'); ExpectedCount = 37 },
+    [pscustomobject]@{ Relative = "NyanLex-$releaseVersion-NeoForge.zip"; Loaders = @('neoforge'); ExpectedCount = 23 },
     [pscustomobject]@{ Relative = "NyanLex-$releaseVersion-Forge.zip"; Loaders = @('forge'); ExpectedCount = 2 },
-    [pscustomobject]@{ Relative = "NyanLex-$releaseVersion-all-versions.zip"; Loaders = @('fabric', 'neoforge', 'forge'); ExpectedCount = 18 }
+    [pscustomobject]@{ Relative = "NyanLex-$releaseVersion-all-versions.zip"; Loaders = @('fabric', 'neoforge', 'forge'); ExpectedCount = 62 }
 )
 
-Require ($artifacts.Count -eq 18) "Artifact map must contain exactly 18 JARs"
-Require (@($artifacts | Where-Object Loader -eq 'fabric').Count -eq 12) `
-    "Artifact map must contain 12 Fabric JARs"
-Require (@($artifacts | Where-Object Loader -eq 'neoforge').Count -eq 4) `
-    "Artifact map must contain 4 NeoForge JARs"
+Require ($artifactCount -eq 62) "Artifact map must contain exactly 62 JARs"
+Require (@($artifacts | Where-Object Loader -eq 'fabric').Count -eq 37) `
+    "Artifact map must contain 37 Fabric JARs"
+Require (@($artifacts | Where-Object Loader -eq 'neoforge').Count -eq 23) `
+    "Artifact map must contain 23 NeoForge JARs"
 Require (@($artifacts | Where-Object Loader -eq 'forge').Count -eq 2) `
     "Artifact map must contain 2 Forge JARs"
 Require (@($artifacts | Group-Object Source | Where-Object Count -ne 1).Count -eq 0) `
@@ -665,8 +711,8 @@ Require (@($zipSpecs | Group-Object Relative | Where-Object Count -ne 1).Count -
     "ZIP map contains duplicate destination paths"
 
 $allowed = @($artifacts.Relative) + @($zipSpecs.Relative) + @('SHA256SUMS.txt')
-Require ($allowed.Count -eq 23) `
-    "Release output map must contain 18 JARs, four ZIPs, and SHA256SUMS.txt"
+Require ($allowed.Count -eq ($checksumCount + 1)) `
+    "Release output map must contain $artifactCount JARs, four ZIPs, and SHA256SUMS.txt"
 Require (@($allowed | Group-Object | Where-Object Count -ne 1).Count -eq 0) `
     "Release output map contains duplicate paths"
 
@@ -736,12 +782,16 @@ foreach ($artifact in $artifacts) {
     $hashAfterValidation = Get-FileSha256Lower $source
     Require ($hashBeforeValidation -ceq $hashAfterValidation) `
         "Source changed while metadata was validated: $($artifact.Source)"
+    if ($artifact.PSObject.Properties.Name -contains 'VerifiedSha256') {
+        Require ($hashAfterValidation -ceq $artifact.VerifiedSha256) `
+            "Artifact changed after feature/API verification: $($artifact.Relative)"
+    }
     $sourcePathsByRelative[$artifact.Relative] = $source
     $sourceHashesByRelative[$artifact.Relative] = $hashAfterValidation
 }
-Require ($sourcePathsByRelative.Count -eq 18 -and
-        $sourceHashesByRelative.Count -eq 18) `
-    "Source preflight did not record all 18 artifacts"
+Require ($sourcePathsByRelative.Count -eq $artifactCount -and
+        $sourceHashesByRelative.Count -eq $artifactCount) `
+    "Source preflight did not record all $artifactCount artifacts"
 
 $stageCreated = $false
 $commitStarted = $false
@@ -815,20 +865,20 @@ try {
         })
     )
     $checksumTargets = @($checksumTargets | Sort-Object Relative)
-    Require ($checksumTargets.Count -eq 22) `
-        "Checksum target set must contain 18 JARs and four ZIPs"
+    Require ($checksumTargets.Count -eq $checksumCount) `
+        "Checksum target set must contain $artifactCount JARs and four ZIPs"
 
     $checksumLines = @($checksumTargets | ForEach-Object {
         (Get-FileSha256Lower $_.Path) + ' *' + $_.Relative
     })
-    Require ($checksumLines.Count -eq 22) `
-        "SHA256SUMS must contain exactly 22 lines"
+    Require ($checksumLines.Count -eq $checksumCount) `
+        "SHA256SUMS must contain exactly $checksumCount lines"
     $checksumPath = Get-PackagePath $stageRoot 'SHA256SUMS.txt'
     [System.IO.File]::WriteAllLines(
         $checksumPath, [string[]]$checksumLines, $utf8NoBom)
 
     # No output is installed until the staging tree is the exact, fully
-    # verified 23-file package.
+    # verified release package.
     Assert-ExactPackageTree $stageRoot $allowed 'Staged release'
     foreach ($artifact in $artifacts) {
         $stagedJar = [string]$packagedByRelative[$artifact.Relative]
@@ -881,7 +931,7 @@ try {
     }
 
     $writtenLines = [System.IO.File]::ReadAllLines($checksumPath, $utf8NoBom)
-    Require ($writtenLines.Count -eq 22 -and
+    Require ($writtenLines.Count -eq $checksumCount -and
             [string]::Join("`n", $writtenLines) -ceq
             [string]::Join("`n", $checksumLines)) `
         "Written SHA256SUMS content or ordering is wrong"
@@ -906,8 +956,8 @@ try {
             "SHA256SUMS hash mismatch: $relative"
         $seenChecksums[$relative] = $true
     }
-    Require ($seenChecksums.Count -eq 22) `
-        "SHA256SUMS does not cover all 22 release files"
+    Require ($seenChecksums.Count -eq $checksumCount) `
+        "SHA256SUMS does not cover all $checksumCount release files"
     Assert-ExactPackageTree $stageRoot $allowed 'Validated staged release'
     Assert-PackageMatchesChecksumLines `
         $stageRoot $checksumLines $utf8NoBom 'Validated staged release'
@@ -967,9 +1017,9 @@ try {
 }
 
 Write-Output ("PACKAGE_RELEASE_OK release={0}" -f $releaseRoot)
-Write-Output 'JARS total=18 fabric=12 neoforge=4 forge=2 source_and_staged_hashes=verified'
-Write-Output 'ZIPS total=4 entries=12,4,2,18 entry_hashes=verified'
-Write-Output 'SHA256SUMS lines=22 format=lowercase-forward-slash verified'
+Write-Output 'JARS total=62 fabric=37 neoforge=23 forge=2 source_and_staged_hashes=verified'
+Write-Output 'ZIPS total=4 entries=37,23,2,62 entry_hashes=verified'
+Write-Output 'SHA256SUMS lines=66 format=lowercase-forward-slash verified'
 foreach ($line in $checksumLines) {
     Write-Output ("SHA256 {0}" -f $line)
 }

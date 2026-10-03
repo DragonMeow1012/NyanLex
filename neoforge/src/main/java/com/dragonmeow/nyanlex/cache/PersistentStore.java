@@ -62,6 +62,12 @@ public interface PersistentStore {
         return java.util.Map.of();
     }
 
+    /** Number of rows in the active durable partition. Implementations backed by
+     *  a live index should override this to avoid allocating an entries snapshot. */
+    default int size() {
+        return entries().size();
+    }
+
     /** Switch the active target-language partition when this store supports it. */
     default void setLanguage(String targetLanguage) {
     }

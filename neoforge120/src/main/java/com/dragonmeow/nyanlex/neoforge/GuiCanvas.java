@@ -1,16 +1,17 @@
 package com.dragonmeow.nyanlex.neoforge;
 
 import com.dragonmeow.nyanlex.config.UiCanvas;
+import com.dragonmeow.nyanlex.translate.ChatComposerPanel;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
 /** {@link UiCanvas} over a {@link GuiGraphics}: how the core dialogs are drawn on any screen. */
-final class GuiCanvas implements UiCanvas {
+public final class GuiCanvas implements UiCanvas, ChatComposerPanel.Canvas {
     private final GuiGraphics g;
     private final Font font;
 
-    GuiCanvas(GuiGraphics g, Font font) {
+    public GuiCanvas(GuiGraphics g, Font font) {
         this.g = g;
         this.font = font;
     }

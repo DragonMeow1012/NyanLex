@@ -1,0 +1,125 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'fabric-loom' version '1.7.4'
+    id 'java'
+}
+
+def targets = new JsonSlurper().parse(file('targets.json'))
+def target = providers.gradleProperty('target').getOrElse('1.17')
+if (!targets.containsKey(target)) throw new GradleException("Unsupported Fabric legacy target: ${target}")
+def config = targets[target]
+def repositoryRoot = file('../..')
+def sourceRoot = new File(repositoryRoot, config.sourceProject)
+def commonProperties = new Properties()
+new File(repositoryRoot, 'gradle.properties').withInputStream { commonProperties.load(it) }
+
+version = providers.gradleProperty('mod_version').getOrElse(commonProperties.getProperty('mod_version'))
+group = 'com.dragonmeow.nyanlex'
+base.archivesName = 'nyanlex'
+layout.buildDirectory = file("build/${target}")
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${target}"
+    mappings loom.officialMojangMappings()
+    modImplementation 'net.fabricmc:fabric-loader:0.16.10'
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${config.fabricApi}"
+}
+
+// The maintained release tree supplies all platform-independent logic. Small
+// API-generation adapters replace only classes whose Minecraft contracts differ.
+def adapterRoots = [file("adapters/${config.profile ?: target}/java"), file("adapters/${target}/java")].unique()
+def patches = [:]
+([config.profile ?: target] + (config.patchProfiles ?: []) + [target]).unique().collect { file("patches/${it}.json") }.findAll { it.exists() }.each {
+    new JsonSlurper().parse(it).each { path, edits -> patches.computeIfAbsent(path) { [] }.addAll(edits) }
+}
+def generatedAdapters = layout.buildDirectory.dir('generated/api-adapters')
+def adapterSource = { path ->
+    def sourceProject = (config.sourceOverrides ?: [:])[path]
+    new File(sourceProject == null ? sourceRoot : new File(repositoryRoot, sourceProject), "src/main/java/${path}")
+}
+def generateAdapters = tasks.register('generateApiAdapters') {
+    inputs.files(patches.keySet().collect { adapterSource(it) })
+    inputs.property 'edits', JsonOutput.toJson(patches)
+    outputs.dir generatedAdapters
+    doLast {
+        delete generatedAdapters
+        patches.each { path, edits ->
+            def text = adapterSource(path).getText('UTF-8').replace('\r\n', '\n')
+            edits.each { edit ->
+                if (!text.contains(edit.from)) throw new GradleException("Stale API adapter ${path}: ${edit.from}")
+                text = text.replace(edit.from, edit.to)
+            }
+            def output = new File(generatedAdapters.get().asFile, path)
+            output.parentFile.mkdirs()
+            output.setText(text, 'UTF-8')
+        }
+    }
+}
+def replacements = adapterRoots.collectMany { root -> fileTree(root).matching { include '**/*.java' }.files.collect {
+    root.toPath().relativize(it.toPath()).toString().replace('\\', '/')
+} } as Set
+replacements.addAll(patches.keySet())
+sourceSets.main.java.setSrcDirs([new File(sourceRoot, 'src/main/java')] + adapterRoots + [generatedAdapters])
+sourceSets.main.java.exclude { details ->
+    replacements.contains(details.path) && details.file.toPath().startsWith(new File(sourceRoot, 'src/main/java').toPath())
+}
+sourceSets.main.resources.setSrcDirs([new File(sourceRoot, 'src/main/resources')])
+
+tasks.withType(JavaCompile).configureEach {
+    dependsOn generateAdapters
+    options.encoding = 'UTF-8'
+    options.release = config.java as int
+}
+
+processResources {
+    inputs.property('version', project.version)
+    inputs.property('minecraftTarget', target)
+    inputs.property('javaTarget', config.java)
+    inputs.property('fabricApiId', config.fabricApiId)
+    doFirst { delete destinationDir }
+    filesMatching('fabric.mod.json') { expand(version: project.version) }
+    doLast {
+        def metadataFile = new File(destinationDir, 'fabric.mod.json')
+        def metadata = new JsonSlurper().parse(metadataFile)
+        metadata.depends.minecraft = target
+        metadata.depends.java = ">=${config.java}"
+        metadata.depends.remove('fabric')
+        metadata.depends.remove('fabric-api')
+        metadata.depends[config.fabricApiId] = '*'
+        metadataFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n'
+    }
+}
+
+tasks.named('remapJar') { archiveClassifier = "Fabric-${target}" }
+tasks.named('jar') {
+    exclude 'assets/nyanslate/**', 'assets/mctranslator/**'
+    exclude 'com/dragonmeow/nyanlex/hub/tool/**'
+    from(new File(repositoryRoot, 'LICENSE')) { rename { 'LICENSE_NyanLex' } }
+}
+
+tasks.register('exportPortVerification') {
+    dependsOn tasks.named('classes')
+    def output = layout.buildDirectory.file('port-verification.json')
+    outputs.file(output)
+    doLast {
+        output.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+                minecraft: target,
+                loader: 'Fabric',
+                fabricApi: config.fabricApi,
+                fabricApiId: config.fabricApiId,
+                sourceProject: config.sourceProject,
+                java: config.java,
+                sourceRoots: sourceSets.main.java.srcDirs.collect { it.absolutePath },
+                compileClasspath: sourceSets.main.compileClasspath.files.collect { it.absolutePath },
+                classesDir: layout.buildDirectory.dir('classes/java/main').get().asFile.absolutePath
+        ])) + '\n'
+    }
+}
+tasks.named('build') { dependsOn tasks.named('exportPortVerification') }

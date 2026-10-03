@@ -1,0 +1,29 @@
+import groovy.json.JsonOutput
+
+// Named-classpath evidence for maintained projects, without modifying their builds.
+// NeoForge projects have no common minecraft_version property; pass
+// -PverificationMinecraft=<exact game version> for those projects.
+allprojects { project ->
+    afterEvaluate {
+        def fabric = plugins.hasPlugin('fabric-loom') || plugins.hasPlugin('net.fabricmc.fabric-loom')
+        def neoforge = plugins.hasPlugin('net.neoforged.moddev') || plugins.hasPlugin('net.neoforged.gradle.userdev')
+        if (!fabric && !neoforge) return
+        tasks.register('exportMaintainedVerification') {
+            dependsOn tasks.named('classes')
+            def output = layout.buildDirectory.file('port-verification.json')
+            outputs.file(output)
+            outputs.upToDateWhen { false }
+            doLast {
+                def gameVersion = findProperty('verificationMinecraft') ?: findProperty('minecraft_version')
+                if (!gameVersion) throw new GradleException('Pass -PverificationMinecraft=<exact game version>')
+                output.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+                    minecraft: gameVersion.toString(),
+                    loader: fabric ? 'Fabric' : 'NeoForge',
+                    classesDir: sourceSets.main.output.classesDirs.singleFile.absolutePath,
+                    resourcesDir: sourceSets.main.output.resourcesDir.absolutePath,
+                    compileClasspath: sourceSets.main.compileClasspath.files.collect { it.absolutePath }
+                ]))
+            }
+        }
+    }
+}

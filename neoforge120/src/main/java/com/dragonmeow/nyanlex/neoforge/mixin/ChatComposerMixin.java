@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.neoforge.mixin;
 
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge;
+import com.dragonmeow.nyanlex.neoforge.GuiCanvas;
 import com.dragonmeow.nyanlex.translate.ChatComposerPanel;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -19,12 +20,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Only fills vanilla's draft. Vanilla alone owns the final Enter/send action. */
 @Mixin(ChatScreen.class)
-public abstract class ChatComposerMixin extends Screen {
+public abstract class ChatComposerMixin extends Screen implements ChatComposerPanel.Host {
     @Shadow protected EditBox input;
     @Unique private EditBox nyanlex$draft;
     @Unique private EditBox nyanlex$search;
     @Unique private boolean nyanlex$enterHeld;
     @Unique private ChatComposerPanel nyanlex$composer;
+    @Unique private String[][] nyanlex$languageRows;
     protected ChatComposerMixin(Component title) { super(title); }
 
     @Inject(method = "init", at = @At("TAIL"), require = 1)
@@ -35,32 +37,8 @@ public abstract class ChatComposerMixin extends Screen {
                     || input.getValue().startsWith("/")) return;
             String draft = nyanlex$draft == null ? ChatComposerPanel.savedDraft() : nyanlex$draft.getValue();
             if (nyanlex$composer != null) nyanlex$composer.close();
-            final String[][] languages = nyanlex$languages();
-            nyanlex$composer = new ChatComposerPanel(new ChatComposerPanel.Host() {
-                public String text(String key) { return Component.translatable(key).getString(); }
-                public int textWidth(String text) { return font.width(text); }
-                public String draft() { return nyanlex$draft.getValue(); }
-                public String chat() { return input.getValue(); }
-                public String language() { return NyanLexNeoForge.config().chatComposerLanguage; }
-                public void language(String tag) { NyanLexNeoForge.config().chatComposerLanguage = tag; NyanLexNeoForge.saveConfig(); }
-                public String[][] languages() { return languages; }
-                public double positionX() { return NyanLexNeoForge.config().chatComposerX; }
-                public double positionY() { return NyanLexNeoForge.config().chatComposerY; }
-                public void position(double x, double y) {
-                    NyanLexNeoForge.config().chatComposerX = x; NyanLexNeoForge.config().chatComposerY = y; NyanLexNeoForge.saveConfig();
-                }
-                public void fill(String text) {
-                    input.setValue(text);
-                    nyanlex$draft.setFocused(false);
-                    input.setFocused(true);
-                    setFocused(input);
-                }
-                public boolean current() { return minecraft.screen == (Object) ChatComposerMixin.this; }
-                public void execute(Runnable action) { minecraft.execute(action); }
-                public void translate(String text, String target, java.util.function.BiConsumer<String, String> callback) {
-                    NyanLexNeoForge.outgoingChat.translate(text, target, callback);
-                }
-            });
+            nyanlex$languageRows = nyanlex$languages();
+            nyanlex$composer = new ChatComposerPanel(this);
             nyanlex$composer.resize(width, height);
             nyanlex$draft = new EditBox(font, nyanlex$composer.inputX(), nyanlex$composer.inputY(),
                     nyanlex$composer.inputWidth(), 20, Component.translatable("nyanlex.composer.title"));
@@ -75,6 +53,36 @@ public abstract class ChatComposerMixin extends Screen {
         } catch (Throwable guardError) {
             HookGuard.fail("ChatComposer.initComposer", guardError);
         }
+    }
+    // The mixed-in screen is the host. Keeping this boundary direct avoids anonymous
+    // Mixin inner classes, which the NeoForge transforming loader cannot resolve.
+    @Unique @Override public String text(String key) { return Component.translatable(key).getString(); }
+    @Unique @Override public int textWidth(String text) { return font.width(text); }
+    @Unique @Override public String draft() { return nyanlex$draft.getValue(); }
+    @Unique @Override public String chat() { return input.getValue(); }
+    @Unique @Override public String language() { return NyanLexNeoForge.config().chatComposerLanguage; }
+    @Unique @Override public void language(String tag) {
+        NyanLexNeoForge.config().chatComposerLanguage = tag;
+        NyanLexNeoForge.saveConfig();
+    }
+    @Unique @Override public String[][] languages() { return nyanlex$languageRows; }
+    @Unique @Override public double positionX() { return NyanLexNeoForge.config().chatComposerX; }
+    @Unique @Override public double positionY() { return NyanLexNeoForge.config().chatComposerY; }
+    @Unique @Override public void position(double x, double y) {
+        NyanLexNeoForge.config().chatComposerX = x;
+        NyanLexNeoForge.config().chatComposerY = y;
+        NyanLexNeoForge.saveConfig();
+    }
+    @Unique @Override public void fill(String text) {
+        input.setValue(text);
+        nyanlex$draft.setFocused(false);
+        input.setFocused(true);
+        setFocused(input);
+    }
+    @Unique @Override public boolean current() { return minecraft.screen == this; }
+    @Unique @Override public void execute(Runnable action) { minecraft.execute(action); }
+    @Unique @Override public void translate(String text, String target, java.util.function.BiConsumer<String, String> callback) {
+        NyanLexNeoForge.outgoingChat.translate(text, target, callback);
     }
     @Unique private String[][] nyanlex$languages() {
         java.util.List<String[]> rows = new java.util.ArrayList<>();
@@ -123,10 +131,7 @@ public abstract class ChatComposerMixin extends Screen {
         if (!HookGuard.enter("ChatComposer.renderComposer")) return;
         try {
             if (nyanlex$composer == null) return;
-            ChatComposerPanel.Canvas canvas = new ChatComposerPanel.Canvas() {
-                public void fill(int x, int y, int w, int h, int color) { g.fill(x, y, x + w, y + h, color); }
-                public void text(String text, int x, int y, int color) { g.drawString(font, text, x, y, color, false); }
-            };
+            ChatComposerPanel.Canvas canvas = new GuiCanvas(g, font);
             nyanlex$composer.render(canvas);
             nyanlex$draft.setX(nyanlex$composer.inputX()); nyanlex$draft.setY(nyanlex$composer.inputY());
             nyanlex$draft.render(g, mx, my, delta);

@@ -14,6 +14,7 @@
     "GuiGraphicsTextMixin",
     "GuiScoreboardMixin",
     "OptionsScreenMixin",
+    "AdvancementToastMixin",
     "ChatComposerMixin"
   ],
   "injectors": {

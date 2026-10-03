@@ -1,0 +1,64 @@
+{
+  "com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java": [
+    {
+      "from": "GuiGraphics;drawStringWithBackdrop",
+      "to": "GuiGraphics;drawString"
+    },
+    {
+      "from": "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)I",
+      "to": "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I"
+    },
+    {
+      "from": "Component text, int x, int y, int width, int color)",
+      "to": "Component text, int x, int y, int color)"
+    },
+    {
+      "from": "drawStringWithBackdrop(font, text, x, y, width, color)",
+      "to": "drawString(font, text, x, y, color)"
+    },
+    {
+      "from": "drawStringWithBackdrop(font, translated, center - w / 2, y, w, color)",
+      "to": "drawString(font, translated, center - w / 2, y, color)"
+    },
+    {
+      "from": "drawStringWithBackdrop(font, line, center - w / 2, ly, w, color)",
+      "to": "drawString(font, line, center - w / 2, ly, color)"
+    },
+    {
+      "from": "x, y, width, color, s == null",
+      "to": "x, y, font.width(text), color, s == null"
+    },
+    {
+      "from": "public abstract Font getFont();",
+      "to": "public abstract Font getFont();\n    @Shadow private Component overlayMessageString;\n    @Shadow private Component title;\n    @Shadow private Component subtitle;"
+    },
+    {
+      "from": "    @Redirect(\n            method = \"renderTitle\",\n            at = @At(value = \"INVOKE\",\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString\"\n                            + \"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I\"),\n            require = 0)\n    private int nyanlex$title(GuiGraphics g, Font font, Component text, int x, int y, int color) {\n        if (!HookGuard.enter(\"GuiScoreboard.title\")) return g.drawString(font, text, x, y, color);\n        try {\n            TranslationService s = NyanLexFabric.service();\n            return nyanlex$backdrop(\"title\", g, font, text, x, y, font.width(text), color, s == null ? null : s::translateTitle);\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.title\", guardError);\n            return g.drawString(font, text, x, y, color);\n        }\n    }\n\n    @Redirect(\n            method = \"renderOverlayMessage\",\n            at = @At(value = \"INVOKE\",\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString\"\n                            + \"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I\"),\n            require = 0)\n    private int nyanlex$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int color) {\n        if (NyanLexFabric.isOwnFeedback(text)) return g.drawString(font, text, x, y, color);\n        if (!HookGuard.enter(\"GuiScoreboard.actionBar\")) return g.drawString(font, text, x, y, color);\n        try {\n            TranslationService s = NyanLexFabric.service();\n            return nyanlex$backdrop(\"actionBar\", g, font, text, x, y, font.width(text), color, s == null ? null : s::translateActionBar);\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.actionBar\", guardError);\n            return g.drawString(font, text, x, y, color);\n        }\n    }\n\n",
+      "to": "    @Redirect(method = \"render\", at = @At(value = \"INVOKE\",\n            target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I\"), require = 0)\n    private int nyanlex$inlineHud(GuiGraphics g, Font font, Component text, int x, int y, int color) {\n        if (!HookGuard.enter(\"GuiScoreboard.inlineHud\")) return g.drawString(font, text, x, y, color);\n        try {\n            TranslationService service = NyanLexFabric.service();\n            if (service != null && !NyanLexFabric.isOwnFeedback(text)) {\n                if (text == overlayMessageString)\n                    return nyanlex$backdrop(\"actionBar\", g, font, text, x, y, font.width(text), color, service::translateActionBar);\n                if (text == title || text == subtitle)\n                    return nyanlex$backdrop(\"title\", g, font, text, x, y, font.width(text), color, service::translateTitle);\n            }\n            return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(\n                    () -> g.drawString(font, text, x, y, color));\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.inlineHud\", guardError);\n            return g.drawString(font, text, x, y, color);\n        }\n    }\n\n"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+    {
+      "from": "super(minecraft, CodexEffortScreen.this.width, CodexEffortScreen.this.height,\n                    28, CodexEffortScreen.this.height - 48, 18);",
+      "to": "super(minecraft, CodexEffortScreen.this.width, CodexEffortScreen.this.height - 76, 28, 18);"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+    {
+      "from": "super(minecraft, CodexModelScreen.this.width, CodexModelScreen.this.height,\n                    48, CodexModelScreen.this.height - 48, 18);",
+      "to": "super(minecraft, CodexModelScreen.this.width, CodexModelScreen.this.height - 96, 48, 18);"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationLanguageScreen.java": [
+    {
+      "from": "super(minecraft, TranslationLanguageScreen.this.width, TranslationLanguageScreen.this.height,\n                    48, TranslationLanguageScreen.this.height - 61, 18);",
+      "to": "super(minecraft, TranslationLanguageScreen.this.width, TranslationLanguageScreen.this.height - 109, 48, 18);"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {
+      "from": "SystemToast.SystemToastIds.",
+      "to": "SystemToast.SystemToastId."
+    }
+  ]
+}

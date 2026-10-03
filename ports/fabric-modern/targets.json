@@ -1,0 +1,16 @@
+{
+  "1.20.5": {"sourceProject":".", "fabricApi":"0.97.8+1.20.5", "java":21, "profile":"1.20-components"},
+  "1.20.6": {"sourceProject":".", "fabricApi":"0.100.8+1.20.6", "java":21, "profile":"1.20-components"},
+  "1.21": {"sourceProject":".", "fabricApi":"0.102.0+1.21", "java":21, "profile":"base"},
+  "1.21.2": {"sourceProject":".", "fabricApi":"0.106.1+1.21.2", "java":21, "profile":"render-state"},
+  "1.21.3": {"sourceProject":".", "fabricApi":"0.114.1+1.21.3", "java":21, "profile":"render-state"},
+  "1.21.4": {"sourceProject":".", "fabricApi":"0.119.4+1.21.4", "java":21, "profile":"render-state"},
+  "1.21.5": {"sourceProject":".", "fabricApi":"0.128.2+1.21.5", "java":21, "profile":"render-state", "patchProfiles":["render-state","data-components"]},
+  "1.21.6": {"sourceProject":".", "fabricApi":"0.128.2+1.21.6", "java":21, "profile":"gui-state", "patchProfiles":["render-state","data-components","gui-state"]},
+  "1.21.7": {"sourceProject":".", "fabricApi":"0.129.0+1.21.7", "java":21, "profile":"gui-state", "patchProfiles":["render-state","data-components","gui-state"]},
+  "1.21.8": {"sourceProject":".", "fabricApi":"0.136.1+1.21.8", "java":21, "profile":"gui-state", "patchProfiles":["render-state","data-components","gui-state"]},
+  "1.21.9": {"sourceProject":"fabric12111", "fabricApi":"0.134.1+1.21.9", "java":21, "profile":"input-events"},
+  "1.21.10": {"sourceProject":"fabric12111", "fabricApi":"0.138.4+1.21.10", "java":21, "profile":"input-events"},
+  "26.1": {"sourceProject":"fabric2612", "fabricApi":"0.145.1+26.1", "java":25, "profile":"unobfuscated"},
+  "26.1.1": {"sourceProject":"fabric2612", "fabricApi":"0.145.4+26.1.1", "java":25, "profile":"unobfuscated"}
+}

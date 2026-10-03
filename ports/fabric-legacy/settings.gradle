@@ -1,0 +1,15 @@
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.fabricmc.net/' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+def minecraftTarget = gradle.startParameter.projectProperties.get('target') ?: '1.17'
+if (!(minecraftTarget ==~ /[0-9]+(\.[0-9]+){1,2}/)) throw new GradleException('Invalid Minecraft target')
+// Task history is selected before settings are evaluated, so it must be supplied
+// by the launcher. A different cache per target preserves all verification classes.
+if (gradle.startParameter.projectCacheDir == null) {
+    throw new GradleException("Pass --project-cache-dir ${file(".gradle/targets/${minecraftTarget}").absolutePath}")
+}
+rootProject.name = 'nyanlex-fabric-legacy-ports'

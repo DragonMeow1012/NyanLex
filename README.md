@@ -12,7 +12,7 @@
 </p>
 
 <p align="center"><a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a> · <b>繁體中文</b> · <a href="README.zh-CN.md">简体中文</a></p>
-<p align="center"><a href="#特色功能">特色功能</a> &nbsp;·&nbsp; <a href="#直接下載">下載</a> &nbsp;·&nbsp; <a href="#實際遊戲展示">實機展示</a> &nbsp;·&nbsp; <a href="#翻譯來源">翻譯來源</a> &nbsp;·&nbsp; <a href="#快捷鍵">快捷鍵</a> &nbsp;·&nbsp; <a href="#隱私">隱私說明</a></p>
+<p align="center"><a href="#特色功能">特色功能</a> &nbsp;·&nbsp; <a href="#下載矩陣">下載</a> &nbsp;·&nbsp; <a href="#實際遊戲展示">實機展示</a> &nbsp;·&nbsp; <a href="#翻譯來源">翻譯來源</a> &nbsp;·&nbsp; <a href="#快捷鍵">快捷鍵</a> &nbsp;·&nbsp; <a href="#隱私">隱私說明</a></p>
 
 > **首次安裝預設關閉線上翻譯。** 開啟後，選定內容會傳送至你選擇的服務，聊天可能包含私訊；已有的本機翻譯仍可離線顯示。[閱讀隱私說明](#隱私)。
 
@@ -70,7 +70,7 @@
 
 ## 開始使用
 
-1. **選對版本。** [下載](#直接下載)符合 Minecraft 版本與 Loader 的單一 JAR，放入該實例的 `mods` 資料夾；Fabric 另需對應的 Fabric API。
+1. **選對版本。** 從[下載矩陣](#下載矩陣)選擇符合 Minecraft 版本與 Loader 的單一 JAR，放入該實例的 `mods` 資料夾；Fabric 另需對應的 Fabric API。
 2. **選擇語言與服務。** 啟動遊戲，透過快速設定選擇目標語言和翻譯來源，確認後才開啟線上翻譯。
 3. **開始閱讀。** 現代版按 <kbd>R</kbd> 翻譯游標指向的物品，按 <kbd>P</kbd> 翻譯可見介面或 HUD；按 <kbd>G</kbd> 切換原文／譯文。
 
@@ -82,66 +82,127 @@
 
 每個區域可選原文、譯文或兩者並列。已有 AI 譯文優先，其次是翻譯包與已存的機翻。舊版按鍵有差異，見[快捷鍵](#快捷鍵)。
 
-## 直接下載
+<!-- BEGIN GENERATED DOWNLOAD MATRIX -->
+## 下載矩陣
 
-每個 JAR 只適用於檔名標示的 Minecraft 版本與 Loader。**請只安裝其中一個，不要一次安裝整包。**
+完整支援範圍請以表格為準：Fabric 提供 Minecraft 1.16.5 至 26.3 的所有正式版本，NeoForge 提供 1.20.1 至 26.3 的所有正式版本；另保留 Fabric 1.14.4、1.15.2 與 Forge 1.12.2、1.13.2。每個 JAR 僅適用於檔名所示的 Minecraft 版本與 Loader。
 
-| Fabric · 12 個版本 | NeoForge · 4 個版本 | Forge · 2 個版本 |
-| :---: | :---: | :---: |
-| 1.14.4～26.3 的指定版本 | 1.20.1、1.21.1、26.2、26.3 | 1.12.2、1.13.2 |
-| [Fabric ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Fabric.zip) | [NeoForge ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-NeoForge.zip) | [Forge ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Forge.zip) |
+### 整包下載
 
-[查看 Release](https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0) · [全版本 ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip) · [SHA-256](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/SHA256SUMS.txt)
+| Fabric · 37 | NeoForge · 23 | Forge · 2 | 全部版本 |
+| --- | --- | --- | --- |
+| [下載 Fabric 版本包](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Fabric.zip) | [下載 NeoForge 版本包](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-NeoForge.zip) | [下載 Forge 版本包](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Forge.zip) | [下載 全部版本](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip) |
 
-展開下方清單，下載你的版本：
+依 Minecraft 系列展開並下載個別版本：
 
 <details>
-<summary><b>Fabric · 12 個版本 — 個別 JAR 與 Java 需求</b></summary>
+<summary><b>舊版 1.12～1.15</b></summary>
 
-Fabric 版本需要相符版本的 Fabric Loader 與 Fabric API。
-
-| Minecraft | Java | 下載 |
-| --- | ---: | --- |
-| 1.14.4 | 8 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) |
-| 1.15.2 | 8 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) |
-| 1.16.5 | 8 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) |
-| 1.17.1 | 16 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) |
-| 1.18.2 | 17 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) |
-| 1.19.4 | 17 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) |
-| 1.20.1 | 17 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) |
-| 1.21.1 | 21 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) |
-| 1.21.11 | 21 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) |
-| 26.1.2 | 25 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) |
-| 26.2 | 25 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) |
-| 26.3 | 25 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) |
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.12.2 | — | — | [下載 Forge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) | 8 |
+| 1.13.2 | — | — | [下載 Forge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) | 8 |
+| 1.14.4 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) | — | — | 8 |
+| 1.15.2 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) | — | — | 8 |
 
 </details>
 
 <details>
-<summary><b>NeoForge · 4 個版本 — 個別 JAR 與 Java 需求</b></summary>
+<summary><b>Minecraft 1.16</b></summary>
 
-| Minecraft | Java | 下載 |
-| --- | ---: | --- |
-| 1.20.1 | 17 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) |
-| 1.21.1 | 21 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) |
-| 26.2 | 25 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) |
-| 26.3 | 25 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) |
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.16.5 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) | — | — | 8 |
 
 </details>
 
 <details>
-<summary><b>Forge · 2 個版本 — 個別 JAR 與 Java 需求</b></summary>
+<summary><b>Minecraft 1.17</b></summary>
 
-| Minecraft | Java | 下載 |
-| --- | ---: | --- |
-| 1.12.2 | 8 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) |
-| 1.13.2 | 8 | [下載 JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) |
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.17 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.jar) | — | — | 16 |
+| 1.17.1 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) | — | — | 16 |
 
 </details>
+
+<details>
+<summary><b>Minecraft 1.18</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.18 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.jar) | — | — | 17 |
+| 1.18.1 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.1.jar) | — | — | 17 |
+| 1.18.2 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) | — | — | 17 |
+
+</details>
+
+<details>
+<summary><b>Minecraft 1.19</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.19 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.jar) | — | — | 17 |
+| 1.19.1 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.1.jar) | — | — | 17 |
+| 1.19.2 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.2.jar) | — | — | 17 |
+| 1.19.3 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.3.jar) | — | — | 17 |
+| 1.19.4 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) | — | — | 17 |
+
+</details>
+
+<details>
+<summary><b>Minecraft 1.20</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.20 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.jar) | — | — | 17 |
+| 1.20.1 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) | — | 17 |
+| 1.20.2 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.2.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.2.jar) | — | 17 |
+| 1.20.3 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.3.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.3.jar) | — | 17 |
+| 1.20.4 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.4.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.4.jar) | — | 17 |
+| 1.20.5 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.5.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.5.jar) | — | 21 |
+| 1.20.6 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.6.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.6.jar) | — | 21 |
+
+</details>
+
+<details>
+<summary><b>Minecraft 1.21</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 1.21 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.jar) | — | 21 |
+| 1.21.1 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) | — | 21 |
+| 1.21.2 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.2.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.2.jar) | — | 21 |
+| 1.21.3 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.3.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.3.jar) | — | 21 |
+| 1.21.4 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.4.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.4.jar) | — | 21 |
+| 1.21.5 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.5.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.5.jar) | — | 21 |
+| 1.21.6 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.6.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.6.jar) | — | 21 |
+| 1.21.7 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.7.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.7.jar) | — | 21 |
+| 1.21.8 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.8.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.8.jar) | — | 21 |
+| 1.21.9 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.9.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.9.jar) | — | 21 |
+| 1.21.10 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.10.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.10.jar) | — | 21 |
+| 1.21.11 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.11.jar) | — | 21 |
+
+</details>
+
+<details>
+<summary><b>Minecraft 26</b></summary>
+
+| Minecraft | Fabric | NeoForge | Forge | Java |
+| --- | --- | --- | --- | ---: |
+| 26.1 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.jar) | — | 25 |
+| 26.1.1 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.1.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.1.jar) | — | 25 |
+| 26.1.2 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.2.jar) | — | 25 |
+| 26.2 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) | — | 25 |
+| 26.3 | [下載 Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) | [下載 NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) | — | 25 |
+
+</details>
+
+<!-- END GENERATED DOWNLOAD MATRIX -->
 
 ## 相容性
 
-- 支援 Fabric、NeoForge、Forge（Minecraft 1.12.2～26.3），完整清單見[直接下載](#直接下載)。
+- 支援 Fabric、NeoForge、Forge（Minecraft 1.12.2～26.3），完整清單見[下載矩陣](#下載矩陣)。
 - 舊版目標（Fabric 1.14.4～1.16.5、Forge 1.12.2～1.13.2）使用精簡版介面：有簡短的快速設定、即時詢問的確認視窗與分類設定畫面，但沒有翻譯包與全內容預熱。
 - 針對模組包的任務書（任務說明）翻譯有特別優化（長段落、彩色文字、提示框）。
 - 純客戶端模組，不修改伺服器，也不會代替玩家送出聊天。
@@ -180,7 +241,7 @@ AI 失敗時是否使用 Google 機翻補上，可在設定中選擇；啟用回
 <details>
 <summary>格式相容性、分檔與匯入限制</summary>
 
-Fabric 1.17.1 以上與 NeoForge 可互相分享；Fabric 1.14.4～1.16.5 與 Forge 1.12.2～1.13.2 可互相分享。這兩組的文字模板格式不同，不能跨組匯入。**每份**檔案上限為 32 MiB、10 萬筆翻譯；這不是整批分享的總量上限，超過時會自動分檔。既有單檔 JSON 仍可匯入；超過上限的舊 JSON 請由持有快取的一方重新匯出。
+Fabric 1.17 以上與 NeoForge 可互相分享；Fabric 1.14.4～1.16.5 與 Forge 1.12.2～1.13.2 可互相分享。這兩組的文字模板格式不同，不能跨組匯入。**每份**檔案上限為 32 MiB、10 萬筆翻譯；這不是整批分享的總量上限，超過時會自動分檔。既有單檔 JSON 仍可匯入；超過上限的舊 JSON 請由持有快取的一方重新匯出。
 
 批次匯入依檔名順序逐檔合併，先匯入的有效譯文優先；單份檔案損壞、格式不符或容量不足，不會阻止其他檔案繼續處理。完成訊息會列出新增筆數、成功／總檔數及失敗資訊；已成功匯入的內容不會回滾。匯出不會覆蓋同名檔案，遇到重名請換一個檔名。
 
@@ -190,7 +251,7 @@ Fabric 1.17.1 以上與 NeoForge 可互相分享；Fabric 1.14.4～1.16.5 與 Fo
 
 ## 快捷鍵
 
-Fabric 1.17.1 以上與 NeoForge：
+Fabric 1.17 以上與 NeoForge：
 
 | 按鍵 | 功能 |
 | --- | --- |

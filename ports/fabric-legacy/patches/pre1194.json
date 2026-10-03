@@ -1,0 +1,100 @@
+{
+  "com/dragonmeow/nyanlex/fabric/mixin/ChatComposerMixin.java": [
+    {
+      "from": "getLanguages().entrySet()",
+      "to": "getLanguages()"
+    },
+    {
+      "from": "java.util.Map.Entry<String, net.minecraft.client.resources.language.LanguageInfo> entry",
+      "to": "net.minecraft.client.resources.language.LanguageInfo entry"
+    },
+    {
+      "from": "entry.getKey()",
+      "to": "entry.getCode()"
+    },
+    {
+      "from": "entry.getValue().toComponent().getString()",
+      "to": "entry.toString()"
+    },
+    {
+      "from": ".setFocused(",
+      "to": ".setFocus("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/QuickSetupScreen.java": [
+    {
+      "from": "getLanguages().entrySet()",
+      "to": "getLanguages()"
+    },
+    {
+      "from": "getLanguageManager().getSelected()",
+      "to": "getLanguageManager().getSelected().getCode()"
+    },
+    {
+      "from": "Map.Entry<String, LanguageInfo> entry",
+      "to": "LanguageInfo entry"
+    },
+    {
+      "from": "entry.getKey()",
+      "to": "entry.getCode()"
+    },
+    {
+      "from": "entry.getValue().toComponent().getString()",
+      "to": "entry.toString()"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationConfigScreen.java": [
+    {
+      "from": "getLanguages().entrySet()",
+      "to": "getLanguages()"
+    },
+    {
+      "from": "java.util.Map.Entry<String, net.minecraft.client.resources.language.LanguageInfo> entry",
+      "to": "net.minecraft.client.resources.language.LanguageInfo entry"
+    },
+    {
+      "from": "entry.getKey()",
+      "to": "entry.getCode()"
+    },
+    {
+      "from": "entry.getValue().toComponent().getString()",
+      "to": "entry.toString()"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationLanguageScreen.java": [
+    {
+      "from": "getLanguages().entrySet()",
+      "to": "getLanguages()"
+    },
+    {
+      "from": "getLanguageManager().getSelected()",
+      "to": "getLanguageManager().getSelected().getCode()"
+    },
+    {
+      "from": "e.getKey()",
+      "to": "e.getCode()"
+    },
+    {
+      "from": "e.getValue().name()",
+      "to": "e.getName()"
+    },
+    {
+      "from": "e.getValue().region()",
+      "to": "e.getRegion()"
+    },
+    {
+      "from": "e.getValue().toComponent()",
+      "to": "Component.literal(e.toString())"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/EntityNameTagMixin.java": [
+    {
+      "from": "Font.DisplayMode mode",
+      "to": "boolean mode"
+    },
+    {
+      "from": "Lnet/minecraft/client/gui/Font$DisplayMode;",
+      "to": "Z"
+    }
+  ]
+}

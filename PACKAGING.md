@@ -1,72 +1,127 @@
 # NyanLex Translator 1.0.0 packaging
 
-Build and package **NyanLex Translator**; jar names use `nyanlex-<version>-...`.
+Each JAR is tied to one Minecraft version and loader. The expanded release contains **62 JARs**: 37 Fabric, 23 NeoForge and 2 Forge. This covers every stable Minecraft release from 1.16.5 through 26.3 for Fabric, and from 1.20.1 through 26.3 for NeoForge, while retaining the four older targets.
 
-NyanLex Translator is an unofficial project and is not affiliated with or endorsed by Mojang, Microsoft, Hypixel, or any mod author.
-
-The release contains 18 JARs. Each JAR is tied to one Minecraft version and loader.
-
-Minecraft 26.3 is included in the main release (18 total). After rebuilding, run
-`python verification/verify-translation-features.py` before packaging. This checks
-the feature entry points, native file picker, language labels, legacy Java 8 class
-versions, and Forge font hooks in each built JAR.
+NeoForge has no releases for Minecraft versions earlier than 1.20.1. Minecraft snapshots and pre-releases are not included. Some stable Minecraft targets require a beta NeoForge build; use the exact dependency pins in the project properties or [port manifests](ports/README.md). The NeoForge 26.1.2 target is built against **26.1.2.109**, not only relabelled with a lower minimum.
 
 ## Project matrix
 
+The canonical machine-readable matrix is [verification/release_matrix.py](verification/release_matrix.py), which combines the 18 maintained targets with the three port manifests and rejects missing or duplicate combinations.
+
 | Loader | Minecraft | Java | Project |
 | --- | --- | ---: | --- |
-| Forge | 1.12.2 | 8 | `forge1122` |
-| Forge | 1.13.2 | 8 | `forge1132` |
 | Fabric | 1.14.4 | 8 | `fabric1144` |
 | Fabric | 1.15.2 | 8 | `fabric1152` |
 | Fabric | 1.16.5 | 8 | `fabric1165` |
+| Fabric | 1.17 | 16 | `ports/fabric-legacy` (`-Ptarget=1.17`) |
 | Fabric | 1.17.1 | 16 | `fabric1171` |
+| Fabric | 1.18 | 17 | `ports/fabric-legacy` (`-Ptarget=1.18`) |
+| Fabric | 1.18.1 | 17 | `ports/fabric-legacy` (`-Ptarget=1.18.1`) |
 | Fabric | 1.18.2 | 17 | `fabric1182` |
+| Fabric | 1.19 | 17 | `ports/fabric-legacy` (`-Ptarget=1.19`) |
+| Fabric | 1.19.1 | 17 | `ports/fabric-legacy` (`-Ptarget=1.19.1`) |
+| Fabric | 1.19.2 | 17 | `ports/fabric-legacy` (`-Ptarget=1.19.2`) |
+| Fabric | 1.19.3 | 17 | `ports/fabric-legacy` (`-Ptarget=1.19.3`) |
 | Fabric | 1.19.4 | 17 | `fabric1194` |
+| Fabric | 1.20 | 17 | `ports/fabric-legacy` (`-Ptarget=1.20`) |
 | Fabric | 1.20.1 | 17 | `fabric120` |
-| NeoForge | 1.20.1 | 17 | `neoforge120` |
-| Fabric | 1.21.1 | 21 | repository root |
-| NeoForge | 1.21.1 | 21 | `neoforge` |
+| Fabric | 1.20.2 | 17 | `ports/fabric-legacy` (`-Ptarget=1.20.2`) |
+| Fabric | 1.20.3 | 17 | `ports/fabric-legacy` (`-Ptarget=1.20.3`) |
+| Fabric | 1.20.4 | 17 | `ports/fabric-legacy` (`-Ptarget=1.20.4`) |
+| Fabric | 1.20.5 | 21 | `ports/fabric-modern` (`-Ptarget=1.20.5`) |
+| Fabric | 1.20.6 | 21 | `ports/fabric-modern` (`-Ptarget=1.20.6`) |
+| Fabric | 1.21 | 21 | `ports/fabric-modern` (`-Ptarget=1.21`) |
+| Fabric | 1.21.1 | 21 | `repository root` |
+| Fabric | 1.21.2 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.2`) |
+| Fabric | 1.21.3 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.3`) |
+| Fabric | 1.21.4 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.4`) |
+| Fabric | 1.21.5 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.5`) |
+| Fabric | 1.21.6 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.6`) |
+| Fabric | 1.21.7 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.7`) |
+| Fabric | 1.21.8 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.8`) |
+| Fabric | 1.21.9 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.9`) |
+| Fabric | 1.21.10 | 21 | `ports/fabric-modern` (`-Ptarget=1.21.10`) |
 | Fabric | 1.21.11 | 21 | `fabric12111` |
+| Fabric | 26.1 | 25 | `ports/fabric-modern` (`-Ptarget=26.1`) |
+| Fabric | 26.1.1 | 25 | `ports/fabric-modern` (`-Ptarget=26.1.1`) |
 | Fabric | 26.1.2 | 25 | `fabric2612` |
 | Fabric | 26.2 | 25 | `fabric26` |
-| NeoForge | 26.2 | 25 | `neoforge26` |
 | Fabric | 26.3 | 25 | `fabric263` |
+| Forge | 1.12.2 | 8 | `forge1122` |
+| Forge | 1.13.2 | 8 | `forge1132` |
+| NeoForge | 1.20.1 | 17 | `neoforge120` |
+| NeoForge | 1.20.2 | 17 | `ports/neoforge` (`-Ptarget=1.20.2`) |
+| NeoForge | 1.20.3 | 17 | `ports/neoforge` (`-Ptarget=1.20.3`) |
+| NeoForge | 1.20.4 | 17 | `ports/neoforge` (`-Ptarget=1.20.4`) |
+| NeoForge | 1.20.5 | 21 | `ports/neoforge` (`-Ptarget=1.20.5`) |
+| NeoForge | 1.20.6 | 21 | `ports/neoforge` (`-Ptarget=1.20.6`) |
+| NeoForge | 1.21 | 21 | `ports/neoforge` (`-Ptarget=1.21`) |
+| NeoForge | 1.21.1 | 21 | `neoforge` |
+| NeoForge | 1.21.2 | 21 | `ports/neoforge` (`-Ptarget=1.21.2`) |
+| NeoForge | 1.21.3 | 21 | `ports/neoforge` (`-Ptarget=1.21.3`) |
+| NeoForge | 1.21.4 | 21 | `ports/neoforge` (`-Ptarget=1.21.4`) |
+| NeoForge | 1.21.5 | 21 | `ports/neoforge` (`-Ptarget=1.21.5`) |
+| NeoForge | 1.21.6 | 21 | `ports/neoforge` (`-Ptarget=1.21.6`) |
+| NeoForge | 1.21.7 | 21 | `ports/neoforge` (`-Ptarget=1.21.7`) |
+| NeoForge | 1.21.8 | 21 | `ports/neoforge` (`-Ptarget=1.21.8`) |
+| NeoForge | 1.21.9 | 21 | `ports/neoforge` (`-Ptarget=1.21.9`) |
+| NeoForge | 1.21.10 | 21 | `ports/neoforge` (`-Ptarget=1.21.10`) |
+| NeoForge | 1.21.11 | 21 | `ports/neoforge` (`-Ptarget=1.21.11`) |
+| NeoForge | 26.1 | 25 | `ports/neoforge` (`-Ptarget=26.1`) |
+| NeoForge | 26.1.1 | 25 | `ports/neoforge` (`-Ptarget=26.1.1`) |
+| NeoForge | 26.1.2 | 25 | `ports/neoforge` (`-Ptarget=26.1.2`) |
+| NeoForge | 26.2 | 25 | `neoforge26` |
 | NeoForge | 26.3 | 25 | `neoforge263` |
 
-## Build
+## Build and validation
 
-Use Gradle 8.10 for stable Loom projects, Gradle 8.13 for NeoForge 1.20.1/1.21.1, and Gradle 9.5 for Minecraft 1.21.11/26.x. Forge 1.12.2 and 1.13.2 use their included wrappers.
-
-Examples:
+The maintained targets use their existing source projects. The 44 additional targets share those sources and adapt only Minecraft/loader API boundaries; see [ports/README.md](ports/README.md).
 
 ```powershell
-.\.gradle-local\gradle-8.10\bin\gradle.bat clean build
-.\.gradle-local\gradle-8.10\bin\gradle.bat -p fabric120 clean build
-.\.gradle-local\gradle-8.13\bin\gradle.bat -p neoforge120 clean build
-.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p fabric26 clean build
-Push-Location forge1122; .\gradlew.bat clean build; Pop-Location
+# Rebuild the 18 maintained targets with their established toolchains.
+./verification/verify-release-matrix.ps1 -Phase Build
+
+# Rebuild and statically validate all 44 additional targets.
+./verification/build-ports.ps1
+
+# Or build one additional target.
+./verification/build-ports.ps1 -Targets neoforge/26.1.2
+
+# Final-artifact feature checks across all 62 targets.
+python verification/verify-translation-features.py
+
+# Additional-target metadata, bytecode and exact vanilla Mixin call-site checks.
+python verification/verify-port-artifacts.py
+
+# Verification-tool regression tests and package transaction/rollback tests.
+python verification/test-port-verification.py
+./verification/test-release-transaction.ps1
+
+# Existing core/protocol harness against the 18 maintained final JARs.
+./verification/verify-release-matrix.ps1 -Phase FinalJar
 ```
+
+Port builds require an explicit target-specific `--project-cache-dir`. The driver supplies it; without isolation, changing `-Ptarget` can make Gradle delete a previous target's compiled classes as stale outputs. Successful port builds write `build/<MC>/port-verification.json` with that target's actual named game classpath.
+
+The artifact verifier rejects anonymous inner classes in the composer Mixin. These classes can pass compilation and ordinary selector checks but fail during NeoForge's runtime class transformation. The composer uses the existing Host interface directly and an external platform canvas instead. Static checks also reject public Host method collisions with vanilla classes.
+
+Builds and static checks do **not** prove that every modpack works. Record actual startup/play tests separately, including Minecraft, Loader build and modpack version; do not mark `runtimeTested` true based on compilation alone.
 
 ## Release folders
 
-Generated binaries are ignored by Git and stored under `mods-jar/1.0.0`:
+Package only after all checks pass:
+
+```powershell
+./verification/package-release.ps1
+```
+
+The default output is `mods-jar/1.0.0-expanded`, preserving the previous `mods-jar/1.0.0` package. The output folder label does not change mod version 1.0.0 or public asset names. `-OutputName` can select another immediate child of `mods-jar`.
 
 ```text
-mods-jar/1.0.0/
-  fabric/
-    1.14.4/nyanlex-1.0.0-Fabric-1.14.4.jar
-    ...
-    26.2/nyanlex-1.0.0-Fabric-26.2.jar
-    26.3/nyanlex-1.0.0-Fabric-26.3.jar
-  neoforge/
-    1.20.1/nyanlex-1.0.0-NeoForge-1.20.1.jar
-    1.21.1/nyanlex-1.0.0-NeoForge-1.21.1.jar
-    26.2/nyanlex-1.0.0-NeoForge-26.2.jar
-    26.3/nyanlex-1.0.0-NeoForge-26.3.jar
-  forge/
-    1.12.2/nyanlex-1.0.0-Forge-1.12.2.jar
-    1.13.2/nyanlex-1.0.0-Forge-1.13.2.jar
+mods-jar/1.0.0-expanded/
+  fabric/<MC>/nyanlex-1.0.0-Fabric-<MC>.jar
+  neoforge/<MC>/nyanlex-1.0.0-NeoForge-<MC>.jar
+  forge/<MC>/nyanlex-1.0.0-Forge-<MC>.jar
   NyanLex-1.0.0-Fabric.zip
   NyanLex-1.0.0-NeoForge.zip
   NyanLex-1.0.0-Forge.zip
@@ -74,41 +129,22 @@ mods-jar/1.0.0/
   SHA256SUMS.txt
 ```
 
-GitHub Release assets are flat, so all 18 JARs are also uploaded individually for README direct-download links. The ZIP files preserve the loader/version directory structure.
+The packager revalidates all 44 ports before creating a staging directory, binds copied files to verified hashes, checks all 62 JARs and four ZIP contents, and performs a guarded atomic folder swap with rollback. The checksum file contains 66 entries: 62 JARs and four ZIPs. Generated binaries are ignored by Git.
 
-## Verification
+## Publication checklist
 
-Before publishing:
+- Confirm 62 JARs, four ZIPs and one checksum file; compare every JAR to its build output.
+- Confirm exact Minecraft/loader metadata, Java levels, client-side declarations, entrypoint classes, icons and four UI locales.
+- Check Fabric API's actual mod ID for each pinned API artifact. Older targets may use `fabric`; newer ones use `fabric-api`. Do not infer the ID solely from the Minecraft major version.
+- Confirm no earlier project-name directories, screenshot drivers, translation-hub content or authoring/test tools are packaged.
+- Run core unit tests and `git diff --check`.
+- Back up existing published assets and notes before replacement. Upload the individual JARs plus four ZIPs and checksums to GitHub Release `v1.0.0`.
+- On Modrinth, use one exact Minecraft version and one loader per version; Fabric API is required for Fabric. Compare uploaded file hashes against the verified package.
+- Update all four README download tables and release/store support descriptions together. Keep the GitHub default README in Traditional Chinese and Modrinth descriptions in English.
+- Describe the difference between build/static validation and actual game testing, including any unresolved startup failures. Never publish a known-broken artifact.
 
-- Build all 18 targets successfully.
-- Confirm exactly 18 packaged JARs, 4 ZIPs, and `SHA256SUMS.txt`.
-- Compare each packaged JAR SHA-256 with its matching `build/libs` output.
-- Confirm loader metadata contains version 1.0.0 and the exact Minecraft range.
-- Confirm loader metadata mod id/entrypoint classes are `nyanlex` / `com.dragonmeow.nyanlex.*`.
-- Confirm each Fabric JAR depends on Fabric API under the right id (`fabric` for 1.14.4 to 1.17.1, `fabric-api` from 1.18.2) and lists no other dependency besides Fabric Loader, Minecraft and Java.
-- Confirm the icon declaration: `iconFile` (and no `logoFile`) in `neoforge.mods.toml`, `logoFile` in the Forge-format `mods.toml` and `mcmod.info`, and that the icon file is inside the JAR.
-- Confirm no JAR contains folders of earlier project names, the screenshot driver, `translation-hub` files, `hub/tool` classes, or test classes other than the known legacy `LegacyTranslator$TestBackend` and `LegacyTranslator$TestAiHttp`.
-- Run `git diff --check` and core unit tests.
-- Upload individual JARs plus the four ZIP files to tag `v1.0.0`.
+## Minecraft 26.3 source sharing
 
-## Minecraft 26.3 builds
+`fabric263` and `neoforge263` use Java 25 and Gradle 9.5. They share the 26.2 platform sources and resources, with version-specific browser-link helpers in `platform26` / `platform263`. Input mappings use Minecraft input constants and NeoForge's original events so SDL and GLFW key codes are not mixed.
 
-Minecraft 26.3 targets are `fabric263` and `neoforge263`, both using Java 25
-and Gradle 9.5. They share the 26.2 translation/loader sources and resources.
-Keyboard mappings use Minecraft input constants and NeoForge's original
-`KeyEvent`, so SDL and GLFW key codes are never mixed. External browser links
-use the version-specific `platform26` / `platform263` source directory.
-
-```powershell
-.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p fabric263 build
-.\.gradle-local\gradle-9.5.0\bin\gradle.bat -p neoforge263 build
-powershell -File verification/package-release.ps1
-```
-
-Both 26.3 JARs are included in the main loader ZIPs and all-versions ZIP.
-
-Fabric requires Fabric Loader 0.19.5 and Fabric API 0.161.0+26.3 for the
-verified configuration. NeoForge was built with 26.3.0.6-beta and ModDevGradle
-2.0.147; older build tooling fails while recompiling Minecraft's `HolderSet`.
-The main packaging script checks metadata and entrypoint classes,
-then verifies the copied JARs and ZIP contents against their build outputs.
+The verified dependency pins are Fabric Loader 0.19.5 / Fabric API 0.161.0+26.3 and NeoForge 26.3.0.6-beta. All public asset names retain the exact Minecraft version.

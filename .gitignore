@@ -30,6 +30,7 @@ Thumbs.db
 # Generated packages and runtime diagnostics
 /mods-jar/
 /logs/
+__pycache__/
 /.agents/
 /pi/
 /*.png

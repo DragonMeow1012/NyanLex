@@ -1,0 +1,76 @@
+// Real client startup using the final packaged mod only. Shared observer-agent
+// properties are passed explicitly by the startup runner; no user game directory
+// or launcher account data is used.
+allprojects { project ->
+    def configureStartup = { boolean neoGradle ->
+        def game = providers.gradleProperty('startupGame').get()
+        def releaseJar = file(providers.gradleProperty('startupJar').get())
+        def gameDirectory = file(providers.gradleProperty('startupDirectory').get())
+        def observerJar = providers.gradleProperty('startupAgent').orNull
+        def runtimeJava = providers.gradleProperty('startupJava').get().toInteger()
+        if (!releaseJar.isFile()) throw new GradleException("Missing final startup JAR: ${releaseJar}")
+
+        // No compiled main output or resources are part of this source set. The
+        // only NyanLex mod source is its byte-identical JAR in this isolated mods/.
+        def runtime = sourceSets.create('packagedStartup')
+        runtime.java.setSrcDirs([])
+        runtime.resources.setSrcDirs([])
+        runtime.compileClasspath = configurations.compileClasspath
+        configurations.named(runtime.runtimeClasspathConfigurationName) {
+            extendsFrom(configurations.runtimeClasspath)
+        }
+        def stage = tasks.register('stageStartupJar', Copy) {
+            from(releaseJar)
+            into(new File(gameDirectory, 'mods'))
+            doLast {
+                new File(gameDirectory, 'options.txt').setText(
+                    'onboardAccessibility:false\nfullscreen:false\nsoundCategory_master:0.0\nmaxFps:30\n', 'UTF-8')
+            }
+        }
+        def configureObserver = { run ->
+            run.jvmArguments.addAll('-Xms256m', '-Xmx2G')
+            if (observerJar) run.jvmArgument("-javaagent:${file(observerJar).absolutePath}")
+            project.properties.findAll { key, value -> key.startsWith('startupProperty.') }.each { key, value ->
+                run.systemProperty(key.substring('startupProperty.'.length()), value.toString())
+            }
+        }
+        if (neoGradle) {
+            runs.create('startupVerification') {
+                runType('client')
+                workingDirectory(gameDirectory)
+                shouldExportToIDE(false)
+                modSource(runtime)
+                arguments('--username', 'NyanLexVerification', '--width', '800', '--height', '480')
+                configureObserver(delegate)
+            }
+        } else {
+            neoForge.runs.create('startupVerification') {
+                client()
+                sourceSet = runtime
+                loadedMods.set([])
+                delegate.gameDirectory = gameDirectory
+                devLogin = false
+                disableIdeRun()
+                taskBefore(stage)
+                programArguments.addAll('--username', 'NyanLexVerification', '--width', '800', '--height', '480')
+                configureObserver(delegate)
+            }
+        }
+        tasks.matching { it.name == 'runStartupVerification' }.configureEach {
+            dependsOn(stage)
+            javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJava) }
+        }
+        tasks.register('inspectStartupConfiguration') {
+            doLast {
+                def launch = tasks.named('runStartupVerification').get()
+                println("STARTUP_CLASSPATH=" + launch.classpath.asPath)
+                println("STARTUP_JVM=" + launch.allJvmArgs)
+                println("STARTUP_ARGUMENTS=" + launch.args)
+                println("STARTUP_ENVIRONMENT=" + launch.environment.findAll { key, value -> key == 'MOD_CLASSES' })
+                if (neoGradle) println("STARTUP_MODS=" + runs.named('startupVerification').get().modSources.all().get())
+            }
+        }
+    }
+    plugins.withId('net.neoforged.moddev') { configureStartup(false) }
+    plugins.withId('net.neoforged.gradle.userdev') { configureStartup(true) }
+}

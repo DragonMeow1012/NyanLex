@@ -1,0 +1,10 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url = 'https://maven.neoforged.net/releases' }
+        mavenCentral()
+    }
+}
+rootProject.name = 'nyanlex-neoforge-ports'
+// Pass --project-cache-dir .gradle/targets/<MC> on the command line. Setting it
+// here is too late to isolate execution history and can remove another target's classes.

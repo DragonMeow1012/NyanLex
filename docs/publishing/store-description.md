@@ -9,8 +9,8 @@ NyanLex helps you read unfamiliar languages in Minecraft and reply in your own. 
 ## Read the game in your language
 
 - **Follow conversations:** show incoming chat with its translation, or choose a translation-only display.
-- **Understand items and quests:** translate item names, descriptions, books and modpack quest text while keeping the original available for comparison.
-- **Read interfaces and HUD text:** translate supported menus, tooltips, scoreboards, boss bars, titles, action bars and name tags. The screen-translation shortcut captures visible text, including hovered tooltips.
+- **Understand items and quests:** translate item names, descriptions, books and modpack quest text while keeping the original available for comparison. Modern builds support both older and current FTB Quests APIs.
+- **Read interfaces and HUD text:** translate supported menus, tooltips, scoreboards, boss bars, titles, action bars, name tags, advancement notices and supported Jade/WAILA-style object-name overlays. The screen-translation shortcut captures visible text, including hovered tooltips.
 - **Keep useful translations:** reuse saved results and share them through JSON import/export. Supported modern builds also offer translation packs and batch translation before you explore.
 
 Translation quality and speed depend on the provider. Custom mod interfaces may render text in ways NyanLex cannot capture. NyanLex does not read text baked into images, and the screen-translation shortcut captures only what is currently visible.
@@ -19,7 +19,7 @@ Translation quality and speed depend on the provider. Custom mod interfaces may 
 
 Enable **Chat input translation** in the General settings, then open chat. Write a draft in the movable composer, select a target language and click **Translate & fill**. The result appears in the normal chat bar for you to review or edit before pressing Enter to send.
 
-The composer remembers its position. Its target language is separate from the language used to read game content. It is disabled by default and never sends a chat message for you.
+The composer starts at the bottom right unless you have saved a different position. Search target languages by name or code; this choice is separate from the language used to read game content. Closing chat keeps the draft for the current game session. The feature is disabled by default and never sends a chat message for you.
 
 ![Chat translation composer with an English translation filled into the chat bar for review](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-chat-composer.png)
 
@@ -33,11 +33,23 @@ The examples below show translation into **Traditional Chinese**; you can select
 
 ![Original chat and Traditional Chinese translations displayed together](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-bilingual-chat.png)
 
+## Supported versions
+
+- **Fabric:** every stable Minecraft release from 1.16.5 through 26.3, plus 1.14.4 and 1.15.2.
+- **NeoForge:** every stable Minecraft release from 1.20.1 through 26.3. NeoForge has no releases for earlier Minecraft versions.
+- **Forge:** Minecraft 1.12.2 and 1.13.2.
+
+There are 62 separate builds; select the exact Minecraft version and loader on the Versions tab. Minecraft snapshots and pre-releases are not included. Some NeoForge loader builds are beta. The NeoForge 26.1.2 build requires loader **26.1.2.109 or newer**.
+
+The saved-translation counter reports the complete durable total rather than the 5,000-entry in-memory cache window. Full-content warmup shows its current-job progress separately.
+
+The mod UI supports English, Japanese, Traditional Chinese and Simplified Chinese, following the client language; other client languages use English UI. Game-text translation targets are not limited to these four languages.
+
 ## First-time setup
 
 Install the build matching your Minecraft version and loader on the **client only**. Fabric builds also require a matching **Fabric API**. Complete the in-game Quick setup to choose your language and provider; no selection is applied until you confirm it. You can leave online translation off and use existing local translations.
 
-On **Fabric 1.17.1+ and NeoForge**:
+On **Fabric 1.17+ and NeoForge**:
 
 | Key | Action |
 | --- | --- |
@@ -73,7 +85,7 @@ On modern builds, **full-content warmup** can translate item names/descriptions 
 
 - **You control online translation.** A new installation starts with it off. Quick setup, settings or an explicit translation confirmation can enable it. Upgrading preserves your existing choice.
 - **Selected text goes to your selected provider.** Depending on enabled features, this includes chat, item descriptions and other game text. Chat may include **private messages**. TAB-list player names are masked locally, but other text may still contain personal information; masking is not a guarantee of anonymity.
-- **Outgoing drafts are sent only when you request their translation.** They are not stored in the translation cache or translation exports. You still review and send the final chat message yourself.
+- **Outgoing drafts are sent only when you request their translation.** After closing chat, drafts remain only in memory until you quit the game; they are not stored in the translation cache or translation exports. You still review and send the final chat message yourself.
 - **API keys are stored in your local configuration** and used for the configured service. Translation providers apply their own data-handling policies.
 - **Translation packs are download-only.** Discovery reads a public GitHub index; selected pack files are downloaded after confirmation. Your local translations and installed-mod list are not uploaded to the hub.
 - **Exports contain translation entries, not API keys or settings.** Translated text itself may contain personal information, so review exports before sharing them.

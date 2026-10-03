@@ -20,18 +20,38 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * Gated by {@code screenTextMode} via {@link NyanLexFabric#screenText(Component)}.</p>
  */
 @Pseudo
-@Mixin(targets = "dev.ftb.mods.ftblibrary.ui.TextField")
+@Mixin(targets = {
+        "dev.ftb.mods.ftblibrary.ui.TextField",
+        "dev.ftb.mods.ftblibrary.client.gui.widget.TextField"
+})
 public abstract class TextFieldMixin {
     @ModifyVariable(
             method = "setText(Lnet/minecraft/network/chat/Component;)Ldev/ftb/mods/ftblibrary/ui/TextField;",
             at = @At("HEAD"), argsOnly = true, require = 0)
-    private Component nyanlex$translateWhole(Component component) {
-        if (!HookGuard.enter("TextField.translateWhole")) return component;
+    private Component nyanlex$translateWholeLegacy(Component component) {
+        if (!HookGuard.enter("TextField.translateWholeLegacy")) return component;
         try {
-            return NyanLexFabric26.questWidgetText(this, component);
+            return nyanlex$translateWhole(component);
         } catch (Throwable guardError) {
-            HookGuard.fail("TextField.translateWhole", guardError);
+            HookGuard.fail("TextField.translateWholeLegacy", guardError);
             return component;
         }
+    }
+
+    @ModifyVariable(
+            method = "setText(Lnet/minecraft/network/chat/Component;)Ldev/ftb/mods/ftblibrary/client/gui/widget/TextField;",
+            at = @At("HEAD"), argsOnly = true, require = 0)
+    private Component nyanlex$translateWholeModern(Component component) {
+        if (!HookGuard.enter("TextField.translateWholeModern")) return component;
+        try {
+            return nyanlex$translateWhole(component);
+        } catch (Throwable guardError) {
+            HookGuard.fail("TextField.translateWholeModern", guardError);
+            return component;
+        }
+    }
+
+    private Component nyanlex$translateWhole(Component component) {
+        return NyanLexFabric26.questWidgetText(this, component);
     }
 }

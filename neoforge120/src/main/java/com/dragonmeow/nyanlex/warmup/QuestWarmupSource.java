@@ -27,9 +27,24 @@ public final class QuestWarmupSource implements ItemWarmupSource {
     public static Object loadedClientFile() {
         try {
             Class<?> type = Class.forName("dev.ftb.mods.ftbquests.client.ClientQuestFile");
-            return type.getField("INSTANCE").get(null);
-        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return loadedClientFile(type);
+        } catch (ClassNotFoundException | LinkageError ignored) {
             return null; // the optional integration is absent
+        }
+    }
+
+    /** Supports both the original public INSTANCE field and the newer getInstance() API. */
+    static Object loadedClientFile(Class<?> type) {
+        try {
+            Object legacy = type.getField("INSTANCE").get(null);
+            if (legacy != null) return legacy;
+        } catch (ReflectiveOperationException | SecurityException ignored) {
+            // New FTB Quests keeps INSTANCE private; continue with its public accessor.
+        }
+        try {
+            return type.getMethod("getInstance").invoke(null);
+        } catch (ReflectiveOperationException | SecurityException | LinkageError ignored) {
+            return null;
         }
     }
 

@@ -291,12 +291,13 @@ public final class OpenAiTranslator implements Translator {
             if (restored == null) {
                 chunkResults.add(new TranslationResult("", null, false, "paragraph lost"));
             } else if (!paragraphBreakSequenceMatches(texts.get(i), restored)) {
-                // 2026-10-02 real-traffic finding (scratchpad/live-ai, gpt-5.4-mini): see
-                // root OpenAiTranslator's identical comment -- a dropped/renumbered ⟦PBn⟧
-                // in an otherwise-correct response must be classified "paragraph lost",
-                // not the generic "format/token lost" tokensMatch's ANY_TOKEN check below
-                // would also (less precisely) reject it as.
-                chunkResults.add(new TranslationResult("", null, false, "paragraph lost"));
+                // Keep readable prose when only display wraps were lost. The cache
+                // publishes it first, then owns one isolated review, as in the root core.
+                boolean readable = ParagraphModel.canReflowBreakLoss(texts.get(i), restored)
+                        && tokensMatch(ParagraphModel.flattenBreakTokens(texts.get(i)),
+                                ParagraphModel.flattenBreakTokens(restored));
+                chunkResults.add(readable ? new TranslationResult(restored, null)
+                        : new TranslationResult("", null, false, "paragraph lost"));
             } else if (!tokensMatch(texts.get(i), restored)) {
                 chunkResults.add(new TranslationResult("", null, false, "format/token lost"));
             } else {

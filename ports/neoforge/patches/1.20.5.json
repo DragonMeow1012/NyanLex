@@ -1,0 +1,14 @@
+{
+  "com/dragonmeow/nyanlex/neoforge/NyanLexNeoForge.java": [
+    {
+      "from": "\n@Mod(value = NyanLexNeoForge.MOD_ID, dist = Dist.CLIENT)\n",
+      "to": "\n@Mod(NyanLexNeoForge.MOD_ID)\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public NyanLexNeoForge(IEventBus modBus, ModContainer container) {\n",
+      "to": "\n    public NyanLexNeoForge(IEventBus modBus, ModContainer container) {\n        if (net.neoforged.fml.loading.FMLEnvironment.dist != Dist.CLIENT) return;\n",
+      "count": 1
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+    {"from":"import net.minecraft.client.gui.screens.options.OptionsSubScreen;", "to":""},
+    {"from":"extends OptionsSubScreen", "to":"extends PortOptionsSubScreen"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+    {"from":"import net.minecraft.client.gui.screens.options.OptionsSubScreen;", "to":""},
+    {"from":"extends OptionsSubScreen", "to":"extends PortOptionsSubScreen"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationLanguageScreen.java": [
+    {"from":"import net.minecraft.client.gui.screens.options.OptionsSubScreen;", "to":""},
+    {"from":"extends OptionsSubScreen", "to":"extends PortOptionsSubScreen"},
+    {"from":"net.minecraft.client.gui.screens.options.FontOptionsScreen", "to":"net.minecraft.client.gui.screens.FontOptionsScreen"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/OptionsScreenMixin.java": [
+    {"from":"net.minecraft.client.gui.screens.options.OptionsScreen", "to":"net.minecraft.client.gui.screens.OptionsScreen"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/DebugHudMixin.java": [
+    {"from":"import net.minecraft.client.DeltaTracker;", "to":""},
+    {"from":"DeltaTracker tracker", "to":"float partialTick"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java": [
+    {"from":"GuiGraphics;drawStringWithBackdrop", "to":"GuiGraphics;drawString"},
+    {"from":"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)I", "to":"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I"},
+    {"from":"Component text, int x, int y, int width, int color)", "to":"Component text, int x, int y, int color)"},
+    {"from":"drawStringWithBackdrop(font, text, x, y, width, color)", "to":"drawString(font, text, x, y, color)"},
+    {"from":"drawStringWithBackdrop(font, translated, center - w / 2, y, w, color)", "to":"drawString(font, translated, center - w / 2, y, color)"},
+    {"from":"drawStringWithBackdrop(font, line, center - w / 2, ly, w, color)", "to":"drawString(font, line, center - w / 2, ly, color)"},
+    {"from":"x, y, width, color, s == null", "to":"x, y, font.width(text), color, s == null"}
+  ]
+}

@@ -221,7 +221,13 @@ public final class ChatComposerPanel {
         g.fill(x + width / 2, y + 48, width / 2 - 8, 20, busy ? 0xFF343744 : 0xFF38765E);
         String language = host.language();
         for (String[] row : host.languages()) if (row[0].equals(language)) { language = languageLabel(row[0], row[1]); break; }
-        g.text(fit(label("target_language").replace("%s", language) + " ▾", width / 2 - 24), x + 13, y + 54, 0xFFFFFFFF);
+        String targetLabel = label("target_language");
+        // Component.translatable(key).getString() consumes an unmatched %s before
+        // this platform-neutral panel receives it. Append in that case; test hosts
+        // and legacy implementations that still expose the token remain supported.
+        targetLabel = targetLabel.contains("%s")
+                ? targetLabel.replace("%s", language) : targetLabel + language;
+        g.text(fit(targetLabel + " ▾", width / 2 - 24), x + 13, y + 54, 0xFFFFFFFF);
         g.text(fit(label(busy ? "working" : "fill"), width / 2 - 20), x + width / 2 + 5, y + 54, 0xFFFFFFFF);
         g.text(fit(label(status), width - 16), x + 8, y + 76,
                 "ready".equals(status) ? 0xFF8EE5B1 : 0xFFC6C8D3);

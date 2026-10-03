@@ -1,0 +1,144 @@
+{
+  "com/dragonmeow/nyanlex/neoforge/CodexEffortScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.screens.options.OptionsSubScreen;\n",
+      "to": "\nimport net.minecraft.client.gui.screens.OptionsSubScreen;\n",
+      "count": 1
+    },
+    {
+      "from": "\npublic final class CodexEffortScreen extends OptionsSubScreen {\n",
+      "to": "\npublic final class CodexEffortScreen extends PortOptionsSubScreen {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/CodexModelScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.screens.options.OptionsSubScreen;\n",
+      "to": "\nimport net.minecraft.client.gui.screens.OptionsSubScreen;\n",
+      "count": 1
+    },
+    {
+      "from": "\npublic final class CodexModelScreen extends OptionsSubScreen {\n",
+      "to": "\npublic final class CodexModelScreen extends PortOptionsSubScreen {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationLanguageScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.screens.options.FontOptionsScreen;\n",
+      "to": "\nimport net.minecraft.client.gui.screens.FontOptionsScreen;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraft.client.gui.screens.options.OptionsSubScreen;\n",
+      "to": "\nimport net.minecraft.client.gui.screens.OptionsSubScreen;\n",
+      "count": 1
+    },
+    {
+      "from": "\npublic final class TranslationLanguageScreen extends OptionsSubScreen {\n",
+      "to": "\npublic final class TranslationLanguageScreen extends PortOptionsSubScreen {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/DebugHudMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.DeltaTracker;\n",
+      "to": "\n\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private void nyanlex$debug(GuiGraphics graphics, DeltaTracker tracker, CallbackInfo ci) {\n",
+      "to": "\n    private void nyanlex$debug(GuiGraphics graphics, float tracker, CallbackInfo ci) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/GuiScoreboardMixin.java": [
+    {
+      "from": "\n *   <li>held-item name — {@code renderSelectedItemName} (drawStringWithBackdrop);</li>\n",
+      "to": "\n *   <li>held-item name — {@code renderSelectedItemName} (drawString);</li>\n",
+      "count": 1
+    },
+    {
+      "from": "\n *   <li>title / subtitle — {@code renderTitle} (drawStringWithBackdrop, both calls);</li>\n",
+      "to": "\n *   <li>title / subtitle — {@code renderTitle} (drawString, both calls);</li>\n",
+      "count": 1
+    },
+    {
+      "from": "\n *   <li>action-bar / overlay message — {@code renderOverlayMessage} (drawStringWithBackdrop).</li>\n",
+      "to": "\n *   <li>action-bar / overlay message — {@code renderOverlayMessage} (drawString).</li>\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawStringWithBackdrop\"\n",
+      "to": "\n                    target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString\"\n",
+      "count": 3
+    },
+    {
+      "from": "\n                            + \"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)I\"),\n",
+      "to": "\n                            + \"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I\"),\n",
+      "count": 3
+    },
+    {
+      "from": "\n    private int nyanlex$heldName(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "to": "\n    private int nyanlex$heldName(GuiGraphics g, Font font, Component text, int x, int y, int color) { int width = font.width(text);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (!HookGuard.enter(\"GuiScoreboard.heldName\")) return g.drawStringWithBackdrop(font, text, x, y, width, color);\n",
+      "to": "\n        if (!HookGuard.enter(\"GuiScoreboard.heldName\")) return g.drawString(font, text, x, y, color);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            return g.drawStringWithBackdrop(font, text, x, y, width, color);\n",
+      "to": "\n            return g.drawString(font, text, x, y, color);\n",
+      "count": 3
+    },
+    {
+      "from": "\n    private int nyanlex$title(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "to": "\n    private int nyanlex$title(GuiGraphics g, Font font, Component text, int x, int y, int color) { int width = font.width(text);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (!HookGuard.enter(\"GuiScoreboard.title\")) return g.drawStringWithBackdrop(font, text, x, y, width, color);\n",
+      "to": "\n        if (!HookGuard.enter(\"GuiScoreboard.title\")) return g.drawString(font, text, x, y, color);\n",
+      "count": 1
+    },
+    {
+      "from": "\n    private int nyanlex$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int width, int color) {\n",
+      "to": "\n    private int nyanlex$actionBar(GuiGraphics g, Font font, Component text, int x, int y, int color) { int width = font.width(text);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (NyanLexNeoForge.isOwnFeedback(text)) return g.drawStringWithBackdrop(font, text, x, y, width, color);\n",
+      "to": "\n        if (NyanLexNeoForge.isOwnFeedback(text)) return g.drawString(font, text, x, y, color);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (!HookGuard.enter(\"GuiScoreboard.actionBar\")) return g.drawStringWithBackdrop(font, text, x, y, width, color);\n",
+      "to": "\n        if (!HookGuard.enter(\"GuiScoreboard.actionBar\")) return g.drawString(font, text, x, y, color);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                            () -> g.drawStringWithBackdrop(font, translated, center - w / 2, y, w, color));\n",
+      "to": "\n                            () -> g.drawString(font, translated, center - w / 2, y, color));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                            () -> g.drawStringWithBackdrop(font, line, center - w / 2, ly, w, color));\n",
+      "to": "\n                            () -> g.drawString(font, line, center - w / 2, ly, color));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                () -> g.drawStringWithBackdrop(font, text, x, y, width, color));\n",
+      "to": "\n                () -> g.drawString(font, text, x, y, color));\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/OptionsScreenMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.screens.options.OptionsScreen;\n",
+      "to": "\nimport net.minecraft.client.gui.screens.OptionsScreen;\n",
+      "count": 1
+    }
+  ]
+}

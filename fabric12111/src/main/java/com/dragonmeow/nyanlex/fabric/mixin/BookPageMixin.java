@@ -28,7 +28,7 @@ import java.util.Optional;
  * Translates opened-book and lectern page text (gated by {@code bookMode}). One mixin
  * covers both cases because {@code LecternScreen extends BookViewScreen}.
  *
- * <p>{@code BookViewScreen} lays the current page out via
+ * <p>{@code BookViewScreen.visitText} lays the current page out via
  * {@code this.font.split(this.bookAccess.getPage(currentPage), 114)} and caches the
  * result, only re-splitting when {@code cachedPage != currentPage}. So we:</p>
  * <ol>
@@ -49,7 +49,7 @@ public abstract class BookPageMixin {
     @Shadow
     protected int cachedPage;
 
-    @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V", at = @At("HEAD"))
+    @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V", at = @At("HEAD"), require = 1)
     private void nyanlex$forceResplit(GuiGraphics g, int mouseX, int mouseY, float partial, CallbackInfo ci) {
         if (!HookGuard.enter("BookPage.forceResplit")) return;
         try {
@@ -63,11 +63,11 @@ public abstract class BookPageMixin {
     }
 
     @Redirect(
-            method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V",
+            method = "visitText",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/gui/Font;split"
                             + "(Lnet/minecraft/network/chat/FormattedText;I)Ljava/util/List;"),
-            require = 0)
+            require = 1)
     private List<FormattedCharSequence> nyanlex$translateBookPage(Font font, FormattedText text, int width) {
         if (!HookGuard.enter("BookPage.translateBookPage")) return font.split(text, width);
         try {

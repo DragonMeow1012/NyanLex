@@ -1,17 +1,18 @@
 package com.dragonmeow.nyanlex.fabric;
 
 import com.dragonmeow.nyanlex.config.UiCanvas;
+import com.dragonmeow.nyanlex.translate.ChatComposerPanel;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiComponent;
 
 /** {@link UiCanvas} over a {@link PoseStack}: how the core dialogs are drawn on any screen. */
-final class GuiCanvas implements UiCanvas {
+public final class GuiCanvas implements UiCanvas, ChatComposerPanel.Canvas {
     private final PoseStack pose;
     private final Font font;
 
-    GuiCanvas(PoseStack pose, Font font) {
+    public GuiCanvas(PoseStack pose, Font font) {
         this.pose = pose;
         this.font = font;
     }

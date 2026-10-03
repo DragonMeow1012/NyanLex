@@ -1,6 +1,7 @@
 package com.dragonmeow.nyanlex.fabric;
 
 import com.dragonmeow.nyanlex.config.UiCanvas;
+import com.dragonmeow.nyanlex.translate.ChatComposerPanel;
 
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -16,13 +17,13 @@ import java.util.ArrayDeque;
  * This Minecraft version has no GUI-space scissor helper, so the clip rectangles are kept in a
  * small stack here and converted to window pixels when applied.
  */
-final class GuiCanvas implements UiCanvas {
+public final class GuiCanvas implements UiCanvas, ChatComposerPanel.Canvas {
     private static final ArrayDeque<int[]> CLIPS = new ArrayDeque<>();
 
     private final PoseStack pose;
     private final Font font;
 
-    GuiCanvas(PoseStack pose, Font font) {
+    public GuiCanvas(PoseStack pose, Font font) {
         this.pose = pose;
         this.font = font;
     }

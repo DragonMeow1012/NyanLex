@@ -1,0 +1,105 @@
+{
+  "com/dragonmeow/nyanlex/neoforge/ConsentOverlay.java": [
+    {
+      "from": "\n        g.pose().pushPose();\n",
+      "to": "\n        g.nextStratum();\n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.pose().translate(0.0F, 0.0F, 1000.0F);\n",
+      "to": "\n        \n",
+      "count": 1
+    },
+    {
+      "from": "\n        g.pose().popPose();\n",
+      "to": "\n        \n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/NyanLexNeoForge.java": [
+    {
+      "from": "\n                mc.options.setKey(mapping, InputConstants.getKey(e.getValue()));\n",
+      "to": "\n                mapping.setKey(InputConstants.getKey(e.getValue()));\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void onRenderNameTag(net.neoforged.neoforge.client.event.RenderNameTagEvent event) {\n",
+      "to": "\n    public void onRenderNameTag(net.neoforged.neoforge.client.event.RenderNameTagEvent.CanRender event) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.tell(() -> {\n",
+      "to": "\n        mc.schedule(() -> {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        for (ItemStack stack : inventory.items) registerItemEntity(stack);\n",
+      "to": "\n        for (int slot = 0; slot < inventory.getContainerSize(); slot++) registerItemEntity(inventory.getItem(slot));\n",
+      "count": 1
+    },
+    {
+      "from": "\n        for (ItemStack stack : inventory.armor) registerItemEntity(stack);\n",
+      "to": "\n        for (net.minecraft.world.entity.EquipmentSlot slot : new net.minecraft.world.entity.EquipmentSlot[] {net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.entity.EquipmentSlot.FEET}) registerItemEntity(mc.player.getItemBySlot(slot));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                CompoundTag extra = tag.getCompound(\"ExtraAttributes\");\n",
+      "to": "\n                CompoundTag extra = tag.getCompoundOrEmpty(\"ExtraAttributes\");\n",
+      "count": 1
+    },
+    {
+      "from": "\n                id = firstNonEmpty(tag.getString(\"id\"), extra.getString(\"id\"));\n",
+      "to": "\n                id = firstNonEmpty(tag.getStringOr(\"id\", \"\"), extra.getStringOr(\"id\", \"\"));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                modifier = firstNonEmpty(tag.getString(\"modifier\"), extra.getString(\"modifier\"));\n",
+      "to": "\n                modifier = firstNonEmpty(tag.getStringOr(\"modifier\", \"\"), extra.getStringOr(\"modifier\", \"\"));\n",
+      "count": 1
+    },
+    {
+      "from": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToasts(),\n",
+      "to": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationKeybindScreen.java": [
+    {
+      "from": "\n            minecraft.options.setKey(row.key(), row.key().getDefaultKey());\n",
+      "to": "\n            row.key().setKey(row.key().getDefaultKey());\n",
+      "count": 1
+    },
+    {
+      "from": "\n                minecraft.options.setKey(listening, InputConstants.getKey(keyCode, scanCode));\n",
+      "to": "\n                listening.setKey(InputConstants.getKey(keyCode, scanCode));\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/GuiGraphicsTextMixin.java": [
+    {
+      "from": "\n            method = \"renderTooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;Ljava/util/Optional;II)V\",\n",
+      "to": "\n            method = \"setTooltipForNextFrame(Lnet/minecraft/client/gui/Font;Ljava/util/List;Ljava/util/Optional;II)V\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"renderComponentTooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;II)V\",\n",
+      "to": "\n            method = \"setComponentTooltipForNextFrame(Lnet/minecraft/client/gui/Font;Ljava/util/List;II)V\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)I\",\n",
+      "to": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)V\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)I\",\n",
+      "to": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/util/FormattedCharSequence;IIIZ)I\",\n",
+      "to": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/util/FormattedCharSequence;IIIZ)V\",\n",
+      "count": 1
+    }
+  ]
+}
