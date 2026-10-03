@@ -50,7 +50,7 @@ class DialogPanelTest {
         @Override public void popClip() { }
     }
 
-    private static final String[] LANGS = {"zh_tw", "zh_hk", "zh_cn", "en_us"};
+    private static final String[] LANGS = {"zh_tw", "ja_jp", "zh_cn", "en_us"};
     private static final int[][] SIZES = {{320, 240}, {427, 240}, {256, 240}, {640, 360}};
 
     private static List<DialogPanel.Content> allDialogs(String code) {

@@ -13,7 +13,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 /** Forge's GUI events attach the composer to vanilla chat without replacing its screen. */
 public final class ForgeChatComposer {
     private GuiScreen screen;
-    private GuiTextField chat, draft;
+    private GuiTextField chat, draft, search;
     private ChatComposerPanel panel;
     private boolean enterHeld;
     private final Minecraft mc = Minecraft.getInstance();
@@ -24,7 +24,7 @@ public final class ForgeChatComposer {
         if (!HookGuard.enter("event.init")) return;
         try {
             if (!(event.getGui() instanceof GuiChat) || !NyanLexForge.config().chatComposerEnabled) return;
-            String previous = screen == event.getGui() && draft != null ? draft.getText() : "";
+            String previous = screen == event.getGui() && draft != null ? draft.getText() : ChatComposerPanel.savedDraft();
             if (panel != null) panel.close();
             panel = null;
             screen = event.getGui();
@@ -61,6 +61,8 @@ public final class ForgeChatComposer {
             });
             panel.resize(screen.width, screen.height);
             draft = new GuiTextField(9108, mc.fontRenderer, panel.inputX(), panel.inputY(), panel.inputWidth(), 20);
+            search = new GuiTextField(9109, mc.fontRenderer, panel.searchX(), panel.searchY(), panel.inputWidth(), 20);
+            search.setMaxStringLength(64);
             draft.setMaxStringLength(256);
             draft.setText(previous);
             chat.setFocused(false);
@@ -105,17 +107,33 @@ public final class ForgeChatComposer {
             draft.x = panel.inputX(); draft.y = panel.inputY();
             draft.drawTextField(event.getMouseX(), event.getMouseY(), event.getRenderPartialTicks());
             panel.renderChoices(canvas);
+            if (panel.choosing()) {
+                search.x = panel.searchX(); search.y = panel.searchY();
+                search.drawTextField(event.getMouseX(), event.getMouseY(), event.getRenderPartialTicks());
+            }
         } catch (Throwable guardError) {
             HookGuard.fail("event.draw", guardError);
         }
     }
 
+    private void focusSearch() {
+        chat.setFocused(false);
+        search.setFocused(panel.choosing());
+        draft.setFocused(!panel.choosing());
+    }
+
     private boolean click(double x, double y, int button) {
-        if (panel.choosing()) { panel.click(x, y, button); return true; }
+        if (panel.choosing()) {
+            if (x >= panel.searchX() && x < panel.searchX() + panel.inputWidth()
+                    && y >= panel.searchY() && y < panel.searchY() + 20) search.mouseClicked((int) x, (int) y, button);
+            else panel.click(x, y, button);
+            focusSearch(); return true;
+        }
         if (!panel.contains(x, y)) { draft.setFocused(false); chat.setFocused(true); return false; }
         if (y >= panel.inputY() && y < panel.inputY() + 20) {
             chat.setFocused(false); draft.setFocused(true); draft.mouseClicked(x, y, button);
         } else panel.click(x, y, button);
+        if (panel.choosing()) focusSearch();
         return true;
     }
     @SubscribeEvent public void key(GuiScreenEvent.KeyboardKeyPressedEvent.Pre event) {
@@ -125,6 +143,12 @@ public final class ForgeChatComposer {
             int code = event.getKeyCode();
             boolean enter = code == 257 || code == 335;
             if (enter && enterHeld) { event.setCanceled(true); return; }
+            if (panel.choosing()) {
+                if (code == 256 || code == 258) panel.closeChoices();
+                else if (enter) { enterHeld = true; panel.chooseFirst(); }
+                else search.keyPressed(code, event.getScanCode(), event.getModifiers());
+                panel.search(search.getText()); focusSearch(); event.setCanceled(true); return;
+            }
             if (!draft.isFocused() || code == 256) return;
             if (enter) { enterHeld = true; panel.submit(); }
             else if (code == 258) { draft.setFocused(false); chat.setFocused(true); }
@@ -145,7 +169,12 @@ public final class ForgeChatComposer {
     @SubscribeEvent public void typed(GuiScreenEvent.KeyboardCharTypedEvent.Pre event) {
         if (!HookGuard.enter("event.typed")) return;
         try {
-            if (!active(event.getGui()) || !draft.isFocused()) return;
+            if (!active(event.getGui())) return;
+            if (panel.choosing()) {
+                search.charTyped(event.getCodePoint(), event.getModifiers());
+                panel.search(search.getText()); event.setCanceled(true); return;
+            }
+            if (!draft.isFocused()) return;
             draft.charTyped(event.getCodePoint(), event.getModifiers()); panel.observe(); event.setCanceled(true);
         } catch (Throwable guardError) {
             HookGuard.fail("event.typed", guardError);

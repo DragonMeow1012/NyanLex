@@ -63,7 +63,7 @@ class ManualPanelTest {
         return p;
     }
 
-    private static final String[] CODES = {"zh_tw", "zh_hk", "zh_cn", "en_us"};
+    private static final String[] CODES = {"zh_tw", "ja_jp", "zh_cn", "en_us"};
 
     @Test
     void theManualFitsEverySizeScrollsAndGoesBackByButtonOrEscape() {
@@ -176,7 +176,7 @@ class ManualPanelTest {
         }
         Rec c = new Rec();
         panel("zh_tw", 427, 240).render(c, -1, -1);
-        assertTrue(c.texts.contains("字太多不想看？讓設定小精靈幫你搞定"), c.texts.toString());
+        assertTrue(c.texts.contains(lang("zh_tw").get(SettingsModel.KEY_MANUAL_SETUP_BTN).getAsString()), c.texts.toString());
         // the very first control reached by Tab, Enter on it opens the quick setup
         ManualPanel p = panel("zh_tw", 427, 240);
         p.keyPressed(SettingsPanel.KEY_TAB);
@@ -242,7 +242,7 @@ class ManualPanelTest {
     void theManualIsRewrittenInTheCurrentWordsInEveryLanguage() {
         String[][] wanted = {
                 {"zh_tw", "快速設定", "線上翻譯", "翻譯包", "預先翻譯", "已存的翻譯", "翻譯服務", "非官方端點", "Codex 額度", "動作列", "MIT"},
-                {"zh_hk", "快速設定", "線上翻譯", "翻譯包", "預先翻譯", "已存的翻譯", "翻譯服務", "非官方端點", "Codex 額度", "動作列", "MIT"},
+                {"ja_jp", "かんたん設定", "オンライン翻訳", "翻訳パック", "事前翻訳", "保存済み", "サービス", "非公式エンドポイント", "Codex 利用枠", "アクションバー", "MIT"},
                 {"zh_cn", "快速设置", "在线翻译", "翻译包", "预先翻译", "已存的翻译", "翻译服务", "非官方端点", "Codex 额度", "动作栏", "MIT"},
                 {"en_us", "Quick setup", "Online translation", "Translation packs", "Pre-translate", "saved translations",
                         "Translation service", "unofficial endpoint", "Codex quota", "action bar", "MIT"}};

@@ -20,7 +20,7 @@
 
 <table>
   <tr>
-    <td width="50%" valign="top"><h3>✍️ Reply in your own language</h3><p>Stay in the game and write what you want to say. Move the floating composer wherever it feels right, choose a language, and fill the chat bar with your translation. Review it, then send it yourself.</p></td>
+    <td width="50%" valign="top"><h3>✍️ Reply in your own language</h3><p>The floating composer starts at the bottom right and can be dragged elsewhere. Search for a target language, translate your draft, review it in the chat bar, then send it yourself. Closing chat with Esc keeps your unfinished draft for the next time you open chat during the same game session.</p></td>
     <td width="50%" valign="top"><h3>💬 Keep up with the conversation</h3><p>Read chat with the original and translation together. Follow your teammates while keeping the original wording close at hand.</p></td>
   </tr>
   <tr>
@@ -32,6 +32,8 @@
     <td width="50%" valign="top"><h3>💾 Share a good translation</h3><p>Get started with translation packs or share your own with friends. Keep the translations you have already made, ready for next time.</p></td>
   </tr>
 </table>
+
+The mod UI follows Minecraft's language and supports English, Japanese, Traditional Chinese and Simplified Chinese. Other client languages use the English UI. This does not restrict the available translation target languages. Previously saved composer positions are preserved.
 
 ## In-game screenshots
 
@@ -234,7 +236,7 @@ Enable it in **General**, then open chat. Write your draft, choose a target lang
 - **Online translation is off on a new install.** While it is off, no translation service receives any of your text.
 - You can turn it on in three ways: from the Quick setup that opens by itself the first time you reach the title screen (choose machine translation, AI translation, or "Not now"; nothing you choose is applied, and nothing is sent, until you press Done); by pressing the translate-item key (default `R`) or translate-screen key (default `P`) while it is off, which first opens a confirmation window and only sends after you press "Start translating"; or in Translation settings > General ("Online translation").
 - Things that work without turning it on, and send nothing: translations already in your local cache, translation packs you downloaded, the built-in glossary, and the vanilla text from the game's own language files.
-- Outgoing drafts are translated only when you click **Translate & fill** or press Enter in the composer. Drafts are not written to translation caches or included in translation exports. You still review and send the final chat message yourself.
+- Outgoing drafts are translated only when you click **Translate & fill** or press Enter in the composer. Unfinished drafts are kept in memory when you close chat, but not after exiting the game. Drafts are not written to translation caches or included in translation exports. You still review and send the final chat message yourself.
 - Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
 - The text goes to the translation service you choose:
   - **Machine translation (Google, no key)** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.

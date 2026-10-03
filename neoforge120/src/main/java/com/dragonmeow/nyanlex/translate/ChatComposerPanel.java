@@ -1,9 +1,16 @@
 package com.dragonmeow.nyanlex.translate;
 
 import java.util.function.BiConsumer;
+import java.util.Locale;
+import java.text.Normalizer;
 
 /** Shared, client-thread-only floating composer. The host owns native text editing and sending. */
 public final class ChatComposerPanel {
+    // Session-only: closing chat must not discard the player's unfinished source text.
+    private static String savedDraft = "";
+
+    public static String savedDraft() { return savedDraft; }
+
     public interface Host {
         String text(String key);
         int textWidth(String text);
@@ -32,6 +39,8 @@ public final class ChatComposerPanel {
     private long revision;
     private String status = "hint";
     private String lastDraft, lastChat;
+    private String search = "";
+    private static final int SEARCH_HEIGHT = 36;
     public static final int HEIGHT = 90;
 
     public ChatComposerPanel(Host host) { this.host = host; }
@@ -42,7 +51,7 @@ public final class ChatComposerPanel {
         width = Math.max(40, Math.min(320, w - 8));
         int maxX = Math.max(0, w - width - 4);
         int maxY = Math.max(0, h - HEIGHT - 26);
-        x = clamp((int) Math.round(finite(host.positionX(), 0) * maxX), 0, maxX);
+        x = clamp((int) Math.round(finite(host.positionX(), 1) * maxX), 0, maxX);
         y = clamp((int) Math.round(finite(host.positionY(), 1) * maxY), 0, maxY);
     }
 
@@ -56,6 +65,37 @@ public final class ChatComposerPanel {
     public boolean busy() { return busy; }
     public boolean contains(double mx, double my) { return inside(mx, my, x, y, width, HEIGHT); }
     public boolean choosing() { return choosing; }
+    public int searchX() { return x + 8; }
+    public int searchY() { return listY() + 14; }
+    public void search(String value) {
+        search = value == null ? "" : searchText(value.trim());
+        languageOffset = 0;
+    }
+    private static String searchText(String value) {
+        return Normalizer.normalize(value.toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "").replace('_', '-');
+    }
+    public String[][] matchingLanguages() {
+        if (search.isEmpty()) return host.languages();
+        java.util.List<String[]> matches = new java.util.ArrayList<>();
+        for (String[] row : host.languages()) {
+            String text = row[0] + " " + row[1] + " " + languageLabel(row[0], row[1])
+                    + " " + Locale.forLanguageTag(row[0].replace('_', '-')).getDisplayName(Locale.ENGLISH);
+            if (searchText(text).contains(search)) matches.add(row);
+        }
+        return matches.toArray(new String[0][]);
+    }
+    public void closeChoices() { choosing = false; }
+    public void chooseFirst() {
+        String[][] rows = matchingLanguages();
+        if (rows.length > languageOffset) selectLanguage(rows[languageOffset][0]);
+    }
+    private void selectLanguage(String tag) {
+        host.language(tag);
+        revision++;
+        status = "hint";
+        choosing = false;
+    }
 
     /** Called after any native edit, including vanilla history/command completion. */
     public void observe() {
@@ -102,20 +142,23 @@ public final class ChatComposerPanel {
         }));
     }
 
-    public void close() { closed = true; revision++; dragging = false; }
+    public void close() {
+        if (closed) return;
+        savedDraft = host.draft();
+        closed = true;
+        revision++;
+        dragging = false;
+    }
 
     public boolean click(double mx, double my, int button) {
         if (button != 0) return contains(mx, my);
         if (choosing) {
             int ly = listY();
-            if (inside(mx, my, x + 8, ly, width - 16, listHeight())) {
-                int index = languageOffset + ((int) my - ly) / 16;
-                if (index < host.languages().length) {
-                    host.language(host.languages()[index][0]);
-                    revision++;
-                    status = "hint";
-                }
-                choosing = false;
+            if (inside(mx, my, x + 8, ly, width - 16, SEARCH_HEIGHT)) return true;
+            if (inside(mx, my, x + 8, ly + SEARCH_HEIGHT, width - 16, listHeight() - SEARCH_HEIGHT)) {
+                int index = languageOffset + ((int) my - ly - SEARCH_HEIGHT) / 16;
+                String[][] rows = matchingLanguages();
+                if (index < rows.length) selectLanguage(rows[index][0]);
                 return true;
             }
             choosing = false;
@@ -149,13 +192,20 @@ public final class ChatComposerPanel {
     public boolean scroll(double amount) {
         if (!choosing) return false;
         languageOffset = clamp(languageOffset + (amount > 0 ? -1 : 1), 0,
-                Math.max(0, host.languages().length - visibleLanguages()));
+                Math.max(0, matchingLanguages().length - visibleLanguages()));
         return true;
     }
-    private int visibleLanguages() { return Math.max(1, Math.min(7, (screenHeight - 32) / 16)); }
-    private int listHeight() { return Math.min(visibleLanguages(), host.languages().length) * 16; }
+    private int visibleLanguages() { return Math.max(1, Math.min(7, (screenHeight - 32 - SEARCH_HEIGHT) / 16)); }
+    private int listHeight() { return SEARCH_HEIGHT + visibleLanguages() * 16; }
     private int listY() { return clamp(y - listHeight(), 0, Math.max(0, screenHeight - listHeight() - 24)); }
     private String label(String key) { return host.text("nyanlex.composer." + key); }
+    private String languageLabel(String tag, String nativeName) {
+        Locale target = Locale.forLanguageTag(tag.replace('_', '-'));
+        Locale client = Locale.forLanguageTag(host.text("language.code").replace('_', '-'));
+        if (client.getLanguage().isEmpty() || target.getLanguage().isEmpty()) return nativeName;
+        String name = target.getDisplayName(client);
+        return name.isEmpty() || name.equalsIgnoreCase(tag) ? nativeName : name;
+    }
     private String fit(String text, int maxWidth) {
         if (host.textWidth(text) <= maxWidth) return text;
         while (!text.isEmpty() && host.textWidth(text + "…") > maxWidth)
@@ -170,8 +220,8 @@ public final class ChatComposerPanel {
         g.fill(x + 8, y + 48, width / 2 - 12, 20, 0xFF363C55);
         g.fill(x + width / 2, y + 48, width / 2 - 8, 20, busy ? 0xFF343744 : 0xFF38765E);
         String language = host.language();
-        for (String[] row : host.languages()) if (row[0].equals(language)) { language = row[1]; break; }
-        g.text(fit(language + " ▾", width / 2 - 24), x + 13, y + 54, 0xFFFFFFFF);
+        for (String[] row : host.languages()) if (row[0].equals(language)) { language = languageLabel(row[0], row[1]); break; }
+        g.text(fit(label("target_language").replace("%s", language) + " ▾", width / 2 - 24), x + 13, y + 54, 0xFFFFFFFF);
         g.text(fit(label(busy ? "working" : "fill"), width / 2 - 20), x + width / 2 + 5, y + 54, 0xFFFFFFFF);
         g.text(fit(label(status), width - 16), x + 8, y + 76,
                 "ready".equals(status) ? 0xFF8EE5B1 : 0xFFC6C8D3);
@@ -180,11 +230,15 @@ public final class ChatComposerPanel {
         if (!choosing) return;
         int ly = listY();
         g.fill(x + 7, ly - 1, width - 14, listHeight() + 2, 0xFF77708F);
-        for (int i = 0; i < visibleLanguages() && languageOffset + i < host.languages().length; i++) {
-            String[] row = host.languages()[languageOffset + i];
-            g.fill(x + 8, ly + i * 16, width - 16, 16,
+        g.fill(x + 8, ly, width - 16, SEARCH_HEIGHT, 0xFF272B3B);
+        g.text(fit(host.text("screen.nyanlex.language.search"), width - 26), x + 13, ly + 3, 0xFFC6C8D3);
+        String[][] rows = matchingLanguages();
+        if (rows.length == 0) g.text(fit(label("no_languages"), width - 26), x + 13, ly + SEARCH_HEIGHT + 4, 0xFFC6C8D3);
+        for (int i = 0; i < visibleLanguages() && languageOffset + i < rows.length; i++) {
+            String[] row = rows[languageOffset + i];
+            g.fill(x + 8, ly + SEARCH_HEIGHT + i * 16, width - 16, 16,
                     row[0].equals(host.language()) ? 0xFF38765E : 0xFF272B3B);
-            g.text(fit(row[1] + " (" + row[0] + ")", width - 26), x + 13, ly + i * 16 + 4, 0xFFFFFFFF);
+            g.text(fit(languageLabel(row[0], row[1]) + " (" + row[0] + ")", width - 26), x + 13, ly + SEARCH_HEIGHT + i * 16 + 4, 0xFFFFFFFF);
         }
     }
     private static boolean inside(double mx, double my, int x, int y, int w, int h) {

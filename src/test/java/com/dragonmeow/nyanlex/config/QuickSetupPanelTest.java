@@ -453,7 +453,7 @@ class QuickSetupPanelTest {
 
     @Test
     void theEndPageNamesTheKeysAndOffersTheKeyScreen() {
-        for (String code : new String[] {"zh_tw", "zh_hk", "zh_cn", "en_us"}) {
+        for (String code : new String[] {"zh_tw", "ja_jp", "zh_cn", "en_us"}) {
             FakeHost host = new FakeHost(code);
             QuickSetupPanel p = panel(host);
             toMethodPage(p);
@@ -505,7 +505,7 @@ class QuickSetupPanelTest {
     @Test
     void everyPageFitsEverySizeInEveryLanguage() {
         int[][] sizes = {{427, 240}, {320, 240}, {256, 240}, {640, 360}, {320, 180}};
-        for (String code : new String[] {"zh_tw", "zh_hk", "zh_cn", "en_us"}) {
+        for (String code : new String[] {"zh_tw", "ja_jp", "zh_cn", "en_us"}) {
             for (int[] size : sizes) {
                 FakeHost host = new FakeHost(code);
                 host.packs = QuickSetupPanel.PackState.FOUND;
@@ -581,7 +581,7 @@ class QuickSetupPanelTest {
 
     @Test
     void everyQuestionnaireKeyExistsInAllFourLangFilesWithMatchingPlaceholders() {
-        for (String code : new String[] {"zh_hk", "zh_cn", "en_us"}) {
+        for (String code : new String[] {"ja_jp", "zh_cn", "en_us"}) {
             DialogContent.Lang reference = DialogPanelTest.lang("zh_tw");
             DialogContent.Lang other = DialogPanelTest.lang(code);
             for (String key : QuickSetupPanel.allLangKeys()) {

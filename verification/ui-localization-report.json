@@ -1,0 +1,21 @@
+{
+  "total_locales": 4,
+  "required_keys": 425,
+  "structurally_complete": [
+    "en_us",
+    "ja_jp",
+    "zh_cn",
+    "zh_tw"
+  ],
+  "missing_key_counts": {},
+  "format_errors": {},
+  "english_identical_counts": {
+    "ja_jp": 3,
+    "zh_cn": 3,
+    "zh_tw": 3
+  },
+  "note": "Structural coverage is not proof of grammatical or native-language review.",
+  "loader_missing_key_counts": {},
+  "loader_format_errors": {},
+  "loader_locale_set_errors": {}
+}

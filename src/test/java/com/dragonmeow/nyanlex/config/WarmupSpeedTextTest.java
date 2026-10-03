@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The pre-translation speed sentence reads right at exactly one item or one minute, in every language. */
 class WarmupSpeedTextTest {
 
-    private static final List<String> LANGS = List.of("en_us", "zh_tw", "zh_cn", "zh_hk");
+    private static final List<String> LANGS = List.of("en_us", "zh_tw", "zh_cn", "ja_jp");
 
     private static String render(String code, String key, Object... args) {
         try (InputStream in = WarmupSpeedTextTest.class.getResourceAsStream("/assets/nyanlex/lang/" + code + ".json")) {
@@ -82,8 +82,19 @@ class WarmupSpeedTextTest {
     }
 
     @Test
+    void japaneseUsesNaturalCountersForEveryRateAndDuration() {
+        for (long rate : new long[] {1, 2, 40}) {
+            for (long eta : new long[] {1, 2, 40}) {
+                String expected = "毎分約 " + rate + " 件、残り約 " + eta + " 分";
+                assertEquals(expected, render("ja_jp", WarmupSpeedText.progressKey(rate, eta), rate, eta));
+                assertEquals("実行中、" + expected, render("ja_jp", WarmupSpeedText.stateKey(rate, eta), rate, eta));
+            }
+        }
+    }
+
+    @Test
     void chineseReadsTheSameWhateverTheNumbersAre() {
-        for (String code : List.of("zh_tw", "zh_cn", "zh_hk")) {
+        for (String code : List.of("zh_tw", "zh_cn")) {
             String progress = render(code, "screen.nyanlex.warmup.progress.speed", 7, 9);
             String state = render(code, "screen.nyanlex.warmup.state.running.speed", 7, 9);
             for (long[] n : new long[][] {{1, 1}, {1, 9}, {7, 1}}) {

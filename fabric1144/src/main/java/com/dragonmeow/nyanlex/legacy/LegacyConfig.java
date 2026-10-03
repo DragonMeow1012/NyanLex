@@ -11,7 +11,7 @@ public final class LegacyConfig {
     boolean deliverChatTranslationsInOrder = true;
     public boolean chatComposerEnabled = false;
     public String chatComposerLanguage = "en";
-    public double chatComposerX = 0.0;
+    public double chatComposerX = 1.0;
     public double chatComposerY = 1.0;
     /**
      * Online translation (master request switch). False keeps showing cached translations but
