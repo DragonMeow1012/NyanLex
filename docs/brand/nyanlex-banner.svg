@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="260" viewBox="0 0 960 260" role="img" aria-labelledby="title desc">
+  <title id="title">NyanLex Translator</title>
+  <desc id="desc">The NyanLex cat reading a book, beside the project name on a midnight-blue Minecraft-inspired pixel background.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#20243e"/><stop offset="1" stop-color="#101725"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#a8b1ef" stroke-opacity=".06"/></pattern>
+  </defs>
+  <rect width="960" height="260" rx="20" fill="url(#bg)"/>
+  <rect width="960" height="260" rx="20" fill="url(#grid)"/>
+  <g fill="#a7a5f2" opacity=".12"><path d="M784 0h64v32h-32v32h-32z"/><path d="M896 32h32v64h-64V64h32z"/><path d="M832 192h32v32h32v36h-64z"/><path d="M0 192h32v32h32v36H0z"/></g>
+  <path d="M296 54h42" stroke="#f3a4bc" stroke-width="5"/>
+  <text x="294" y="139" font-family="'Segoe UI',Arial,sans-serif" font-size="78" font-weight="750" letter-spacing="-3" fill="#f5f4ff">Nyan<tspan fill="#c1bbff">Lex</tspan></text>
+  <text x="300" y="178" font-family="'Segoe UI',Arial,sans-serif" font-size="22" font-weight="600" letter-spacing="8" fill="#d3d7ee">TRANSLATOR</text>
+  <g stroke="#8f9bbc" stroke-width="2" fill="none" opacity=".65"><path d="M755 96h96v52h-30l-14 14v-14h-52z"/><path d="M773 114h59m-59 14h42"/></g>
+  <g transform="translate(35 18) scale(1.12)">
+  <circle cx="100" cy="100" r="94" fill="#E3E9FF"/>
+  <g stroke="#262A44" stroke-width="3">
+    <rect x="10" y="18" width="38" height="30" rx="10" fill="#FFFFFF"/><path d="M26 46 L24 56 L36 47" fill="#FFFFFF"/>
+    <rect x="152" y="18" width="38" height="30" rx="10" fill="#FFFFFF"/><path d="M174 46 L176 56 L164 47" fill="#FFFFFF"/>
+  </g>
+  <text x="29" y="40" text-anchor="middle" font-family="'Yu Gothic UI','Yu Gothic','Meiryo',sans-serif" font-weight="700" font-size="18" fill="#3C55D6">A</text>
+  <text x="171" y="40" text-anchor="middle" font-family="'Yu Gothic UI','Yu Gothic','Meiryo',sans-serif" font-weight="700" font-size="17" fill="#E8577E">あ</text>
+  <g stroke="#262A44" stroke-width="4" stroke-linejoin="round">
+    <path d="M54 80 L60 32 Q62 26 68 30 L94 54 Z" fill="#FFFFFF"/><path d="M146 80 L140 32 Q138 26 132 30 L106 54 Z" fill="#FFFFFF"/>
+  </g>
+  <path d="M63 44 L66 64 L80 56 Z" fill="#FF9DB4"/><path d="M137 44 L134 64 L120 56 Z" fill="#FF9DB4"/>
+  <ellipse cx="100" cy="96" rx="54" ry="42" fill="#FFFFFF" stroke="#262A44" stroke-width="4"/>
+  <ellipse cx="80" cy="96" rx="9" ry="12" fill="#262A44"/><ellipse cx="120" cy="96" rx="9" ry="12" fill="#262A44"/>
+  <circle cx="84" cy="91" r="3.5" fill="#fff"/><circle cx="124" cy="91" r="3.5" fill="#fff"/>
+  <circle cx="77" cy="101" r="1.8" fill="#fff"/><circle cx="117" cy="101" r="1.8" fill="#fff"/>
+  <ellipse cx="66" cy="113" rx="8" ry="4" fill="#FF9DB4"/><ellipse cx="134" cy="113" rx="8" ry="4" fill="#FF9DB4"/>
+  <path d="M97 106 L103 106 L100 109 Z" fill="#FF7FA0"/>
+  <path d="M92 112 Q96 118 100 112 Q104 118 108 112" fill="none" stroke="#262A44" stroke-width="3.5" stroke-linecap="round"/>
+  <g stroke="#262A44" stroke-width="2.6" stroke-linecap="round" fill="none">
+    <path d="M56 103 Q40 98 24 97"/><path d="M56 109 L22 110"/><path d="M56 115 Q40 120 26 125"/>
+    <path d="M144 103 Q160 98 176 97"/><path d="M144 109 L178 110"/><path d="M144 115 Q160 120 174 125"/>
+  </g>
+  <g stroke="#262A44" stroke-width="4" stroke-linejoin="round">
+    <path d="M22 134 Q62 118 100 138 L100 190 Q62 174 22 186 Z" fill="#FFF6DC"/>
+    <path d="M178 134 Q138 118 100 138 L100 190 Q138 174 178 186 Z" fill="#FFF6DC"/>
+    <ellipse cx="66" cy="130" rx="12" ry="9" fill="#FFFFFF"/><ellipse cx="134" cy="130" rx="12" ry="9" fill="#FFFFFF"/>
+  </g>
+  <g stroke="#A9B3D6" stroke-width="3" stroke-linecap="round"><path d="M36 150 L84 154"/><path d="M36 162 L84 166"/><path d="M116 154 L164 150"/><path d="M116 166 L164 162"/></g>
+  </g>
+</svg>

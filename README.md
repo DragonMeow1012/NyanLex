@@ -1,24 +1,129 @@
-# NyanLex Translator 1.0.0
+<p align="center">
+  <img src="docs/brand/nyanlex-banner.svg" alt="NyanLex Translator — Read Minecraft chat, items and screens in your language." width="960">
+</p>
 
-[繁體中文](README.zh-TW.md)
+<p align="center"><strong>Read Minecraft chat, items and screens in your language.</strong><br>Client-side translation · Original + translated text · Reusable local translations</p>
 
-NyanLex Translator is a client-side real-time translation mod. It translates text that needs translation on screen without changing server data or sending chat messages for the player.
+<p align="center">
+  <a href="https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-1.0.0-8b7fd6?style=flat-square" alt="Release 1.0.0"></a>
+  <img src="https://img.shields.io/badge/Loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-52658f?style=flat-square" alt="Fabric, NeoForge and Forge">
+  <img src="https://img.shields.io/badge/Install-Client%20only-478978?style=flat-square" alt="Client-side only">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Code-MIT-c09055?style=flat-square" alt="Code license: MIT"></a>
+</p>
 
-> **Unofficial.** NyanLex Translator is an independent community-style fan project. It is not affiliated with, endorsed by, or sponsored by Mojang, Microsoft, Hypixel, or any mod author. Minecraft is a trademark of Mojang AB / Microsoft.
+<p align="center"><b>English</b> · <a href="README.zh-TW.md">繁體中文</a></p>
+<p align="center"><a href="#direct-downloads">Download</a> &nbsp;·&nbsp; <a href="#in-game-screenshots">See it in game</a> &nbsp;·&nbsp; <a href="#translation-sources">Translation sources</a> &nbsp;·&nbsp; <a href="#keyboard-shortcuts">Shortcuts</a> &nbsp;·&nbsp; <a href="#privacy">Privacy</a></p>
 
-## Privacy (read this first)
+> **Online translation starts off.** When enabled, selected text goes to your chosen provider; chat can include private messages. Saved translations remain available offline. [Read the privacy details](#privacy).
 
-- **Online translation is off on a new install.** While it is off, no translation service receives any of your text.
-- You can turn it on in three ways: from the Quick setup that opens by itself the first time you reach the title screen (choose machine translation, AI translation, or "Not now"; nothing you choose is applied, and nothing is sent, until you press Done); by pressing the translate-item key (default `R`) or translate-screen key (default `P`) while it is off, which first opens a confirmation window and only sends after you press "Start translating"; or in Translation settings > General ("Online translation").
-- Things that work without turning it on, and send nothing: translations already in your local cache, translation packs you downloaded, the built-in glossary, and the vanilla text from the game's own language files.
-- Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
-- The text goes to the translation service you choose:
-  - **Machine translation (Google, no key)** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.
-  - **AI engines** (an OpenAI-compatible service such as Gemini, OpenAI or DeepSeek, or ChatGPT/Codex sign-in) also need your own key or sign-in, and go only to the service you configure. Signing in with ChatGPT uses your account's Codex quota.
-- **API keys are stored only in the config file on your machine**, are sent only to the provider you chose, are masked in the settings screen, and are never written to logs or debug dumps.
-- Users upgrading from an earlier version keep their existing settings: if you were already translating, online translation stays on.
-- **Translation packs are download-only.** Finding and downloading them only reads public files from GitHub (`index.json` plus the files you confirm); no text and no list of your mods is sent, nothing is ever uploaded, and nothing is downloaded until you confirm.
-- Player names from the TAB list are masked locally before sending; other server text may still contain user-provided content.
+<table>
+  <tr>
+    <td width="50%" valign="top"><h3>💬 Follow the conversation</h3><p>Show original messages and translations together, so you can read and compare.</p></td>
+    <td width="50%" valign="top"><h3>📖 Understand your items</h3><p>Translate tooltips, books, quest text, and supported HUD and mod screens.</p></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><h3>🌐 Choose your translator</h3><p>Use Google, an AI API, ChatGPT/Codex, or an OpenAI-compatible local model.</p></td>
+    <td width="50%" valign="top"><h3>💾 Keep your translations</h3><p>Reuse the cache, download translation packs, or import translations from a friend.</p></td>
+  </tr>
+</table>
+
+## In-game screenshots
+
+### Item tooltips, before and after
+
+Read the item description while keeping its numbers and text colors. Click either image to view it at full size.
+
+<table>
+  <tr><th width="50%">Original</th><th width="50%">Traditional Chinese translation</th></tr>
+  <tr>
+    <td valign="top"><img src="docs/images/promo/hypixel-potion-en.png" alt="Original English item tooltip" width="380"></td>
+    <td valign="top"><img src="docs/images/promo/hypixel-potion-zh-TW.png" alt="The same item translated into Traditional Chinese" width="380"></td>
+  </tr>
+</table>
+
+### Original chat and translation, together
+
+<p align="center"><img src="docs/images/promo/hypixel-chat-bilingual.png" alt="Bilingual chat with player names pixelated" width="660"></p>
+
+Actual gameplay screenshots. Player names are pixelated; translation text is unchanged. Translation quality and response time depend on your provider.
+
+<details>
+<summary>See more: choosing your translation language</summary>
+
+![Translation language selection](docs/images/promo/language-selector.png)
+
+</details>
+
+## Get started
+
+1. **Pick your build.** [Download](#direct-downloads) the single JAR matching your Minecraft version and loader, then put it in that instance's `mods` folder. Fabric also needs the matching Fabric API.
+2. **Choose your language and provider.** Start the game and use Quick setup. Online translation turns on only after you confirm your choice.
+3. **Start reading.** On modern targets, press <kbd>R</kbd> over an item, <kbd>P</kbd> for visible screen or HUD text, and <kbd>G</kbd> to switch between original and translated display.
+
+| Mode | Chat | Items, screens and other surfaces |
+| --- | --- | --- |
+| Google machine translation | Automatic | On demand with `R` / `P` |
+| AI translation | Automatic | Automatic; `R` / `P` force a fresh translation |
+| Saved translations | Display immediately | Display immediately, without another request |
+
+Choose original text, translation, or both for each surface. Existing AI translations take priority, followed by translation packs and saved machine translations. Legacy controls differ; see [keyboard shortcuts](#keyboard-shortcuts).
+
+## Direct downloads
+
+Each JAR is for the exact Minecraft version and loader in its filename. **Install one matching JAR, not the whole bundle.**
+
+| Fabric · 12 builds | NeoForge · 4 builds | Forge · 2 builds |
+| :---: | :---: | :---: |
+| Selected versions from 1.14.4 to 26.3 | 1.20.1, 1.21.1, 26.2, 26.3 | 1.12.2, 1.13.2 |
+| [Fabric ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Fabric.zip) | [NeoForge ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-NeoForge.zip) | [Forge ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Forge.zip) |
+
+[Release page](https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0) · [All-versions ZIP](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip) · [SHA-256 checksums](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/SHA256SUMS.txt)
+
+Expand a loader to find your build:
+
+<details>
+<summary><b>Fabric · 12 builds — individual JARs and Java requirements</b></summary>
+
+Fabric targets require matching Fabric Loader and Fabric API versions.
+
+| Minecraft | Java | Download |
+| --- | ---: | --- |
+| 1.14.4 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) |
+| 1.15.2 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) |
+| 1.16.5 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) |
+| 1.17.1 | 16 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) |
+| 1.18.2 | 17 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) |
+| 1.19.4 | 17 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) |
+| 1.20.1 | 17 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) |
+| 1.21.1 | 21 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) |
+| 1.21.11 | 21 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) |
+| 26.1.2 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) |
+| 26.2 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) |
+| 26.3 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) |
+
+</details>
+
+<details>
+<summary><b>NeoForge · 4 builds — individual JARs and Java requirements</b></summary>
+
+| Minecraft | Java | Download |
+| --- | ---: | --- |
+| 1.20.1 | 17 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) |
+| 1.21.1 | 21 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) |
+| 26.2 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) |
+| 26.3 | 25 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) |
+
+</details>
+
+<details>
+<summary><b>Forge · 2 builds — individual JARs and Java requirements</b></summary>
+
+| Minecraft | Java | Download |
+| --- | ---: | --- |
+| 1.12.2 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) |
+| 1.13.2 | 8 | [Download JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) |
+
+</details>
 
 ## Compatibility
 
@@ -26,87 +131,6 @@ NyanLex Translator is a client-side real-time translation mod. It translates tex
 - The legacy targets (Fabric 1.14.4-1.16.5 and Forge 1.12.2-1.13.2) have a simpler interface: a short Quick setup, the on-the-spot confirmation window and a categorized settings screen, but no translation packs and no full-content warmup.
 - Quest and task-book screens in modpacks get extra optimization (long paragraphs, colored text, tooltips).
 - This is a client-side mod; it does not modify servers and does not send chat for you.
-
-## Features
-
-- Translates chat, item names, tooltips, scoreboards, name tags, boss bars, titles, action bars, books, and mod screens.
-- Each surface can show original text, translated text, or both.
-- Supports Google machine translation (unofficial endpoint) and OpenAI-compatible APIs such as Gemini, OpenAI, DeepSeek, OpenRouter, Ollama and LM Studio.
-- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-5.6-terra` / `medium`.
-- Async batching, priority queues, disk caches, and failure backoff reduce main-thread work and duplicate requests. The send interval and collection window both default to 5 seconds, with 11 settings: Off or 1–10 seconds.
-- Player names are masked from the TAB list. Modern targets skip labels consisting of known mod, shader or technical names and their versions; existing translations still take precedence.
-- **Everything except chat follows the translation service you pick for it**: with AI it translates automatically like chat; with machine translation (Google) only chat translates on its own and the rest is on demand, so joining a server never floods it with text: press `R` on the item under your cursor, `P` with a screen open to translate that screen, or `P` in the world to translate the scoreboard, name tags, boss bars, titles and action bar you can see (sent as one batch). Anything already translated is shown straight from your saved translations either way (a text the AI already translated first, then translation packs, then saved machine translations); with AI, `R`/`P` force a fresh translation.
-- **Segmented tooltip cache**: long tooltips (title plus multi-line body) cache and restore per segment, so only the segment that actually changed needs a fresh request.
-- **Translation packs** (ready-made AI translations prepared by the maintainers and hosted on GitHub): the mod does not check for them at startup. There are two ways to get them: the last page of the Quick setup detects them automatically (it only appears when packs for your installed mods are found), and the "Detect and download translation packs" button under Translation settings > Packs. Both list each pack with its size and the expected total, download only after you confirm, and merge the files into your saved translations. "Clear downloaded translation packs" in the same category removes only what came from packs; translations you made yourself are kept. It only reads the hub's `index.json` and the files you confirm - nothing local is ever uploaded. Pack content holds only translated text and hashes (never the original text) and is licensed CC BY-NC-SA 4.0; see [translation-hub/README.md](translation-hub/README.md).
-- **Settings in seven categories** (Esc > Options > Translation settings...): General, Display, Service, Packs, Translations, Advanced and About, with a search box and an in-game manual. The Quick setup can be run again from General. "Do-not-translate terms" keeps server or brand names in the original language (case-insensitive, whole-word).
-- **Full-content warmup** (Translation settings > Translations): expand Categories to choose Item names and descriptions and Screen text, both selected by default. Quest titles and descriptions belong to Screen text. Warmup runs only when you press Start or Continue, skips existing translations, and can be paused or stopped. It requires AI translation and asks first if online translation is off. Some screen content loads only after entering a world; enter the world before starting warmup for that content.
-- Under Translation settings > Translations you can export and import saved translations as JSON to merge a friend's translations locally while keeping your own, and clear the saved translations of the current language.
-
-## In-game screenshots
-
-### Chat translation
-
-Player names in this screenshot are masked.
-
-Chat can display the original message and its translation together for comparison.
-
-![Bilingual server chat with player names masked](docs/images/promo/hypixel-chat-bilingual.png)
-
-<details>
-<summary>Choose a familiar language from the translation language list</summary>
-
-![Translation language selection](docs/images/promo/language-selector.png)
-
-</details>
-
-## Direct downloads
-
-Each JAR supports only the exact Minecraft version and loader in its filename.
-
-[Download the all-versions ZIP with loader/version folders](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip)
-
-
-### Fabric
-
-Fabric targets require matching Fabric Loader and Fabric API versions.
-
-| Minecraft | Java | Download |
-| --- | ---: | --- |
-| 1.14.4 | 8 | [nyanlex-1.0.0-Fabric-1.14.4.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) |
-| 1.15.2 | 8 | [nyanlex-1.0.0-Fabric-1.15.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) |
-| 1.16.5 | 8 | [nyanlex-1.0.0-Fabric-1.16.5.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) |
-| 1.17.1 | 16 | [nyanlex-1.0.0-Fabric-1.17.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) |
-| 1.18.2 | 17 | [nyanlex-1.0.0-Fabric-1.18.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) |
-| 1.19.4 | 17 | [nyanlex-1.0.0-Fabric-1.19.4.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) |
-| 1.20.1 | 17 | [nyanlex-1.0.0-Fabric-1.20.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) |
-| 1.21.1 | 21 | [nyanlex-1.0.0-Fabric-1.21.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) |
-| 1.21.11 | 21 | [nyanlex-1.0.0-Fabric-1.21.11.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) |
-| 26.1.2 | 25 | [nyanlex-1.0.0-Fabric-26.1.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) |
-| 26.2 | 25 | [nyanlex-1.0.0-Fabric-26.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) |
-| 26.3 | 25 | [nyanlex-1.0.0-Fabric-26.3.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) |
-
-### NeoForge
-
-| Minecraft | Java | Download |
-| --- | ---: | --- |
-| 1.20.1 | 17 | [nyanlex-1.0.0-NeoForge-1.20.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) |
-| 1.21.1 | 21 | [nyanlex-1.0.0-NeoForge-1.21.1.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) |
-| 26.2 | 25 | [nyanlex-1.0.0-NeoForge-26.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) |
-| 26.3 | 25 | [nyanlex-1.0.0-NeoForge-26.3.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) |
-
-### Forge
-
-| Minecraft | Java | Download |
-| --- | ---: | --- |
-| 1.12.2 | 8 | [nyanlex-1.0.0-Forge-1.12.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) |
-| 1.13.2 | 8 | [nyanlex-1.0.0-Forge-1.13.2.jar](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) |
-
-## Installation
-
-1. Download the exact JAR from the tables above.
-2. Install the same Minecraft version of Fabric, NeoForge, or Forge.
-3. Put the JAR in that instance's `mods` directory.
-4. Start the game with the Java version shown in the table.
 
 ## Translation sources
 
@@ -125,9 +149,22 @@ You can choose whether Google machine translation fills in after an AI failure. 
 
 Local caches, imported translations, downloaded packs and the built-in glossary provide existing translations without a new translation request. See the [translation hub documentation](translation-hub/README.md) for pack sources, format and licensing.
 
-## Sharing translations
+## Full-content warmup
+
+Open **Translation settings > Translations**, then expand **Categories** to choose **Item names and descriptions** and **Screen text**, both selected by default. Quest titles and descriptions belong to Screen text. Warmup runs only when you press Start or Continue, skips existing translations, and can be paused or stopped. It requires AI translation and asks first if online translation is off. Some screen content loads only after entering a world; enter the world before starting warmup for that content.
+
+You can continue manually after a rate-limit pause; switching models checks the new model state. Google 429 pause and backoff protection remains in place.
+
+## Translation packs and sharing
+
+Translation packs contain ready-made AI translations prepared by the maintainers and hosted on GitHub. The mod does not check for them at startup. There are two ways to get them: the last page of the Quick setup detects them automatically (it only appears when packs for your installed mods are found), and the "Detect and download translation packs" button under Translation settings > Packs. Both list each pack with its size and the expected total, download only after you confirm, and merge the files into your saved translations. "Clear downloaded translation packs" in the same category removes only what came from packs; translations you made yourself are kept. It only reads the hub's `index.json` and the files you confirm - nothing local is ever uploaded. Pack content holds only translated text and hashes (never the original text) and is licensed CC BY-NC-SA 4.0; see [translation-hub/README.md](translation-hub/README.md).
+
+### Sharing translations
 
 Use **Export translations** in Translation Settings. **Supports automatic split exports and batch imports**: small exports produce one JSON file; larger exports produce `translations.part-0001.json`, `translations.part-0002.json`, and so on. Share the entire set. Your friend selects the same target language, then uses Ctrl/Shift to select multiple JSON files in **Import translations**. Import merges valid missing entries, keeps existing translations, and makes no translation requests. Files contain translation rows only, without API keys, login credentials, or settings.
+
+<details>
+<summary>Format compatibility, split files and import limits</summary>
 
 Fabric 1.17.1+ and NeoForge share one compatible format. Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2 share the legacy format. Files cannot be imported across these two format families. Each part is limited to 32 MiB and 100,000 entries; this is **not a limit on the total export**, which splits automatically. Existing single-file exports remain compatible. For an older oversized JSON, re-export from the client holding the cached translations.
 
@@ -135,6 +172,7 @@ Batch imports process files in filename order; the first valid translation wins.
 
 Legacy clients retain their 8,192-entry shared cache limit. A file exceeding the remaining capacity is rejected without replacing existing translations. Modern disk cache files retain up to 100,000 entries by default; overflow still evicts older entries under the existing cache policy. Splitting exports does not increase client cache capacity.
 
+</details>
 
 ## Keyboard shortcuts
 
@@ -154,18 +192,50 @@ Legacy UI:
 | Fabric 1.14.4-1.16.5 | `G` opens Translation Settings; `P` retranslates the current screen |
 | Forge 1.12.2-1.13.2 | `G` opens Translation Settings; `H` enables/disables translation; `P` retranslates the current screen |
 
-`P` captures currently visible text, including a hovered tooltip; with no screen open it captures the HUD text you can see (scoreboard rows, boss bars, titles, the action bar, name tags). It does not scan off-screen content or activate while typing. With machine translation, everything except chat translates on demand (see Features above), so `R`/`P` are how you get those translations; with AI they translate automatically and `R`/`P` force a fresh translation. Completion time depends on the translation service.
+`P` captures currently visible text, including a hovered tooltip; with no screen open it captures the HUD text you can see (scoreboard rows, boss bars, titles, the action bar, name tags). It does not scan off-screen content or activate while typing. With machine translation, everything except chat translates on demand (see Get started above), so `R`/`P` are how you get those translations; with AI they translate automatically and `R`/`P` force a fresh translation. Completion time depends on the translation service.
+
+<details>
+<summary>Upgrading from an earlier project name</summary>
 
 If your keybinds look reset after upgrading: this release changes the mod id from `mctranslator` to `nyanlex`. The first launch automatically copies your old config file, translation caches, and any custom `options.txt` keybinds over to the new name (the old files are kept, not deleted), once. If a translation cache already exists under the new name, the old one is merged into it instead (rows already in the new file win), also once, so a cache cleared or deleted afterwards does not come back.
 
-## 1.0.0 highlights
+</details>
 
-- **Renamed to NyanLex Translator**: the package, mod id, config/cache filename prefix, and GitHub translation hub all moved to the new name. The first launch automatically copies your config, caches, and keybinds saved under any earlier name to the new name (originals are kept; existing new-named files are never overwritten).
-- With machine translation, everything except chat is triggered on demand (`R`/`P`), so nothing you haven't looked at is sent ahead of time; with AI it translates automatically like chat. A text the AI has already translated is shown first even when machine translation is selected.
-- Tooltips now cache per segment, cutting down on re-requesting an entire long tooltip for one changed line.
-- Adds translation packs: ready-made translations prepared by the maintainers. There is no startup check; you find them from the last page of the Quick setup (shown only when packs for your installed mods exist) or with "Translation settings > Packs > Detect and download translation packs", and nothing downloads until you confirm. "Clear downloaded translation packs" removes them again.
-- Rebuilds the settings into seven categories with search and an in-game manual, adds a Quick setup that opens by itself on the first start, and adds "Full-content warmup" with selectable categories.
+<details>
+<summary>More settings and translation behavior</summary>
 
-## Source and issues
+Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-5.6-terra` / `medium`.
+
+Async batching, priority queues, disk caches, and failure backoff reduce main-thread work and duplicate requests. The send interval and collection window both default to 5 seconds, with 11 settings: Off or 1–10 seconds.
+
+Player names are masked from the TAB list. Modern targets skip labels consisting of known mod, shader or technical names and their versions; existing translations still take precedence.
+
+**Segmented tooltip cache**: long tooltips (title plus multi-line body) cache and restore per segment, so only the segment that actually changed needs a fresh request.
+
+**Settings in seven categories** (Esc > Options > Translation settings...): General, Display, Service, Packs, Translations, Advanced and About, with a search box and an in-game manual. The Quick setup can be run again from General. "Do-not-translate terms" keeps server or brand names in the original language (case-insensitive, whole-word).
+
+</details>
+
+## Privacy
+
+- **Online translation is off on a new install.** While it is off, no translation service receives any of your text.
+- You can turn it on in three ways: from the Quick setup that opens by itself the first time you reach the title screen (choose machine translation, AI translation, or "Not now"; nothing you choose is applied, and nothing is sent, until you press Done); by pressing the translate-item key (default `R`) or translate-screen key (default `P`) while it is off, which first opens a confirmation window and only sends after you press "Start translating"; or in Translation settings > General ("Online translation").
+- Things that work without turning it on, and send nothing: translations already in your local cache, translation packs you downloaded, the built-in glossary, and the vanilla text from the game's own language files.
+- Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
+- The text goes to the translation service you choose:
+  - **Machine translation (Google, no key)** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.
+  - **AI engines** (an OpenAI-compatible service such as Gemini, OpenAI or DeepSeek, or ChatGPT/Codex sign-in) also need your own key or sign-in, and go only to the service you configure. Signing in with ChatGPT uses your account's Codex quota.
+- **API keys are stored only in the config file on your machine**, are sent only to the provider you chose, are masked in the settings screen, and are never written to logs or debug dumps.
+- Users upgrading from an earlier version keep their existing settings: if you were already translating, online translation stays on.
+- **Translation packs are download-only.** Finding and downloading them only reads public files from GitHub (`index.json` plus the files you confirm); no local text or installed-mod list is uploaded, and translation files are downloaded only after confirmation (discovery first reads the public index).
+- Player names from the TAB list are masked locally before sending; other server text may still contain user-provided content.
+
+## About NyanLex
+
+1.0.0 is the first release under the NyanLex Translator name. [Read the release notes](https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0).
 
 See [PACKAGING.md](PACKAGING.md) for build commands and the release folder layout. Report problems through [GitHub Issues](https://github.com/DragonMeow1012/NyanLex/issues).
+
+Code is licensed under [MIT](LICENSE). Translation data has separate source and license notices in the [translation hub](translation-hub/README.md).
+
+Unofficial project; not affiliated with, endorsed by, or sponsored by Mojang, Microsoft, Hypixel, or other mod authors. Minecraft is a trademark of Mojang AB / Microsoft.
