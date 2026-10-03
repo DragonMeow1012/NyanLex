@@ -158,7 +158,8 @@ public final class NyanLexForge {
         try {
             Minecraft mc = Minecraft.getMinecraft();
             if (instance == null || source == null || mc == null || renderingScreen == null
-                    || renderingScreen != mc.currentScreen || !instance.config.enabled) return source;
+                    || renderingScreen != mc.currentScreen || mc.currentScreen instanceof net.minecraft.client.gui.GuiChat
+                    || !instance.config.enabled) return source;
             if (SCREEN_CAPTURE.active(renderingScreen)) {
                 SCREEN_CAPTURE.record(renderingScreen, source);
                 return source;
@@ -255,6 +256,7 @@ public final class NyanLexForge {
         ClientRegistry.registerKeyBinding(itemRetranslateKey);
         TRANSLATOR.loadSharedTranslations(configDir, currentTarget(), config);
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(new ForgeChatComposer());
     }
 
     @SubscribeEvent public void onClientTick(TickEvent.ClientTickEvent event) {

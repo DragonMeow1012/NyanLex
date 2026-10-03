@@ -13,7 +13,8 @@
     "GuiGraphicsTextMixin",
     "GuiScoreboardMixin",
     "EntityNameTagMixin",
-    "OptionsScreenMixin"
+    "OptionsScreenMixin",
+    "ChatComposerMixin"
   ],
   "injectors": {
     "defaultRequire": 0

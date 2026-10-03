@@ -13,7 +13,8 @@
     "FontSplitMixin",
     "GuiGraphicsTextMixin",
     "GuiScoreboardMixin",
-    "OptionsScreenMixin"
+    "OptionsScreenMixin",
+    "ChatComposerMixin"
   ],
   "injectors": {
     "defaultRequire": 0

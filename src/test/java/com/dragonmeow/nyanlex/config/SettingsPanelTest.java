@@ -1059,7 +1059,12 @@ class SettingsPanelTest {
         assertEquals("card:master#1", p.focusedKey());
         assertTrue(p.keyPressed(SettingsPanel.KEY_ENTER, false, false));
         assertEquals(List.of(SettingAction.OPEN_PRIVACY), host.actions);
-        tab(p, 1, false); // 快速設定 is before; the language button comes next
+        tab(p, 1, false);
+        assertEquals("card:composer#0", p.focusedKey());
+        assertFalse(host.cfg.chatComposerEnabled);
+        assertTrue(p.keyPressed(SettingsPanel.KEY_ENTER, false, false));
+        assertTrue(host.cfg.chatComposerEnabled);
+        tab(p, 1, false); // Language follows the outgoing composer switch.
         assertEquals("card:language#0", p.focusedKey());
         assertTrue(p.keyPressed(SettingsPanel.KEY_ENTER, false, false));
         assertEquals(List.of(SettingAction.OPEN_PRIVACY, SettingAction.OPEN_LANGUAGE), host.actions);

@@ -95,5 +95,19 @@
   "config.nyanlex.chat_delivery.short": "聊天順序：%s",
   "config.nyanlex.enabled": "翻譯功能：開啟",
   "config.nyanlex.disabled": "翻譯功能：關閉",
-  "screen.nyanlex.options": "翻譯設定…"
+  "screen.nyanlex.options": "翻譯設定…",
+  "nyanlex.composer.title": "聊天輸入翻譯",
+  "nyanlex.composer.hint": "拖曳標題列移動；翻譯後確認，再送出。",
+  "nyanlex.composer.fill": "翻譯並填入",
+  "nyanlex.composer.working": "翻譯中…",
+  "nyanlex.composer.ready": "已填入聊天欄，確認後按 Enter 送出。",
+  "nyanlex.composer.changed": "草稿或設定已變更，請重新翻譯。",
+  "nyanlex.composer.failed": "翻譯失敗，已保留草稿，可重新翻譯。",
+  "nyanlex.composer.too_long": "譯文超過聊天長度，請縮短原文。",
+  "nyanlex.composer.invalid": "無法填入這份譯文，請重試。",
+  "nyanlex.composer.command": "指令請直接輸入下方聊天欄。",
+  "nyanlex.composer.offline": "請先在設定中開啟線上翻譯。",
+  "nyanlex.composer.busy": "上一筆翻譯仍在處理，請稍候。",
+  "nyanlex.composer.paused": "翻譯服務暫停中，請等候限流解除再試。",
+  "config.nyanlex.composer": "聊天輸入翻譯：%s"
 }

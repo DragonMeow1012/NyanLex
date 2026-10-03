@@ -41,6 +41,7 @@ public final class InlineLegacyCoreSimulation {
     }
 
     public static void main(String[] args) throws Exception {
+        testOutgoingDraft();
         testTranslationSharing();
         testTemplateBoundaries();
         testReservedTemplateTokenCollisions();
@@ -100,6 +101,31 @@ public final class InlineLegacyCoreSimulation {
 
     private static void caseOk(String name) {
         System.out.println("LEGACY_1_0_7_CASE_OK " + name);
+    }
+
+    private static void testOutgoingDraft() throws Exception {
+        AtomicReference<String> received = new AtomicReference<String>();
+        LegacyTranslator translator = new LegacyTranslator(sources -> {
+            received.set(sources.get(0));
+            return Collections.singletonList("Wait, " + sources.get(0).replace(" 等一下", "") + ".");
+        });
+        LegacyConfig config = config();
+        config.translationRequestsEnabled = true;
+        CompletableFuture<String> result = new CompletableFuture<String>();
+        try {
+            translator.translateDraft("Jerry 等一下", "en", config, Collections.singletonList("Jerry"),
+                    (value, error) -> result.complete(value == null ? "ERROR: " + error : value));
+            String reply = result.get(5, TimeUnit.SECONDS);
+            check(reply.startsWith("Wait, Jerry") && !reply.contains("\u27e6"),
+                    "draft name restoration: " + reply + "; source=" + received.get());
+            check(!received.get().contains("Jerry"), "draft exposed TAB player name to provider");
+            com.dragonmeow.nyanlex.translate.TranslationFile exported = translator.exportTranslations("en", config);
+            check(exported.machine.isEmpty() && exported.ai.isEmpty(), "draft leaked into export");
+            config.translationRequestsEnabled = false;
+            translator.translateDraft("No request", "en", config, Collections.emptyList(),
+                    (value, error) -> check(value == null && "offline".equals(error), "draft ignored master switch"));
+            System.out.println("INLINE_LEGACY_COMPOSER_OK name_protection export_isolation request_switch");
+        } finally { translator.shutdownForTests(); }
     }
 
     private static void testTranslationSharing() throws Exception {

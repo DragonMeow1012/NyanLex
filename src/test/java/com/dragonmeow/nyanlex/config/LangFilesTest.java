@@ -103,7 +103,7 @@ class LangFilesTest {
 
     private static final String[] DYNAMIC_FAMILIES = {
             "screen.nyanlex.warmup.warn.", "screen.nyanlex.warmup.state.", "screen.nyanlex.warmup.reason.",
-            "screen.nyanlex.provider."};
+            "screen.nyanlex.provider.", "nyanlex.composer."};
 
     @Test
     void noLangKeyIsLeftWithoutAUserAndEveryUsedKeyExists() throws IOException {

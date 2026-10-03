@@ -92,6 +92,7 @@ public final class NyanLexFabric implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static TranslatorConfig config;
+    public static com.dragonmeow.nyanlex.service.OutgoingChatTranslator outgoingChat;
     private static TranslationService service;
     private static TranslationDebugLog debugLog;
     private static Path configPath;
@@ -1336,11 +1337,12 @@ public final class NyanLexFabric implements ClientModInitializer {
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
         // 事前冷卻節流：one pacer PER ENGINE so Google and AI space their own requests
         // without blocking each other. The cooldown is read live from config.
+        RequestPacer machinePacer = new RequestPacer(() -> config.requestCooldownMs);
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(
                 transport,
                 () -> config.sourceLang,
                 () -> config.machineTranslationProvider,
-                new RequestPacer(() -> config.requestCooldownMs));
+                machinePacer);
         OpenAiTranslator apiAi = new OpenAiTranslator(transport,
                 () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
                 new RequestPacer(() -> config.requestCooldownMs));
@@ -1416,6 +1418,10 @@ public final class NyanLexFabric implements ClientModInitializer {
                         : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
                         && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
+        outgoingChat = new com.dragonmeow.nyanlex.service.OutgoingChatTranslator(config,
+                new com.dragonmeow.nyanlex.translate.GoogleFreeTranslator(transport, "auto",
+                        machinePacer, com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared()),
+                ai, executor, () -> onlineNames);
         com.dragonmeow.nyanlex.translate.MachineGateGuard.install(com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared(), GATE_FEEDBACK);
         // 2026-10-02: manual (cache-only, translate-key-driven) item/screen-text mode is
         // no longer a global startup flag -- TranslationService now judges it live, per

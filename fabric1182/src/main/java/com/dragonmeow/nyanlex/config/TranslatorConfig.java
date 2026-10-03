@@ -37,6 +37,11 @@ public final class TranslatorConfig {
     public DisplayMode chatMode = DisplayMode.BOTH;              // 聊天：原文+翻譯 stacked (3-way)
     /** Preserve received chat order; false displays each translation as soon as it is ready. */
     public boolean deliverChatTranslationsInOrder = true;
+    /** Explicit outgoing drafts; independent of the language used to read the game. */
+    public boolean chatComposerEnabled = false;
+    public String chatComposerLanguage = "en";
+    public double chatComposerX = 0.0;
+    public double chatComposerY = 1.0;
     public DisplayMode tooltipMode = DisplayMode.TRANSLATION;    // 物品名稱／說明（提示與手持共用）(3-way)
     public DisplayMode scoreboardMode = DisplayMode.TRANSLATION; // 記分板 (on/off)
     public DisplayMode nameMode = DisplayMode.TRANSLATION;       // 名牌 / 全息 (on/off)
@@ -320,6 +325,7 @@ public final class TranslatorConfig {
 
     /** Fill in sane defaults for any missing / invalid fields. */
     public TranslatorConfig normalized() {
+        if (chatComposerLanguage == null || chatComposerLanguage.isBlank()) chatComposerLanguage = "en";
         if (targetLang == null || targetLang.isBlank()) targetLang = "zh-TW";
         if (sourceLang == null || sourceLang.isBlank()) sourceLang = "auto";
         if (MachineTranslationProvider.isRetiredId(machineTranslationProvider)) {

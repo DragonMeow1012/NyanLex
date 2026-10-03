@@ -406,5 +406,20 @@
   "screen.nyanlex.ai.custom": "自定义／本地",
   "nyanlex.ui.warmup.categories": "分类",
   "nyanlex.ui.warmup.items": "物品名称与说明",
-  "nyanlex.ui.warmup.screen": "界面文字"
+  "nyanlex.ui.warmup.screen": "界面文字",
+  "nyanlex.composer.title": "聊天输入翻译",
+  "nyanlex.composer.hint": "拖动标题栏移动；翻译后确认，再发送。",
+  "nyanlex.composer.fill": "翻译并填入",
+  "nyanlex.composer.working": "翻译中…",
+  "nyanlex.composer.ready": "已填入聊天栏，确认后按 Enter 发送。",
+  "nyanlex.composer.changed": "草稿或设置已更改，请重新翻译。",
+  "nyanlex.composer.failed": "翻译失败，已保留草稿，可重新翻译。",
+  "nyanlex.composer.too_long": "译文超过聊天长度，请缩短原文。",
+  "nyanlex.composer.invalid": "无法填入这份译文，请重试。",
+  "nyanlex.composer.command": "指令请直接输入下方聊天栏。",
+  "nyanlex.composer.offline": "请先在设置中开启在线翻译。",
+  "nyanlex.composer.busy": "上一条翻译仍在处理，请稍候。",
+  "nyanlex.composer.paused": "翻译服务暂停中，请等候限流解除再试。",
+  "nyanlex.settings.composer": "聊天输入翻译：%s",
+  "nyanlex.settings.composer.tip": "用熟悉的语言打字，翻译成指定语言后填入聊天栏，由你确认再发送。拖动浮窗标题栏可移动位置。沿用聊天的翻译服务。"
 }

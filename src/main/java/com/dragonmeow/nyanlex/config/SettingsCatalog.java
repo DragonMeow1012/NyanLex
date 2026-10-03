@@ -140,6 +140,11 @@ public final class SettingsCatalog {
                         SettingEntry.SideEffect.CLEAR_PENDING)
                         .withKeywords("online", "master", "master switch", "總開關", "总开关", "privacy",
                                 "隱私", "隐私", "送出", "請求", "请求", "request"),
+                toggle(SettingsPage.GENERAL, "composer", c -> c.chatComposerEnabled,
+                        c -> onOff(c.chatComposerEnabled),
+                        c -> c.chatComposerEnabled = !c.chatComposerEnabled,
+                        SettingEntry.SideEffect.NONE)
+                        .withKeywords("chat", "reply", "outgoing", "聊天", "回話", "浮窗"),
                 sub(SettingsPage.GENERAL, "language", SettingAction.OPEN_LANGUAGE,
                         SettingsCatalog::languageState),
                 sub(SettingsPage.GENERAL, "keybind", SettingAction.OPEN_KEYBINDS, null)

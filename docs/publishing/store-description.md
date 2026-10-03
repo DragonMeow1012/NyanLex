@@ -1,6 +1,6 @@
 # NyanLex Translator
 
-Real-time translation for chat, items, tooltips and screens, with reusable local translations.
+Understand your Minecraft world. Join the conversation in your own language.
 
 ## Data and privacy
 
@@ -8,10 +8,13 @@ Real-time translation for chat, items, tooltips and screens, with reusable local
 
 When enabled, text from the surfaces you choose is sent to the translation provider you select. Chat translation can include private messages. TAB-list player names are masked locally; other text may still include personal information. Google machine translation uses an unofficial endpoint and can be rate-limited or become unavailable. AI translation connects to your configured service; optional Google fallback can also send a failed AI request's text to Google. API keys are stored in your local configuration and masked in the interface.
 
+Chat composer drafts are sent for translation only when you submit them in the panel. They are not stored in translation caches or exports. The translated text is only inserted into the chat bar; you decide when to send it.
+
 Translation packs are download-only. Pack discovery reads a public GitHub index to show available packs; the selected translation files are downloaded only after confirmation. The mod does not upload your translations or installed-mod list. Exported translations are files you choose to share yourself.
 
 ## Features
 
+- Chat input translation: write in a draggable panel that remembers its position, translate into your chosen language (English by default), and fill the normal chat bar. Review the result before pressing Enter to send. Disabled by default; uses your selected chat translation service.
 - Translate chat, item names, tooltips, screen text, books and supported HUD text. Choose original text, translation or both.
 - Reuse local translations and downloaded packs instead of requesting the same text repeatedly, including after an AI provider or model change.
 - Select Google machine translation, Gemini, OpenAI, DeepSeek, an OpenAI-compatible service such as OpenRouter, Ollama or LM Studio, or ChatGPT/Codex sign-in. API services may require your own key and incur provider charges. ChatGPT sign-in requires a separately installed Codex CLI and uses your account's Codex quota.
@@ -42,7 +45,7 @@ Real gameplay screenshots. Player names in the chat image are pixelated for priv
 
 ## Project information
 
-NyanLex Translator 1.0.0 is the first release under this name. AI tools assisted with code, translations, documentation and the project icon. Optional AI functionality connects to local or online language models. The Codex option launches a locally installed Codex process; the mod does not install it for you.
+AI tools assisted with code, translations, documentation and the project icon. Optional AI functionality connects to local or online language models. The Codex option launches a locally installed Codex process; the mod does not install it for you.
 
 Unofficial project; not affiliated with or endorsed by Mojang, Microsoft, Hypixel or other mod authors. Code is MIT-licensed. Optional translation packs have separate licenses and per-pack attribution described in the [translation hub](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub).
 

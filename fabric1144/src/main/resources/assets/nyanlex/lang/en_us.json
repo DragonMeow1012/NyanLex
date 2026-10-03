@@ -127,5 +127,19 @@
   "screen.nyanlex.help.quick": "Too much text? Let the setup helper do it for you",
   "config.nyanlex.surface.hint": "Chat and entity name tags are always translated automatically; items, the scoreboard, screens and other text depend on the translation service.",
   "config.nyanlex.mine.hint": "Export or import the saved translations for the current language to share or back them up.",
-  "screen.nyanlex.options": "Translation settings..."
+  "screen.nyanlex.options": "Translation settings...",
+  "nyanlex.composer.title": "Chat input translation",
+  "nyanlex.composer.hint": "Drag the header to move. Translate, review, then send.",
+  "nyanlex.composer.fill": "Translate & fill",
+  "nyanlex.composer.working": "Translating…",
+  "nyanlex.composer.ready": "Ready to review. Press Enter in chat to send.",
+  "nyanlex.composer.changed": "Draft or settings changed. Translate again.",
+  "nyanlex.composer.failed": "Translation failed. Your draft is kept; try again.",
+  "nyanlex.composer.too_long": "Translation exceeds the chat limit. Shorten your draft.",
+  "nyanlex.composer.invalid": "Cannot insert this response. Please try again.",
+  "nyanlex.composer.command": "Enter commands in the chat bar below.",
+  "nyanlex.composer.offline": "Turn on online translation in settings first.",
+  "nyanlex.composer.busy": "A request is still running. Please wait.",
+  "nyanlex.composer.paused": "Translation is rate limited. Retry after the pause.",
+  "config.nyanlex.composer": "Chat input translation: %s"
 }

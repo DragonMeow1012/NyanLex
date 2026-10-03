@@ -13,7 +13,8 @@
     "HudMixin",
     "BossBarMixin",
     "EntityNameTagMixin",
-    "BookPageMixin"
+    "BookPageMixin",
+    "ChatComposerMixin"
   ],
   "injectors": {
     "defaultRequire": 0

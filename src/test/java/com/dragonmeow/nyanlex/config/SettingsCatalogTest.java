@@ -46,7 +46,7 @@ class SettingsCatalogTest {
 
     @Test
     void entryCountsPerPage() {
-        assertEquals(4, SettingsCatalog.entries(SettingsPage.GENERAL).size(), "快速設定, 線上翻譯, 翻譯語言, 快捷鍵");
+        assertEquals(5, SettingsCatalog.entries(SettingsPage.GENERAL).size(), "快速設定, 線上翻譯, 翻譯語言, 快捷鍵");
         assertEquals(18 + 1, SettingsCatalog.entries(SettingsPage.DISPLAY).size(), "nine surfaces with their service, plus 不翻譯詞彙");
         assertEquals(9, SettingsCatalog.rows(SettingsPage.DISPLAY).size());
         assertEquals(2, SettingsCatalog.entries(SettingsPage.SERVICE).size());

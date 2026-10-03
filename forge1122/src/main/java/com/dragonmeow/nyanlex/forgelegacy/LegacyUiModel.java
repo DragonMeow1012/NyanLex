@@ -79,6 +79,7 @@ final class LegacyUiModel {
     static final int A_IMPORT = 14;
     static final int A_COOLDOWN = 15;
     static final int A_CHAT_ORDER = 16;
+    static final int A_COMPOSER = 19;
     static final int A_DEBUG = 17;
     static final int A_GITHUB = 18;
     static final int A_CATEGORY = 100;
@@ -125,6 +126,7 @@ final class LegacyUiModel {
                 rows.add(new Row(BUTTON, languageLabel, A_LANGUAGE));
                 rows.add(new Row(BUTTON, t.get(cfg.enabled ? "config.nyanlex.enabled"
                         : "config.nyanlex.disabled"), A_ENABLED));
+                rows.add(new Row(BUTTON, t.get("config.nyanlex.composer", onOff(t, cfg.chatComposerEnabled)), A_COMPOSER));
                 rows.add(new Row(BUTTON, t.get("config.nyanlex.keys.open"), A_KEYS));
                 break;
             }
@@ -211,6 +213,8 @@ final class LegacyUiModel {
             case A_FALLBACK:
                 cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
                 return true;
+            case A_COMPOSER:
+                cfg.chatComposerEnabled = !cfg.chatComposerEnabled; return true;
             case A_CHAT_ORDER:
                 cfg.deliverChatTranslationsInOrder = !cfg.deliverChatTranslationsInOrder;
                 return true;

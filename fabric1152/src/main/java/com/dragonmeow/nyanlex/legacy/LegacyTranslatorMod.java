@@ -602,7 +602,16 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         if (mc != null && config != null) mc.setScreen(new LegacySettingsScreen(parent));
     }
 
-    static LegacyConfig config() { return config; }
+    public static void translateDraft(String text, String target, java.util.function.BiConsumer<String, String> callback) {
+        java.util.List<String> names = new java.util.ArrayList<String>();
+        net.minecraft.client.multiplayer.ClientPacketListener connection = Minecraft.getInstance().getConnection();
+        if (connection != null) for (net.minecraft.client.multiplayer.PlayerInfo info : connection.getOnlinePlayers()) {
+            if (info != null && info.getProfile() != null) names.add(info.getProfile().getName());
+        }
+        TRANSLATOR.translateDraft(text, target, config, names, callback);
+    }
+
+    public static LegacyConfig config() { return config; }
     static LegacyCodexClient codexClient() { return codexClient; }
     static LegacySessionTokenUsage.Snapshot tokenUsageSnapshot() {
         return TRANSLATOR.tokenUsageSnapshot();
@@ -788,7 +797,8 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return !stack.isEmpty() && stack.peek() == screen;
     }
     private static boolean screenTranslationAllowed(Screen screen) {
-        if (screen == null || screen.getClass().getName().startsWith("com.dragonmeow.nyanlex.")) return false;
+        if (screen == null || screen instanceof net.minecraft.client.gui.screens.ChatScreen
+                || screen.getClass().getName().startsWith("com.dragonmeow.nyanlex.")) return false;
         Component title = screen.getTitle();
         String key = title instanceof net.minecraft.network.chat.TranslatableComponent
                 ? ((net.minecraft.network.chat.TranslatableComponent) title).getKey() : null;
@@ -824,7 +834,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return lines;
     }
     public static boolean debugEnabled() { return config != null && config.debugTranslationOverlay; }
-    static void saveConfig() { saveConfig(config); }
+    public static void saveConfig() { saveConfig(config); }
     private static void saveConfig(LegacyConfig value) {
         if (value == null) return;
         try {

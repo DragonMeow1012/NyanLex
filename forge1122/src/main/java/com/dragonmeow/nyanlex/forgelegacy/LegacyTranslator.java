@@ -442,6 +442,48 @@ final class LegacyTranslator {
     private volatile LegacyCodexClient codexClient;
     private volatile Runnable cancelDetachedHookForTests;
 
+
+    private final java.util.concurrent.atomic.AtomicBoolean outgoingBusy = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** Explicit draft: reuse HTTP pacing and request guards, without writing private drafts to cache. */
+    void translateDraft(final String text, final String target, final LegacyConfig live, final Collection<String> names,
+                        final java.util.function.BiConsumer<String, String> callback) {
+        if (!live.enabled || !live.translationRequestsEnabled) { callback.accept(null, "offline"); return; }
+        if (!outgoingBusy.compareAndSet(false, true)) { callback.accept(null, "busy"); return; }
+        final LegacyConfig snapshot = live.snapshotForRequest();
+        final LegacyChatRequestProfile profile = LegacyChatRequestProfile.capture(live, target);
+        snapshot.sourceLang = "auto";
+        final List<String> protectedTerms = new ArrayList<String>(snapshot.doNotTranslateTerms);
+        if (names != null) protectedTerms.addAll(names);
+        final LegacyTemplateText.Prepared prepared = LegacyTemplateText.prepare(text, protectedTerms);
+        final Pending item = new Pending("", prepared.text(), target, "auto", "google", aiProfile(snapshot),
+                snapshot.aiEnabled, true, snapshot, live, requestGeneration.get(), 0);
+        try {
+            executor.execute(new PrioritizedTask(true, () -> {
+                String result = null, error = "failed";
+                dispatchingBatch.set(Collections.singletonList(item));
+                try {
+                    checkRequestsOpen();
+                    if (!profile.equals(LegacyChatRequestProfile.capture(live, target))) error = "changed";
+                    else {
+                        List<String> values;
+                        if (testBackend != null) values = testBackend.translate(Collections.singletonList(item.source), snapshot);
+                        else if (snapshot.aiEnabled) values = requestAiBatch(Collections.singletonList(item), target, snapshot);
+                        else values = requestMachineBatch(Collections.singletonList(item), "auto", target, "google", snapshot.requestCooldownMs);
+                        if (values != null && values.size() == 1 && validationFailureFor(item.source, values.get(0)) == null)
+                            result = prepared.restore(values.get(0));
+                    }
+                } catch (RequestsPausedException | com.dragonmeow.nyanlex.translate.RequestsPausedException paused) { error = "paused"; }
+                catch (Exception failure) { error = "failed"; }
+                finally { dispatchingBatch.remove(); outgoingBusy.set(false); }
+                if (!profile.equals(LegacyChatRequestProfile.capture(live, target))) { result = null; error = "changed"; }
+                callback.accept(result, error);
+            }));
+        } catch (RejectedExecutionException full) {
+            outgoingBusy.set(false); callback.accept(null, "busy");
+        }
+    }
+
     LegacyTranslator() { this(null); }
 
     LegacyTranslator(TestBackend testBackend) {
@@ -917,7 +959,7 @@ final class LegacyTranslator {
             } else if (first.ai) {
                 try {
                     translated = requestAiBatch(batch, first.target, first.config);
-                } catch (RequestsPausedException paused) {
+                } catch (RequestsPausedException | com.dragonmeow.nyanlex.translate.RequestsPausedException paused) {
                     throw paused;
                 } catch (Exception aiFailure) {
                     if (first.config.disableGoogleFallbackForAi) throw aiFailure;
@@ -929,7 +971,7 @@ final class LegacyTranslator {
                 translated = requestMachineBatch(batch, first.sourceLang, first.target,
                         first.machineProvider, first.config.requestCooldownMs);
             }
-        } catch (RequestsPausedException paused) {
+        } catch (RequestsPausedException | com.dragonmeow.nyanlex.translate.RequestsPausedException paused) {
             // Switched off while pacing: nothing was sent, so nothing is recorded as failed.
             for (Pending item : batch) {
                 if (cancelItem(item)) log(item.config, engine, item.source, "paused");
@@ -1494,7 +1536,7 @@ final class LegacyTranslator {
         try {
             pace(true, config.requestCooldownMs);
             return executeAiHttp(text, target, config, selectedKey);
-        } catch (RequestsPausedException paused) {
+        } catch (RequestsPausedException | com.dragonmeow.nyanlex.translate.RequestsPausedException paused) {
             throw paused; // Nothing was sent: the key is not cooled down.
         } catch (HttpStatusException status) {
             long delay = status.code == 429 ? 60_000L
@@ -1602,7 +1644,12 @@ final class LegacyTranslator {
         return 0L;
     }
     private String requestGoogle(String text, String sourceLang, String target, int cooldown) throws Exception {
+        com.dragonmeow.nyanlex.translate.MachineTranslationGate gate = com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared();
+        boolean probe = gate.acquire();
+        boolean settled = false;
+        try {
         pace(false, cooldown);
+        gate.recheck(probe);
         String endpoint = "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl="
                 + enc(sourceLang) + "&tl=" + enc(target) + "&q=" + enc(text);
         HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
@@ -1612,6 +1659,10 @@ final class LegacyTranslator {
         try {
             int code = connection.getResponseCode();
             String body = read(connection, code >= 400);
+            if (code == 429 || com.dragonmeow.nyanlex.translate.MachineTranslationGate.isBlockPage(body)) {
+                settled = true; gate.onRateLimited();
+                throw new com.dragonmeow.nyanlex.translate.RequestsPausedException();
+            }
             if (code >= 400) throw new HttpStatusException(code, body);
             if (body == null || body.trim().isEmpty())
                 throw new IllegalStateException("empty response");
@@ -1621,8 +1672,10 @@ final class LegacyTranslator {
                 JsonArray chunk = element.getAsJsonArray();
                 if (chunk.size() > 0 && !chunk.get(0).isJsonNull()) translated.append(chunk.get(0).getAsString());
             }
+            gate.onSuccess(); settled = true;
             return translated.toString();
         } finally { connection.disconnect(); }
+        } finally { if (!settled) gate.onAbort(probe); }
     }
 
     private void pace(boolean ai, int cooldown) throws InterruptedException {

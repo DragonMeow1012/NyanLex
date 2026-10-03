@@ -86,7 +86,7 @@ class SettingsModelTest {
         assertEquals(SettingCard.Kind.MASTER, SettingsModel.byId("master").kind());
         assertEquals(SettingCard.Kind.SURFACE, SettingsModel.byId("chat").kind());
         assertEquals("chat.engine", SettingsModel.byId("chat").engineEntry().id());
-        assertEquals(List.of("quick", "master", "language", "keybind"),
+        assertEquals(List.of("quick", "master", "composer", "language", "keybind"),
                 ids(SettingsModel.cards(SettingsCategory.GENERAL)), "一般: one 線上翻譯 card, no duplicate privacy card");
         assertEquals(SettingCard.Kind.BUTTON, SettingsModel.byId("quick").kind());
         assertNull(SettingsModel.byId("privacy"));

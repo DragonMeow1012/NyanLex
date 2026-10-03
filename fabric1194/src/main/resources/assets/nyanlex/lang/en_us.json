@@ -406,5 +406,20 @@
   "nyanlex.ui.hud.running_rate": "Pre-translating: scanned %s / %s, about %s per minute",
   "nyanlex.ui.warmup.categories": "Categories",
   "nyanlex.ui.warmup.items": "Item names and descriptions",
-  "nyanlex.ui.warmup.screen": "Interface text"
+  "nyanlex.ui.warmup.screen": "Interface text",
+  "nyanlex.composer.title": "Chat input translation",
+  "nyanlex.composer.hint": "Drag the header to move. Translate, review, then send.",
+  "nyanlex.composer.fill": "Translate & fill",
+  "nyanlex.composer.working": "Translating…",
+  "nyanlex.composer.ready": "Ready to review. Press Enter in chat to send.",
+  "nyanlex.composer.changed": "Draft or settings changed. Translate again.",
+  "nyanlex.composer.failed": "Translation failed. Your draft is kept; try again.",
+  "nyanlex.composer.too_long": "Translation exceeds the chat limit. Shorten your draft.",
+  "nyanlex.composer.invalid": "Cannot insert this response. Please try again.",
+  "nyanlex.composer.command": "Enter commands in the chat bar below.",
+  "nyanlex.composer.offline": "Turn on online translation in settings first.",
+  "nyanlex.composer.busy": "A request is still running. Please wait.",
+  "nyanlex.composer.paused": "Translation is rate limited. Retry after the pause.",
+  "nyanlex.settings.composer": "Chat input translation: %s",
+  "nyanlex.settings.composer.tip": "Write in your language, translate into a separate target language, and review in the chat bar before sending. Drag the floating header to move it. Uses the chat translation service."
 }

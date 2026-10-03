@@ -2,13 +2,17 @@ package com.dragonmeow.nyanlex.forgelegacy;
 
 import java.util.Locale;
 
-final class LegacyConfig {
+public final class LegacyConfig {
     static final String DEFAULT_CODEX_MODEL = "gpt-5.6-terra";
     static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
     boolean enabled = true;
     boolean followGameLanguage = true;
     boolean showOriginal = true;
     boolean deliverChatTranslationsInOrder = true;
+    public boolean chatComposerEnabled = false;
+    public String chatComposerLanguage = "en";
+    public double chatComposerX = 0.0;
+    public double chatComposerY = 1.0;
     /**
      * Online translation (master request switch). False keeps showing cached translations but
      * never sends a new translation request. Off for a new install; an older config file that
@@ -119,6 +123,7 @@ final class LegacyConfig {
         if (loaded == null) return null;
         if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
         loaded.doNotTranslateTerms = normalizeDoNotTranslateTerms(loaded.doNotTranslateTerms);
+        if (loaded.chatComposerLanguage == null || loaded.chatComposerLanguage.trim().isEmpty()) loaded.chatComposerLanguage = "en";
         if (loaded.aiKeysByEndpoint == null)
             loaded.aiKeysByEndpoint = new java.util.LinkedHashMap<String, String>();
         if (loaded.codexModel == null || loaded.codexModel.trim().isEmpty())

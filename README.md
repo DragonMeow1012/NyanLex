@@ -2,7 +2,7 @@
   <img src="docs/brand/nyanlex-banner.svg" alt="NyanLex Translator — Read Minecraft chat, items and screens in your language." width="960">
 </p>
 
-<p align="center"><strong>Read Minecraft chat, items and screens in your language.</strong><br>Client-side translation · Original + translated text · Reusable local translations</p>
+<p align="center"><strong>Understand your Minecraft world. Join the conversation.</strong></p>
 
 <p align="center">
   <a href="https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-1.0.0-8b7fd6?style=flat-square" alt="Release 1.0.0"></a>
@@ -12,18 +12,24 @@
 </p>
 
 <p align="center"><b>English</b> · <a href="README.zh-TW.md">繁體中文</a></p>
-<p align="center"><a href="#direct-downloads">Download</a> &nbsp;·&nbsp; <a href="#in-game-screenshots">See it in game</a> &nbsp;·&nbsp; <a href="#translation-sources">Translation sources</a> &nbsp;·&nbsp; <a href="#keyboard-shortcuts">Shortcuts</a> &nbsp;·&nbsp; <a href="#privacy">Privacy</a></p>
+<p align="center"><a href="#features">Features</a> &nbsp;·&nbsp; <a href="#direct-downloads">Download</a> &nbsp;·&nbsp; <a href="#in-game-screenshots">See it in game</a> &nbsp;·&nbsp; <a href="#translation-sources">Translation sources</a> &nbsp;·&nbsp; <a href="#keyboard-shortcuts">Shortcuts</a> &nbsp;·&nbsp; <a href="#privacy">Privacy</a></p>
 
 > **Online translation starts off.** When enabled, selected text goes to your chosen provider; chat can include private messages. Saved translations remain available offline. [Read the privacy details](#privacy).
 
+## Features
+
 <table>
   <tr>
-    <td width="50%" valign="top"><h3>💬 Follow the conversation</h3><p>Show original messages and translations together, so you can read and compare.</p></td>
-    <td width="50%" valign="top"><h3>📖 Understand your items</h3><p>Translate tooltips, books, quest text, and supported HUD and mod screens.</p></td>
+    <td width="50%" valign="top"><h3>✍️ Reply in your own language</h3><p>Stay in the game and write what you want to say. Move the floating composer wherever it feels right, choose a language, and fill the chat bar with your translation. Review it, then send it yourself.</p></td>
+    <td width="50%" valign="top"><h3>💬 Keep up with the conversation</h3><p>Read chat with the original and translation together. Follow your teammates while keeping the original wording close at hand.</p></td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><h3>🌐 Choose your translator</h3><p>Use Google, an AI API, ChatGPT/Codex, or an OpenAI-compatible local model.</p></td>
-    <td width="50%" valign="top"><h3>💾 Keep your translations</h3><p>Reuse the cache, download translation packs, or import translations from a friend.</p></td>
+    <td width="50%" valign="top"><h3>📖 Follow every clue</h3><p>Discover item abilities, quest stories, books, and interfaces in a familiar language, so you can focus on exploring.</p></td>
+    <td width="50%" valign="top"><h3>🔥 Get ready before you explore</h3><p>Warm up the content you want to read, with categories you can choose. Saved translations are ready to use when the adventure begins.</p></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><h3>🌐 Find your translation style</h3><p>Choose Google or an AI service to suit your needs, or connect a local model. Make the experience your own.</p></td>
+    <td width="50%" valign="top"><h3>💾 Share a good translation</h3><p>Get started with translation packs or share your own with friends. Keep the translations you have already made, ready for next time.</p></td>
   </tr>
 </table>
 
@@ -216,11 +222,19 @@ Player names are masked from the TAB list. Modern targets skip labels consisting
 
 </details>
 
+<details>
+<summary>Using chat input translation</summary>
+
+Enable it in **General**, then open chat. Write your draft, choose a target language (English by default), and click **Translate & fill**. Review or edit the result in the chat bar, then press Enter to send. Drag the floating header to move it; its position is remembered.
+
+</details>
+
 ## Privacy
 
 - **Online translation is off on a new install.** While it is off, no translation service receives any of your text.
 - You can turn it on in three ways: from the Quick setup that opens by itself the first time you reach the title screen (choose machine translation, AI translation, or "Not now"; nothing you choose is applied, and nothing is sent, until you press Done); by pressing the translate-item key (default `R`) or translate-screen key (default `P`) while it is off, which first opens a confirmation window and only sends after you press "Start translating"; or in Translation settings > General ("Online translation").
 - Things that work without turning it on, and send nothing: translations already in your local cache, translation packs you downloaded, the built-in glossary, and the vanilla text from the game's own language files.
+- Outgoing drafts are translated only when you click **Translate & fill** or press Enter in the composer. Drafts are not written to translation caches or included in translation exports. You still review and send the final chat message yourself.
 - Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
 - The text goes to the translation service you choose:
   - **Machine translation (Google, no key)** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.
@@ -232,7 +246,7 @@ Player names are masked from the TAB list. Modern targets skip labels consisting
 
 ## About NyanLex
 
-1.0.0 is the first release under the NyanLex Translator name. [Read the release notes](https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0).
+[Read the release notes](https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0).
 
 See [PACKAGING.md](PACKAGING.md) for build commands and the release folder layout. Report problems through [GitHub Issues](https://github.com/DragonMeow1012/NyanLex/issues).
 

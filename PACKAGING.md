@@ -1,6 +1,6 @@
 # NyanLex Translator 1.0.0 packaging
 
-This is the first release of **NyanLex Translator**; jar names use `nyanlex-<version>-...`.
+Build and package **NyanLex Translator**; jar names use `nyanlex-<version>-...`.
 
 NyanLex Translator is an unofficial project and is not affiliated with or endorsed by Mojang, Microsoft, Hypixel, or any mod author.
 

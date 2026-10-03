@@ -12,7 +12,8 @@
     "EntityNameTagMixin",
     "FontSplitMixin",
     "GuiScoreboardMixin",
-    "OptionsScreenMixin"
+    "OptionsScreenMixin",
+    "ChatComposerMixin"
   ],
   "injectors": {
     "defaultRequire": 0

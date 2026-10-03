@@ -31,7 +31,8 @@ LEGACY_SETTINGS_KEYS = ["config.nyanlex.online", "config.nyanlex.online.desc",
                         "config.nyanlex.chat_delivery.ordered", "config.nyanlex.chat_delivery.ready_first"]
 # The requests screen class name is chosen per tree, so find it by its title key.
 REQUEST_UI_STRING = b"screen.nyanlex.requests.title"
-CONFIG_FIELDS = [b"translationRequestsEnabled", b"doNotTranslateTerms"]
+CONFIG_FIELDS = [b"translationRequestsEnabled", b"doNotTranslateTerms",
+                 b"chatComposerEnabled", b"chatComposerLanguage", b"chatComposerX", b"chatComposerY"]
 # Modern core: translate/<name>.class
 MODERN_REQUEST_CLASSES = ["DoNotTranslateMatcher", "RequestGate", "RequestsPausedException"]
 # Legacy core (Java 8) keeps its switch/term code inside the eight synced core files.
@@ -76,6 +77,18 @@ def check_jar(target, path):
     forge = target.startswith("forge")
     with ZipFile(path) as jar:
         assert jar.testzip() is None, path
+        read_class(jar, PREFIX + "translate/ChatComposerPanel.class", target, legacy)
+        if forge:
+            read_class(jar, PREFIX + "forgelegacy/ForgeChatComposer.class", target, True)
+        else:
+            mixin_configs = [json.loads(jar.read(name)) for name in jar.namelist()
+                             if name.endswith(".mixins.json")]
+            composers = [config for config in mixin_configs
+                         if "ChatComposerMixin" in config.get("client", [])]
+            assert len(composers) == 1, (target, "chat composer mixin registration")
+            read_class(jar, composers[0]["package"].replace(".", "/") + "/ChatComposerMixin.class", target, legacy)
+        if not legacy:
+            read_class(jar, PREFIX + "service/OutgoingChatTranslator.class", target, False)
         for name in ["TranslationFile", "TranslationFileDialog", "TranslationFileDialog$Picker", "ScreenTranslationCapture"]:
             bytecode = read_class(jar, PREFIX + "translate/" + name + ".class", target, legacy)
             if name == "TranslationFile":
@@ -111,7 +124,9 @@ def check_jar(target, path):
         for language in languages:
             text = read_entry(jar, "assets/nyanlex/lang/" + language + "." + extension, target).decode("utf-8")
             settings_keys = LEGACY_SETTINGS_KEYS if legacy else MODERN_SETTINGS_KEYS
-            for key in REQUEST_KEYS + settings_keys + ["key.nyanlex.screenscan"]:
+            for key in REQUEST_KEYS + settings_keys + ["key.nyanlex.screenscan",
+                    "nyanlex.composer.title", "nyanlex.composer.fill", "nyanlex.composer.paused",
+                    "config.nyanlex.composer" if legacy else "nyanlex.settings.composer"]:
                 values = key_values(text, extension, key)
                 assert len(values) == 1, (target, language, key, len(values))
                 assert values[0].strip(), (target, language, key, "empty value")

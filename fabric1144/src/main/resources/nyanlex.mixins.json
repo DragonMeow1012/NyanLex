@@ -10,7 +10,8 @@
     "FontTextMixin",
     "OptionsScreenMixin",
     "ScreenRenderScopeMixin",
-    "ScreenKeyMixin"
+    "ScreenKeyMixin",
+    "ChatComposerMixin"
   ],
   "injectors": {
     "defaultRequire": 0

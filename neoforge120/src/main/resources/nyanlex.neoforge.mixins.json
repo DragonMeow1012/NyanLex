@@ -13,7 +13,8 @@
     "BookPageMixin",
     "GuiGraphicsTextMixin",
     "FontSplitMixin",
-    "EntityNameTagMixin"
+    "EntityNameTagMixin",
+    "ChatComposerMixin"
   ],
   "injectors": {
     "defaultRequire": 0

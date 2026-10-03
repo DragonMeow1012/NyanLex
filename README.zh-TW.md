@@ -2,7 +2,7 @@
   <img src="docs/brand/nyanlex-banner.svg" alt="NyanLex Translator — 用熟悉的語言，讀懂 Minecraft 裡的聊天、物品與介面。" width="960">
 </p>
 
-<p align="center"><strong>用熟悉的語言，讀懂 Minecraft 裡的聊天、物品與介面。</strong><br>純客戶端翻譯 · 原文與譯文並列 · 已有翻譯直接沿用</p>
+<p align="center"><strong>讀懂 Minecraft 的世界，也讓世界讀懂你。</strong></p>
 
 <p align="center">
   <a href="https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-1.0.0-8b7fd6?style=flat-square" alt="Release 1.0.0"></a>
@@ -12,18 +12,24 @@
 </p>
 
 <p align="center"><a href="README.md">English</a> · <b>繁體中文</b></p>
-<p align="center"><a href="#直接下載">下載</a> &nbsp;·&nbsp; <a href="#實際遊戲展示">實機展示</a> &nbsp;·&nbsp; <a href="#翻譯來源">翻譯來源</a> &nbsp;·&nbsp; <a href="#快捷鍵">快捷鍵</a> &nbsp;·&nbsp; <a href="#隱私">隱私說明</a></p>
+<p align="center"><a href="#特色功能">特色功能</a> &nbsp;·&nbsp; <a href="#直接下載">下載</a> &nbsp;·&nbsp; <a href="#實際遊戲展示">實機展示</a> &nbsp;·&nbsp; <a href="#翻譯來源">翻譯來源</a> &nbsp;·&nbsp; <a href="#快捷鍵">快捷鍵</a> &nbsp;·&nbsp; <a href="#隱私">隱私說明</a></p>
 
 > **首次安裝預設關閉線上翻譯。** 開啟後，選定內容會傳送至你選擇的服務，聊天可能包含私訊；已有的本機翻譯仍可離線顯示。[閱讀隱私說明](#隱私)。
 
+## 特色功能
+
 <table>
   <tr>
-    <td width="50%" valign="top"><h3>💬 聊天看得懂</h3><p>聊天可同時顯示原文與譯文，和其他玩家交流時保留對照。</p></td>
-    <td width="50%" valign="top"><h3>📖 物品與介面</h3><p>翻譯物品說明、書本、任務文字，以及支援的 HUD 和模組介面。</p></td>
+    <td width="50%" valign="top"><h3>✍️ 用自己的語言，自在回話</h3><p>不用切出遊戲查翻譯。在可自由拖曳的聊天浮窗寫下想說的話，選好語言，譯文就會填入聊天欄；確認滿意，再親手送出。</p></td>
+    <td width="50%" valign="top"><h3>💬 跨越語言，接上話題</h3><p>聊天原文與譯文一起看，跟上隊友的討論，也保留原話的語氣與脈絡。</p></td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><h3>🌐 翻譯服務自己選</h3><p>Google、AI API 或 ChatGPT／Codex，也可連接本機模型。</p></td>
-    <td width="50%" valign="top"><h3>💾 翻過就留著</h3><p>沿用快取、下載翻譯包，或匯入朋友分享的譯文。</p></td>
+    <td width="50%" valign="top"><h3>📖 冒險，不再漏看線索</h3><p>從物品能力、任務故事到書本與介面，把看不懂的文字變成熟悉的語言，專心探索眼前的世界。</p></td>
+    <td width="50%" valign="top"><h3>🔥 先翻好，再出發</h3><p>全內容預熱一次準備好想看的內容，也能自由選擇分類。已存好的譯文直接接著用，把等待留在冒險之前。</p></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><h3>🌐 找到適合你的翻譯</h3><p>從 Google 到 AI，依照自己的需求選擇服務，也能連接本機模型，打造順手的遊玩體驗。</p></td>
+    <td width="50%" valign="top"><h3>💾 好翻譯，一起用</h3><p>下載現成翻譯包快速上手，或把整理好的譯文分享給朋友。翻過的內容留下來，下次見面就看得懂。</p></td>
   </tr>
 </table>
 
@@ -204,6 +210,8 @@ Fabric 1.17.1 以上與 NeoForge：
 <details>
 <summary>更多設定與翻譯行為</summary>
 
+**聊天輸入翻譯**：在「一般」開啟後，按聊天快捷鍵即可輸入草稿。目標語言預設英文，可從浮窗選單更換；拖曳標題列會記住位置。點「翻譯並填入」後，確認聊天欄中的譯文，再按 Enter 送出。
+
 所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設使用 `gpt-5.6-terra`／`medium`。
 
 非同步批次、優先佇列、磁碟快取與失敗退避，減少主執行緒負擔與重複請求。送出間隔和批次收集預設皆為 5 秒，可選「關」或 1～10 秒，共 11 檔。
@@ -222,6 +230,7 @@ Fabric 1.17.1 以上與 NeoForge：
 - 開啟方式有三種：第一次進入標題畫面時會自動出現「快速設定」（可選機器翻譯、AI 翻譯，或「先不要」；按下「完成」之前不會套用任何選擇，也不會送出任何文字）；線上翻譯關閉時按翻譯物品鍵（預設 `R`）或翻譯畫面鍵（預設 `P`），會先跳出確認視窗，按「開始翻譯」才會送出；或到 翻譯設定 → 一般 開啟「線上翻譯」。
 - 不必開啟也能使用、且不會送出任何東西的有：本機已有的翻譯快取、已下載的翻譯包、內建譯名表，以及遊戲自身語言檔的原版文字。
 - 開啟後，會送出你設定為要翻譯的文字（物品說明、介面等）。若開啟聊天翻譯，聊天內容也會送出，**包含私訊**。
+- 聊天輸入翻譯只在你按下「翻譯並填入」（或在浮窗按 Enter）時送出草稿；草稿不寫入翻譯快取，也不包含在翻譯匯出檔內。填入後仍由你確認發送。
 - 文字會送到你所選的翻譯服務：
   - **機器翻譯（Google，免金鑰）**使用**非官方**網頁端點，可能隨時被限流或失效。
   - **AI 引擎**（OpenAI 相容服務，例如 Gemini、OpenAI、DeepSeek，或 ChatGPT／Codex 登入）同樣需自備金鑰或登入，只會送到你自己設定的服務。用 ChatGPT 登入時，會使用你帳號的 Codex 額度。
@@ -232,7 +241,7 @@ Fabric 1.17.1 以上與 NeoForge：
 
 ## 關於 NyanLex
 
-1.0.0 是改名為 NyanLex Translator 後的第一版。[查看本版更新說明](https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0)。
+[查看本版更新說明](https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0)。
 
 各版本建置方式與 Release 資料夾結構請見 [PACKAGING.md](PACKAGING.md)。問題請提交到 [GitHub Issues](https://github.com/DragonMeow1012/NyanLex/issues)。
 
