@@ -1409,7 +1409,8 @@ public final class InlineLegacyCoreSimulation {
 
     private static void testConfigPersistence() {
         Gson gson = new Gson();
-        LegacyConfig missing = LegacyConfig.normalizeLoaded(gson.fromJson("{}", LegacyConfig.class));
+        LegacyConfig missing = LegacyConfig.normalizeLoaded(LegacyConfig.applyUpgradeDefaults(
+                gson.fromJson("{}", LegacyConfig.class), false, false));
         check(missing.deliverChatTranslationsInOrder,
                 "missing chat delivery field did not retain ordered default");
         missing.deliverChatTranslationsInOrder = false;
@@ -2479,10 +2480,11 @@ public final class InlineLegacyCoreSimulation {
     private static void testRequestSwitchConfigAndProfile() {
         Gson gson = new Gson();
         LegacyConfig defaults = new LegacyConfig();
-        check(defaults.translationRequestsEnabled && defaults.doNotTranslateTerms != null
+        check(!defaults.translationRequestsEnabled && defaults.doNotTranslateTerms != null
                         && defaults.doNotTranslateTerms.isEmpty(),
                 "request switch / DNT defaults are wrong");
-        LegacyConfig missing = LegacyConfig.normalizeLoaded(gson.fromJson("{}", LegacyConfig.class));
+        LegacyConfig missing = LegacyConfig.normalizeLoaded(LegacyConfig.applyUpgradeDefaults(
+                gson.fromJson("{}", LegacyConfig.class), false, false));
         check(missing.translationRequestsEnabled && missing.doNotTranslateTerms != null
                         && missing.doNotTranslateTerms.isEmpty(),
                 "missing request switch / DNT fields did not keep their defaults");
@@ -3672,6 +3674,7 @@ public final class InlineLegacyCoreSimulation {
 
     private static LegacyConfig config() {
         LegacyConfig config = new LegacyConfig();
+        config.translationRequestsEnabled = true;
         config.batchWindowMs = 0;
         config.requestCooldownMs = 0;
         config.failureBackoffMs = 250;

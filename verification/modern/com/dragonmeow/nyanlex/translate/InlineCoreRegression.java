@@ -68,6 +68,21 @@ public final class InlineCoreRegression {
         }
     };
 
+    private static TranslatorConfig translatingConfig() {
+        TranslatorConfig config = new TranslatorConfig();
+        config.translationRequestsEnabled = true;
+        // These fixtures exercise automatic requests; non-chat Google surfaces are manual.
+        config.aiTooltip = true;
+        config.aiScoreboard = true;
+        config.aiName = true;
+        config.aiBossBar = true;
+        config.aiTitle = true;
+        config.aiActionBar = true;
+        config.aiBook = true;
+        config.aiScreenText = true;
+        return config;
+    }
+
     private static void check(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
     }
@@ -354,7 +369,7 @@ public final class InlineCoreRegression {
     }
 
     private static void configRoundTripsAndClamps() throws Exception {
-        TranslatorConfig config = new TranslatorConfig();
+        TranslatorConfig config = translatingConfig();
         config.deliverChatTranslationsInOrder = false;
         config.workerThreads = Integer.MAX_VALUE;
         config.cacheMaxSize = Integer.MAX_VALUE;
@@ -412,7 +427,7 @@ public final class InlineCoreRegression {
                         && displayedFirst.queuedSize() == 512,
                 "cap did not prefer the displayed late-recovery record");
 
-        TranslatorConfig config = new TranslatorConfig();
+        TranslatorConfig config = translatingConfig();
         Object connection = new Object();
         Object world = new Object();
         ChatDeliverySession<SessionEntry> context = session();
@@ -436,7 +451,7 @@ public final class InlineCoreRegression {
         long profileEpoch = profileSwitch.add(first).epoch();
         profileSwitch.add(shown);
         profileSwitch.add(third);
-        TranslatorConfig changedTarget = new TranslatorConfig();
+        TranslatorConfig changedTarget = translatingConfig();
         changedTarget.targetLang = "ja-JP";
         ChatDeliverySession.Transition<SessionEntry> switched = profileSwitch.observe(
                 connection, world, profile(changedTarget), false);
@@ -448,7 +463,7 @@ public final class InlineCoreRegression {
                 "request-profile switch did not flush only undisplayed originals in order");
 
         ChatDeliverySession<SessionEntry> deliveryToggle = session();
-        config = new TranslatorConfig();
+        config = translatingConfig();
         deliveryToggle.observe(connection, world, profile(config), false);
         pending = new SessionEntry(1, false, "pending");
         deliveryToggle.add(pending);
@@ -479,7 +494,7 @@ public final class InlineCoreRegression {
     }
 
     private static void requestProfileBoundaries() {
-        TranslatorConfig machine = new TranslatorConfig();
+        TranslatorConfig machine = translatingConfig();
         ChatRequestProfile machineBefore = profile(machine);
         machine.aiBaseUrl = "https://unused.invalid";
         machine.aiModel = "unused-api";
@@ -490,7 +505,7 @@ public final class InlineCoreRegression {
         check(machineBefore.equals(profile(machine)),
                 "inactive AI settings changed a machine request profile");
 
-        TranslatorConfig apiAi = new TranslatorConfig();
+        TranslatorConfig apiAi = translatingConfig();
         apiAi.aiChat = true;
         ChatRequestProfile apiBefore = profile(apiAi);
         apiAi.codexModel = "inactive-codex";
@@ -498,7 +513,7 @@ public final class InlineCoreRegression {
         check(apiBefore.equals(profile(apiAi)),
                 "inactive Codex settings changed an API-AI request profile");
 
-        TranslatorConfig codexAi = new TranslatorConfig();
+        TranslatorConfig codexAi = translatingConfig();
         codexAi.aiChat = true;
         codexAi.aiUseCodex = true;
         codexAi.disableGoogleFallbackForAi = true;
@@ -513,7 +528,7 @@ public final class InlineCoreRegression {
         check(!codexBefore.equals(profile(codexAi)),
                 "active Codex model change did not invalidate the request profile");
 
-        TranslatorConfig target = new TranslatorConfig();
+        TranslatorConfig target = translatingConfig();
         target.targetLang = "stale-config";
         check(ChatRequestProfile.capture(target, "ja-JP").equals(
                         ChatRequestProfile.capture(target, "ja-JP"))
@@ -851,7 +866,7 @@ public final class InlineCoreRegression {
 
         /** Design 1.0.7 §3.1: cached rows of both engines keep showing while switched off. */
         private static void switchedOffServesCachedRowsOfBothEngines() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.chatMode = DisplayMode.TRANSLATION;
             config.scoreboardMode = DisplayMode.TRANSLATION;
             config.aiChat = true;
@@ -879,7 +894,7 @@ public final class InlineCoreRegression {
 
             // An AI surface may stand in with a cached GT row while nothing new can be sent,
             // except in strict AI mode.
-            TranslatorConfig mixed = new TranslatorConfig();
+            TranslatorConfig mixed = translatingConfig();
             mixed.chatMode = DisplayMode.TRANSLATION;
             mixed.aiChat = true;
             mixed.disableGoogleFallbackForAi = false; // this part exercises the GT-fallback path
@@ -914,7 +929,7 @@ public final class InlineCoreRegression {
         /** Design §3.2: a miss stays original and writes no failure, negative, echo,
          *  backoff, churn or retry-demand state, even as time passes. */
         private static void switchedOffMissShowsOriginalAndRecordsNothing() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.chatMode = DisplayMode.TRANSLATION;
             config.tooltipMode = DisplayMode.TRANSLATION;
             config.scoreboardMode = DisplayMode.TRANSLATION;
@@ -994,7 +1009,7 @@ public final class InlineCoreRegression {
 
         /** Design §3.4: nothing was recorded, so reopening requests the same misses. */
         private static void switchingBackOnRequestsPreviousMisses() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.tooltipMode = DisplayMode.TRANSLATION;
             config.chatMode = DisplayMode.TRANSLATION;
             config.translationRequestsEnabled = false;
@@ -1227,7 +1242,7 @@ public final class InlineCoreRegression {
         /** Design §3.7: R, P and the item-name invalidate-and-reask branch are no-ops while
          *  switched off; the request-free local correction still runs. */
         private static void retranslateAndItemNameCorrectionNeverDeleteRowsWhileSwitchedOff() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.tooltipMode = DisplayMode.TRANSLATION;
             config.screenTextMode = DisplayMode.TRANSLATION;
             config.aiTooltip = true;
@@ -1265,7 +1280,7 @@ public final class InlineCoreRegression {
             // GT copy when that copy could be re-requested.
             AtomicInteger calls = new AtomicInteger();
             for (boolean on : new boolean[] {false, true}) {
-                TranslatorConfig correction = new TranslatorConfig();
+                TranslatorConfig correction = translatingConfig();
                 correction.tooltipMode = DisplayMode.TRANSLATION;
                 correction.aiTooltip = true;
                 correction.translationRequestsEnabled = on;
@@ -1293,7 +1308,7 @@ public final class InlineCoreRegression {
          *  and a cached semantic row is shown for colour chat as the style fallback. */
         private static void switchedOffChatCompletesImmediately() {
             for (boolean aiChat : new boolean[] {false, true}) {
-                TranslatorConfig config = new TranslatorConfig();
+                TranslatorConfig config = translatingConfig();
                 config.aiChat = aiChat;
                 config.translationRequestsEnabled = false;
                 config.disableGoogleFallbackForAi = false; // this part exercises the GT-fallback path
@@ -1332,7 +1347,7 @@ public final class InlineCoreRegression {
 
         /** The switch and the term list both belong to the chat request profile. */
         private static void chatRequestProfileTracksSwitchAndTerms() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             ChatRequestProfile on = ChatRequestProfile.capture(config, config.targetLang);
             config.translationRequestsEnabled = false;
             ChatRequestProfile off = ChatRequestProfile.capture(config, config.targetLang);
@@ -1355,7 +1370,7 @@ public final class InlineCoreRegression {
                     "switching requests off did not release waiting chat as originals");
 
             for (boolean aiChat : new boolean[] {false, true}) {
-                TranslatorConfig terms = new TranslatorConfig();
+                TranslatorConfig terms = translatingConfig();
                 terms.aiChat = aiChat;
                 ChatRequestProfile none = ChatRequestProfile.capture(terms, terms.targetLang);
                 terms.doNotTranslateTerms.add("SkyBlock");
@@ -1377,7 +1392,7 @@ public final class InlineCoreRegression {
         /** Design §2: the two new persisted fields keep their JSON types and normalise. */
         private static void configFieldsRoundTripAndNormalize() {
             TranslatorConfig defaults = new TranslatorConfig();
-            check(defaults.translationRequestsEnabled && defaults.doNotTranslateTerms != null
+            check(!defaults.translationRequestsEnabled && defaults.doNotTranslateTerms != null
                             && defaults.doNotTranslateTerms.isEmpty(),
                     "new config fields have wrong defaults");
             StringWriter defaultJson = new StringWriter();
@@ -1386,8 +1401,8 @@ public final class InlineCoreRegression {
             check(writtenDefaults.has("translationRequestsEnabled")
                             && writtenDefaults.get("translationRequestsEnabled").isJsonPrimitive()
                             && writtenDefaults.get("translationRequestsEnabled").getAsJsonPrimitive().isBoolean()
-                            && writtenDefaults.get("translationRequestsEnabled").getAsBoolean(),
-                    "translationRequestsEnabled is not persisted as boolean true");
+                            && !writtenDefaults.get("translationRequestsEnabled").getAsBoolean(),
+                    "translationRequestsEnabled is not persisted as boolean false");
             check(writtenDefaults.has("doNotTranslateTerms")
                             && writtenDefaults.get("doNotTranslateTerms").isJsonArray()
                             && writtenDefaults.getAsJsonArray("doNotTranslateTerms").size() == 0,
@@ -1408,7 +1423,7 @@ public final class InlineCoreRegression {
                             && handEdited.doNotTranslateTerms.equals(List.of("SkyBlock", "Hypixel")),
                     "a hand-edited config was not loaded/normalised: " + handEdited.doNotTranslateTerms);
 
-            TranslatorConfig edited = new TranslatorConfig();
+            TranslatorConfig edited = translatingConfig();
             edited.translationRequestsEnabled = false;
             edited.doNotTranslateTerms = new ArrayList<String>(Arrays.asList(
                     "  SkyBlock ", "", null, "skyblock", "Hypixel", "SKYBLOCK", "  ",
@@ -1515,7 +1530,7 @@ public final class InlineCoreRegression {
         /** Design §4: a term is masked before the request (the Google wire carries only the
          *  numeric sentinel) and restored in the spelling the text actually used. */
         private static void termIsMaskedOnTheWireAndRestoredInOriginalSpelling() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.chatMode = DisplayMode.TRANSLATION;
             config.doNotTranslateTerms.add("skyblock");
             List<String> sent = new ArrayList<String>();
@@ -1542,7 +1557,7 @@ public final class InlineCoreRegression {
                     "unmask did not restore each spelling");
 
             // Real Google engine: ⟦0⟧ crosses the wire only as its numeric sentinel.
-            TranslatorConfig wire = new TranslatorConfig();
+            TranslatorConfig wire = translatingConfig();
             wire.chatMode = DisplayMode.TRANSLATION;
             wire.doNotTranslateTerms.add("SkyBlock");
             List<String> queries = new ArrayList<String>();
@@ -1583,7 +1598,7 @@ public final class InlineCoreRegression {
             check("前往⟦0⟧嶼".equals(mask("前往天空島嶼", terms("天空島")).text()),
                     "a CJK-edged term must not need a word boundary");
 
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.scoreboardMode = DisplayMode.TRANSLATION;
             config.doNotTranslateTerms.add("skyblock");
             List<String> sent = new ArrayList<String>();
@@ -1614,7 +1629,7 @@ public final class InlineCoreRegression {
             check(!mask("Dungeon\nHub", terms("Dungeon Hub")).hasMasks(),
                     "a hard line break was treated as horizontal space");
 
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.scoreboardMode = DisplayMode.TRANSLATION;
             config.doNotTranslateTerms.add("Private Island");
             List<String> sent = new ArrayList<String>();
@@ -1645,7 +1660,7 @@ public final class InlineCoreRegression {
                         "a single-letter term matched a section code letter: " + codeOnly);
             }
 
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.scoreboardMode = DisplayMode.TRANSLATION;
             config.doNotTranslateTerms.add("SkyBlock");
             List<String> sent = new ArrayList<String>();
@@ -1671,7 +1686,7 @@ public final class InlineCoreRegression {
                             mask("Welcome to Hypixel! Visit hypixel.net", hypixel).text()),
                     "a standalone term next to its domain was not masked alone");
 
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.scoreboardMode = DisplayMode.TRANSLATION;
             config.doNotTranslateTerms.add("hypixel");
             List<String> sent = new ArrayList<String>();
@@ -1691,7 +1706,7 @@ public final class InlineCoreRegression {
         /** Design §4: a line made only of terms (also colour-wrapped) is never sent anywhere;
          *  a term plus a real word still is. */
         private static void lineMadeOnlyOfTermsIsNeverSent() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.scoreboardMode = DisplayMode.TRANSLATION;
             config.chatMode = DisplayMode.TRANSLATION;
             config.tooltipMode = DisplayMode.TRANSLATION;
@@ -1739,7 +1754,7 @@ public final class InlineCoreRegression {
         /** decide() judges half-transliteration on the masked pair, so "SkyBlock's …"
          *  (and "Steve's …") translations display. */
         private static void possessiveAfterAProtectedTermStillDisplays() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.tooltipMode = DisplayMode.TRANSLATION;
             config.doNotTranslateTerms.add("SkyBlock");
             List<String> sent = new ArrayList<String>();
@@ -1763,7 +1778,7 @@ public final class InlineCoreRegression {
         private static void aiPlaceholderWithInnerSpacesIsRestored() {
             check("歡迎來到 SkyBlock！".equals(NameMasker.unmask("歡迎來到 ⟦ 0 ⟧！", List.of("SkyBlock"))),
                     "unmask did not tolerate a spaced placeholder");
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.chatMode = DisplayMode.TRANSLATION;
             config.aiChat = true;
             config.doNotTranslateTerms.add("skyblock");
@@ -1781,7 +1796,7 @@ public final class InlineCoreRegression {
         /** The cache key is the masked text: adding a term switches keys, removing it brings
          *  the old row back without a request, re-adding (any case) hits the masked row. */
         private static void addingOrRemovingTermsChangesOnlyTheKey() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.scoreboardMode = DisplayMode.TRANSLATION;
             List<String> sent = new ArrayList<String>();
             TranslationService service = service(config, recording(sent, text -> text
@@ -1833,7 +1848,7 @@ public final class InlineCoreRegression {
                             && longer.names().equals(List.of("Steve's Island", "Steve")),
                     "a term containing a player name did not win as the longer span");
 
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.chatMode = DisplayMode.TRANSLATION;
             config.doNotTranslateTerms.add("skyblock");
             List<String> sent = new ArrayList<String>();
@@ -1846,7 +1861,7 @@ public final class InlineCoreRegression {
             check("Steve 加入了 SkyBlock".equals(service.translateChat("Steve joined SkyBlock").translated()),
                     "name + term were not both restored");
 
-            TranslatorConfig namesOff = new TranslatorConfig();
+            TranslatorConfig namesOff = translatingConfig();
             namesOff.chatMode = DisplayMode.TRANSLATION;
             namesOff.protectPlayerNames = false;
             namesOff.doNotTranslateTerms.add("skyblock");
@@ -1863,7 +1878,7 @@ public final class InlineCoreRegression {
         /** R17 extended to terms: a translation that lost the placeholder never displays and
          *  self-heals only once. */
         private static void translationThatLostATermNeverDisplays() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.tooltipMode = DisplayMode.TRANSLATION;
             config.doNotTranslateTerms.add("SkyBlock");
             AtomicInteger calls = new AtomicInteger();
@@ -1895,7 +1910,7 @@ public final class InlineCoreRegression {
          *  context; render lookups then hit the same masked keys. The remaining masking entry
          *  points are covered by D1 (chat), D6 (tooltip ready), D11 and S8 (invalidation). */
         private static void everyServiceEntryPointMasksTerms() {
-            TranslatorConfig config = new TranslatorConfig();
+            TranslatorConfig config = translatingConfig();
             config.chatMode = DisplayMode.TRANSLATION;
             config.tooltipMode = DisplayMode.TRANSLATION;
             config.scoreboardMode = DisplayMode.TRANSLATION;
@@ -1976,7 +1991,7 @@ public final class InlineCoreRegression {
 
             // reconcileItemNameWithTooltip re-asks the AI for a mismatching item name with the
             // tooltip read so far as surface context; that context must be masked too.
-            TranslatorConfig tooltipConfig = new TranslatorConfig();
+            TranslatorConfig tooltipConfig = translatingConfig();
             tooltipConfig.tooltipMode = DisplayMode.TRANSLATION;
             tooltipConfig.aiTooltip = true;
             tooltipConfig.doNotTranslateTerms.add("SkyBlock");

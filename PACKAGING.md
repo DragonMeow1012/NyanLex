@@ -58,10 +58,12 @@ mods-jar/1.0.0/
     1.14.4/nyanlex-1.0.0-Fabric-1.14.4.jar
     ...
     26.2/nyanlex-1.0.0-Fabric-26.2.jar
+    26.3/nyanlex-1.0.0-Fabric-26.3.jar
   neoforge/
     1.20.1/nyanlex-1.0.0-NeoForge-1.20.1.jar
     1.21.1/nyanlex-1.0.0-NeoForge-1.21.1.jar
     26.2/nyanlex-1.0.0-NeoForge-26.2.jar
+    26.3/nyanlex-1.0.0-NeoForge-26.3.jar
   forge/
     1.12.2/nyanlex-1.0.0-Forge-1.12.2.jar
     1.13.2/nyanlex-1.0.0-Forge-1.13.2.jar

@@ -342,6 +342,7 @@ public final class InlineForgeGlueRegression {
 
         LoaderFixture() {
             config.enabled = true;
+            config.translationRequestsEnabled = true;
             config.followGameLanguage = false;
             config.targetLang = "en";
             profile = LegacyChatRequestProfile.capture(config, config.targetLang);
