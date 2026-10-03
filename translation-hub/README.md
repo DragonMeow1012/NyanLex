@@ -9,7 +9,7 @@
 本資料夾收錄由 AI 與機器翻譯產生的**譯文**，供 Nyanlex 模組在使用者**主動按下下載**後取用。
 
 - **不收錄、不散布任何原文。** 檔案只含「原文內容的 SHA-256 雜湊 → 譯文」，無法由檔案還原原文，也不含玩家名稱或範例句。原文的著作權屬各原權利人（遊戲、伺服器、模組作者）。
-- **非官方。** 與 Mojang、Microsoft、任何伺服器（如 Hypixel）或模組作者**沒有**隸屬、合作或背書關係。
+- **非官方。** 與 Mojang、Microsoft、任何伺服器或模組作者**沒有**隸屬、合作或背書關係。
 - **授權：** 預設以 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)（姓名標示－非商業性－相同方式分享）授權，詳見同目錄 `LICENSE`。**例外：** 檔案（及 `index.json` 中對應條目）標有 `license` 欄位的，依該欄位標示的授權，例如來源模組以 LGPL 授權者，其譯文沿用該 LGPL 授權（如 `LGPL-3.0-only`）。程式碼仍為 repo 根目錄的 MIT 授權，不受影響。
 - 譯文為機器翻譯／AI 產生，可能有誤，不保證正確。
 - **內容由維護者整理與更新。** 模組不會上傳玩家的翻譯，玩家端只有下載。
@@ -19,7 +19,7 @@
 ```
 translation-hub/
   index.json                      各檔的筆數、大小與 sha256（檔案本身的）
-  servers/<host>/<lang>.json      伺服器（正規化網域，如 hypixel.net）
+  servers/<host>/<lang>.json      伺服器（正規化網域）
   modpacks/<slug>/<lang>.json     模組包
   mods/<modid>/<lang>.json        單一模組（模組 id 與載入器一致）
   LICENSE
@@ -61,7 +61,7 @@ translation-hub/
 This folder holds **translated text** produced by AI and machine translation, fetched by the Nyanlex mod only after the user **explicitly presses download**.
 
 - **No original text is stored or distributed.** Files contain only `SHA-256 hash of the source content -> translation`; the source cannot be recovered from a file, and no player names or sample sentences appear. Copyright in the original text belongs to its owners (the game, server and mod authors).
-- **Unofficial.** Not affiliated with, endorsed by or associated with Mojang, Microsoft, any server (for example Hypixel) or any mod author.
+- **Unofficial.** Not affiliated with, endorsed by or associated with Mojang, Microsoft, any server or any mod author.
 - **License:** by default, data in this folder is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (see `LICENSE` here). **Exception:** a file whose `license` field is set (and its entry in `index.json`) is under the license it names, for example a translation of a mod released under an LGPL license keeps that LGPL license (such as `LGPL-3.0-only`). The program code remains MIT-licensed at the repository root and is unaffected.
 - Translations are machine/AI generated and may contain errors.
 - **Content is curated and updated by the maintainers.** The mod never uploads a player's translations; the player side only downloads.
@@ -71,7 +71,7 @@ This folder holds **translated text** produced by AI and machine translation, fe
 ```
 translation-hub/
   index.json                      row count, size and sha256 (of the file itself) per file
-  servers/<host>/<lang>.json      server (normalized host, e.g. hypixel.net)
+  servers/<host>/<lang>.json      server (normalized host)
   modpacks/<slug>/<lang>.json     modpack
   mods/<modid>/<lang>.json        single mod (same id the loader reports)
   LICENSE
