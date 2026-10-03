@@ -127,7 +127,7 @@ Fabric targets require matching Fabric Loader and Fabric API versions.
 
 ## Compatibility
 
-- Fabric, NeoForge, and Forge targets are listed below (Minecraft 1.12.2 to 26.3).
+- Fabric, NeoForge, and Forge targets are listed in [Direct downloads](#direct-downloads) (Minecraft 1.12.2 to 26.3).
 - The legacy targets (Fabric 1.14.4-1.16.5 and Forge 1.12.2-1.13.2) have a simpler interface: a short Quick setup, the on-the-spot confirmation window and a categorized settings screen, but no translation packs and no full-content warmup.
 - Quest and task-book screens in modpacks get extra optimization (long paragraphs, colored text, tooltips).
 - This is a client-side mod; it does not modify servers and does not send chat for you.
