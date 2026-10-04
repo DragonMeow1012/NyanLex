@@ -21,8 +21,12 @@ import java.nio.file.Path;
 public final class TranslatorConfig {
 
     public static final int PACING_DEFAULTS_VERSION = 1;
-    public static final String DEFAULT_CODEX_MODEL = "gpt-5.6-terra";
+    public static final String AI_PROVIDER_API = "api";
+    public static final String AI_PROVIDER_CODEX = "codex";
+    public static final String AI_PROVIDER_ANTIGRAVITY = "antigravity";
+    public static final String DEFAULT_CODEX_MODEL = "gpt-6-luna";
     public static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
+    public static final String DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.7-flash-low";
     public static final int MAX_WORKER_THREADS = 8;
     public static final int MAX_MEMORY_CACHE_ENTRIES = 50_000;
     public static final int DEFAULT_PERSISTENT_CACHE_ENTRIES = 100_000;
@@ -74,12 +78,17 @@ public final class TranslatorConfig {
     /** One or more API keys (for the active endpoint); rotated round-robin and on failure. */
     public java.util.List<String> aiApiKeys = new java.util.ArrayList<>();
 
-    /** Use ChatGPT-authenticated Codex through a local app-server. */
+    /** Active AI authentication/transport route: api, codex, or antigravity. */
+    public String aiProvider = AI_PROVIDER_API;
+    /** Legacy persisted switch, retained only so pre-Antigravity configs migrate losslessly. */
+    @Deprecated
     public boolean aiUseCodex = false;
     /** Codex model selected from the signed-in account's live catalog. */
     public String codexModel = DEFAULT_CODEX_MODEL;
     /** Reasoning effort advertised by the selected Codex model. */
     public String codexReasoningEffort = DEFAULT_CODEX_REASONING_EFFORT;
+    /** Antigravity model slug; its suffix already includes the reasoning level. */
+    public String antigravityModel = DEFAULT_ANTIGRAVITY_MODEL;
 
     /** Remembered keys per endpoint (raw, comma-separated) so switching providers restores its key. */
     public java.util.Map<String, String> aiKeysByEndpoint = new java.util.HashMap<>();
@@ -288,6 +297,10 @@ public final class TranslatorConfig {
                 && !json.getAsJsonObject().has("firstRunDone") && cfg.translationRequestsEnabled) {
             cfg.firstRunDone = true; // an existing user who already translates never sees the first-start card
         }
+        if (cfg != null && json != null && json.isJsonObject()
+                && !json.getAsJsonObject().has("aiProvider")) {
+            cfg.aiProvider = cfg.aiUseCodex ? AI_PROVIDER_CODEX : AI_PROVIDER_API;
+        }
         return (cfg == null ? new TranslatorConfig() : cfg).normalized();
     }
 
@@ -323,6 +336,25 @@ public final class TranslatorConfig {
         return out;
     }
 
+    public boolean usesCodex() {
+        return AI_PROVIDER_CODEX.equals(aiProvider)
+                || aiUseCodex && !AI_PROVIDER_ANTIGRAVITY.equals(aiProvider);
+    }
+
+    public boolean usesAntigravity() {
+        return AI_PROVIDER_ANTIGRAVITY.equals(aiProvider);
+    }
+
+    public boolean usesLocalAiCli() {
+        return usesCodex() || usesAntigravity();
+    }
+
+    /** Change the AI route and keep the legacy Codex field synchronized for older builds. */
+    public void selectAiProvider(String provider) {
+        aiProvider = normalizeAiProvider(provider);
+        aiUseCodex = AI_PROVIDER_CODEX.equals(aiProvider);
+    }
+
     /** Fill in sane defaults for any missing / invalid fields. */
     public TranslatorConfig normalized() {
         if (chatComposerLanguage == null || chatComposerLanguage.isBlank()) chatComposerLanguage = "en";
@@ -350,6 +382,11 @@ public final class TranslatorConfig {
         if (codexModel == null || codexModel.isBlank()) codexModel = DEFAULT_CODEX_MODEL;
         if (codexReasoningEffort == null || codexReasoningEffort.isBlank()) {
             codexReasoningEffort = DEFAULT_CODEX_REASONING_EFFORT;
+        }
+        aiProvider = normalizeAiProvider(aiProvider);
+        aiUseCodex = AI_PROVIDER_CODEX.equals(aiProvider);
+        if (antigravityModel == null || antigravityModel.isBlank()) {
+            antigravityModel = DEFAULT_ANTIGRAVITY_MODEL;
         }
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
@@ -388,6 +425,13 @@ public final class TranslatorConfig {
         if (workerThreads <= 0) workerThreads = 2;
         else if (workerThreads > MAX_WORKER_THREADS) workerThreads = MAX_WORKER_THREADS;
         return this;
+    }
+
+    private static String normalizeAiProvider(String provider) {
+        if (provider == null) return AI_PROVIDER_API;
+        String value = provider.trim().toLowerCase(java.util.Locale.ROOT);
+        if (AI_PROVIDER_CODEX.equals(value) || AI_PROVIDER_ANTIGRAVITY.equals(value)) return value;
+        return AI_PROVIDER_API;
     }
 
     /**

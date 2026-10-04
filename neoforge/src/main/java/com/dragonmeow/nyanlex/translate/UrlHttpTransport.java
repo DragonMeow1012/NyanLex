@@ -55,6 +55,7 @@ public final class UrlHttpTransport implements HttpTransport {
 
     /** The key-less Google endpoint the machine translation engine reads from. */
     static final String GOOGLE_FREE_HOST = "translate.googleapis.com";
+    static final String GOOGLE_FREE_FALLBACK_HOST = "translate.google.com";
 
     @Override
     public String get(String url) throws IOException {
@@ -74,7 +75,10 @@ public final class UrlHttpTransport implements HttpTransport {
                 // A browser-like UA reduces the chance of the free endpoint blocking us.
                 .header("User-Agent", "Mozilla/5.0 (NyanLex Mod)")
                 .GET();
-        if (GOOGLE_FREE_HOST.equalsIgnoreCase(uri.getHost())) builder.version(HttpClient.Version.HTTP_1_1);
+        if (GOOGLE_FREE_HOST.equalsIgnoreCase(uri.getHost())
+                || GOOGLE_FREE_FALLBACK_HOST.equalsIgnoreCase(uri.getHost())) {
+            builder.version(HttpClient.Version.HTTP_1_1);
+        }
         return builder.build();
     }
 

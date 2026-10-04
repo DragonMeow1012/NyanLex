@@ -303,7 +303,26 @@ public final class TemplateText {
     // (ParagraphModel's indent-paragraph semantics) untouched.
     private static final Pattern TRANSLATED_COLUMN_GAP =
             Pattern.compile("(?<=\\S)[ \\t\\u00A0]{3,}");
+    /** Wide gaps inside prose are visual wrapping residue, not semantic content.  Keep
+     *  outer indentation intact, but present the translator with one flowing sentence
+     *  so target-language grammar is free to reorder its words. */
+    private static final Pattern PROSE_LAYOUT_GAP =
+            Pattern.compile("(?<=\\S)[ \\t\\u00A0]{2,}(?=\\S)");
     private static final Pattern CJK_CHAR = Pattern.compile("[\\u4e00-\\u9fff]");
+
+    /**
+     * Collapse wide horizontal gaps between prose runs to one ordinary space.
+     *
+     * <p>This is intentionally independent of the target language and safe for marked
+     * rich text: a gap between two {@code CS} regions is still between non-whitespace
+     * characters. Leading/trailing indentation and hard line breaks are preserved.
+     * Surface policy belongs to the caller: ordinary GUI paragraphs use this before
+     * lookup, while real column surfaces such as scoreboards keep their gaps.</p>
+     */
+    public static String collapseProseLayoutGaps(String text) {
+        if (text == null || text.isEmpty()) return text;
+        return PROSE_LAYOUT_GAP.matcher(text).replaceAll(" ");
+    }
 
     /** Tooltip-only display clean-up: on lines that actually translated into CJK, collapse any
      *  in-line run of 3+ horizontal spaces to a fixed 2 — label and value stay visibly

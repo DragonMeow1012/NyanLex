@@ -13,6 +13,7 @@ import net.minecraft.util.text.ChatType;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.client.event.ClientChatReceivedEvent;
+import net.minecraftforge.client.event.ClientChatEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.client.event.RenderTooltipEvent;
@@ -50,6 +51,7 @@ public final class NyanLexForge {
     private boolean scanKeyDown;
     private boolean keybindMigrationChecked;
     private boolean firstRunChecked;
+    private volatile boolean settingsScreenRequested;
     private final Map<Integer, ITextComponent> renderedNames = new ConcurrentHashMap<Integer, ITextComponent>();
     private final LegacyChatDeliveryQueue<PendingChat> pendingChats = new LegacyChatDeliveryQueue<PendingChat>();
     private final Map<Long, PendingChat> pendingChatById = new LinkedHashMap<Long, PendingChat>();
@@ -200,6 +202,20 @@ public final class NyanLexForge {
             HookGuard.fail("event.screenKey", guardError);
         }
     }
+
+    /** Handles the settings command locally so it never reaches a multiplayer server. */
+    @SubscribeEvent public void onClientCommand(ClientChatEvent event) {
+        if (!HookGuard.enter("event.onClientCommand")) return;
+        try {
+            String command = event.getMessage() == null ? "" : event.getMessage().trim();
+            if (!"/nyanlex".equalsIgnoreCase(command)
+                    && !"/nyanlex config".equalsIgnoreCase(command)) return;
+            event.setCanceled(true);
+            settingsScreenRequested = true;
+        } catch (Throwable guardError) {
+            HookGuard.fail("event.onClientCommand", guardError);
+        }
+    }
     @SubscribeEvent public void screenKeyReleased(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyReleasedEvent.Pre event) {
         if (!HookGuard.enter("event.screenKeyReleased")) return;
         try {
@@ -295,6 +311,10 @@ public final class NyanLexForge {
                 TRANSLATOR.cancelPending();
                 flushPendingChatOriginals(minecraft);
                 clearItemWarmState();
+            }
+            if (minecraft != null && settingsScreenRequested) {
+                settingsScreenRequested = false;
+                minecraft.displayGuiScreen(new ForgeSettingsScreen(null));
             }
             while (minecraft != null && settingsKey.isPressed()) {
                 if (ForgeTextInput.focused(minecraft.currentScreen)) continue;

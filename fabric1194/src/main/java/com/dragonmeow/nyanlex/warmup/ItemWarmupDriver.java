@@ -327,7 +327,7 @@ public final class ItemWarmupDriver {
     }
 
     private int maxConcurrency() {
-        return backend.usesCodex() ? 1 : MAX_CONCURRENCY;
+        return backend.usesSerialLocalAi() ? 1 : MAX_CONCURRENCY;
     }
 
     /** True while an interactive translation holds the run back. */

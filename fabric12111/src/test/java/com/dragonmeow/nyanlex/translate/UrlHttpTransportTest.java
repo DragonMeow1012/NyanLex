@@ -28,12 +28,14 @@ class UrlHttpTransportTest {
 
     @Test
     void theGoogleMachineTranslationRequestUsesHttp1() {
-        java.net.http.HttpRequest request = UrlHttpTransport.buildGetRequest(
-                "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-TW&dt=t&q=hello%20world",
-                Duration.ofSeconds(5));
-        assertEquals(java.util.Optional.of(java.net.http.HttpClient.Version.HTTP_1_1), request.version(),
-                "that endpoint answers 429 to HTTP/2 clients");
-        assertEquals("GET", request.method());
+        for (String host : new String[] {"translate.googleapis.com", "translate.google.com"}) {
+            java.net.http.HttpRequest request = UrlHttpTransport.buildGetRequest(
+                    "https://" + host + "/translate_a/single?client=gtx&sl=auto&tl=zh-TW&dt=t&q=hello%20world",
+                    Duration.ofSeconds(5));
+            assertEquals(java.util.Optional.of(java.net.http.HttpClient.Version.HTTP_1_1), request.version(),
+                    host + " answers 429 more readily to HTTP/2 clients");
+            assertEquals("GET", request.method());
+        }
     }
 
     @Test

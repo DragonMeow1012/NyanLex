@@ -1,12 +1,12 @@
 {
-  "com/dragonmeow/nyanlex/neoforge/CodexEffortScreen.java": [
+  "com/dragonmeow/nyanlex/neoforge/LocalAiEffortScreen.java": [
     {
-      "from": "\n            CodexEffortScreen.this.renderBackground(graphics);\n",
-      "to": "\n            CodexEffortScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
+      "from": "\n            LocalAiEffortScreen.this.renderBackground(graphics);\n",
+      "to": "\n            LocalAiEffortScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
       "count": 1
     },
     {
-      "from": "\n        @Override protected void renderBackground(GuiGraphics graphics) {\n",
+      "from": "\n        @Override\n        protected void renderBackground(GuiGraphics graphics) {\n",
       "to": "\n        @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n",
       "count": 1
     },
@@ -16,20 +16,27 @@
       "count": 1
     }
   ],
-  "com/dragonmeow/nyanlex/neoforge/CodexModelScreen.java": [
+  "com/dragonmeow/nyanlex/neoforge/LocalAiModelScreen.java": [
     {
-      "from": "\n            CodexModelScreen.this.renderBackground(graphics);\n",
-      "to": "\n            CodexModelScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
+      "from": "\n            LocalAiModelScreen.this.renderBackground(graphics);\n",
+      "to": "\n            LocalAiModelScreen.this.renderBackground(graphics, mouseX, mouseY, delta);\n",
       "count": 1
     },
     {
-      "from": "\n        @Override protected void renderBackground(GuiGraphics graphics) {\n",
+      "from": "\n        @Override\n        protected void renderBackground(GuiGraphics graphics) {\n",
       "to": "\n        @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n",
       "count": 1
     },
     {
       "from": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n",
       "to": "\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60); super.render(graphics, mouseX, mouseY, delta);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/CliSetupScreen.java": [
+    {
+      "from": "\n        this.renderBackground(graphics);\n",
+      "to": "\n        this.renderBackground(graphics, mouseX, mouseY, partialTick);\n",
       "count": 1
     }
   ],
@@ -89,6 +96,11 @@
     {
       "from": "\nimport net.minecraftforge.client.event.RegisterKeyMappingsEvent;\n",
       "to": "\nimport net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.client.event.RegisterClientCommandsEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;\n",
       "count": 1
     },
     {

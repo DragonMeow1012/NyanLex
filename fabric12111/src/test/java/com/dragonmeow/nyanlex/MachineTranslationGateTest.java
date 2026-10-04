@@ -68,7 +68,7 @@ class MachineTranslationGateTest {
         assertFalse(gate.blocksRequests());
         assertThrows(RequestsPausedException.class, () -> translator.translate("Hello", "zh-TW"));
         assertTrue(gate.blocksRequests());
-        assertEquals(1, google.requests.get());
+        assertEquals(2, google.requests.get(), "both Google hosts must reject before the gate closes");
         assertEquals(1, gate.minutesUntilReopen());
     }
 
@@ -183,13 +183,13 @@ class MachineTranslationGateTest {
                 10 * 60 * MIN, cacheClock::get, null);
         cache.requestBatched("Hello world");
         for (int i = 0; i < 4; i++) cache.flushBatch();
-        assertEquals(1, google.requests.get(), "the first batch trips the gate");
+        assertEquals(2, google.requests.get(), "the first batch tries both hosts, then trips the gate");
         assertTrue(gate.blocksRequests());
 
         // Closed: another text is observed, flushed repeatedly, still nothing is sent.
         cache.requestBatched("Second line");
         for (int i = 0; i < 6; i++) cache.flushBatch();
-        assertEquals(1, google.requests.get());
+        assertEquals(2, google.requests.get());
 
         // Gate reopens and Google is healthy again: the waiting text goes out and is translated.
         now.addAndGet(MIN);

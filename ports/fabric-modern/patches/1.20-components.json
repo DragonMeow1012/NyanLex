@@ -1,9 +1,9 @@
 {
-  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/LocalAiEffortScreen.java": [
     {"from":"import net.minecraft.client.gui.screens.options.OptionsSubScreen;", "to":""},
     {"from":"extends OptionsSubScreen", "to":"extends PortOptionsSubScreen"}
   ],
-  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/LocalAiModelScreen.java": [
     {"from":"import net.minecraft.client.gui.screens.options.OptionsSubScreen;", "to":""},
     {"from":"extends OptionsSubScreen", "to":"extends PortOptionsSubScreen"}
   ],

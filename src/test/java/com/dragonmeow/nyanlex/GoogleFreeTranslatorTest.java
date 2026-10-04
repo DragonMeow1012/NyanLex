@@ -63,6 +63,28 @@ class GoogleFreeTranslatorTest {
     }
 
     @Test
+    void rateLimitedPrimarySwitchesToFallbackAndKeepsUsingIt() throws Exception {
+        List<String> requested = new java.util.ArrayList<>();
+        HttpTransport transport = url -> {
+            requested.add(url);
+            if (url.startsWith("https://translate.googleapis.com/")) {
+                throw new IOException("HTTP 429");
+            }
+            return googleResponse(qOf(url).replace("Hello", "你好").replace("World", "世界"));
+        };
+        GoogleFreeTranslator translator = new GoogleFreeTranslator(transport, "auto");
+
+        assertEquals("你好", translator.translate("Hello", "zh-TW").translatedText());
+        assertEquals("世界", translator.translate("World", "zh-TW").translatedText());
+
+        assertEquals(3, requested.size());
+        assertTrue(requested.get(0).startsWith("https://translate.googleapis.com/"));
+        assertTrue(requested.get(1).startsWith("https://translate.google.com/"));
+        assertTrue(requested.get(2).startsWith("https://translate.google.com/"),
+                "a successful fallback becomes the session endpoint");
+    }
+
+    @Test
     void blankSourceLangDefaultsToAuto() {
         GoogleFreeTranslator t = new GoogleFreeTranslator(url -> "[]", "   ");
         assertTrue(t.buildUrl("x", "zh-TW").contains("sl=auto"));

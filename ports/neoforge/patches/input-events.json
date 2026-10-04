@@ -1,4 +1,11 @@
 {
+  "com/dragonmeow/nyanlex/neoforge26/mixin/AdvancementToastMixin.java": [
+    {
+      "from": "\n            method = \"extractRenderState\",\n",
+      "to": "\n            method = \"render\",\n",
+      "count": 1
+    }
+  ],
   "com/dragonmeow/nyanlex/neoforge26/ConfirmDialogScreen.java": [
     {
       "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
@@ -330,19 +337,24 @@
       "count": 1
     },
     {
+      "from": "\n    private void drawAntigravityState(GuiGraphicsExtractor graphics) {\n",
+      "to": "\n    private void drawAntigravityState(GuiGraphics graphics) {\n",
+      "count": 1
+    },
+    {
       "from": "\n            graphics.centeredText(this.font, line, this.width / 2, layAccount, 0xFF909090);\n",
       "to": "\n            graphics.drawCenteredString(this.font, line, this.width / 2, layAccount, 0xFF909090);\n",
-      "count": 1
+      "count": 2
     },
     {
       "from": "\n        graphics.text(this.font, line1, x, layAccount, 0xFF80FF80, false);\n",
       "to": "\n        graphics.drawString(this.font, line1, x, layAccount, 0xFF80FF80, false);\n",
-      "count": 1
+      "count": 2
     },
     {
       "from": "\n        graphics.text(this.font, line2, x, layAccount, 0xFFFFFFFF, false);\n",
       "to": "\n        graphics.drawString(this.font, line2, x, layAccount, 0xFFFFFFFF, false);\n",
-      "count": 1
+      "count": 2
     },
     {
       "from": "\n        graphics.text(this.font, line3, x, layAccount, 0xFFA0A0A0, false);\n",
@@ -360,34 +372,44 @@
       "count": 1
     }
   ],
-  "com/dragonmeow/nyanlex/neoforge26/Neo26CodexEffortScreen.java": [
+  "com/dragonmeow/nyanlex/neoforge26/Neo26CliSetupScreen.java": [
     {
       "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
       "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
       "count": 1
     },
     {
-      "from": "\n        protected void extractListBackground(GuiGraphicsExtractor graphics) {\n",
-      "to": "\n        protected void renderListBackground(GuiGraphics graphics) {\n",
+      "from": "\n                if (client.gui.screen() == this) this.rebuildWidgets();\n",
+      "to": "\n                if (client.screen == this) this.rebuildWidgets();\n",
       "count": 1
     },
     {
-      "from": "\n            super.extractListBackground(graphics);\n",
-      "to": "\n            super.renderListBackground(graphics);\n",
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {\n",
       "count": 1
     },
     {
-      "from": "\n            public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY,\n",
-      "to": "\n            public void renderContent(GuiGraphics graphics, int mouseX, int mouseY,\n",
+      "from": "\n        graphics.centeredText(this.font, this.title, this.width / 2, 18, 0xFFFFFFFF);\n",
+      "to": "\n        graphics.drawCenteredString(this.font, this.title, this.width / 2, 18, 0xFFFFFFFF);\n",
       "count": 1
     },
     {
-      "from": "\n                graphics.centeredText(Neo26CodexEffortScreen.this.font, this.label,\n",
-      "to": "\n                graphics.drawCenteredString(Neo26CodexEffortScreen.this.font, this.label,\n",
+      "from": "\n        graphics.centeredText(this.font,\n",
+      "to": "\n        graphics.drawCenteredString(this.font,\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.centeredText(this.font, Component.literal(this.status),\n",
+      "to": "\n            graphics.drawCenteredString(this.font, Component.literal(this.status),\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(graphics, mouseX, mouseY, partialTick);\n",
+      "to": "\n        super.render(graphics, mouseX, mouseY, partialTick);\n",
       "count": 1
     }
   ],
-  "com/dragonmeow/nyanlex/neoforge26/Neo26CodexModelScreen.java": [
+  "com/dragonmeow/nyanlex/neoforge26/Neo26LocalAiEffortScreen.java": [
     {
       "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
       "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
@@ -409,8 +431,35 @@
       "count": 1
     },
     {
-      "from": "\n                graphics.centeredText(Neo26CodexModelScreen.this.font, this.label,\n",
-      "to": "\n                graphics.drawCenteredString(Neo26CodexModelScreen.this.font, this.label,\n",
+      "from": "\n                graphics.centeredText(Neo26LocalAiEffortScreen.this.font, this.label,\n",
+      "to": "\n                graphics.drawCenteredString(Neo26LocalAiEffortScreen.this.font, this.label,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26LocalAiModelScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n        protected void extractListBackground(GuiGraphicsExtractor graphics) {\n",
+      "to": "\n        protected void renderListBackground(GuiGraphics graphics) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            super.extractListBackground(graphics);\n",
+      "to": "\n            super.renderListBackground(graphics);\n",
+      "count": 1
+    },
+    {
+      "from": "\n            public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY,\n",
+      "to": "\n            public void renderContent(GuiGraphics graphics, int mouseX, int mouseY,\n",
+      "count": 1
+    },
+    {
+      "from": "\n                graphics.centeredText(Neo26LocalAiModelScreen.this.font, this.label,\n",
+      "to": "\n                graphics.drawCenteredString(Neo26LocalAiModelScreen.this.font, this.label,\n",
       "count": 1
     }
   ],
@@ -731,8 +780,8 @@
       "count": 1
     },
     {
-      "from": "\n                    if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.gui.screen()));\n",
-      "to": "\n                    if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.screen));\n",
+      "from": "\n        if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.gui.screen()));\n",
+      "to": "\n        if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.screen));\n",
       "count": 1
     },
     {

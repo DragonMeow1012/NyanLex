@@ -61,19 +61,22 @@ On **Fabric 1.17+ and NeoForge**:
 
 With Google, incoming chat translates automatically after opt-in; other content is translated on demand with `R` or `P`. With AI, enabled content translates automatically and those keys request a fresh translation. Saved results display without another request. Shortcuts do not activate while you are typing.
 
+Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
+
 **Legacy builds** (Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2) use a simpler interface and do not include translation packs or full-content warmup. `G` opens settings and `P` retranslates the current screen; Forge also uses `H` to enable or disable translation.
 
 ## Choose a translation service
 
 | Service | What you need |
 | --- | --- |
-| Google machine translation | No API key. Uses an unofficial web endpoint, so availability and rate limits may change. |
+| Google machine translation | No API key. Uses unofficial web endpoints and tries a compatible alternate once after a 429 or block page; availability may still change. |
 | Gemini, OpenAI or DeepSeek | Your own API key; presets are available in settings. |
+| Google / Antigravity sign-in | On modern Fabric/NeoForge builds, install Antigravity CLI from the official Google download page and sign in. NyanLex uses that Google account's Antigravity allowance and the model variants reported by the CLI. |
 | OpenRouter or another OpenAI-compatible service | Its service URL, model and any required API key. |
 | Ollama or LM Studio | Your own running OpenAI-compatible local server and model. |
 | ChatGPT / Codex | A separately installed Codex CLI and ChatGPT sign-in. Uses your account's Codex allowance. |
 
-AI providers may charge for usage. The optional Codex integration starts a local Codex process; NyanLex does not install the CLI for you. You can choose whether Google is used as a fallback after an AI failure. If enabled, that text may also be sent to Google.
+AI providers may charge for usage. The optional Codex and Antigravity integrations start separately installed local tools; NyanLex does not install either CLI. Antigravity installation instructions are available at [antigravity.google/download](https://antigravity.google/download). You can choose whether Google machine translation is used as a fallback after an AI failure. If enabled, that text may also be sent to Google.
 
 ## Prepare and share translations
 

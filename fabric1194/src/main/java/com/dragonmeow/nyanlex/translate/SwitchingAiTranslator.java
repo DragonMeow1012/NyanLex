@@ -2,23 +2,35 @@ package com.dragonmeow.nyanlex.translate;
 
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
-/** Live router between ordinary API-key AI and ChatGPT-authenticated Codex. */
+/** Live router between API-key AI and the two account-authenticated local CLI routes. */
 public final class SwitchingAiTranslator implements Translator {
 
     private final OpenAiTranslator api;
     private final OpenAiTranslator codex;
-    private final BooleanSupplier useCodex;
+    private final OpenAiTranslator antigravity;
+    private final Supplier<String> provider;
 
     public SwitchingAiTranslator(OpenAiTranslator api, OpenAiTranslator codex,
                                  BooleanSupplier useCodex) {
+        this(api, codex, api,
+                () -> useCodex.getAsBoolean() ? "codex" : "api");
+    }
+
+    public SwitchingAiTranslator(OpenAiTranslator api, OpenAiTranslator codex,
+                                 OpenAiTranslator antigravity, Supplier<String> provider) {
         this.api = api;
         this.codex = codex;
-        this.useCodex = useCodex;
+        this.antigravity = antigravity;
+        this.provider = provider;
     }
 
     private OpenAiTranslator current() {
-        return useCodex.getAsBoolean() ? codex : api;
+        String selected = provider.get();
+        if ("codex".equals(selected)) return codex;
+        if ("antigravity".equals(selected)) return antigravity;
+        return api;
     }
 
     public boolean isRateLimited() {

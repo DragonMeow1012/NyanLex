@@ -185,8 +185,8 @@
       "count": 1
     },
     {
-      "from": "\n                    if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.gui.screen()));\n",
-      "to": "\n                    if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.screen));\n",
+      "from": "\n        if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.gui.screen()));\n",
+      "to": "\n        if (mc != null) mc.setScreenAndShow(new Neo26ConfigScreen(mc.screen));\n",
       "count": 1
     },
     {
@@ -242,6 +242,13 @@
     {
       "from": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),\n",
       "to": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26CliSetupScreen.java": [
+    {
+      "from": "\n                if (client.gui.screen() == this) this.rebuildWidgets();\n",
+      "to": "\n                if (client.screen == this) this.rebuildWidgets();\n",
       "count": 1
     }
   ],

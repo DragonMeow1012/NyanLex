@@ -100,7 +100,7 @@ public final class ItemWarmupEstimator {
             tokens *= scale;
             calibrated = true;
         }
-        int concurrency = backend.usesCodex() ? 1 : ItemWarmupDriver.MAX_CONCURRENCY;
+        int concurrency = backend.usesSerialLocalAi() ? 1 : ItemWarmupDriver.MAX_CONCURRENCY;
         double secondsPerRequest = Math.max(1.5, ASSUMED_LATENCY_SECONDS / concurrency);
         int minutes = plannedRequests == 0 ? 0
                 : (int) Math.max(1, Math.ceil(plannedRequests * secondsPerRequest / 60.0));

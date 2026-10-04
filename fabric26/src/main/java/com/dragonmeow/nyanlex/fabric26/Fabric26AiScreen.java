@@ -1,6 +1,7 @@
 package com.dragonmeow.nyanlex.fabric26;
 
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
+import com.dragonmeow.nyanlex.translate.AntigravityCliClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient.AccountSnapshot;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient.LoginStart;
@@ -20,7 +21,6 @@ import java.util.Locale;
 
 public final class Fabric26AiScreen extends Screen {
     private static final String OPENAI_API_URL = "https://api.openai.com/v1";
-    private static final String CODEX_DOWNLOAD_URL = "https://openai.com/codex/get-started/";
     private static final int FIELD_W = 320;
 
     private final Screen parent;
@@ -28,13 +28,14 @@ public final class Fabric26AiScreen extends Screen {
     private EditBox modelBox;
     private EditBox keysBox;
     private Button loginButton;
+    private Button manageButton;
     private Button modelButton;
     private Button effortButton;
     private Button refreshButton;
     private Button testButton;
     private boolean busy;
     private boolean initialCodexRefreshStarted;
-    private boolean missingPromptShown;
+    private boolean initialAntigravityRefreshStarted;
     private String status = "";
 
     // Vertical layout, computed once per init() so the widgets and the text agree. The key notice wraps
@@ -66,8 +67,8 @@ public final class Fabric26AiScreen extends Screen {
         String path = file == null ? "" : file.toAbsolutePath().toString();
         String text = Component.translatable("screen.nyanlex.ai.key_notice", path).getString();
         noticeLines = com.dragonmeow.nyanlex.config.UiText.wrap(text, Math.max(80, this.width - 12), this.font::width);
-        boolean openAi = isOpenAiProvider(cfg);
-        boolean codex = cfg.aiUseCodex;
+        boolean accountModes = isOpenAiProvider(cfg) || isGeminiProvider(cfg);
+        boolean localCli = cfg.usesLocalAiCli();
         int[] gaps = {10, 6, 4, 2};
         tight = false;
         boolean fitted = false;
@@ -76,14 +77,14 @@ public final class Fabric26AiScreen extends Screen {
             int small = Math.min(g, 6);
             int end = 17 + noticeLines.size() * 10;
             layAccount = end + 3;
-            layProv = end + (codex ? 17 : 7);
+            layProv = end + (localCli ? 17 : 7);
             int y = layProv + 20;
-            if (openAi || codex) {
+            if (accountModes) {
                 y += small;
                 layMode = y;
                 y += 20;
             }
-            if (codex) {
+            if (localCli) {
                 y += small;
                 layLogin = y;
                 y += 20 + g;
@@ -120,7 +121,7 @@ public final class Fabric26AiScreen extends Screen {
         }
         if (!fitted) {
             tight = true;
-            layDone = codex ? layCodexTest : layTest;
+            layDone = localCli ? layCodexTest : layTest;
             return;
         }
         layDone = Math.min(layDone, Math.max(4, this.height - 24));
@@ -136,20 +137,26 @@ public final class Fabric26AiScreen extends Screen {
         TranslatorConfig cfg = NyanLexFabric26.config();
         computeLayout(cfg);
         int x = this.width / 2 - FIELD_W / 2;
-        boolean openAiPanel = isOpenAiProvider(cfg);
+        boolean accountModes = isOpenAiProvider(cfg) || isGeminiProvider(cfg);
         addProviderButtons(x, layProv);
-        if (openAiPanel || cfg.aiUseCodex) addOpenAiModeButtons(x, layMode);
-        if (cfg.aiUseCodex) {
+        if (accountModes) addAccountModeButtons(x, layMode);
+        if (cfg.usesCodex()) {
             initCodex(x);
+        } else if (cfg.usesAntigravity()) {
+            initAntigravity(x);
         } else {
-            initApi(x, openAiPanel);
+            initApi(x);
         }
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
                 .bounds(tight ? this.width / 2 + 3 : this.width / 2 - 100, layDone, tight ? FIELD_W / 2 - 3 : 200, 20).build());
 
-        if (cfg.aiUseCodex && !this.initialCodexRefreshStarted) {
+        if (cfg.usesCodex() && !this.initialCodexRefreshStarted) {
             this.initialCodexRefreshStarted = true;
             refreshCodexSession(false);
+        }
+        if (cfg.usesAntigravity() && !this.initialAntigravityRefreshStarted) {
+            this.initialAntigravityRefreshStarted = true;
+            refreshAntigravitySession(false);
         }
     }
 
@@ -157,20 +164,17 @@ public final class Fabric26AiScreen extends Screen {
         TranslatorConfig cfg = NyanLexFabric26.config();
         int gap = 6;
         int width = (FIELD_W - gap * 3) / 4;
-        addProviderButton(providerLabel("Gemini", !cfg.aiUseCodex
-                        && isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")),
-                x, y, width, () -> selectApiProvider(
-                        "https://generativelanguage.googleapis.com/v1beta/openai",
-                        "gemini-3.1-flash-lite"));
+        addProviderButton(providerLabel("Gemini", isGeminiProvider(cfg)),
+                x, y, width, this::selectGeminiProvider);
         addProviderButton(providerLabel("OpenAI", isOpenAiProvider(cfg)),
                 x + width + gap, y, width, this::selectOpenAiProvider);
-        addProviderButton(providerLabel("DeepSeek", !cfg.aiUseCodex
+        addProviderButton(providerLabel("DeepSeek", !cfg.usesLocalAiCli()
                         && isEndpoint(cfg.aiBaseUrl, "https://api.deepseek.com")),
                 x + (width + gap) * 2, y, width,
                 () -> selectApiProvider("https://api.deepseek.com", "deepseek-chat"));
         addProviderButton(providerLabel(
                         Component.translatable("screen.nyanlex.ai.custom").getString(),
-                        !cfg.aiUseCodex && !isKnownApiEndpoint(cfg.aiBaseUrl)),
+                        !cfg.usesLocalAiCli() && !isKnownApiEndpoint(cfg.aiBaseUrl)),
                 x + (width + gap) * 3, y, width,
                 () -> selectApiProvider("http://127.0.0.1:11434/v1", ""));
     }
@@ -180,21 +184,25 @@ public final class Fabric26AiScreen extends Screen {
                 .bounds(x, y, width, 20).build());
     }
 
-    private void addOpenAiModeButtons(int x, int y) {
+    private void addAccountModeButtons(int x, int y) {
         TranslatorConfig cfg = NyanLexFabric26.config();
         int gap = 6;
         int width = (FIELD_W - gap) / 2;
+        boolean gemini = isGeminiProvider(cfg);
         addProviderButton(providerLabel(
                         Component.translatable("screen.nyanlex.ai.openai.api_mode").getString(),
-                        !cfg.aiUseCodex),
-                x, y, width, this::selectOpenAiApiMode);
+                        !cfg.usesLocalAiCli()),
+                x, y, width, gemini ? this::selectGeminiApiMode : this::selectOpenAiApiMode);
         addProviderButton(providerLabel(
-                        Component.translatable("screen.nyanlex.ai.openai.codex_mode").getString(),
-                        cfg.aiUseCodex),
-                x + width + gap, y, width, this::selectCodexProvider);
+                        Component.translatable(gemini
+                                ? "screen.nyanlex.ai.gemini.google_mode"
+                                : "screen.nyanlex.ai.openai.codex_mode").getString(),
+                        cfg.usesLocalAiCli()),
+                x + width + gap, y, width,
+                gemini ? this::selectAntigravityProvider : this::selectCodexProvider);
     }
 
-    private void initApi(int x, boolean openAiPanel) {
+    private void initApi(int x) {
         TranslatorConfig cfg = NyanLexFabric26.config();
         int baseY = layBase;
         int modelY = layModel;
@@ -248,9 +256,16 @@ public final class Fabric26AiScreen extends Screen {
                 b -> {
                     if (signedIn) logoutCodex();
                     else loginCodex();
-                }).bounds(x, layLogin, FIELD_W, 20).build();
+                }).bounds(x, layLogin, 252, 20).build();
         this.loginButton.active = !this.busy;
         this.addRenderableWidget(this.loginButton);
+
+        this.manageButton = Button.builder(
+                Component.translatable("screen.nyanlex.ai.cli.manage"),
+                b -> openCliSetup(Fabric26CliSetupScreen.Provider.CODEX))
+                .bounds(x + 258, layLogin, 62, 20).build();
+        this.manageButton.active = !this.busy;
+        this.addRenderableWidget(this.manageButton);
 
         this.modelButton = Button.builder(modelLabel(), b -> openModelPicker())
                 .bounds(x, layCodexModel, 252, 20).build();
@@ -278,6 +293,64 @@ public final class Fabric26AiScreen extends Screen {
         this.addRenderableWidget(this.testButton);
     }
 
+    private void initAntigravity(int x) {
+        AntigravityCliClient client = NyanLexFabric26.antigravityClient();
+        boolean installed = client != null && client.isInstalledCached();
+        boolean modelsLoaded = installed && !client.cachedModels().isEmpty();
+        boolean signedIn = modelsLoaded && client.hasAuthenticatedSessionCached();
+
+        this.loginButton = Button.builder(
+                Component.translatable(signedIn
+                        ? "screen.nyanlex.ai.antigravity.logout"
+                        : "screen.nyanlex.ai.antigravity.login"),
+                b -> {
+                    if (signedIn) logoutAntigravity();
+                    else openAntigravityLogin();
+                }).bounds(x, layLogin, 252, 20).build();
+        this.loginButton.active = installed && !this.busy;
+        this.addRenderableWidget(this.loginButton);
+
+        this.manageButton = Button.builder(
+                Component.translatable("screen.nyanlex.ai.cli.manage"),
+                b -> openCliSetup(Fabric26CliSetupScreen.Provider.ANTIGRAVITY))
+                .bounds(x + 258, layLogin, 62, 20).build();
+        this.manageButton.active = !this.busy;
+        this.addRenderableWidget(this.manageButton);
+
+        this.modelButton = Button.builder(modelLabel(), b -> openModelPicker())
+                .bounds(x, layCodexModel, 252, 20).build();
+        this.modelButton.active = signedIn && !this.busy;
+        this.addRenderableWidget(this.modelButton);
+
+        this.refreshButton = Button.builder(
+                Component.translatable("screen.nyanlex.ai.codex.refresh"),
+                b -> refreshAntigravitySession(true)).bounds(x + 258, layCodexModel, 62, 20).build();
+        this.refreshButton.active = !this.busy;
+        this.addRenderableWidget(this.refreshButton);
+
+        this.testButton = Button.builder(
+                Component.translatable("screen.nyanlex.ai.test"),
+                b -> testAntigravity()).bounds(x, layEffort,
+                        tight ? FIELD_W / 2 - 3 : FIELD_W, 20).build();
+        this.testButton.active = signedIn && !this.busy
+                && NyanLexFabric26.config().antigravityModel != null
+                && !NyanLexFabric26.config().antigravityModel.isBlank();
+        this.addRenderableWidget(this.testButton);
+    }
+
+    private void selectGeminiProvider() {
+        if (isGeminiProvider(NyanLexFabric26.config())) {
+            this.rebuildWidgets();
+            return;
+        }
+        selectGeminiApiMode();
+    }
+
+    private void selectGeminiApiMode() {
+        selectApiProvider("https://generativelanguage.googleapis.com/v1beta/openai",
+                "gemini-3.1-flash-lite");
+    }
+
     private void selectOpenAiProvider() {
         if (isOpenAiProvider(NyanLexFabric26.config())) {
             this.rebuildWidgets();
@@ -288,10 +361,10 @@ public final class Fabric26AiScreen extends Screen {
 
     private void selectOpenAiApiMode() {
         TranslatorConfig cfg = NyanLexFabric26.config();
-        saveApiFields();
+        saveCurrentFields();
         boolean alreadyOpenAiApi = isEndpoint(cfg.aiBaseUrl, OPENAI_API_URL);
         String openAiKeys = keysForEndpoint(cfg, OPENAI_API_URL);
-        cfg.aiUseCodex = false;
+        cfg.selectAiProvider(TranslatorConfig.AI_PROVIDER_API);
         cfg.aiBaseUrl = OPENAI_API_URL;
         if (!alreadyOpenAiApi) cfg.aiModel = "gpt-5.4-mini";
         cfg.aiApiKeys = parseKeys(openAiKeys);
@@ -303,9 +376,9 @@ public final class Fabric26AiScreen extends Screen {
 
     private void selectApiProvider(String url, String model) {
         TranslatorConfig cfg = NyanLexFabric26.config();
-        saveApiFields();
+        saveCurrentFields();
         String providerKeys = keysForEndpoint(cfg, url);
-        cfg.aiUseCodex = false;
+        cfg.selectAiProvider(TranslatorConfig.AI_PROVIDER_API);
         cfg.aiBaseUrl = url;
         cfg.aiModel = model;
         cfg.aiApiKeys = parseKeys(providerKeys);
@@ -316,7 +389,7 @@ public final class Fabric26AiScreen extends Screen {
     }
 
     private void selectCodexProvider() {
-        saveApiFields();
+        saveCurrentFields();
         TranslatorConfig cfg = NyanLexFabric26.config();
         if (!isEndpoint(cfg.aiBaseUrl, OPENAI_API_URL)) {
             String openAiKeys = keysForEndpoint(cfg, OPENAI_API_URL);
@@ -324,7 +397,24 @@ public final class Fabric26AiScreen extends Screen {
             cfg.aiModel = "gpt-5.4-mini";
             cfg.aiApiKeys = parseKeys(openAiKeys);
         }
-        cfg.aiUseCodex = true;
+        cfg.selectAiProvider(TranslatorConfig.AI_PROVIDER_CODEX);
+        NyanLexFabric26.saveConfig();
+        Fabric26TextStyle.clearRenderMemo();
+        this.status = "";
+        this.rebuildWidgets();
+    }
+
+    private void selectAntigravityProvider() {
+        saveCurrentFields();
+        TranslatorConfig cfg = NyanLexFabric26.config();
+        if (!isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")) {
+            String geminiUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
+            String geminiKeys = keysForEndpoint(cfg, geminiUrl);
+            cfg.aiBaseUrl = geminiUrl;
+            cfg.aiModel = "gemini-3.1-flash-lite";
+            cfg.aiApiKeys = parseKeys(geminiKeys);
+        }
+        cfg.selectAiProvider(TranslatorConfig.AI_PROVIDER_ANTIGRAVITY);
         NyanLexFabric26.saveConfig();
         Fabric26TextStyle.clearRenderMemo();
         this.status = "";
@@ -341,6 +431,10 @@ public final class Fabric26AiScreen extends Screen {
         cfg.aiKeysByEndpoint.put(endpointKey(url), this.keysBox.getValue());
     }
 
+    private void saveCurrentFields() {
+        if (!NyanLexFabric26.config().usesLocalAiCli()) saveApiFields();
+    }
+
     private void refreshCodexSession(boolean userInitiated) {
         CodexAppServerClient client = NyanLexFabric26.codexClient();
         if (client == null) {
@@ -353,7 +447,7 @@ public final class Fabric26AiScreen extends Screen {
                 onMain(() -> {
                     setBusy(false, Component.translatable(
                             "screen.nyanlex.ai.codex.not_installed").getString());
-                    showMissingCodexPrompt();
+                    if (userInitiated) showMissingCodexPrompt();
                 });
                 return;
             }
@@ -443,15 +537,106 @@ public final class Fabric26AiScreen extends Screen {
         });
     }
 
+    private void refreshAntigravitySession(boolean userInitiated) {
+        AntigravityCliClient client = NyanLexFabric26.antigravityClient();
+        if (client == null) {
+            setStatus(Component.translatable("message.nyanlex.not_initialized").getString(), false);
+            return;
+        }
+        setBusy(true, Component.translatable(
+                "screen.nyanlex.ai.antigravity.checking").getString());
+        runAsync("nyanlex-antigravity-refresh", () -> {
+            boolean installed = client.isInstalled();
+            if (installed) {
+                try {
+                    List<AntigravityCliClient.ModelOption> models = client.listModels();
+                    normalizeAntigravitySelection(models);
+                    setStatus(Component.translatable(
+                            "screen.nyanlex.ai.antigravity.models_updated", models.size()).getString(), true);
+                } catch (Exception e) {
+                    setStatus(Component.translatable("message.nyanlex.failed",
+                            errorMessage(e)).getString(), true);
+                }
+            } else {
+                onMain(() -> {
+                    setBusy(false, Component.translatable(
+                            "screen.nyanlex.ai.antigravity.not_installed").getString());
+                    if (userInitiated) showMissingAntigravityPrompt();
+                });
+            }
+        });
+    }
+
+    private void openAntigravityLogin() {
+        if (this.minecraft == null) return;
+        this.minecraft.setScreenAndShow(new ConfirmScreen(confirmed -> {
+            if (this.minecraft != null) this.minecraft.setScreenAndShow(this);
+            if (confirmed) launchAntigravityLogin();
+        }, Component.translatable("screen.nyanlex.ai.antigravity.login_guide_title"),
+                Component.translatable("screen.nyanlex.ai.antigravity.login_guide_message"),
+                Component.translatable("screen.nyanlex.ai.antigravity.login_guide_open"),
+                Component.translatable("gui.cancel")));
+    }
+
+    private void launchAntigravityLogin() {
+        AntigravityCliClient client = NyanLexFabric26.antigravityClient();
+        if (client == null) return;
+        setBusy(true, Component.translatable(
+                "screen.nyanlex.ai.antigravity.starting_login").getString());
+        runAsync("nyanlex-antigravity-login", () -> {
+            try {
+                client.openLoginTerminal();
+                setStatus(Component.translatable(
+                        "screen.nyanlex.ai.antigravity.login_opened").getString(), true);
+            } catch (Exception e) {
+                setStatus(Component.translatable("message.nyanlex.failed",
+                        errorMessage(e)).getString(), true);
+                if (!client.isInstalledCached()) onMain(this::showMissingAntigravityPrompt);
+            }
+        });
+    }
+
+    private void logoutAntigravity() {
+        AntigravityCliClient client = NyanLexFabric26.antigravityClient();
+        if (client == null) return;
+        setBusy(true, Component.translatable(
+                "screen.nyanlex.ai.antigravity.logging_out").getString());
+        runAsync("nyanlex-antigravity-logout", () -> {
+            try {
+                client.openLogoutTerminal();
+                setStatus(Component.translatable(
+                        "screen.nyanlex.ai.antigravity.logout_opened").getString(), true);
+            } catch (Exception e) {
+                setStatus(Component.translatable("message.nyanlex.failed",
+                        errorMessage(e)).getString(), true);
+            }
+        });
+    }
+
+    private void testAntigravity() {
+        NyanLexFabric26.saveConfig();
+        if (this.testButton != null) {
+            this.testButton.active = false;
+            this.testButton.setMessage(Component.translatable("screen.nyanlex.ai.testing"));
+        }
+        NyanLexFabric26.testAntigravity(result -> {
+            this.status = result;
+            if (this.testButton != null) {
+                this.testButton.active = true;
+                this.testButton.setMessage(Component.translatable("screen.nyanlex.ai.test"));
+            }
+        });
+    }
+
     private void openModelPicker() {
         if (this.minecraft != null) {
-            this.minecraft.setScreenAndShow(new Fabric26CodexModelScreen(this));
+            this.minecraft.setScreenAndShow(new Fabric26LocalAiModelScreen(this));
         }
     }
 
     private void openEffortPicker() {
         if (this.minecraft != null) {
-            this.minecraft.setScreenAndShow(new Fabric26CodexEffortScreen(this));
+            this.minecraft.setScreenAndShow(new Fabric26LocalAiEffortScreen(this));
         }
     }
 
@@ -470,6 +655,24 @@ public final class Fabric26AiScreen extends Screen {
                         .findFirst().orElse(models.get(0)));
         cfg.codexModel = selected.model();
         normalizeEffort(cfg, selected);
+        NyanLexFabric26.saveConfig();
+    }
+
+    private void normalizeAntigravitySelection(List<AntigravityCliClient.ModelOption> models) {
+        TranslatorConfig cfg = NyanLexFabric26.config();
+        if (models == null || models.isEmpty()) {
+            cfg.antigravityModel = TranslatorConfig.DEFAULT_ANTIGRAVITY_MODEL;
+            NyanLexFabric26.saveConfig();
+            return;
+        }
+        boolean selectedAvailable = models.stream()
+                .anyMatch(option -> option.model().equals(cfg.antigravityModel));
+        if (!selectedAvailable) {
+            cfg.antigravityModel = models.stream()
+                    .filter(option -> option.model().equals(
+                            TranslatorConfig.DEFAULT_ANTIGRAVITY_MODEL))
+                    .findFirst().orElse(models.get(0)).model();
+        }
         NyanLexFabric26.saveConfig();
     }
 
@@ -495,6 +698,18 @@ public final class Fabric26AiScreen extends Screen {
     }
 
     private Component modelLabel() {
+        if (NyanLexFabric26.config().usesAntigravity()) {
+            AntigravityCliClient client = NyanLexFabric26.antigravityClient();
+            String selectedModel = NyanLexFabric26.config().antigravityModel;
+            AntigravityCliClient.ModelOption selected = client == null ? null
+                    : client.cachedModels().stream()
+                            .filter(option -> option.model().equals(selectedModel))
+                            .findFirst().orElse(null);
+            String name = selected == null
+                    ? Component.translatable("screen.nyanlex.ai.codex.no_models").getString()
+                    : selected.displayName();
+            return Component.translatable("screen.nyanlex.ai.codex.model", name);
+        }
         ModelOption selected = selectedModel().orElse(null);
         String name = selected == null
                 ? Component.translatable("screen.nyanlex.ai.codex.no_models").getString()
@@ -528,17 +743,22 @@ public final class Fabric26AiScreen extends Screen {
     }
 
     private void showMissingCodexPrompt() {
-        if (this.minecraft == null || this.missingPromptShown) return;
-        this.missingPromptShown = true;
-        ConfirmScreen confirm = new ConfirmScreen(confirmed -> {
-            this.missingPromptShown = false;
-            if (confirmed) com.dragonmeow.nyanlex.platform.BrowserLinks.open(CODEX_DOWNLOAD_URL);
-            if (this.minecraft != null) this.minecraft.setScreenAndShow(this);
-        }, Component.translatable("screen.nyanlex.ai.codex.missing_title"),
-                Component.translatable("screen.nyanlex.ai.codex.missing_message"),
-                Component.translatable("screen.nyanlex.ai.codex.open_download"),
-                Component.translatable("gui.cancel"));
-        this.minecraft.setScreenAndShow(confirm);
+        openCliSetup(Fabric26CliSetupScreen.Provider.CODEX);
+    }
+
+    private void showMissingAntigravityPrompt() {
+        openCliSetup(Fabric26CliSetupScreen.Provider.ANTIGRAVITY);
+    }
+
+    private void openCliSetup(Fabric26CliSetupScreen.Provider provider) {
+        if (this.minecraft != null) this.minecraft.setScreenAndShow(new Fabric26CliSetupScreen(this, provider));
+    }
+
+    void refreshLocalProviderOnReturn() {
+        this.busy = false;
+        this.status = "";
+        if (NyanLexFabric26.config().usesCodex()) this.initialCodexRefreshStarted = false;
+        if (NyanLexFabric26.config().usesAntigravity()) this.initialAntigravityRefreshStarted = false;
     }
 
     private void runAsync(String name, Runnable task) {
@@ -564,11 +784,15 @@ public final class Fabric26AiScreen extends Screen {
 
         TranslatorConfig cfg = NyanLexFabric26.config();
         drawKeyNotice(graphics);
-        if (cfg.aiUseCodex) {
-            drawCodexAccount(graphics);
+        if (cfg.usesLocalAiCli()) {
+            if (cfg.usesCodex()) drawCodexAccount(graphics);
+            else drawAntigravityState(graphics);
             // always visible, whatever the sign-in status line says below it
             graphics.centeredText(this.font, Component.translatable(
-                    "screen.nyanlex.ai.codex.quota_notice"), this.width / 2, layQuota, 0xFFA4A9B8);
+                    cfg.usesCodex()
+                            ? "screen.nyanlex.ai.codex.quota_notice"
+                            : "screen.nyanlex.ai.antigravity.quota_notice"),
+                    this.width / 2, layQuota, 0xFFA4A9B8);
             if (!this.status.isBlank()) {
                 graphics.centeredText(this.font, Component.literal(this.status),
                         this.width / 2, layStatus, 0xFFFFD080);
@@ -614,6 +838,29 @@ public final class Fabric26AiScreen extends Screen {
         graphics.text(this.font, line3, x, layAccount, 0xFFA0A0A0, false);
     }
 
+    private void drawAntigravityState(GuiGraphicsExtractor graphics) {
+        AntigravityCliClient client = NyanLexFabric26.antigravityClient();
+        boolean installed = client != null && client.isInstalledCached();
+        boolean signedIn = installed && !client.cachedModels().isEmpty()
+                && client.hasAuthenticatedSessionCached();
+        if (!signedIn) {
+            Component line = Component.translatable(installed
+                    ? "screen.nyanlex.ai.antigravity.signed_out"
+                    : "screen.nyanlex.ai.antigravity.not_installed");
+            graphics.centeredText(this.font, line, this.width / 2, layAccount, 0xFF909090);
+            return;
+        }
+        Component line1 = Component.translatable("screen.nyanlex.ai.antigravity.signed_in");
+        String email = client.cachedAccountEmail();
+        Component line2 = Component.literal(email == null || email.isBlank()
+                ? "Google" : maskEmail(email));
+        int total = this.font.width(line1) + this.font.width(line2) + 8;
+        int x = this.width / 2 - total / 2;
+        graphics.text(this.font, line1, x, layAccount, 0xFF80FF80, false);
+        x += this.font.width(line1) + 8;
+        graphics.text(this.font, line2, x, layAccount, 0xFFFFFFFF, false);
+    }
+
     private void drawRight(GuiGraphicsExtractor graphics, Component text, int y, int color) {
         graphics.text(this.font, text, this.width - this.font.width(text) - 6, y, color, false);
     }
@@ -652,7 +899,14 @@ public final class Fabric26AiScreen extends Screen {
     }
 
     private static boolean isOpenAiProvider(TranslatorConfig cfg) {
-        return cfg != null && (cfg.aiUseCodex || isEndpoint(cfg.aiBaseUrl, OPENAI_API_URL));
+        return cfg != null && (cfg.usesCodex()
+                || !cfg.usesLocalAiCli() && isEndpoint(cfg.aiBaseUrl, OPENAI_API_URL));
+    }
+
+    private static boolean isGeminiProvider(TranslatorConfig cfg) {
+        return cfg != null && (cfg.usesAntigravity()
+                || !cfg.usesLocalAiCli() && isEndpoint(cfg.aiBaseUrl,
+                "https://generativelanguage.googleapis.com/v1beta/openai"));
     }
 
     private static boolean isKnownApiEndpoint(String url) {
@@ -680,15 +934,17 @@ public final class Fabric26AiScreen extends Screen {
     @Override
     public void onClose() {
         TranslatorConfig cfg = NyanLexFabric26.config();
-        boolean wasCodex = cfg.aiUseCodex;
+        String oldProvider = cfg.aiProvider;
         String oldUrl = cfg.aiBaseUrl;
         String oldModel = cfg.aiModel;
+        String oldAntigravityModel = cfg.antigravityModel;
         List<String> oldKeys = cfg.aiApiKeys == null ? List.of() : List.copyOf(cfg.aiApiKeys);
-        saveApiFields();
+        if (!cfg.usesLocalAiCli()) saveApiFields();
         NyanLexFabric26.saveConfig();
-        if (wasCodex != cfg.aiUseCodex
+        if (!java.util.Objects.equals(oldProvider, cfg.aiProvider)
                 || !java.util.Objects.equals(oldUrl, cfg.aiBaseUrl)
                 || !java.util.Objects.equals(oldModel, cfg.aiModel)
+                || !java.util.Objects.equals(oldAntigravityModel, cfg.antigravityModel)
                 || !oldKeys.equals(cfg.aiApiKeys)) {
             Fabric26TextStyle.clearRenderMemo();
         }

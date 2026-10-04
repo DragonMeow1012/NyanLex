@@ -18,7 +18,7 @@
 
 - 翻譯聊天、物品名稱、提示框、介面、書本、成就通知與支援的 HUD 文字，可選原文、譯文或兩者並列；現代版本同時相容新舊 FTB Quests API，並支援 Jade／WAILA 類物件名稱提示。
 - 重複使用本機快取及已下載翻譯包；切換 AI 服務或模型後，已有譯文仍可沿用。
-- 支援 Google、Gemini、OpenAI、DeepSeek、OpenRouter、Ollama、LM Studio 等相容服務，以及 ChatGPT／Codex 登入。API 服務可能需要自備金鑰與支付費用；ChatGPT 登入需另外安裝 Codex CLI，並使用帳號的 Codex 額度。
+- 支援 Google、Gemini、OpenAI、DeepSeek、OpenRouter、Ollama、LM Studio 等相容服務，以及 ChatGPT／Codex 與 Google／Antigravity 登入。API 服務可能需要自備金鑰與支付費用；ChatGPT 登入使用帳號的 Codex 額度，Google 登入使用該帳號的 Antigravity 額度。
 - 現代版使用 AI 時自動翻譯已開啟的區域；使用 Google 時聊天自動翻譯，其餘按需觸發：物品按 `R`，介面或 HUD 按 `P`。已有翻譯兩種模式都能顯示。
 - 現代版提供「全內容預熱」，右側展開分類可勾選「物品名稱與說明」及「介面文字」，預設全部。任務標題、描述歸在介面文字；按開始或繼續才執行，已有譯文會略過。部分內容進入世界後才載入。
 - 預熱可暫停、繼續或停止；切換 AI 模型後按繼續，會檢查新模型狀態。Google 的 429 暫停保護仍保留。
@@ -40,9 +40,11 @@
 
 舊式版本（Fabric 1.14.4～1.16.5、Forge 1.12.2～1.13.2）提供精簡設定介面，沒有翻譯包及全內容預熱，快捷鍵也有差異。完整操作見 [README](https://github.com/DragonMeow1012/NyanLex/blob/main/README.md)。翻譯品質與速度取決於服務商，建置成功不代表每個模組介面都已實測。
 
+你可以從設定選單開啟翻譯設定；如果入口被其他 UI 模組隱藏，也可以在聊天欄輸入 `/nyanlex`。
+
 ## 專案資訊
 
-選用的 AI 翻譯功能連線到本機或線上語言模型。Codex 選項會啟動已安裝的本機 Codex 程序，不會代為安裝。製作來源與平台正式揭露的填寫方式見[審核資料](submission-guide.zh-TW.md)。
+選用的 AI 翻譯功能連線到本機或線上語言模型。Codex 與 Antigravity 選項只會啟動已安裝的本機官方工具，不會代為安裝。現代 Fabric／NeoForge 版本可從 Gemini 分頁切換到「Google 登入」；請先依 [Google 官方下載頁](https://antigravity.google/download)安裝 Antigravity CLI，模型（含思考強度版本）由 CLI 取得。製作來源與平台正式揭露的填寫方式見[審核資料](submission-guide.zh-TW.md)。
 
 本專案為非官方作品，與 Mojang、Microsoft 或其他模組作者無隸屬或背書關係。程式碼採 MIT 授權；選用的翻譯包另有授權與來源標示，見 [翻譯倉庫](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub)。
 

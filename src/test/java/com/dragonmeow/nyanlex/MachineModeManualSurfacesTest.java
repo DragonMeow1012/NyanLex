@@ -226,6 +226,7 @@ class MachineModeManualSurfacesTest {
             s.translateTitle(SURFACE_TEXTS[2]);
             s.translateActionBar(SURFACE_TEXTS[3]);
             s.translateUi(SURFACE_TEXTS[4]);
+            s.translateQuestHudText(SURFACE_TEXTS[6]);
             s.translateScoreboardLine("12345"); // nothing to translate: never collected
             s.translateBook("Chapter Two"); // not a HUD surface: not collected
             s.flushBatches();
@@ -233,14 +234,15 @@ class MachineModeManualSurfacesTest {
         assertEquals(0, gtRequests.get(), "nothing is sent while the window is open");
         pump(s);
 
-        assertEquals(6, reported.get(), "six distinct drawn texts were sent");
+        assertEquals(7, reported.get(), "seven distinct drawn texts were sent");
         assertFalse(s.isHudCaptureActive());
         assertEquals(1, gtBatches.get(), "one batch for the whole HUD");
-        assertEquals(6, gtRequests.get());
+        assertEquals(7, gtRequests.get());
         assertTrue(gtSent.contains(SURFACE_TEXTS[4]) && !gtSent.contains("Chapter Two"));
         assertEquals("機翻:" + SURFACE_TEXTS[1], s.translateBossBar(SURFACE_TEXTS[1]).translated());
         assertEquals("機翻:" + SURFACE_TEXTS[0], s.translateScoreboardLine(SURFACE_TEXTS[0]).translated());
         assertEquals("機翻:" + SURFACE_TEXTS[4], s.translateUi(SURFACE_TEXTS[4]).translated());
+        assertEquals("機翻:" + SURFACE_TEXTS[6], s.translateQuestHudText(SURFACE_TEXTS[6]).translated());
         assertFalse(s.translateBook("Chapter Two").changed());
     }
 
@@ -341,7 +343,7 @@ class MachineModeManualSurfacesTest {
         TranslatorConfig cfg = machineConfig();
         TranslationService s = service(cfg, gtCache(cfg), aiCache(cfg, Map.of()));
         assertTrue(s.usesMachineEngineForHud());
-        cfg.aiScoreboard = cfg.aiBossBar = cfg.aiTitle = cfg.aiActionBar = cfg.aiName = true;
+        cfg.aiScoreboard = cfg.aiBossBar = cfg.aiTitle = cfg.aiActionBar = cfg.aiName = cfg.aiScreenText = true;
         assertFalse(s.usesMachineEngineForHud());
     }
 }

@@ -49,6 +49,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     private static Path configPath;
     private static LegacyCodexClient codexClient;
     private KeyMapping settingsKey;
+    private static volatile boolean settingsScreenRequested;
     private static KeyMapping screenScanKey;
     private static KeyMapping itemRetranslateKey;
     private boolean keybindMigrationChecked;
@@ -135,6 +136,10 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
             else TRANSLATOR.cancelPending();
             instance.flushPendingChats(client);
             instance.warmVisibleItemNames(client);
+            if (settingsScreenRequested) {
+                settingsScreenRequested = false;
+                client.setScreen(new LegacySettingsScreen(null));
+            }
             while (settingsKey.consumeClick()) {
                 // Only pass-events screens can let a click through; never act while the player types.
                 if (!LegacyTextInput.focused(client.screen)) client.setScreen(new LegacySettingsScreen(client.screen));
@@ -145,6 +150,15 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         }));
         ItemTooltipCallback.EVENT.register((stack, context, lines) ->
                 HookGuard.run("event.itemTooltip", () -> translateTooltip(stack, lines)));
+    }
+
+    /** Handles the settings command locally so it never reaches a multiplayer server. */
+    public static boolean handleClientCommand(String message) {
+        String command = message == null ? "" : message.trim();
+        if (!"/nyanlex".equalsIgnoreCase(command)
+                && !"/nyanlex config".equalsIgnoreCase(command)) return false;
+        settingsScreenRequested = true;
+        return true;
     }
 
     /** First launch only: the quick setup opens once over the title screen. */

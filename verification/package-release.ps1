@@ -162,6 +162,32 @@ function Get-StreamSha256Lower {
     }
 }
 
+function Get-PackageTreeState {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    Assert-NoReparseTree $Root $Description
+    Require (Test-Path -LiteralPath $Root -PathType Container) `
+        "$Description is not a directory: $Root"
+
+    $entries = @(Get-ChildItem -LiteralPath $Root -Force -Recurse |
+        Sort-Object FullName | ForEach-Object {
+            $relative = $_.FullName.Substring($Root.Length + 1).Replace('\', '/')
+            if ($_.PSIsContainer) {
+                "D $relative"
+            } else {
+                "F $(Get-FileSha256Lower $_.FullName) $relative"
+            }
+        })
+
+    # Recheck after hashing so a reparse point cannot be introduced while the
+    # previous release is being captured for the transactional replacement.
+    Assert-NoReparseTree $Root $Description
+    return [string]::Join("`n", $entries)
+}
+
 function Assert-OutputTarget {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -739,8 +765,9 @@ Require (-not (Test-Path -LiteralPath $failedInstallRoot)) `
     "Unique failed-install recovery path already exists: $failedInstallRoot"
 
 $releaseExistedAtPreflight = Test-Path -LiteralPath $releaseRoot
+$existingReleaseState = $null
 if ($releaseExistedAtPreflight) {
-    Assert-ExactPackageTree $releaseRoot $allowed 'Existing release'
+    $existingReleaseState = Get-PackageTreeState $releaseRoot 'Existing release'
 }
 
 foreach ($artifact in $artifacts) {
@@ -964,7 +991,9 @@ try {
 
     $assertExpectedTree = {
         param([string]$Path, [string]$Description)
-        Assert-ExactPackageTree $Path $allowed $Description
+        $actualState = Get-PackageTreeState $Path $Description
+        Require ($actualState -ceq $existingReleaseState) `
+            "$Description changed after release preflight"
     }
     $assertMovableTree = {
         param([string]$Path, [string]$Description)

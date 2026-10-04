@@ -118,9 +118,9 @@ def changelog(target) -> str:
 
 ### Fixes in this build
 
-- FTB quest tabs, titles and body text now refresh together when pressing `G` or when an asynchronous translation completes.
-- The chat composer keeps the selected target language visible after translation.
-- The saved-translation counter reports the durable accumulated total instead of stopping at 5,000 cached entries.
+- Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
+- Modern Fabric/NeoForge builds can use a Google account through a separately installed Antigravity CLI, including the CLI-reported model and reasoning variants. Install it from [Google's official download page](https://antigravity.google/download).
+- Google machine translation tries a compatible alternate endpoint once when the primary returns a 429 or block page.
 
 Online translation is disabled by default on new installations. Use only the JAR matching this exact Minecraft version and loader. Translation coverage depends on how each mod renders text; text embedded in images is not translated.
 

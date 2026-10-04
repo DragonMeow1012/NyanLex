@@ -27,6 +27,7 @@ public final class GoogleFreeTranslator implements Translator {
      * It may stop working or be rate-limited at any time.
      */
     static final String ENDPOINT = "https://translate.googleapis.com/translate_a/single";
+    static final String FALLBACK_ENDPOINT = "https://translate.google.com/translate_a/single";
 
     private static final java.util.regex.Pattern ANY_TOKEN =
             java.util.regex.Pattern.compile("\\u27E6[^\\u27E6\\u27E7]*\\u27E7");
@@ -35,6 +36,9 @@ public final class GoogleFreeTranslator implements Translator {
     private final String sourceLang;
     private final RequestPacer pacer;
     private final MachineTranslationGate gate;
+    /** Last endpoint that completed a request. Kept for the session so a blocked host is
+     * not probed again for every translated line. */
+    private volatile String activeEndpoint = ENDPOINT;
 
     public GoogleFreeTranslator(HttpTransport transport, String sourceLang) {
         this(transport, sourceLang, RequestPacer.disabled());
@@ -58,10 +62,14 @@ public final class GoogleFreeTranslator implements Translator {
 
     /** Build the GET URL for the given text and target language (visible for testing). */
     public String buildUrl(String text, String targetLang) {
+        return buildUrl(ENDPOINT, text, targetLang);
+    }
+
+    private String buildUrl(String endpoint, String text, String targetLang) {
         String sl = URLEncoder.encode(sourceLang, StandardCharsets.UTF_8);
         String tl = URLEncoder.encode(targetLang, StandardCharsets.UTF_8);
         String q = URLEncoder.encode(text, StandardCharsets.UTF_8);
-        return ENDPOINT + "?client=gtx&sl=" + sl + "&tl=" + tl + "&dt=t&q=" + q;
+        return endpoint + "?client=gtx&sl=" + sl + "&tl=" + tl + "&dt=t&q=" + q;
     }
 
     @Override
@@ -83,21 +91,28 @@ public final class GoogleFreeTranslator implements Translator {
         boolean probe = gate.acquire(); // closed gate: RequestsPausedException, nothing is sent
         boolean settled = false;
         try {
-            pacer.acquire(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
-            gate.recheck(probe);
             String body;
+            String endpoint = activeEndpoint;
             try {
-                body = transport.get(buildUrl(text, targetLang));
+                body = requestEndpoint(endpoint, text, targetLang, probe);
             } catch (IOException e) {
-                if (MachineTranslationGate.isRateLimitMessage(e.getMessage())) {
-                    settled = true;
-                    rateLimited(e.getMessage());
+                if (!MachineTranslationGate.isRateLimitMessage(e.getMessage())) {
+                    throw new TranslationException("http error: " + e.getMessage(), e);
                 }
-                throw new TranslationException("http error: " + e.getMessage(), e);
-            }
-            if (MachineTranslationGate.isBlockPage(body)) {
-                settled = true;
-                rateLimited("unusual traffic page");
+                // Google exposes the same response format on two hosts. A 429 is often
+                // host-specific, so try the other host exactly once before closing the
+                // global gate. The pacer still spaces this second outbound request.
+                String fallback = alternateEndpoint(endpoint);
+                try {
+                    body = requestEndpoint(fallback, text, targetLang, probe);
+                    activeEndpoint = fallback;
+                } catch (IOException fallbackError) {
+                    settled = true;
+                    String detail = MachineTranslationGate.isRateLimitMessage(fallbackError.getMessage())
+                            ? fallbackError.getMessage()
+                            : e.getMessage() + "; alternate failed: " + fallbackError.getMessage();
+                    throw rateLimited(detail);
+                }
             }
             TranslationResult result = GoogleResponseParser.parse(body);
             gate.onSuccess();
@@ -108,13 +123,26 @@ public final class GoogleFreeTranslator implements Translator {
         }
     }
 
+    private String requestEndpoint(String endpoint, String text, String targetLang, boolean probe)
+            throws IOException {
+        pacer.acquire(); // 事前冷卻：every outbound request is spaced by requestCooldownMs
+        gate.recheck(probe);
+        String body = transport.get(buildUrl(endpoint, text, targetLang));
+        if (MachineTranslationGate.isBlockPage(body)) throw new IOException("unusual traffic page");
+        return body;
+    }
+
+    private static String alternateEndpoint(String endpoint) {
+        return FALLBACK_ENDPOINT.equals(endpoint) ? ENDPOINT : FALLBACK_ENDPOINT;
+    }
+
     /** Close the gate and abandon the request as "unsent, not failed". */
-    private void rateLimited(String detail) {
+    private RequestsPausedException rateLimited(String detail) {
         int minutes = gate.onRateLimited();
         DebugErrorLog.report(DebugErrorLog.HTTP_ERROR, "Google translate rate limited (429)",
                 "backoffMinutes", Integer.toString(minutes),
                 "detail", detail == null ? "" : detail.substring(0, Math.min(detail.length(), 200)));
-        throw new RequestsPausedException();
+        return new RequestsPausedException();
     }
 
     @Override

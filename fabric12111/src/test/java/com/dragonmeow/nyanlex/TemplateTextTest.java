@@ -392,6 +392,19 @@ class TemplateTextTest {
     }
 
     @Test
+    void collapseProseLayoutGapsKeepsIndentationAndHardLines() {
+        assertEquals("你 知道 嗎？",
+                TemplateText.collapseProseLayoutGaps("你      知道\t\t嗎？"));
+        assertEquals("   第一行  \n\t第二 行\u00A0\u00A0",
+                TemplateText.collapseProseLayoutGaps("   第一行  \n\t第二   行\u00A0\u00A0"),
+                "only internal visual gaps collapse; indentation and trailing padding stay");
+        assertEquals("⟦CS0⟧Did⟦/CS0⟧ ⟦CS1⟧you know?⟦/CS1⟧",
+                TemplateText.collapseProseLayoutGaps(
+                        "⟦CS0⟧Did⟦/CS0⟧     ⟦CS1⟧you  know?⟦/CS1⟧"),
+                "style markers do not stop prose normalization");
+    }
+
+    @Test
     void serverInstanceIdsPlayerCountsAndHubNumbersShareOneTemplate() {
         String first = "SkyBlock Hub #11  Players: 48/60  Server: mega33A";
         String second = "SkyBlock Hub #13  Players: 44/60  Server: mega4E";

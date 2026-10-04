@@ -22,7 +22,8 @@ public final class DialogContent {
         return List.of("nyanlex.ui.consent.title", "nyanlex.ui.consent.item", "nyanlex.ui.consent.screen",
                 "nyanlex.ui.consent.hud", "nyanlex.ui.consent.warmup", "nyanlex.ui.consent.stop",
                 "nyanlex.ui.consent.start", "nyanlex.ui.consent.cancel",
-                "nyanlex.ui.engine.ai", "nyanlex.ui.engine.codex", "nyanlex.ui.engine.custom",
+                "nyanlex.ui.engine.ai", "nyanlex.ui.engine.codex", "nyanlex.ui.engine.antigravity",
+                "nyanlex.ui.engine.custom",
                 "nyanlex.ui.privacy.status.on", "nyanlex.ui.privacy.status.off",
                 "message.nyanlex.tooltip_hint_start", "screen.nyanlex.provider.google",
                 "config.nyanlex.language.follow",
@@ -40,7 +41,8 @@ public final class DialogContent {
     /** "Google 翻譯（非官方端點）", "Gemini" ... or "ChatGPT（使用你的 Codex 額度）": the service one surface sends to. */
     public static String engineName(TranslatorConfig cfg, boolean ai, Lang lang) {
         if (ai) {
-            if (cfg.aiUseCodex) return lang.get("nyanlex.ui.engine.codex");
+            if (cfg.usesCodex()) return lang.get("nyanlex.ui.engine.codex");
+            if (cfg.usesAntigravity()) return lang.get("nyanlex.ui.engine.antigravity");
             return lang.get("nyanlex.ui.engine.ai", aiProviderName(cfg, lang));
         }
         MachineTranslationProvider provider = MachineTranslationProvider.fromId(cfg.machineTranslationProvider);

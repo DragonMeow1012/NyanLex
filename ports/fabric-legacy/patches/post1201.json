@@ -1,7 +1,13 @@
 {
-  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/CliSetupScreen.java": [
     {
-      "from": "        @Override protected void renderBackground(GuiGraphics graphics) {\n            CodexEffortScreen.this.renderBackground(graphics);\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n        }\n",
+      "from": "this.renderBackground(graphics);",
+      "to": "this.renderBackground(graphics, mouseX, mouseY, partialTick);"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/LocalAiEffortScreen.java": [
+    {
+      "from": "        @Override\n        protected void renderBackground(GuiGraphics graphics) {\n            LocalAiEffortScreen.this.renderBackground(graphics);\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n        }\n",
       "to": ""
     },
     {
@@ -9,9 +15,9 @@
       "to": "public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {\n        this.renderBackground(graphics, mouseX, mouseY, delta);\n        graphics.fill(0, 28, this.width, this.height - 48, 0x20204A60);"
     }
   ],
-  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/LocalAiModelScreen.java": [
     {
-      "from": "        @Override protected void renderBackground(GuiGraphics graphics) {\n            CodexModelScreen.this.renderBackground(graphics);\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n        }\n",
+      "from": "        @Override\n        protected void renderBackground(GuiGraphics graphics) {\n            LocalAiModelScreen.this.renderBackground(graphics);\n            graphics.fill(0, this.y0, this.width, this.y1, 0x20204A60);\n        }\n",
       "to": ""
     },
     {

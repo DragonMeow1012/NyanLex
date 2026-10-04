@@ -125,9 +125,9 @@ final class FabricItemWarmupSource implements ItemWarmupSource {
         }
 
         @Override
-        public boolean usesCodex() {
+        public boolean usesSerialLocalAi() {
             TranslationService s = NyanLexFabric.service();
-            return s != null && s.isCodexEngine();
+            return s != null && s.isSerialLocalAiEngine();
         }
 
         @Override

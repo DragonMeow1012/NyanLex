@@ -28,6 +28,8 @@ import com.dragonmeow.nyanlex.service.RecoveryAssembly;
 import com.dragonmeow.nyanlex.service.TranslationDecision;
 import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.translate.AiSettings;
+import com.dragonmeow.nyanlex.translate.AntigravityCliClient;
+import com.dragonmeow.nyanlex.translate.AntigravityCliTransport;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerTransport;
 import com.dragonmeow.nyanlex.translate.OpenAiTranslator;
@@ -44,6 +46,7 @@ import com.dragonmeow.nyanlex.fabric.mixin.AbstractContainerScreenAccessor;
 import com.dragonmeow.nyanlex.fabric.mixin.ChatComponentMixin;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -98,6 +101,8 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static UrlHttpTransport transport;
     private static CodexAppServerClient codexClient;
     private static CodexAppServerTransport codexTransport;
+    private static AntigravityCliClient antigravityClient;
+    private static AntigravityCliTransport antigravityTransport;
     private static final SessionTokenUsage tokenUsage = new SessionTokenUsage();
 
     private static HubLocalCache hubLocalCache;
@@ -114,6 +119,7 @@ public final class NyanLexFabric implements ClientModInitializer {
             ThreadLocal.withInitial(() -> false);
 
     private static KeyMapping modeKey;
+    private static volatile boolean settingsScreenRequested;
     private static KeyMapping retranslateKey;
     private static KeyMapping screenScanKey;
     private static final com.dragonmeow.nyanlex.translate.ScreenTranslationCapture SCREEN_CAPTURE =
@@ -857,11 +863,14 @@ public final class NyanLexFabric implements ClientModInitializer {
         return hubDownloadJob.isRunning();
     }
 
-    /** An API key is entered, or a ChatGPT login is signed in: either one makes the AI service usable. */
+    /** An API key or authenticated local account provider makes the AI service usable. */
     public static boolean aiConfigured() {
         if (config == null) return false;
-        if (config.aiUseCodex) {
+        if (config.usesCodex()) {
             return codexClient != null && codexClient.isSignedInCached();
+        }
+        if (config.usesAntigravity()) {
+            return antigravityClient != null && antigravityClient.isInstalledCached();
         }
         if (config.aiApiKeys == null) return false;
         for (String key : config.aiApiKeys) if (key != null && !key.isBlank()) return true;
@@ -887,6 +896,10 @@ public final class NyanLexFabric implements ClientModInitializer {
 
     public static CodexAppServerClient codexClient() {
         return codexClient;
+    }
+
+    public static AntigravityCliClient antigravityClient() {
+        return antigravityClient;
     }
 
     public static SessionTokenUsage.Snapshot tokenUsageSnapshot() {
@@ -1225,11 +1238,25 @@ public final class NyanLexFabric implements ClientModInitializer {
         codexClient.setTokenUsage(tokenUsage);
         // Spawn + initialize app-server in the background when Codex mode is the active
         // engine, so the first translation does not wait for process start.
-        if (config.aiUseCodex) codexClient.warmUpAsync();
+        if (config.usesCodex()) codexClient.warmUpAsync();
         codexTransport = new CodexAppServerTransport(codexClient,
                 () -> config.codexReasoningEffort);
         OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,
                 () -> new AiSettings("codex://app-server", config.codexModel,
+                        java.util.Collections.emptyList(), config.aiGlossary),
+                RequestPacer.disabled());
+        antigravityClient = new AntigravityCliClient(
+                codexRoot.resolve(MOD_ID + "-antigravity-workspace"));
+        antigravityClient.setTokenUsage(tokenUsage);
+        if (config.usesAntigravity()) {
+            antigravityClient.warmUpAsync(config.antigravityModel);
+        }
+        antigravityTransport = new AntigravityCliTransport(antigravityClient,
+                () -> config.antigravityModel);
+        OpenAiTranslator antigravityAi = new OpenAiTranslator(antigravityTransport,
+                () -> new AiSettings("antigravity://cli",
+                        config.antigravityModel == null || config.antigravityModel.isBlank()
+                                ? "default" : config.antigravityModel,
                         java.util.Collections.emptyList(), config.aiGlossary),
                 RequestPacer.disabled());
         // 偵錯模式: the one local error log (newest 1000 entries, API keys masked). It is written only
@@ -1242,14 +1269,17 @@ public final class NyanLexFabric implements ClientModInitializer {
         com.dragonmeow.nyanlex.translate.DebugErrorLog.install(errorLog);
         apiAi.setExchangeDumpSink(errorLog.exchangeSink());
         codexAi.setExchangeDumpSink(errorLog.exchangeSink());
+        antigravityAi.setExchangeDumpSink(errorLog.exchangeSink());
         SwitchingAiTranslator ai = new SwitchingAiTranslator(
-                apiAi, codexAi, () -> config.aiUseCodex);
+                apiAi, codexAi, antigravityAi, () -> config.aiProvider);
         aiRateLimitedProbe = ai::isRateLimited;
         // The hook below can run after the mod class loader is closed (NeoForge); load what it needs now.
         CodexAppServerClient.preloadForShutdown();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             CodexAppServerClient client = codexClient;
             if (client != null) client.close();
+            AntigravityCliClient googleClient = antigravityClient;
+            if (googleClient != null) googleClient.close();
         }, "nyanlex-codex-shutdown"));
         PersistentStore googleStore = new ProviderLanguageFileStore(
                 FabricLoader.getInstance().getConfigDir(), MOD_ID + "-cache", config.targetLang,
@@ -1275,9 +1305,11 @@ public final class NyanLexFabric implements ClientModInitializer {
         cache.setDebugLog("Google", debugLog);
         aiCache.setDebugLog("AI", debugLog); // migrate legacy dispatcher stand-ins once
         aiCache.setProvisionalRetryGate(() ->
-                (config.aiUseCodex
+                (config.usesCodex()
                         ? codexClient != null && codexClient.isSignedInCached()
                                 && config.codexModel != null && !config.codexModel.isBlank()
+                        : config.usesAntigravity()
+                                ? antigravityClient != null && antigravityClient.isInstalledCached()
                         : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
                         && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
@@ -1313,6 +1345,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         hubDownloadJob.addListener(NyanLexFabric::onHubDownloadJobChanged);
 
         registerKeyBinds();
+        registerCommands();
         registerEvents();
 
         LOGGER.info("[{}] (Fabric) initialized (target={}, chat={}, tooltip={})",
@@ -1488,6 +1521,22 @@ public final class NyanLexFabric implements ClientModInitializer {
                 || !contents.getKey().startsWith("chat.type.advancement.")) return null;
         Object[] args = contents.getArgs();
         return args.length > 1 && args[1] instanceof Component ? (Component) args[1] : null;
+    }
+
+    private void registerCommands() {
+        ClientCommandManager.DISPATCHER.register(ClientCommandManager.literal(MOD_ID)
+                .executes(context -> requestSettingsScreen())
+                .then(ClientCommandManager.literal("config")
+                        .executes(context -> requestSettingsScreen())));
+    }
+
+    private static int requestSettingsScreen() {
+        settingsScreenRequested = true;
+        return 1;
+    }
+
+    private static void openSettings(Minecraft mc) {
+        if (mc != null) mc.setScreen(new TranslationConfigScreen(mc.screen));
     }
 
     private static Component withAdvancementAnnouncementTitle(Component source, Component title) {
@@ -2201,9 +2250,13 @@ public final class NyanLexFabric implements ClientModInitializer {
         maybeMigrateKeybinds(mc);
         SCREEN_RENDER_STACK.remove();
         refreshScannedScreen();
+        if (settingsScreenRequested) {
+            settingsScreenRequested = false;
+            openSettings(mc);
+        }
         if (modeKey != null) {
             while (modeKey.consumeClick()) {
-                if (mc != null) mc.setScreen(new TranslationConfigScreen(mc.screen));
+                openSettings(mc);
             }
         }
         if (retranslateKey != null && service != null) {
@@ -2638,6 +2691,36 @@ public final class NyanLexFabric implements ClientModInitializer {
             if (client != null) client.execute(() -> onResult.accept(message));
             else onResult.accept(message);
         }, "nyanlex-codex-test");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    public static void testAntigravity(java.util.function.Consumer<String> onResult) {
+        if (antigravityClient == null || config == null) {
+            onResult.accept(new net.minecraft.network.chat.TranslatableComponent(
+                    "message.nyanlex.not_initialized").getString());
+            return;
+        }
+        if (!antigravityClient.hasAuthenticatedSessionCached()) {
+            onResult.accept(new net.minecraft.network.chat.TranslatableComponent(
+                    "screen.nyanlex.ai.antigravity.test_requires_login").getString());
+            return;
+        }
+        Thread thread = new Thread(() -> {
+            String result;
+            try {
+                String translated = antigravityClient.testConnection(
+                        config.antigravityModel == null ? "" : config.antigravityModel);
+                result = "Hello, world -> " + translated;
+            } catch (Exception error) {
+                result = new net.minecraft.network.chat.TranslatableComponent("message.nyanlex.failed",
+                        error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage()).getString();
+            }
+            final String message = result;
+            Minecraft client = Minecraft.getInstance();
+            if (client != null) client.execute(() -> onResult.accept(message));
+            else onResult.accept(message);
+        }, "nyanlex-antigravity-test");
         thread.setDaemon(true);
         thread.start();
     }

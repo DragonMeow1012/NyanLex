@@ -30,7 +30,13 @@ public interface ItemWarmupBackend {
         return false;
     }
 
-    /** The AI engine is the ChatGPT (Codex) sign-in: the warm-up keeps one request at a time. */
+    /** The AI engine is a serialized local CLI: the warm-up keeps one request at a time. */
+    default boolean usesSerialLocalAi() {
+        return usesCodex();
+    }
+
+    /** Compatibility hook for loader glue compiled before Antigravity support. */
+    @Deprecated
     default boolean usesCodex() {
         return false;
     }

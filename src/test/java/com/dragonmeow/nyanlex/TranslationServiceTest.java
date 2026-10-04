@@ -142,6 +142,40 @@ class TranslationServiceTest {
         return new TranslationService(cfg, cache, aiCache);
     }
 
+    @Test
+    void screenProseDropsEnglishLayoutGapsButScoreboardKeepsColumns() {
+        TranslatorConfig cfg = TestConfigs.translating();
+        cfg.targetLang = "zh-TW";
+        cfg.screenTextMode = DisplayMode.TRANSLATION;
+        cfg.scoreboardMode = DisplayMode.TRANSLATION;
+        cfg.aiScreenText = true;
+        cfg.aiScoreboard = true;
+        List<String> requests = new ArrayList<>();
+        Translator translator = (text, target) -> {
+            requests.add(text);
+            if (text.contains("⟦WS0⟧")) {
+                return new TranslationResult("你 ⟦WS0⟧ 知道 ⟦WS1⟧ 嗎？", "en");
+            }
+            return new TranslationResult("你      知道     嗎？", "en");
+        };
+        TranslationService service = service(cfg, translator, DIRECT);
+        String source = "Did     you     know?";
+
+        service.translateScreenText(source);
+        pump(service);
+        assertEquals("你 知道 嗎？", service.translateScreenText(source).translated());
+        assertTrue(requests.contains("Did you know?"),
+                "GUI prose must reach the translator as one semantic sentence");
+
+        service.translateScoreboardLine(source);
+        pump(service);
+        assertEquals("你     知道     嗎？",
+                service.translateScoreboardLine(source).translated(),
+                "a real column surface still restores its exact horizontal gaps");
+        assertTrue(requests.stream().anyMatch(request -> request.contains("⟦WS0⟧")),
+                "scoreboard requests retain explicit layout tokens");
+    }
+
     /** Simulate two client ticks: the coalescer holds one tick after growth, then sends. */
     private static void pump(TranslationService s) {
         s.flushBatches();

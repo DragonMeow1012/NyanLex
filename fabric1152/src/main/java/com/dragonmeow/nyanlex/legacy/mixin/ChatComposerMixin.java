@@ -185,6 +185,11 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
         if (!HookGuard.enter("ChatComposer.keyComposer")) return;
         try {
             int key = code;
+            if ((key == 257 || key == 335)
+                    && LegacyTranslatorMod.handleClientCommand(input.getValue())) {
+                ci.setReturnValue(true);
+                return;
+            }
             if (nyanlex$enterHeld && (key == 257 || key == 335)) { ci.setReturnValue(true); return; }
             if (nyanlex$composer != null && nyanlex$composer.choosing()) {
                 if (key == 256 || key == 258) nyanlex$composer.closeChoices();

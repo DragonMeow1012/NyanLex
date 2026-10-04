@@ -37,16 +37,16 @@
       "to": "    @Redirect(method = \"render\", at = @At(value = \"INVOKE\",\n            target = \"Lnet/minecraft/client/gui/GuiGraphics;drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I\"), require = 0)\n    private int nyanlex$inlineHud(GuiGraphics g, Font font, Component text, int x, int y, int color) {\n        if (!HookGuard.enter(\"GuiScoreboard.inlineHud\")) return g.drawString(font, text, x, y, color);\n        try {\n            TranslationService service = NyanLexFabric.service();\n            if (service != null && !NyanLexFabric.isOwnFeedback(text)) {\n                if (text == overlayMessageString)\n                    return nyanlex$backdrop(\"actionBar\", g, font, text, x, y, font.width(text), color, service::translateActionBar);\n                if (text == title || text == subtitle)\n                    return nyanlex$backdrop(\"title\", g, font, text, x, y, font.width(text), color, service::translateTitle);\n            }\n            return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(\n                    () -> g.drawString(font, text, x, y, color));\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.inlineHud\", guardError);\n            return g.drawString(font, text, x, y, color);\n        }\n    }\n\n"
     }
   ],
-  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/LocalAiEffortScreen.java": [
     {
-      "from": "super(minecraft, CodexEffortScreen.this.width, CodexEffortScreen.this.height,\n                    28, CodexEffortScreen.this.height - 48, 18);",
-      "to": "super(minecraft, CodexEffortScreen.this.width, CodexEffortScreen.this.height - 76, 28, 18);"
+      "from": "super(minecraft, LocalAiEffortScreen.this.width, LocalAiEffortScreen.this.height,\n                    28, LocalAiEffortScreen.this.height - 48, 18);",
+      "to": "super(minecraft, LocalAiEffortScreen.this.width, LocalAiEffortScreen.this.height - 76, 28, 18);"
     }
   ],
-  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/LocalAiModelScreen.java": [
     {
-      "from": "super(minecraft, CodexModelScreen.this.width, CodexModelScreen.this.height,\n                    48, CodexModelScreen.this.height - 48, 18);",
-      "to": "super(minecraft, CodexModelScreen.this.width, CodexModelScreen.this.height - 96, 48, 18);"
+      "from": "super(minecraft, LocalAiModelScreen.this.width, LocalAiModelScreen.this.height,\n                    48, LocalAiModelScreen.this.height - 48, 18);",
+      "to": "super(minecraft, LocalAiModelScreen.this.width, LocalAiModelScreen.this.height - 96, 48, 18);"
     }
   ],
   "com/dragonmeow/nyanlex/fabric/TranslationLanguageScreen.java": [

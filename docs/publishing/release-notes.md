@@ -16,10 +16,13 @@ Enable **Chat input translation**, open chat, and write in the floating panel. C
 - Four complete README translations are available; Traditional Chinese remains the GitHub homepage.
 - Long descriptions remain readable when an AI response loses only display-wrap markers. A single review can restore the layout; cached reads do not repeat the request, and numbers, protected names and colour markers must still survive validation.
 
-Also included: Google, Gemini, OpenAI, DeepSeek, OpenAI-compatible services and ChatGPT/Codex sign-in; translation import/export; and, on modern versions, downloadable translation packs and full-content warmup with selectable categories. Completed translations remain reusable after switching AI providers or models.
+Also included: Google, Gemini, OpenAI, DeepSeek, OpenAI-compatible services, ChatGPT/Codex sign-in, and Google sign-in through a separately installed Antigravity CLI on modern Fabric/NeoForge builds. Antigravity mode uses the signed-in Google account's allowance and obtains its model variants from the CLI. Translation import/export, downloadable translation packs and full-content warmup with selectable categories remain available. Completed translations remain reusable after switching AI providers or models.
 
 ## Compatibility and display fixes
 
+- Added Google account sign-in through Antigravity CLI, with live model discovery, account display, login/logout guidance and a bounded connection test.
+- Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
+- Google machine translation now tries a compatible alternate endpoint once when the primary endpoint returns a 429 or block page.
 - FTB Quests supports both the older public-instance API and the newer accessor API. Quest tabs, titles and body text now share one refresh path, so pressing `G` changes the displayed text—not only the mode indicator—and completed asynchronous translations appear without toggling twice.
 - Jade/WAILA-style object-name overlays have a dedicated optional compatibility hook on supported modern builds.
 - Advancement toasts and advancement announcements translate the advancement title while preserving the surrounding game message.
@@ -64,6 +67,9 @@ Validation covers automated tests, per-target builds, packaged classes and metad
 
 ### 相容性與顯示修正
 
+- 現代 Fabric／NeoForge 版本新增透過 Antigravity CLI 的 Google 帳號登入，使用該帳號的 Antigravity 額度，並提供即時模型清單、帳號顯示、登入／登出引導及有逾時限制的連線測試。
+- 你可以從設定選單開啟翻譯設定；如果入口被其他 UI 模組隱藏，也可以在聊天欄輸入 `/nyanlex`。
+- Google 機器翻譯的主要端點回傳 429 或阻擋頁面時，會改試一次相容的備用端點。
 - FTB Quests 同時相容舊版公開實例 API 與新版存取方法。任務索引、標題和內文統一走同一條刷新路徑，按 `G` 時不再只有模式提示改變；背景翻譯完成後也會直接套用，不必再切換兩次。
 - 支援的現代版本新增 Jade／WAILA 類物件名稱提示的專用選用相容掛鉤。
 - 成就彈窗與聊天中的成就訊息會翻譯成就名稱，並保留遊戲原本的訊息格式。

@@ -243,6 +243,22 @@ public final class CodexAppServerClient implements AutoCloseable {
         }
     }
 
+    /** Whether the selected executable is supplied by the installed Codex desktop app. */
+    public boolean usesBundledDesktopAppExecutable() {
+        if (!isWindows()) return false;
+        String executable = resolveExecutable();
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (executable == null || executable.isBlank()
+                || localAppData == null || localAppData.isBlank()) return false;
+        try {
+            Path appBin = Path.of(localAppData, "OpenAI", "Codex", "bin")
+                    .toAbsolutePath().normalize();
+            return Path.of(executable).toAbsolutePath().normalize().startsWith(appBin);
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     /**
      * Start (spawn + initialize) app-server in the background so the first translation
      * does not pay the ~0.6 s process start. Best effort: failures are left to the next
@@ -1443,6 +1459,21 @@ public final class CodexAppServerClient implements AutoCloseable {
             stopProcess();
             failAll(new IOException("Codex app-server client closed"));
             releaseThreadBaselines();
+        }
+    }
+
+    /** Stop the current app-server without permanently closing this reusable client. */
+    public void prepareForCliUninstall() {
+        synchronized (lifecycleLock) {
+            if (closed) return;
+            stopProcess();
+            failAll(new IOException("Codex CLI is being uninstalled"));
+            releaseThreadBaselines();
+            cachedAccount = AccountSnapshot.signedOut();
+            cachedModels = List.of();
+        }
+        synchronized (executableLock) {
+            resolvedExecutable = null;
         }
     }
 

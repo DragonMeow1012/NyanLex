@@ -2,10 +2,13 @@
   "com/dragonmeow/nyanlex/fabric/AiConfigScreen.java": [
     {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
   ],
-  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/CliSetupScreen.java": [
     {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
   ],
-  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/LocalAiEffortScreen.java": [
+    {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/LocalAiModelScreen.java": [
     {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
   ],
   "com/dragonmeow/nyanlex/fabric/TranslationConfigScreen.java": [

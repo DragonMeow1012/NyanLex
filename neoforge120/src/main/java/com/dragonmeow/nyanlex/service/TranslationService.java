@@ -573,13 +573,13 @@ public final class TranslationService {
 
     public void requestScreenTextAsync(String source, Consumer<String> onResult) {
         if (!TextFilter.shouldTranslate(source, activeTargetLang)) return;
-        NameMasker.Masked masked = asyncMask(source, onResult);
+        String request = screenTextRequest(source);
+        NameMasker.Masked masked = asyncMask(request, onResult);
         if (masked == null || !translatableMasked(masked, false)) return;
         Consumer<String> ready = translated -> {
-            String restored = NameMasker.unmask(translated, restoreValues(masked, source, true));
+            String restored = NameMasker.unmask(translated, restoreValues(masked, request, true));
             if (restored != null) {
-                onResult.accept(finalizeTranslatedText(
-                        LayoutPreserver.matchOuterWhitespace(source, restored)));
+                onResult.accept(finalizeScreenText(source, restored));
             }
         };
         requestByEngine(config.aiScreenText, masked.text(), false, ready, false, true);
@@ -597,13 +597,13 @@ public final class TranslationService {
         // Automatic live-GUI request: manual (P) under the machine engine, see isManualScreenTranslation().
         if (!config.aiScreenText || !wantsScreenTextTranslation(source)) return;
         // Same masked key as the render-time lookup of this widget.
-        NameMasker.Masked masked = asyncMask(source, onResult);
+        String request = screenTextRequest(source);
+        NameMasker.Masked masked = asyncMask(request, onResult);
         if (masked == null || !translatableMasked(masked, false)) return;
         Consumer<String> ready = translated -> {
-            String restored = NameMasker.unmask(translated, restoreValues(masked, source, true));
+            String restored = NameMasker.unmask(translated, restoreValues(masked, request, true));
             if (restored != null) {
-                onResult.accept(finalizeTranslatedText(
-                        LayoutPreserver.matchOuterWhitespace(source, restored)));
+                onResult.accept(finalizeScreenText(source, restored));
             }
         };
         requestByEngine(screenEngine(source), masked.text(), false, ready, false, true);
@@ -2069,7 +2069,7 @@ public final class TranslationService {
     // -------------------------------------------------------------------------
 
     /** The HUD text surfaces the in-world P scan collects. */
-    public enum HudSurface { SCOREBOARD, BOSS_BAR, TITLE, ACTION_BAR, NAME_TAG }
+    public enum HudSurface { SCOREBOARD, BOSS_BAR, TITLE, ACTION_BAR, NAME_TAG, SCREEN_TEXT }
 
     /** Client ticks the collection window stays open: at least one full render frame passes. */
     private static final int HUD_CAPTURE_TICKS = 3;
@@ -2094,7 +2094,7 @@ public final class TranslationService {
      *  is a manual machine action and must pass the Google gate). */
     public boolean usesMachineEngineForHud() {
         return !config.aiScoreboard || !config.aiBossBar || !config.aiTitle
-                || !config.aiActionBar || !config.aiName;
+                || !config.aiActionBar || !config.aiName || !config.aiScreenText;
     }
 
     public boolean isHudCaptureActive() {
@@ -2127,6 +2127,7 @@ public final class TranslationService {
             case TITLE -> config.titleMode;
             case ACTION_BAR -> config.actionBarMode;
             case NAME_TAG -> config.nameMode;
+            case SCREEN_TEXT -> config.screenTextMode;
         };
     }
 
@@ -2137,6 +2138,7 @@ public final class TranslationService {
             case TITLE -> config.aiTitle;
             case ACTION_BAR -> config.aiActionBar;
             case NAME_TAG -> config.aiName;
+            case SCREEN_TEXT -> config.aiScreenText;
         };
     }
 
@@ -2413,8 +2415,20 @@ public final class TranslationService {
         // above -- see isManualScreenTranslation(). Note this is NOT screenEngine(text)
         // (the CACHE selection a few lines up): a manually-scanned source still only
         // auto-sends when aiScreenText itself is AI.
-        return lookup(text, config.screenTextMode, screenEngine(text), true, false, true,
-                config.aiScreenText);
+        String request = screenTextRequest(text);
+        return screenTextDecision(text,
+                lookup(request, config.screenTextMode, screenEngine(text), true, false, true,
+                        config.aiScreenText));
+    }
+
+    /**
+     * Screen-style text rendered by an in-world mod HUD, such as FTB Quests' pinned tracker.
+     * It uses the same mode, engine and prose-layout policy as ordinary GUI text, while also
+     * participating in the manual in-world HUD scan when the machine engine is selected.
+     */
+    public TranslationDecision translateQuestHudText(String text) {
+        noteHud(HudSurface.SCREEN_TEXT, screenTextRequest(text));
+        return translateScreenText(text);
     }
     /** {@code §x} codes around one plain run: the shape a widget draws a coloured label in. */
     private static final java.util.regex.Pattern LEGACY_WRAPPED =
@@ -2438,8 +2452,31 @@ public final class TranslationService {
     }
 
     public TranslationDecision translateScreenScanText(String text) {
-        return lookup(text, config.screenTextMode, config.aiScreenText, true, false, false,
-                config.aiScreenText);
+        String request = screenTextRequest(text);
+        return screenTextDecision(text,
+                lookup(request, config.screenTextMode, config.aiScreenText, true, false, false,
+                        config.aiScreenText));
+    }
+
+    /** Ordinary GUI text is prose. Third-party screens often hand us strings that were
+     *  already padded for an English visual wrap; sending those gaps through
+     *  TranslationTemplate would turn them into fixed WS columns and lock the target
+     *  language back into the English word positions. Normalize only this surface at
+     *  its boundary. Scoreboards and other true column surfaces keep their raw input. */
+    private static String screenTextRequest(String source) {
+        return TemplateText.collapseProseLayoutGaps(source);
+    }
+
+    private TranslationDecision screenTextDecision(
+            String original, TranslationDecision decision) {
+        if (decision == null || !decision.changed()) return TranslationDecision.unchanged(original);
+        String translated = finalizeScreenText(original, decision.translated());
+        return TranslationDecision.of(decision.mode(), original, translated);
+    }
+
+    private String finalizeScreenText(String original, String translated) {
+        String flowed = TemplateText.collapseProseLayoutGaps(translated);
+        return finalizeTranslatedText(LayoutPreserver.matchOuterWhitespace(original, flowed));
     }
 
     private TranslationDecision lookup(String original, DisplayMode mode, boolean useAi) {
@@ -2573,9 +2610,15 @@ public final class TranslationService {
         return google.hasInteractiveWork() || ai.hasInteractiveWork();
     }
 
-    /** Whether the AI engine is the ChatGPT-authenticated Codex route. */
+    /** Whether the AI engine is a serialized account-authenticated local CLI route. */
+    public boolean isSerialLocalAiEngine() {
+        return config.usesLocalAiCli();
+    }
+
+    /** Compatibility for loader glue not yet exposing Antigravity in its settings screen. */
+    @Deprecated
     public boolean isCodexEngine() {
-        return config.aiUseCodex;
+        return isSerialLocalAiEngine();
     }
 
     /**

@@ -212,14 +212,17 @@ Expand a Minecraft series to download an individual build:
 
 | Source | API key / sign-in | Notes |
 | --- | --- | --- |
-| Google machine translation | Not required | Uses an unofficial web endpoint that may be limited or stop working. Retains the 429 pause and backoff protection. |
+| Google machine translation | Not required | Uses unofficial web endpoints. If the primary returns a 429/block page, one compatible alternate is tried; pause and backoff begin only if both fail. The service may still be limited or stop working. |
 | Gemini | Your API key | Includes a preset button; connects through the OpenAI-compatible interface with a configurable model. |
+| Google / Antigravity sign-in | Google sign-in | Supported on modern Fabric/NeoForge builds. Install Antigravity CLI from the [official download page](https://antigravity.google/download), then switch the Gemini tab to Google sign-in. Translation uses that account's Antigravity allowance; the CLI supplies model choices, including reasoning variants. |
 | OpenAI | Your API key | Includes a preset button, configurable model and service URL. |
 | DeepSeek | Your API key | Includes a preset button, configurable model and service URL. |
 | OpenRouter | Your API key | Enter its OpenAI-compatible service URL and model in the AI settings. |
 | Ollama / LM Studio | Depends on your local server; may be empty | Connects to an OpenAI-compatible server you run. You provide the model. |
 | Other OpenAI-compatible services | Depends on the service | Custom Base URL, model, rotating API keys and glossary. An empty key sends no `Authorization` header. |
 | ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, reasoning effort and token controls, and uses your account's Codex quota. |
+
+NyanLex does not install either CLI automatically. Sign-in is completed through the local official tool in a browser or terminal; credentials stay with that tool, while NyanLex calls the already signed-in local process.
 
 You can choose whether Google machine translation fills in after an AI failure. With this fallback enabled, the text may also be sent to Google.
 
@@ -267,6 +270,8 @@ Legacy UI:
 | --- | --- |
 | Fabric 1.14.4-1.16.5 | `G` opens Translation Settings; `P` retranslates the current screen |
 | Forge 1.12.2-1.13.2 | `G` opens Translation Settings; `H` enables/disables translation; `P` retranslates the current screen |
+
+Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
 
 `P` captures currently visible text, including a hovered tooltip; with no screen open it captures the HUD text you can see (scoreboard rows, boss bars, titles, the action bar, name tags). It does not scan off-screen content or activate while typing. With machine translation, everything except chat translates on demand (see Get started above), so `R`/`P` are how you get those translations; with AI they translate automatically and `R`/`P` force a fresh translation. Completion time depends on the translation service.
 

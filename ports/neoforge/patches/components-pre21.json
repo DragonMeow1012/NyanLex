@@ -1,25 +1,25 @@
 {
-  "com/dragonmeow/nyanlex/neoforge/CodexEffortScreen.java": [
+  "com/dragonmeow/nyanlex/neoforge/LocalAiEffortScreen.java": [
     {
       "from": "\nimport net.minecraft.client.gui.screens.options.OptionsSubScreen;\n",
       "to": "\nimport net.minecraft.client.gui.screens.OptionsSubScreen;\n",
       "count": 1
     },
     {
-      "from": "\npublic final class CodexEffortScreen extends OptionsSubScreen {\n",
-      "to": "\npublic final class CodexEffortScreen extends PortOptionsSubScreen {\n",
+      "from": "\npublic final class LocalAiEffortScreen extends OptionsSubScreen {\n",
+      "to": "\npublic final class LocalAiEffortScreen extends PortOptionsSubScreen {\n",
       "count": 1
     }
   ],
-  "com/dragonmeow/nyanlex/neoforge/CodexModelScreen.java": [
+  "com/dragonmeow/nyanlex/neoforge/LocalAiModelScreen.java": [
     {
       "from": "\nimport net.minecraft.client.gui.screens.options.OptionsSubScreen;\n",
       "to": "\nimport net.minecraft.client.gui.screens.OptionsSubScreen;\n",
       "count": 1
     },
     {
-      "from": "\npublic final class CodexModelScreen extends OptionsSubScreen {\n",
-      "to": "\npublic final class CodexModelScreen extends PortOptionsSubScreen {\n",
+      "from": "\npublic final class LocalAiModelScreen extends OptionsSubScreen {\n",
+      "to": "\npublic final class LocalAiModelScreen extends PortOptionsSubScreen {\n",
       "count": 1
     }
   ],

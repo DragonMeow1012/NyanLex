@@ -21,9 +21,10 @@ public final class ChatRequestProfile {
     private final boolean machineFallbackEnabled;
     private final String aiBaseUrl;
     private final String aiModel;
-    private final boolean useCodex;
+    private final String aiProvider;
     private final String codexModel;
     private final String codexReasoningEffort;
+    private final String antigravityModel;
     private final List<String> glossary;
     private final boolean protectPlayerNames;
     /** Turning new requests off (or on) retires the pending backlog as originals. */
@@ -38,11 +39,15 @@ public final class ChatRequestProfile {
         boolean usesMachine = !aiChat || machineFallbackEnabled;
         sourceLang = usesMachine ? text(config.sourceLang) : "";
         machineProvider = usesMachine ? text(config.machineTranslationProvider) : "";
-        useCodex = aiChat && config.aiUseCodex;
-        aiBaseUrl = aiChat && !useCodex ? text(config.aiBaseUrl) : "";
-        aiModel = aiChat && !useCodex ? text(config.aiModel) : "";
-        codexModel = useCodex ? text(config.codexModel) : "";
-        codexReasoningEffort = useCodex ? text(config.codexReasoningEffort) : "";
+        aiProvider = aiChat ? text(config.aiProvider) : "";
+        boolean api = aiChat && !config.usesLocalAiCli();
+        aiBaseUrl = api ? text(config.aiBaseUrl) : "";
+        aiModel = api ? text(config.aiModel) : "";
+        codexModel = aiChat && config.usesCodex() ? text(config.codexModel) : "";
+        codexReasoningEffort = aiChat && config.usesCodex()
+                ? text(config.codexReasoningEffort) : "";
+        antigravityModel = aiChat && config.usesAntigravity()
+                ? text(config.antigravityModel) : "";
         glossary = aiChat
                 ? Collections.unmodifiableList(new ArrayList<>(config.aiGlossary == null
                         ? Collections.emptyList() : config.aiGlossary))
@@ -69,7 +74,6 @@ public final class ChatRequestProfile {
         ChatRequestProfile that = (ChatRequestProfile) other;
         return aiChat == that.aiChat
                 && machineFallbackEnabled == that.machineFallbackEnabled
-                && useCodex == that.useCodex
                 && protectPlayerNames == that.protectPlayerNames
                 && translationRequestsEnabled == that.translationRequestsEnabled
                 && targetLang.equals(that.targetLang)
@@ -77,8 +81,10 @@ public final class ChatRequestProfile {
                 && machineProvider.equals(that.machineProvider)
                 && aiBaseUrl.equals(that.aiBaseUrl)
                 && aiModel.equals(that.aiModel)
+                && aiProvider.equals(that.aiProvider)
                 && codexModel.equals(that.codexModel)
                 && codexReasoningEffort.equals(that.codexReasoningEffort)
+                && antigravityModel.equals(that.antigravityModel)
                 && glossary.equals(that.glossary)
                 && doNotTranslateTerms.equals(that.doNotTranslateTerms);
     }
@@ -86,8 +92,8 @@ public final class ChatRequestProfile {
     @Override
     public int hashCode() {
         return Objects.hash(targetLang, sourceLang, aiChat, machineProvider,
-                machineFallbackEnabled, aiBaseUrl, aiModel, useCodex, codexModel,
-                codexReasoningEffort, glossary, protectPlayerNames,
+                machineFallbackEnabled, aiBaseUrl, aiModel, aiProvider, codexModel,
+                codexReasoningEffort, antigravityModel, glossary, protectPlayerNames,
                 translationRequestsEnabled, doNotTranslateTerms);
     }
 }

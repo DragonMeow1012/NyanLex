@@ -9,7 +9,7 @@
       "to": "net.minecraft.network.chat.Component.translatable("
     }
   ],
-  "com/dragonmeow/nyanlex/fabric/CodexEffortScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/CliSetupScreen.java": [
     {
       "from": "new net.minecraft.network.chat.TextComponent(",
       "to": "net.minecraft.network.chat.Component.literal("
@@ -19,7 +19,17 @@
       "to": "net.minecraft.network.chat.Component.translatable("
     }
   ],
-  "com/dragonmeow/nyanlex/fabric/CodexModelScreen.java": [
+  "com/dragonmeow/nyanlex/fabric/LocalAiEffortScreen.java": [
+    {
+      "from": "new net.minecraft.network.chat.TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    },
+    {
+      "from": "new net.minecraft.network.chat.TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/LocalAiModelScreen.java": [
     {
       "from": "new net.minecraft.network.chat.TextComponent(",
       "to": "net.minecraft.network.chat.Component.literal("
@@ -110,6 +120,14 @@
     }
   ],
   "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {
+      "from": "import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;\n",
+      "to": "import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;\nimport net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;\n"
+    },
+    {
+      "from": "    private void registerCommands() {\n        ClientCommandManager.DISPATCHER.register(ClientCommandManager.literal(MOD_ID)\n                .executes(context -> requestSettingsScreen())\n                .then(ClientCommandManager.literal(\"config\")\n                        .executes(context -> requestSettingsScreen())));\n    }",
+      "to": "    private void registerCommands() {\n        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->\n                dispatcher.register(ClientCommandManager.literal(MOD_ID)\n                        .executes(context -> requestSettingsScreen())\n                        .then(ClientCommandManager.literal(\"config\")\n                                .executes(context -> requestSettingsScreen()))));\n    }"
+    },
     {
       "from": "new net.minecraft.network.chat.TextComponent(",
       "to": "net.minecraft.network.chat.Component.literal("

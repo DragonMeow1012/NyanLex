@@ -618,6 +618,8 @@ class TranslationCacheTest {
             @Override public void put(String key, String value) { backing.put(key, value); }
             @Override public void clear() { backing.clear(); }
             @Override public void remove(String key) { backing.remove(key); }
+            @Override public Map<String, String> entries() { return Map.copyOf(backing); }
+            @Override public int size() { return backing.size(); }
         };
     }
 
@@ -649,6 +651,20 @@ class TranslationCacheTest {
         assertEquals("T:a", cache.getCached("a"));
         assertEquals(2, calls.get(), "disk hit must not call the translator again");
         assertTrue(disk.containsKey("a") && disk.containsKey("b"));
+    }
+
+    @Test
+    void sizeReportsAllDurableRowsBeyondTheMemoryLruLimit() {
+        Map<String, String> disk = new java.util.HashMap<>();
+        for (int i = 0; i < 12; i++) disk.put("saved-" + i, "譯文-" + i);
+        TranslationCache cache = new TranslationCache(
+                countingUpper(new AtomicInteger()), "zh-TW", DIRECT, 2,
+                10_000L, () -> 0L, inlineStore(disk));
+
+        assertEquals(12, cache.size(),
+                "the UI total must describe the durable language cache, not the LRU cap");
+        cache.translateBlocking("new row");
+        assertEquals(13, cache.size(), "new durable rows must update the cumulative total");
     }
 
     @Test

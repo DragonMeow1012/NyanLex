@@ -50,6 +50,10 @@ final class LegacyTranslator {
     private static final int MAX_HIGH_BATCH_BURST = 3;
     private static final int MAX_AI_KEYS = 64;
     private static final int MAX_HTTP_RESPONSE_CHARS = 2_000_000;
+    private static final String GOOGLE_PRIMARY_ENDPOINT =
+            "https://translate.googleapis.com/translate_a/single";
+    private static final String GOOGLE_FALLBACK_ENDPOINT =
+            "https://translate.google.com/translate_a/single";
     private static final Pattern FORMAT_TOKEN = Pattern.compile(
             "(?i)(?:\\u00a7[0-9A-FK-ORX]|%(?:\\d+\\$)?[A-Z%]|\\{\\d+\\}"
                     + "|\\u27E6\\s*MT\\s*\\d+\\s*\\u27E7)");
@@ -435,6 +439,7 @@ final class LegacyTranslator {
     /** Batch whose request gate pace() re-checks; unbound (connection test) is never gated. */
     private final ThreadLocal<List<Pending>> dispatchingBatch = new ThreadLocal<List<Pending>>();
     private long lastGtRequest, lastAiRequest;
+    private volatile String activeGoogleEndpoint = GOOGLE_PRIMARY_ENDPOINT;
     private int consecutiveHighBatches;
     private final LegacySessionTokenUsage tokenUsage = new LegacySessionTokenUsage();
     private final TestBackend testBackend;
@@ -1648,20 +1653,45 @@ final class LegacyTranslator {
         boolean probe = gate.acquire();
         boolean settled = false;
         try {
+            String endpoint = activeGoogleEndpoint;
+            String translated;
+            try {
+                translated = requestGoogleEndpoint(endpoint, text, sourceLang, target, cooldown, gate, probe);
+            } catch (GoogleBlockedException blocked) {
+                String alternate = GOOGLE_FALLBACK_ENDPOINT.equals(endpoint)
+                        ? GOOGLE_PRIMARY_ENDPOINT : GOOGLE_FALLBACK_ENDPOINT;
+                try {
+                    translated = requestGoogleEndpoint(alternate, text, sourceLang, target, cooldown, gate, probe);
+                    activeGoogleEndpoint = alternate;
+                } catch (Exception alternateFailure) {
+                    settled = true;
+                    gate.onRateLimited();
+                    throw new com.dragonmeow.nyanlex.translate.RequestsPausedException();
+                }
+            }
+            gate.onSuccess();
+            settled = true;
+            return translated;
+        } finally { if (!settled) gate.onAbort(probe); }
+    }
+
+    private String requestGoogleEndpoint(String baseUrl, String text, String sourceLang,
+                                         String target, int cooldown,
+                                         com.dragonmeow.nyanlex.translate.MachineTranslationGate gate,
+                                         boolean probe) throws Exception {
         pace(false, cooldown);
         gate.recheck(probe);
-        String endpoint = "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl="
+        String endpoint = baseUrl + "?client=gtx&dt=t&sl="
                 + enc(sourceLang) + "&tl=" + enc(target) + "&q=" + enc(text);
         HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
         connection.setConnectTimeout(10000);
         connection.setReadTimeout(15000);
-        connection.setRequestProperty("User-Agent", "NyanLex/1.0.4");
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (NyanLex Mod)");
         try {
             int code = connection.getResponseCode();
             String body = read(connection, code >= 400);
             if (code == 429 || com.dragonmeow.nyanlex.translate.MachineTranslationGate.isBlockPage(body)) {
-                settled = true; gate.onRateLimited();
-                throw new com.dragonmeow.nyanlex.translate.RequestsPausedException();
+                throw new GoogleBlockedException();
             }
             if (code >= 400) throw new HttpStatusException(code, body);
             if (body == null || body.trim().isEmpty())
@@ -1672,10 +1702,8 @@ final class LegacyTranslator {
                 JsonArray chunk = element.getAsJsonArray();
                 if (chunk.size() > 0 && !chunk.get(0).isJsonNull()) translated.append(chunk.get(0).getAsString());
             }
-            gate.onSuccess(); settled = true;
             return translated.toString();
         } finally { connection.disconnect(); }
-        } finally { if (!settled) gate.onAbort(probe); }
     }
 
     private void pace(boolean ai, int cooldown) throws InterruptedException {
@@ -1826,4 +1854,5 @@ final class LegacyTranslator {
         final int code;
         HttpStatusException(int code, String body) { super("HTTP " + code + ": " + compact(body)); this.code = code; }
     }
+    private static final class GoogleBlockedException extends Exception {}
 }
