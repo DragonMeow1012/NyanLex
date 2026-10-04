@@ -2,9 +2,10 @@
   <img src="docs/brand/nyanlex-banner.svg" alt="NyanLex Translator — Minecraft のチャット、アイテム、画面を使い慣れた言語で読める翻訳 Mod。" width="960">
 </p>
 
-<p align="center"><strong>Minecraft の世界を読み解き、あなたの言葉も世界へ届けよう。</strong></p>
+<p align="center"><strong>あなたの言語の限界を、世界の限界にしてはいけない。</strong></p>
 
 <p align="center">
+  <a href="https://modrinth.com/mod/nyanlex-translator"><img src="https://img.shields.io/badge/Modrinth-Download-00AF5C?style=flat-square&logo=modrinth&logoColor=white" alt="Modrinth で NyanLex Translator をダウンロード"></a>
   <a href="https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-1.0.0-8b7fd6?style=flat-square" alt="Release 1.0.0"></a>
   <img src="https://img.shields.io/badge/Loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-52658f?style=flat-square" alt="Fabric, NeoForge and Forge">
   <img src="https://img.shields.io/badge/Install-Client%20only-478978?style=flat-square" alt="Client-side only">
@@ -12,7 +13,7 @@
 </p>
 
 <p align="center"><a href="README.en.md">English</a> · <b>日本語</b> · <a href="README.md">繁體中文</a> · <a href="README.zh-CN.md">简体中文</a></p>
-<p align="center"><a href="#主な機能">主な機能</a> &nbsp;·&nbsp; <a href="#ダウンロード一覧">ダウンロード</a> &nbsp;·&nbsp; <a href="#ゲーム内スクリーンショット">ゲーム画面</a> &nbsp;·&nbsp; <a href="#翻訳サービス">翻訳サービス</a> &nbsp;·&nbsp; <a href="#キーボードショートカット">ショートカット</a> &nbsp;·&nbsp; <a href="#プライバシー">プライバシー</a></p>
+<p align="center"><a href="#主な機能">主な機能</a> &nbsp;·&nbsp; <a href="#ダウンロード">ダウンロード</a> &nbsp;·&nbsp; <a href="#ゲーム内スクリーンショット">ゲーム画面</a> &nbsp;·&nbsp; <a href="#翻訳サービス">翻訳サービス</a> &nbsp;·&nbsp; <a href="#キーボードショートカット">ショートカット</a> &nbsp;·&nbsp; <a href="#プライバシー">プライバシー</a></p>
 
 > **新規インストールでは、オンライン翻訳は初期状態で無効です。** 有効にすると、選択したテキストが指定したサービスへ送信されます。チャットには個人メッセージが含まれる場合があります。保存済みの翻訳はオフラインでも利用できます。[プライバシーの詳細](#プライバシー)をご確認ください。
 
@@ -70,7 +71,7 @@ Mod の UI は Minecraft クライアントの言語に従い、英語・日本�
 
 ## 導入方法
 
-1. **対応するビルドを選びます。** [ダウンロード一覧](#ダウンロード一覧)から Minecraft のバージョンと Loader に合う単一の JAR を選び、そのインスタンスの `mods` フォルダへ入れます。Fabric では、対応する Fabric API も必要です。
+1. **対応するビルドを選びます。** [ダウンロード](#ダウンロード)から Minecraft のバージョンと Loader に合う単一の JAR を選び、そのインスタンスの `mods` フォルダへ入れます。Fabric では、対応する Fabric API も必要です。
 2. **言語とサービスを選びます。** ゲームを起動し、クイック設定で翻訳先の言語と翻訳サービスを選択します。確認するまでオンライン翻訳は有効になりません。
 3. **読み始めます。** 新しいバージョンでは、アイテムにカーソルを合わせて <kbd>R</kbd>、表示中の画面や HUD のテキストには <kbd>P</kbd> を押します。<kbd>G</kbd> で原文と翻訳の表示を切り替えます。
 
@@ -83,7 +84,7 @@ Mod の UI は Minecraft クライアントの言語に従い、英語・日本�
 表示領域ごとに、原文のみ、翻訳のみ、または両方を選べます。既存の AI 翻訳が最優先され、その次に翻訳パックと保存済みの機械翻訳が使われます。旧バージョンでは操作が異なるため、[キーボードショートカット](#キーボードショートカット)をご覧ください。
 
 <!-- BEGIN GENERATED DOWNLOAD MATRIX -->
-## ダウンロード一覧
+## ダウンロード
 
 正式な対応範囲は以下の表をご確認ください。Fabric は Minecraft 1.16.5 から 26.3 までの全正式版、NeoForge は 1.20.1 から 26.3 までの全正式版を提供します。Fabric 1.14.4／1.15.2 と Forge 1.12.2／1.13.2 も引き続き利用できます。各 JAR はファイル名に記載された Minecraft バージョンと Loader 専用です。
 
@@ -202,7 +203,7 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 ## 対応環境
 
-- Fabric、NeoForge、Forge（Minecraft 1.12.2～26.3）に対応しています。全一覧は[ダウンロード一覧](#ダウンロード一覧)をご覧ください。
+- Fabric、NeoForge、Forge（Minecraft 1.12.2～26.3）に対応しています。全一覧は[ダウンロード](#ダウンロード)をご覧ください。
 - 旧バージョン（Fabric 1.14.4～1.16.5、Forge 1.12.2～1.13.2）は簡易インターフェースです。短いクイック設定、その場で確認するウィンドウ、カテゴリ別の設定画面はありますが、翻訳パックと全コンテンツの事前翻訳には対応していません。
 - Mod パックのクエスト／タスクブック画面は、長い段落、色付きテキスト、ツールチップ向けに最適化されています。
 - クライアント側だけで動く Mod です。サーバーを変更せず、プレイヤーに代わってチャットを送信することもありません。

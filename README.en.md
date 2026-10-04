@@ -2,9 +2,10 @@
   <img src="docs/brand/nyanlex-banner.svg" alt="NyanLex Translator — Read Minecraft chat, items and screens in your language." width="960">
 </p>
 
-<p align="center"><strong>Understand Minecraft—and make yourself understood.</strong></p>
+<p align="center"><strong>The limits of your language should never be the limits of your world.</strong></p>
 
 <p align="center">
+  <a href="https://modrinth.com/mod/nyanlex-translator"><img src="https://img.shields.io/badge/Modrinth-Download-00AF5C?style=flat-square&logo=modrinth&logoColor=white" alt="Download NyanLex Translator on Modrinth"></a>
   <a href="https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-1.0.0-8b7fd6?style=flat-square" alt="Release 1.0.0"></a>
   <img src="https://img.shields.io/badge/Loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-52658f?style=flat-square" alt="Fabric, NeoForge and Forge">
   <img src="https://img.shields.io/badge/Install-Client%20only-478978?style=flat-square" alt="Client-side only">
@@ -12,7 +13,7 @@
 </p>
 
 <p align="center"><b>English</b> · <a href="README.ja.md">日本語</a> · <a href="README.md">繁體中文</a> · <a href="README.zh-CN.md">简体中文</a></p>
-<p align="center"><a href="#features">Features</a> &nbsp;·&nbsp; <a href="#download-matrix">Download</a> &nbsp;·&nbsp; <a href="#in-game-screenshots">See it in game</a> &nbsp;·&nbsp; <a href="#translation-sources">Translation sources</a> &nbsp;·&nbsp; <a href="#keyboard-shortcuts">Shortcuts</a> &nbsp;·&nbsp; <a href="#privacy">Privacy</a></p>
+<p align="center"><a href="#features">Features</a> &nbsp;·&nbsp; <a href="#download">Download</a> &nbsp;·&nbsp; <a href="#in-game-screenshots">See it in game</a> &nbsp;·&nbsp; <a href="#translation-sources">Translation sources</a> &nbsp;·&nbsp; <a href="#keyboard-shortcuts">Shortcuts</a> &nbsp;·&nbsp; <a href="#privacy">Privacy</a></p>
 
 > **Online translation starts off.** When enabled, selected text goes to your chosen provider; chat can include private messages. Saved translations remain available offline. [Read the privacy details](#privacy).
 
@@ -70,7 +71,7 @@ All screenshots above were captured in the Better MC modpack. The translation te
 
 ## Get started
 
-1. **Pick your build.** Use the [download matrix](#download-matrix) to select the single JAR matching your Minecraft version and loader, then put it in that instance's `mods` folder. Fabric also needs the matching Fabric API.
+1. **Pick your build.** Use the [downloads](#download) to select the single JAR matching your Minecraft version and loader, then put it in that instance's `mods` folder. Fabric also needs the matching Fabric API.
 2. **Choose your language and provider.** Start the game and use Quick setup. Online translation turns on only after you confirm your choice.
 3. **Start reading.** On modern targets, press <kbd>R</kbd> over an item, <kbd>P</kbd> for visible screen or HUD text, and <kbd>G</kbd> to switch between original and translated display.
 
@@ -83,7 +84,7 @@ All screenshots above were captured in the Better MC modpack. The translation te
 Choose original text, translation, or both for each surface. Existing AI translations take priority, followed by translation packs and saved machine translations. Legacy controls differ; see [keyboard shortcuts](#keyboard-shortcuts).
 
 <!-- BEGIN GENERATED DOWNLOAD MATRIX -->
-## Download matrix
+## Download
 
 Use the tables below as the definitive support list. Fabric covers every stable Minecraft release from 1.16.5 through 26.3, and NeoForge covers every stable release from 1.20.1 through 26.3. Fabric 1.14.4 and 1.15.2, plus Forge 1.12.2 and 1.13.2, remain available. Each JAR works only with the Minecraft version and loader named in its filename.
 
@@ -202,7 +203,7 @@ Expand a Minecraft series to download an individual build:
 
 ## Compatibility
 
-- Fabric, NeoForge, and Forge targets are listed in the [download matrix](#download-matrix) (Minecraft 1.12.2 to 26.3).
+- Fabric, NeoForge, and Forge targets are listed under [Download](#download) (Minecraft 1.12.2 to 26.3).
 - The legacy targets (Fabric 1.14.4-1.16.5 and Forge 1.12.2-1.13.2) have a simpler interface: a short Quick setup, the on-the-spot confirmation window and a categorized settings screen, but no translation packs and no full-content warmup.
 - Quest and task-book screens in modpacks get extra optimization (long paragraphs, colored text, tooltips).
 - This is a client-side mod; it does not modify servers and does not send chat for you.

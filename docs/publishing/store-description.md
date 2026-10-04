@@ -1,6 +1,8 @@
+![NyanLex Translator banner](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/brand/nyanlex-banner.svg)
+
 # NyanLex Translator
 
-**Understand Minecraft—and make yourself understood.**
+**The limits of your language should never be the limits of your world.**
 
 NyanLex helps you read unfamiliar languages in Minecraft and reply in your own. Translate chat, item tooltips, quest descriptions and interface text without leaving the game. It runs on your client; the server does not need to install it.
 

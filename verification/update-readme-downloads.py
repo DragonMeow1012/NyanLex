@@ -9,7 +9,7 @@ from release_matrix import ROOT, VERSION, targets, version_key
 
 TEXT = {
     "README.md": {
-        "heading": "下載矩陣",
+        "heading": "下載",
         "scope": "完整支援範圍請以表格為準：Fabric 提供 Minecraft 1.16.5 至 26.3 的所有正式版本，NeoForge 提供 1.20.1 至 26.3 的所有正式版本；另保留 Fabric 1.14.4、1.15.2 與 Forge 1.12.2、1.13.2。每個 JAR 僅適用於檔名所示的 Minecraft 版本與 Loader。",
         "bundles": "整包下載",
         "bundle": "版本包",
@@ -21,7 +21,7 @@ TEXT = {
         "none": "—",
     },
     "README.en.md": {
-        "heading": "Download matrix",
+        "heading": "Download",
         "scope": "Use the tables below as the definitive support list. Fabric covers every stable Minecraft release from 1.16.5 through 26.3, and NeoForge covers every stable release from 1.20.1 through 26.3. Fabric 1.14.4 and 1.15.2, plus Forge 1.12.2 and 1.13.2, remain available. Each JAR works only with the Minecraft version and loader named in its filename.",
         "bundles": "Bundle downloads",
         "bundle": "bundle",
@@ -33,7 +33,7 @@ TEXT = {
         "none": "—",
     },
     "README.ja.md": {
-        "heading": "ダウンロード一覧",
+        "heading": "ダウンロード",
         "scope": "正式な対応範囲は以下の表をご確認ください。Fabric は Minecraft 1.16.5 から 26.3 までの全正式版、NeoForge は 1.20.1 から 26.3 までの全正式版を提供します。Fabric 1.14.4／1.15.2 と Forge 1.12.2／1.13.2 も引き続き利用できます。各 JAR はファイル名に記載された Minecraft バージョンと Loader 専用です。",
         "bundles": "一括ダウンロード",
         "bundle": "版パック",
@@ -45,7 +45,7 @@ TEXT = {
         "none": "—",
     },
     "README.zh-CN.md": {
-        "heading": "下载矩阵",
+        "heading": "下载",
         "scope": "完整支持范围请以表格为准：Fabric 提供 Minecraft 1.16.5 至 26.3 的所有正式版本，NeoForge 提供 1.20.1 至 26.3 的所有正式版本；另保留 Fabric 1.14.4、1.15.2 与 Forge 1.12.2、1.13.2。每个 JAR 仅适用于文件名所示的 Minecraft 版本与 Loader。",
         "bundles": "整包下载",
         "bundle": "版本包",
@@ -63,10 +63,10 @@ RELEASE = f"https://github.com/DragonMeow1012/NyanLex/releases/download/v{VERSIO
 BEGIN = "<!-- BEGIN GENERATED DOWNLOAD MATRIX -->"
 END = "<!-- END GENERATED DOWNLOAD MATRIX -->"
 HEADING_ALIASES = {
-    "README.md": ("下載矩陣", "直接下載"),
-    "README.en.md": ("Download matrix", "Direct downloads"),
-    "README.ja.md": ("ダウンロード一覧", "直接ダウンロード"),
-    "README.zh-CN.md": ("下载矩阵", "直接下载"),
+    "README.md": ("下載", "下載矩陣", "直接下載"),
+    "README.en.md": ("Download", "Download matrix", "Direct downloads"),
+    "README.ja.md": ("ダウンロード", "ダウンロード一覧", "直接ダウンロード"),
+    "README.zh-CN.md": ("下载", "下载矩阵", "直接下载"),
 }
 
 

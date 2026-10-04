@@ -2,9 +2,10 @@
   <img src="docs/brand/nyanlex-banner.svg" alt="NyanLex Translator — 用熟悉的語言，讀懂 Minecraft 裡的聊天、物品與介面。" width="960">
 </p>
 
-<p align="center"><strong>讀懂 Minecraft 的世界，也讓世界讀懂你。</strong></p>
+<p align="center"><strong>語言的界限，不是世界的界限。</strong></p>
 
 <p align="center">
+  <a href="https://modrinth.com/mod/nyanlex-translator"><img src="https://img.shields.io/badge/Modrinth-Download-00AF5C?style=flat-square&logo=modrinth&logoColor=white" alt="在 Modrinth 下載 NyanLex Translator"></a>
   <a href="https://github.com/DragonMeow1012/NyanLex/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-1.0.0-8b7fd6?style=flat-square" alt="Release 1.0.0"></a>
   <img src="https://img.shields.io/badge/Loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-52658f?style=flat-square" alt="Fabric, NeoForge and Forge">
   <img src="https://img.shields.io/badge/Install-Client%20only-478978?style=flat-square" alt="Client-side only">
@@ -12,7 +13,7 @@
 </p>
 
 <p align="center"><a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a> · <b>繁體中文</b> · <a href="README.zh-CN.md">简体中文</a></p>
-<p align="center"><a href="#特色功能">特色功能</a> &nbsp;·&nbsp; <a href="#下載矩陣">下載</a> &nbsp;·&nbsp; <a href="#實際遊戲展示">實機展示</a> &nbsp;·&nbsp; <a href="#翻譯來源">翻譯來源</a> &nbsp;·&nbsp; <a href="#快捷鍵">快捷鍵</a> &nbsp;·&nbsp; <a href="#隱私">隱私說明</a></p>
+<p align="center"><a href="#特色功能">特色功能</a> &nbsp;·&nbsp; <a href="#下載">下載</a> &nbsp;·&nbsp; <a href="#實際遊戲展示">實機展示</a> &nbsp;·&nbsp; <a href="#翻譯來源">翻譯來源</a> &nbsp;·&nbsp; <a href="#快捷鍵">快捷鍵</a> &nbsp;·&nbsp; <a href="#隱私">隱私說明</a></p>
 
 > **首次安裝預設關閉線上翻譯。** 開啟後，選定內容會傳送至你選擇的服務，聊天可能包含私訊；已有的本機翻譯仍可離線顯示。[閱讀隱私說明](#隱私)。
 
@@ -70,7 +71,7 @@
 
 ## 開始使用
 
-1. **選對版本。** 從[下載矩陣](#下載矩陣)選擇符合 Minecraft 版本與 Loader 的單一 JAR，放入該實例的 `mods` 資料夾；Fabric 另需對應的 Fabric API。
+1. **選對版本。** 從[下載](#下載)選擇符合 Minecraft 版本與 Loader 的單一 JAR，放入該實例的 `mods` 資料夾；Fabric 另需對應的 Fabric API。
 2. **選擇語言與服務。** 啟動遊戲，透過快速設定選擇目標語言和翻譯來源，確認後才開啟線上翻譯。
 3. **開始閱讀。** 現代版按 <kbd>R</kbd> 翻譯游標指向的物品，按 <kbd>P</kbd> 翻譯可見介面或 HUD；按 <kbd>G</kbd> 切換原文／譯文。
 
@@ -83,7 +84,7 @@
 每個區域可選原文、譯文或兩者並列。已有 AI 譯文優先，其次是翻譯包與已存的機翻。舊版按鍵有差異，見[快捷鍵](#快捷鍵)。
 
 <!-- BEGIN GENERATED DOWNLOAD MATRIX -->
-## 下載矩陣
+## 下載
 
 完整支援範圍請以表格為準：Fabric 提供 Minecraft 1.16.5 至 26.3 的所有正式版本，NeoForge 提供 1.20.1 至 26.3 的所有正式版本；另保留 Fabric 1.14.4、1.15.2 與 Forge 1.12.2、1.13.2。每個 JAR 僅適用於檔名所示的 Minecraft 版本與 Loader。
 
@@ -202,7 +203,7 @@
 
 ## 相容性
 
-- 支援 Fabric、NeoForge、Forge（Minecraft 1.12.2～26.3），完整清單見[下載矩陣](#下載矩陣)。
+- 支援 Fabric、NeoForge、Forge（Minecraft 1.12.2～26.3），完整清單見[下載](#下載)。
 - 舊版目標（Fabric 1.14.4～1.16.5、Forge 1.12.2～1.13.2）使用精簡版介面：有簡短的快速設定、即時詢問的確認視窗與分類設定畫面，但沒有翻譯包與全內容預熱。
 - 針對模組包的任務書（任務說明）翻譯有特別優化（長段落、彩色文字、提示框）。
 - 純客戶端模組，不修改伺服器，也不會代替玩家送出聊天。
