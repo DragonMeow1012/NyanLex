@@ -193,6 +193,11 @@ public final class Fabric26AiScreen extends Screen {
                         Component.translatable("screen.nyanlex.ai.openai.api_mode").getString(),
                         !cfg.usesLocalAiCli()),
                 x, y, width, gemini ? this::selectGeminiApiMode : this::selectOpenAiApiMode);
+        if (gemini && !cfg.antigravityEnabled) {
+            addProviderButton(Component.translatable("screen.nyanlex.ai.gemini.policy_title").getString(),
+                    x + width + gap, y, width, this::selectGeminiApiMode);
+            return;
+        }
         addProviderButton(providerLabel(
                         Component.translatable(gemini
                                 ? "screen.nyanlex.ai.gemini.google_mode"
@@ -297,7 +302,7 @@ public final class Fabric26AiScreen extends Screen {
         AntigravityCliClient client = NyanLexFabric26.antigravityClient();
         boolean installed = client != null && client.isInstalledCached();
         boolean modelsLoaded = installed && !client.cachedModels().isEmpty();
-        boolean signedIn = modelsLoaded && client.hasAuthenticatedSessionCached();
+        boolean signedIn = modelsLoaded && client.hasConnectedSessionCached();
 
         this.loginButton = Button.builder(
                 Component.translatable(signedIn
@@ -347,8 +352,12 @@ public final class Fabric26AiScreen extends Screen {
     }
 
     private void selectGeminiApiMode() {
-        selectApiProvider("https://generativelanguage.googleapis.com/v1beta/openai",
-                "gemini-3.1-flash-lite");
+        if (this.minecraft == null) return;
+        this.minecraft.setScreenAndShow(new ConfirmDialogScreen(this,
+                Component.translatable("screen.nyanlex.ai.gemini.policy_title"),
+                Component.translatable("screen.nyanlex.ai.gemini.policy_message"),
+                Component.translatable("screen.nyanlex.ai.gemini.policy_continue"), () ->
+                    selectApiProvider("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.1-flash-lite")));
     }
 
     private void selectOpenAiProvider() {
@@ -405,6 +414,7 @@ public final class Fabric26AiScreen extends Screen {
     }
 
     private void selectAntigravityProvider() {
+        if (!NyanLexFabric26.config().antigravityEnabled) return;
         saveCurrentFields();
         TranslatorConfig cfg = NyanLexFabric26.config();
         if (!isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")) {
@@ -842,7 +852,7 @@ public final class Fabric26AiScreen extends Screen {
         AntigravityCliClient client = NyanLexFabric26.antigravityClient();
         boolean installed = client != null && client.isInstalledCached();
         boolean signedIn = installed && !client.cachedModels().isEmpty()
-                && client.hasAuthenticatedSessionCached();
+                && client.hasConnectedSessionCached();
         if (!signedIn) {
             Component line = Component.translatable(installed
                     ? "screen.nyanlex.ai.antigravity.signed_out"
@@ -851,9 +861,7 @@ public final class Fabric26AiScreen extends Screen {
             return;
         }
         Component line1 = Component.translatable("screen.nyanlex.ai.antigravity.signed_in");
-        String email = client.cachedAccountEmail();
-        Component line2 = Component.literal(email == null || email.isBlank()
-                ? "Google" : maskEmail(email));
+        Component line2 = Component.literal("Google");
         int total = this.font.width(line1) + this.font.width(line2) + 8;
         int x = this.width / 2 - total / 2;
         graphics.text(this.font, line1, x, layAccount, 0xFF80FF80, false);

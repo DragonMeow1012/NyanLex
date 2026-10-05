@@ -38,6 +38,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CodexAppServerClientStateTest {
 
     @Test
+    void toolNotificationsAreRejectedAndReportedQuotaClosesTheSendGate() throws Exception {
+        CodexAppServerClient client = client();
+        try {
+            JsonObject item = new JsonObject();
+            item.addProperty("type", "commandExecution");
+            JsonObject tool = new JsonObject();
+            tool.add("item", item);
+            assertThrows(IOException.class, () -> notify(client, "item/started", tool));
+            assertThrows(IOException.class, () -> notify(client, "item/completed", tool));
+            notify(client, "account/rateLimits/updated", JsonParser.parseString(
+                    "{\"rateLimits\":{\"primary\":{\"usedPercent\":100}}}").getAsJsonObject());
+            assertEquals(Long.MAX_VALUE, client.blockedUntil());
+            assertThrows(CliRequestLimits.LimitedException.class,
+                    () -> client.complete("model", "low", "Translate", "must not send"));
+            notifyLoginCompleted(client, "explicit-login", true);
+            assertEquals(0, client.blockedUntil());
+        } finally {
+            client.close();
+        }
+    }
+
+    @Test
     void earlyNotificationsAreConsumedAtomicallyAndUnknownFloodStaysBounded()
             throws Exception {
         CodexAppServerClient client = client();
@@ -654,7 +676,7 @@ class CodexAppServerClientStateTest {
                 "gpt-test", "medium", "Translate only.", "Oak Chest"));
         assertTrue(capFailure.getMessage().contains("Too many active Codex threads"),
                 capFailure::getMessage);
-        assertEquals(List.of("thread/start", "thread/unsubscribe"), protocol.methods,
+        assertEquals(List.of("mcpServerStatus/list", "account/rateLimits/read", "thread/start", "thread/unsubscribe"), protocol.methods,
                 "server-created ephemeral thread leaked when local cap rejected it");
         assertTrue(process.isAlive());
         client.close();
@@ -798,7 +820,7 @@ class CodexAppServerClientStateTest {
                 "gpt-test", "medium", "Translate only.", "Oak Chest"));
 
         assertEquals("forced turn/start failure", failure.getMessage());
-        assertEquals(List.of("thread/start", "turn/start", "thread/unsubscribe"),
+        assertEquals(List.of("mcpServerStatus/list", "account/rateLimits/read", "thread/start", "turn/start", "thread/unsubscribe"),
                 protocol.methods);
         assertEquals(0, retainedSize(client, "activeThreads"));
         assertEquals(1, retainedSize(client, "recentlyClosedThreads"));
@@ -1052,7 +1074,11 @@ class CodexAppServerClientStateTest {
 
                 JsonObject response = new JsonObject();
                 response.add("id", request.get("id"));
-                if ("thread/start".equals(method)) {
+                if ("mcpServerStatus/list".equals(method)) {
+                    JsonObject result = new JsonObject();
+                    result.add("data", new com.google.gson.JsonArray());
+                    response.add("result", result);
+                } else if ("thread/start".equals(method)) {
                     JsonObject thread = new JsonObject();
                     thread.addProperty("id", "thread-cleanup");
                     JsonObject result = new JsonObject();

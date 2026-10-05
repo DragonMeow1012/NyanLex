@@ -87,6 +87,22 @@ public final class TranslationConfigScreen extends Screen {
     }
 
     private final class Host implements UiHost {
+        @Override
+        public boolean beforeToggle(SettingEntry entry) {
+            if (!"antigravity".equals(entry.id()) || config().antigravityEnabled
+                    || config().hideAntigravityNotice) return true;
+            if (TranslationConfigScreen.this.minecraft == null) return false;
+            TranslationConfigScreen.this.minecraft.setScreen(new ConfirmDialogScreen(TranslationConfigScreen.this,
+                    new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.antigravity.risk_title"),
+                    new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.antigravity.risk_message"),
+                    new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.antigravity.enable"), () -> {
+                        config().setAntigravityEnabled(true);
+                        NyanLexFabric.saveConfig();
+                    }).rememberChoice(config().hideAntigravityNotice,
+                            value -> config().hideAntigravityNotice = value));
+            return false;
+        }
+
         @Override public TranslatorConfig config() { return NyanLexFabric.config(); }
 
         @Override public void saveConfig() { NyanLexFabric.saveConfig(); }
@@ -244,16 +260,17 @@ public final class TranslationConfigScreen extends Screen {
         }, ProjectLinks.GITHUB_URL, true));
     }
 
-    private void confirm(Component title, Component message, Runnable onYes) {
+    private void confirm(Component title, Component message, Component confirmLabel, Runnable onYes) {
         if (this.minecraft == null) return;
         this.minecraft.setScreen(new ConfirmDialogScreen(this, title, message,
-                new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CONFIRM_YES), onYes));
+                confirmLabel, onYes));
     }
 
     private void confirmClearCache() {
         int count = NyanLexFabric.service() == null ? 0 : NyanLexFabric.service().translatedCount();
         confirm(new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_CACHE_CONFIRM_TITLE),
-                new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_CACHE_CONFIRM_MESSAGE, count), () -> {
+                new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_CACHE_CONFIRM_MESSAGE, count),
+                    new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CONFIRM_YES), () -> {
                     if (NyanLexFabric.service() != null) NyanLexFabric.service().clearTranslations();
                     FabricTextStyle.clearRenderMemo();
                     setStatus(new net.minecraft.network.chat.TranslatableComponent("config.nyanlex.cache.cleared"));
@@ -267,7 +284,8 @@ public final class TranslationConfigScreen extends Screen {
             return;
         }
         confirm(new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_TITLE),
-                new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_MESSAGE), () -> {
+                new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_MESSAGE),
+                    new net.minecraft.network.chat.TranslatableComponent(SettingsCatalog.KEY_CONFIRM_YES), () -> {
                     int removed = com.dragonmeow.nyanlex.hub.HubPackCleaner.clear(
                             NyanLexFabric.hubLocalCache(), NyanLexFabric.hubDownloadState());
                     FabricTextStyle.clearRenderMemo();

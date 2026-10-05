@@ -35,18 +35,6 @@ The examples below show translation into **Traditional Chinese**; you can select
 
 ![Original chat and Traditional Chinese translations displayed together](https://raw.githubusercontent.com/DragonMeow1012/NyanLex/main/docs/images/promo/better-mc-bilingual-chat.png)
 
-## Supported versions
-
-- **Fabric:** every stable Minecraft release from 1.16.5 through 26.3, plus 1.14.4 and 1.15.2.
-- **NeoForge:** every stable Minecraft release from 1.20.1 through 26.3. NeoForge has no releases for earlier Minecraft versions.
-- **Forge:** Minecraft 1.12.2 and 1.13.2.
-
-There are 62 separate builds; select the exact Minecraft version and loader on the Versions tab. Minecraft snapshots and pre-releases are not included. Some NeoForge loader builds are beta. The NeoForge 26.1.2 build requires loader **26.1.2.109 or newer**.
-
-The saved-translation counter reports the complete durable total rather than the 5,000-entry in-memory cache window. Full-content warmup shows its current-job progress separately.
-
-The mod UI supports English, Japanese, Traditional Chinese and Simplified Chinese, following the client language; other client languages use English UI. Game-text translation targets are not limited to these four languages.
-
 ## First-time setup
 
 Install the build matching your Minecraft version and loader on the **client only**. Fabric builds also require a matching **Fabric API**. Complete the in-game Quick setup to choose your language and provider; no selection is applied until you confirm it. You can leave online translation off and use existing local translations.
@@ -71,7 +59,7 @@ Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if
 | --- | --- |
 | Google machine translation | No API key. Uses unofficial web endpoints and tries a compatible alternate once after a 429 or block page; availability may still change. |
 | Gemini, OpenAI or DeepSeek | Your own API key; presets are available in settings. |
-| Google / Antigravity sign-in | On modern Fabric/NeoForge builds, install Antigravity CLI from the official Google download page and sign in. NyanLex uses that Google account's Antigravity allowance and the model variants reported by the CLI. |
+| Google / Antigravity sign-in | Hidden by default; reveal it in Advanced settings after reading the account and service risks. On modern Fabric/NeoForge builds, install Antigravity CLI from the official Google download page and sign in. NyanLex uses that Google account's Antigravity allowance and the model variants reported by the CLI. |
 | OpenRouter or another OpenAI-compatible service | Its service URL, model and any required API key. |
 | Ollama or LM Studio | Your own running OpenAI-compatible local server and model. |
 | ChatGPT / Codex | A separately installed Codex CLI and ChatGPT sign-in. Uses your account's Codex allowance. |

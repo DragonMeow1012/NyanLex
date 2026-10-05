@@ -52,12 +52,11 @@ foreach ($tree in $trees) {
 }
 
 # Fabric 1.17.1 is source-compatible with the canonical core except for its
-# Minecraft-bundled Gson version and three translator files that carry broader
+# Minecraft-bundled Gson version and two translator files that carry broader
 # version-specific adaptations. Keep the compatibility boundary explicit:
 # newly added common files are mirrored automatically, while a changed expected
 # replacement fails loudly instead of silently dropping an old-runtime fix.
 $fabric1171Excluded = @(
-    'translate\CodexAppServerTransport.java',
     'translate\GoogleResponseParser.java',
     'translate\OpenAiTranslator.java'
 )
@@ -175,7 +174,8 @@ foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122
     New-Item -ItemType Directory -Force -Path $sharedDestination | Out-Null
     foreach ($sharedName in @('ScreenTranslationCapture.java', 'TranslationFile.java', 'TranslationFileDialog.java',
             'HookHealth.java', 'HookGuard.java', 'ChatComposerPanel.java',
-            'MachineTranslationGate.java', 'RequestsPausedException.java')) {
+            'MachineTranslationGate.java', 'RequestsPausedException.java', 'RequestGate.java',
+            'RequestPacer.java', 'CliProcessSupport.java', 'CliRequestLimits.java', 'HttpEndpointPolicy.java')) {
         $sharedSource = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\translate\$sharedName"
         $sharedFile = Join-Path $sharedDestination $sharedName
         if (-not (Test-Path $sharedFile) -or (Get-FileHash $sharedSource).Hash -ne (Get-FileHash $sharedFile).Hash) {

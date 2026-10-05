@@ -108,8 +108,7 @@ public final class RequestPacer {
      * Block until this instance's minimum send interval has elapsed since the
      * previously reserved slot, then reserve the next slot. Returns immediately
      * when the cooldown is {@code <= 0}. An interrupt re-asserts the thread's
-     * interrupt flag and releases the caller (the transport call that follows
-     * will surface the failure).
+     * interrupt flag and aborts the request before it reaches the transport.
      *
      * <p>The worker's {@link RequestGate} is checked first (even with pacing off) and
      * again after sleeping, so a request waiting here when new requests are switched
@@ -130,6 +129,7 @@ public final class RequestPacer {
                 sleeper.sleep(waitMs);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                throw new RequestsPausedException();
             }
             RequestGate.checkOpen();
         }

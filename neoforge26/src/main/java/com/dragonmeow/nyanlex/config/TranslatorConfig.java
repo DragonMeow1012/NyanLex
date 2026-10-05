@@ -80,6 +80,10 @@ public final class TranslatorConfig {
 
     /** Active AI authentication/transport route: api, codex, or antigravity. */
     public String aiProvider = AI_PROVIDER_API;
+    /** Advanced opt-in after reading the Antigravity service and account risks. */
+    public boolean antigravityEnabled = false;
+    public boolean hideAntigravityNotice = false;
+    public boolean hideGeminiApiNotice = false;
     /** Legacy persisted switch, retained only so pre-Antigravity configs migrate losslessly. */
     @Deprecated
     public boolean aiUseCodex = false;
@@ -342,7 +346,17 @@ public final class TranslatorConfig {
     }
 
     public boolean usesAntigravity() {
-        return AI_PROVIDER_ANTIGRAVITY.equals(aiProvider);
+        return antigravityEnabled && AI_PROVIDER_ANTIGRAVITY.equals(aiProvider);
+    }
+
+    public void setAntigravityEnabled(boolean enabled) {
+        antigravityEnabled = enabled;
+        if (!enabled && AI_PROVIDER_ANTIGRAVITY.equals(aiProvider)) {
+            // Do not silently send an existing user's text through an alternative API.
+            aiProvider = AI_PROVIDER_API;
+            aiUseCodex = false;
+            translationRequestsEnabled = false;
+        }
     }
 
     public boolean usesLocalAiCli() {
@@ -351,6 +365,7 @@ public final class TranslatorConfig {
 
     /** Change the AI route and keep the legacy Codex field synchronized for older builds. */
     public void selectAiProvider(String provider) {
+        if (AI_PROVIDER_ANTIGRAVITY.equals(provider) && !antigravityEnabled) return;
         aiProvider = normalizeAiProvider(provider);
         aiUseCodex = AI_PROVIDER_CODEX.equals(aiProvider);
     }
@@ -385,6 +400,7 @@ public final class TranslatorConfig {
         }
         aiProvider = normalizeAiProvider(aiProvider);
         aiUseCodex = AI_PROVIDER_CODEX.equals(aiProvider);
+        setAntigravityEnabled(antigravityEnabled);
         if (antigravityModel == null || antigravityModel.isBlank()) {
             antigravityModel = DEFAULT_ANTIGRAVITY_MODEL;
         }

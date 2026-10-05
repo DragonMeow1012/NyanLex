@@ -1360,6 +1360,7 @@ public final class NyanLexFabric implements ClientModInitializer {
                 codexRoot.resolve(MOD_ID + "-codex-home"),
                 codexRoot.resolve(MOD_ID + "-codex-workspace"));
         codexClient.setTokenUsage(tokenUsage);
+        codexClient.setRequestCooldown(() -> config.requestCooldownMs);
         // Spawn + initialize app-server in the background when Codex mode is the active
         // engine, so the first translation does not wait for process start.
         if (config.usesCodex()) codexClient.warmUpAsync();
@@ -1372,6 +1373,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         antigravityClient = new AntigravityCliClient(
                 codexRoot.resolve(MOD_ID + "-antigravity-workspace"));
         antigravityClient.setTokenUsage(tokenUsage);
+        antigravityClient.setRequestCooldown(() -> config.requestCooldownMs);
         if (config.usesAntigravity()) {
             antigravityClient.warmUpAsync(config.antigravityModel);
         }
@@ -2819,7 +2821,7 @@ public final class NyanLexFabric implements ClientModInitializer {
             onResult.accept(Component.translatable("message.nyanlex.not_initialized").getString());
             return;
         }
-        if (!antigravityClient.hasAuthenticatedSessionCached()) {
+        if (!antigravityClient.hasConnectedSessionCached()) {
             onResult.accept(Component.translatable(
                     "screen.nyanlex.ai.antigravity.test_requires_login").getString());
             return;

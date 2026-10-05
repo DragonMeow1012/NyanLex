@@ -48,6 +48,9 @@ public final class DialogPanel {
     /** Empty vertical space. */
     public record Gap(int height) implements Block {}
 
+    /** A keyboard-accessible checkbox; the host owns its selected state. */
+    public record Check(int id, String label, boolean selected) implements Block {}
+
     /** One mode or engine button of a {@link Grid} row; {@code color} 0 means white, {@code blue} the AI look. */
     public record Cell(int id, String label, int color, boolean blue) {}
 
@@ -137,6 +140,7 @@ public final class DialogPanel {
     private String titleShown = "";
     private int dotsX;
     private final List<Item> items = new ArrayList<>();
+    private final java.util.Set<Integer> checkboxIds = new java.util.HashSet<>();
     private final List<Item> footerItems = new ArrayList<>();
     private final List<LaidText> texts = new ArrayList<>();
     private final List<LaidList> lists = new ArrayList<>();
@@ -208,6 +212,7 @@ public final class DialogPanel {
     private void layout() {
         layouts++;
         items.clear();
+        checkboxIds.clear();
         footerItems.clear();
         texts.clear();
         lists.clear();
@@ -287,6 +292,11 @@ public final class DialogPanel {
                 items.add(new Item(c.id(), c.title(), c.desc(), 0, y, inner, h, true, c.selected(), false, true, false,
                         false, 0, false, null, pad));
                 y += h;
+            } else if (b instanceof Check check) {
+                checkboxIds.add(check.id());
+                items.add(new Item(check.id(), check.label(), null, 0, y, inner, BTN_H,
+                        false, check.selected(), false, true, false));
+                y += BTN_H;
             } else if (b instanceof Row r) {
                 int n = Math.max(1, r.buttons().size());
                 int each = (inner - (n - 1) * GAP) / n;
@@ -455,6 +465,17 @@ public final class DialogPanel {
         int y = screenY(it);
         boolean hover = it.enabled() && mx >= x && mx < x + it.w() && my >= y && my < y + it.h()
                 && (it.inFooter() || (my >= viewY && my < viewY + viewH));
+        if (!it.inFooter() && checkboxIds.contains(it.id())) {
+            if (hover) c.fill(x, y, it.w(), it.h(), C_CARD_HOVER);
+            SettingsPanel.border(c, x + 2, y + 3, 10, 10, it.selected() ? C_ACCENT : C_MUTED);
+            if (it.selected()) {
+                c.fill(x + 4, y + 7, 2, 2, C_TITLE);
+                c.fill(x + 6, y + 9, 2, 2, C_TITLE);
+                c.fill(x + 8, y + 5, 2, 4, C_TITLE);
+            }
+            c.text(UiText.fit(it.label(), it.w() - 20, width), x + 18, y + 4, C_TEXT);
+            return;
+        }
         if (it.choice()) {
             SettingsPanel.rrect(c, x, y, it.w(), it.h(), it.selected() ? C_CARD_SELECTED : hover ? C_CARD_HOVER : C_CARD);
             SettingsPanel.border(c, x, y, it.w(), it.h(), it.selected() ? C_ACCENT : C_EDGE);
@@ -627,6 +648,8 @@ public final class DialogPanel {
             String base = String.format(narration.choice(), it.label() + (it.desc() == null ? "" : "。" + it.desc()));
             return it.selected() ? String.format(narration.chosen(), base) : base;
         }
+        if (!it.inFooter() && checkboxIds.contains(it.id()) && it.selected())
+            return String.format(narration.chosen(), it.label());
         String label = String.format(narration.button(), it.narrate() != null ? it.narrate() : it.label());
         return it.enabled() ? label : String.format(narration.disabled(), label);
     }

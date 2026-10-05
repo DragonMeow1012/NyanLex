@@ -8,7 +8,7 @@
 
 本資料夾收錄由 AI 與機器翻譯產生的**譯文**，供 Nyanlex 模組在使用者**主動按下下載**後取用。
 
-- **不收錄、不散布任何原文。** 檔案只含「原文內容的 SHA-256 雜湊 → 譯文」，無法由檔案還原原文，也不含玩家名稱或範例句。原文的著作權屬各原權利人（遊戲、伺服器、模組作者）。
+- **不收錄、不散布任何原文。** 檔案只含「原文內容的 SHA-256 雜湊 → 譯文」，雜湊不直接儲存原文，但短句仍可能被猜測比對，譯文本身也可能包含可識別資訊。原文的著作權屬各原權利人（遊戲、伺服器、模組作者）。
 - **非官方。** 與 Mojang、Microsoft、任何伺服器或模組作者**沒有**隸屬、合作或背書關係。
 - **授權：** 預設以 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)（姓名標示－非商業性－相同方式分享）授權，詳見同目錄 `LICENSE`。**例外：** 檔案（及 `index.json` 中對應條目）標有 `license` 欄位的，依該欄位標示的授權，例如來源模組以 LGPL 授權者，其譯文沿用該 LGPL 授權（如 `LGPL-3.0-only`）。程式碼仍為 repo 根目錄的 MIT 授權，不受影響。
 - 譯文為機器翻譯／AI 產生，可能有誤，不保證正確。
@@ -44,6 +44,10 @@ translation-hub/
 
 下載端只在查詢當下用本機的原文 key 計算雜湊比對，並在命中時驗證 token 結構與網址，不符的列直接丟棄。
 
+### 權利與來源
+
+只存雜湊與譯文不等於取得翻譯或散布授權。每個發布包須核對來源、版本、原授權、署名與翻譯散布依據；既有 license 標籤不是已完成權利審查的證明。未確認前不新增發布相關資料包。
+
 ### 下架與移除
 
 權利人（伺服器營運者、模組作者等）可於本 GitHub repo 開 Issue，**標題格式**：
@@ -60,7 +64,7 @@ translation-hub/
 
 This folder holds **translated text** produced by AI and machine translation, fetched by the Nyanlex mod only after the user **explicitly presses download**.
 
-- **No original text is stored or distributed.** Files contain only `SHA-256 hash of the source content -> translation`; the source cannot be recovered from a file, and no player names or sample sentences appear. Copyright in the original text belongs to its owners (the game, server and mod authors).
+- **No original text is stored or distributed.** Files contain only `SHA-256 hash of the source content -> translation`; the hash does not directly store the source, but short phrases can still be guessed and matched, and translated text may contain identifying information. Copyright in the original text belongs to its owners (the game, server and mod authors).
 - **Unofficial.** Not affiliated with, endorsed by or associated with Mojang, Microsoft, any server or any mod author.
 - **License:** by default, data in this folder is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (see `LICENSE` here). **Exception:** a file whose `license` field is set (and its entry in `index.json`) is under the license it names, for example a translation of a mod released under an LGPL license keeps that LGPL license (such as `LGPL-3.0-only`). The program code remains MIT-licensed at the repository root and is unaffected.
 - Translations are machine/AI generated and may contain errors.
@@ -95,6 +99,10 @@ translation-hub/
 | `entries` | Key is `sha256(normalized cache key)` (UTF-8); value is the translation. `⟦n⟧`, `⟦MT⟧` etc. are internal protection tokens, leave them intact |
 
 The client hashes the local source key only at lookup time and, on a hit, validates token structure and URLs against that local key; non-matching rows are dropped.
+
+### Rights and provenance
+
+Hashes do not establish translation or redistribution rights. Verify each pack's source, version, original license, attribution and permission before publication; existing license labels are not proof of a completed rights review.
 
 ### Takedown
 

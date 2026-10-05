@@ -10,6 +10,8 @@ import java.util.Map;
  * <em>inline</em> fake transport — the unit tests never touch the real network.</p>
  */
 public interface HttpTransport {
+    /** Account-level pause reported by a local CLI; zero when no pause is known. */
+    default long blockedUntil() { return 0L; }
 
     /**
      * Perform an HTTP GET and return the response body as a UTF-8 string.

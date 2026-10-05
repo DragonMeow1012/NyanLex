@@ -87,6 +87,22 @@ public final class Neo26ConfigScreen extends Screen {
     }
 
     private final class Host implements UiHost {
+        @Override
+        public boolean beforeToggle(SettingEntry entry) {
+            if (!"antigravity".equals(entry.id()) || config().antigravityEnabled
+                    || config().hideAntigravityNotice) return true;
+            if (Neo26ConfigScreen.this.minecraft == null) return false;
+            Neo26ConfigScreen.this.minecraft.setScreenAndShow(new ConfirmDialogScreen(Neo26ConfigScreen.this,
+                    Component.translatable("screen.nyanlex.ai.antigravity.risk_title"),
+                    Component.translatable("screen.nyanlex.ai.antigravity.risk_message"),
+                    Component.translatable("screen.nyanlex.ai.antigravity.enable"), () -> {
+                        config().setAntigravityEnabled(true);
+                        NyanLexNeoForge26.saveConfig();
+                    }).rememberChoice(config().hideAntigravityNotice,
+                            value -> config().hideAntigravityNotice = value));
+            return false;
+        }
+
         @Override public TranslatorConfig config() { return NyanLexNeoForge26.config(); }
 
         @Override public void saveConfig() { NyanLexNeoForge26.saveConfig(); }
@@ -245,16 +261,17 @@ public final class Neo26ConfigScreen extends Screen {
                 java.net.URI.create(ProjectLinks.GITHUB_URL), true));
     }
 
-    private void confirm(Component title, Component message, Runnable onYes) {
+    private void confirm(Component title, Component message, Component confirmLabel, Runnable onYes) {
         if (this.minecraft == null) return;
         this.minecraft.setScreenAndShow(new ConfirmDialogScreen(this, title, message,
-                Component.translatable(SettingsCatalog.KEY_CONFIRM_YES), onYes));
+                confirmLabel, onYes));
     }
 
     private void confirmClearCache() {
         int count = NyanLexNeoForge26.service() == null ? 0 : NyanLexNeoForge26.service().translatedCount();
         confirm(Component.translatable(SettingsCatalog.KEY_CLEAR_CACHE_CONFIRM_TITLE),
-                Component.translatable(SettingsCatalog.KEY_CLEAR_CACHE_CONFIRM_MESSAGE, count), () -> {
+                Component.translatable(SettingsCatalog.KEY_CLEAR_CACHE_CONFIRM_MESSAGE, count),
+                    Component.translatable(SettingsCatalog.KEY_CONFIRM_YES), () -> {
                     if (NyanLexNeoForge26.service() != null) NyanLexNeoForge26.service().clearTranslations();
                     Neo26TextStyle.clearRenderMemo();
                     setStatus(Component.translatable("config.nyanlex.cache.cleared"));
@@ -268,7 +285,8 @@ public final class Neo26ConfigScreen extends Screen {
             return;
         }
         confirm(Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_TITLE),
-                Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_MESSAGE), () -> {
+                Component.translatable(SettingsCatalog.KEY_CLEAR_PACKS_CONFIRM_MESSAGE),
+                    Component.translatable(SettingsCatalog.KEY_CONFIRM_YES), () -> {
                     int removed = com.dragonmeow.nyanlex.hub.HubPackCleaner.clear(
                             NyanLexNeoForge26.hubLocalCache(), NyanLexNeoForge26.hubDownloadState());
                     Neo26TextStyle.clearRenderMemo();

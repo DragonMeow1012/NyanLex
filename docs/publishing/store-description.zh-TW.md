@@ -28,23 +28,13 @@
 
 只需安裝於客戶端，選擇與遊戲版本、Loader 完全相符的 JAR。Fabric 另需對應版本的 Fabric API；伺服器不必安裝。
 
-| Loader | Minecraft 版本 |
-| --- | --- |
-| Fabric · 37 個版本 | 1.16.5～26.3 的全部正式版本，另含 1.14.4、1.15.2 |
-| NeoForge · 23 個版本 | 1.20.1～26.3 的全部正式版本 |
-| Forge · 2 個版本 | 1.12.2、1.13.2 |
-
-共 62 個 Minecraft／Loader 組合。更早的 Minecraft 沒有對應的 NeoForge；不包含 Minecraft 快照或預覽版。NeoForge 26.1.2 的 Loader 最低需求為 **26.1.2.109**。模組 UI 支援英文、日文、繁體中文、簡體中文，不限制遊戲內容的翻譯目標語言。
-
-「已翻譯」顯示永久保存的累積總數，不受記憶體快取 5,000 筆上限影響；本次全內容預熱進度另行計算。
-
 舊式版本（Fabric 1.14.4～1.16.5、Forge 1.12.2～1.13.2）提供精簡設定介面，沒有翻譯包及全內容預熱，快捷鍵也有差異。完整操作見 [README](https://github.com/DragonMeow1012/NyanLex/blob/main/README.md)。翻譯品質與速度取決於服務商，建置成功不代表每個模組介面都已實測。
 
 你可以從設定選單開啟翻譯設定；如果入口被其他 UI 模組隱藏，也可以在聊天欄輸入 `/nyanlex`。
 
 ## 專案資訊
 
-選用的 AI 翻譯功能連線到本機或線上語言模型。Codex 與 Antigravity 選項只會啟動已安裝的本機官方工具，不會代為安裝。現代 Fabric／NeoForge 版本可從 Gemini 分頁切換到「Google 登入」；請先依 [Google 官方下載頁](https://antigravity.google/download)安裝 Antigravity CLI，模型（含思考強度版本）由 CLI 取得。製作來源與平台正式揭露的填寫方式見[審核資料](submission-guide.zh-TW.md)。
+選用的 AI 翻譯功能連線到本機或線上語言模型。Codex 與 Antigravity 選項只會啟動已安裝的本機官方工具，不會代為安裝。Antigravity 預設隱藏，現代 Fabric／NeoForge 版本須先在進階設定閱讀風險並確認開啟，才能從 Gemini 分頁切換到「Google 登入」；請先依 [Google 官方下載頁](https://antigravity.google/download)安裝 Antigravity CLI，模型（含思考強度版本）由 CLI 取得。Google 個人版條款限制第三方存取；官方登入與工具封鎖不能取代第三方整合授權確認。Gemini API 另有年齡、面向未成年人用戶端及免費方案資料使用限制，詳見 [Gemini API 條款](https://ai.google.dev/gemini-api/terms)。製作來源與平台正式揭露的填寫方式見[審核資料](submission-guide.zh-TW.md)。
 
 本專案為非官方作品，與 Mojang、Microsoft 或其他模組作者無隸屬或背書關係。程式碼採 MIT 授權；選用的翻譯包另有授權與來源標示，見 [翻譯倉庫](https://github.com/DragonMeow1012/NyanLex/tree/main/translation-hub)。
 

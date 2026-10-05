@@ -41,6 +41,12 @@
       "to": "mouseScrolled(double mouseX, double mouseY, double horizontal, double delta)"
     }
   ],
+  "com/dragonmeow/nyanlex/fabric/ConfirmDialogScreen.java": [
+    {
+      "from": "mouseScrolled(double mouseX, double mouseY, double delta)",
+      "to": "mouseScrolled(double mouseX, double mouseY, double horizontal, double delta)"
+    }
+  ],
   "com/dragonmeow/nyanlex/fabric/QuickSetupScreen.java": [
     {
       "from": "mouseScrolled(double mouseX, double mouseY, double delta)",

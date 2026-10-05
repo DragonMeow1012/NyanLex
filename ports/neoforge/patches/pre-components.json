@@ -60,6 +60,13 @@
       "count": 1
     }
   ],
+  "com/dragonmeow/nyanlex/neoforge/ConfirmDialogScreen.java": [
+    {
+      "from": "mouseScrolled(double mouseX, double mouseY, double delta)",
+      "to": "mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta)",
+      "count": 1
+    }
+  ],
   "com/dragonmeow/nyanlex/neoforge/ItemWarmupConfirmScreen.java": [
     {
       "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n",

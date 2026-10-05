@@ -1503,14 +1503,14 @@ final class LegacyTranslator {
         if (config.aiUseCodex) {
             LegacyCodexClient client = codexClient;
             if (client == null) throw new IllegalStateException("Codex not initialized");
+            client.setRequestCooldown(() -> config.requestCooldownMs);
             String model = config.codexModel == null ? "" : config.codexModel.trim();
             String effort = config.codexReasoningEffort == null ? "" : config.codexReasoningEffort.trim();
             String systemPrompt = "Translate Minecraft text to " + target
                     + ". Preserve names, numbers, formatting codes, line breaks, numeric boundary markers,"
                     + " and every ⟦MTn⟧ placeholder exactly."
                     + " Return translation only.";
-            // Codex has no pacing, but a cold app-server start can take seconds: re-check
-            // right before the billable turn/start.
+            // Re-check the send switch after startup and account pacing, before the billable turn.
             return client.complete(model, effort, systemPrompt, text, new Runnable() {
                 @Override public void run() { checkRequestsOpen(); }
             });
@@ -1582,9 +1582,10 @@ final class LegacyTranslator {
         user.addProperty("content", text);
         messages.add(user);
         root.add("messages", messages);
-        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) com.dragonmeow.nyanlex.translate.HttpEndpointPolicy.validate(endpoint).toURL().openConnection();
         connection.setRequestMethod("POST");
         connection.setDoOutput(true);
+        connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(10000);
         connection.setReadTimeout(45000);
         if (apiKey != null && !apiKey.trim().isEmpty())
@@ -1596,7 +1597,7 @@ final class LegacyTranslator {
         try {
             int code = connection.getResponseCode();
             String response = read(connection, code >= 400);
-            if (code >= 400) throw new HttpStatusException(code, response);
+            if (code / 100 != 2) throw new HttpStatusException(code, response);
             if (response == null || response.trim().isEmpty())
                 throw new IllegalStateException("empty response");
             JsonObject parsed = new JsonParser().parse(response).getAsJsonObject();
@@ -1683,17 +1684,18 @@ final class LegacyTranslator {
         gate.recheck(probe);
         String endpoint = baseUrl + "?client=gtx&dt=t&sl="
                 + enc(sourceLang) + "&tl=" + enc(target) + "&q=" + enc(text);
-        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) com.dragonmeow.nyanlex.translate.HttpEndpointPolicy.validate(endpoint).toURL().openConnection();
+        connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(10000);
         connection.setReadTimeout(15000);
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (NyanLex Mod)");
+        connection.setRequestProperty("User-Agent", "NyanLex Mod");
         try {
             int code = connection.getResponseCode();
             String body = read(connection, code >= 400);
             if (code == 429 || com.dragonmeow.nyanlex.translate.MachineTranslationGate.isBlockPage(body)) {
                 throw new GoogleBlockedException();
             }
-            if (code >= 400) throw new HttpStatusException(code, body);
+            if (code / 100 != 2) throw new HttpStatusException(code, body);
             if (body == null || body.trim().isEmpty())
                 throw new IllegalStateException("empty response");
             JsonArray chunks = new JsonParser().parse(body).getAsJsonArray().get(0).getAsJsonArray();

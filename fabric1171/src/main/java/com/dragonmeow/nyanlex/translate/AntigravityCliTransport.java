@@ -17,6 +17,9 @@ public final class AntigravityCliTransport implements HttpTransport {
     }
 
     @Override
+    public long blockedUntil() { return client.blockedUntil(); }
+
+    @Override
     public String get(String url) throws IOException {
         throw new IOException("GET is not supported by Antigravity CLI");
     }

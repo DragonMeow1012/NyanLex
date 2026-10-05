@@ -224,6 +224,18 @@ Expand a Minecraft series to download an individual build:
 
 NyanLex does not install either CLI automatically. Sign-in is completed through the local official tool in a browser or terminal; credentials stay with that tool, while NyanLex calls the already signed-in local process.
 
+Antigravity is hidden by default. Read and confirm its risks in Advanced settings to reveal Google sign-in. Disabling it while selected also disables online translation; unconfirmed older configurations do the same to prevent silent fallback to another provider. Google individual terms restrict third-party access and permit account suspension. Official CLI use does not establish authorization for public integration; Google confirmation is still required.
+
+Gemini API requires users to be 18 or older and restricts clients directed toward or likely to be accessed by minors. Bringing your own key does not settle eligibility. Unpaid services prohibit sensitive, confidential or personal data and may use content for improvement and human review. Clients offered in the EEA, Switzerland and UK require Paid Services. See [Gemini API terms](https://ai.google.dev/gemini-api/terms).
+
+Remote APIs require HTTPS; HTTP is limited to localhost, 127.0.0.1 and ::1 for local models. Redirects are not followed automatically, preventing credentials or text from being forwarded to another address.
+
+CLI sign-in uses a dedicated translation profile and workspace inside the game's config directory; an upgrade may require signing in again. The Google account terminal opens only when you click Sign in or Sign out. Antigravity's custom agent requests an empty tool list, with additional deny rules for file access, commands, web access and MCP. **Text translation remains available. An official PreToolUse hook denies all tool operations before execution; an advertised tool list does not disable translation.** Connection tests use the same boundary. Game text and context are untrusted translation data.
+
+Both CLIs serialize translation requests and honor your send interval, with a one-second minimum, including warm-up and connection tests. Rate limits trigger backoff; exhausted allowances pause until a reported reset or an explicit reconnect if no reset is known. **Remaining allowance may be unavailable; missing quota data does not block translation. Check your official account's usage.** Tests consume some allowance. The mod never buys credits, redeems resets or rotates signed-in accounts. Antigravity requests have a 30-second deadline; cancellation and timeout terminate the process and discoverable descendants. Forced termination of the game can still prevent complete child cleanup.
+
+[OpenAI's app-server documentation](https://learn.chatgpt.com/docs/app-server) permits existing authentication for local or open-source apps and recommends Sign in with ChatGPT; it does not permit commercial or hosted services. Google's [terms](https://antigravity.google/terms) and [official CLI interface](https://antigravity.google/docs/cli/headless/) require separate consideration: authorization for a public third-party integration still needs confirmation from Google. Official login and tool isolation do not establish that authorization or guarantee unlimited allowance or freedom from suspension.
+
 You can choose whether Google machine translation fills in after an AI failure. With this fallback enabled, the text may also be sent to Google.
 
 Local caches, imported translations, downloaded packs and the built-in glossary provide existing translations without a new translation request. See the [translation hub documentation](translation-hub/README.md) for pack sources, format and licensing.
@@ -318,6 +330,7 @@ Enable it in **General**, then open chat. The composer starts at the bottom righ
 - Users upgrading from an earlier version keep their existing settings: if you were already translating, online translation stays on.
 - **Translation packs are download-only.** Finding and downloading them only reads public files from GitHub (`index.json` plus the files you confirm); no local text or installed-mod list is uploaded, and translation files are downloaded only after confirmation (discovery first reads the public index).
 - Player names from the TAB list are masked locally before sending; other server text may still contain user-provided content.
+- **NyanLex does not read Antigravity logs or email addresses.** Google mode shows connection status only. Credentials stay with the official CLI, which may store local conversations or diagnostics; submitted text also follows the provider's privacy policy. Translation profiles and logs live in dedicated game-config folders. Do not share those folders as translation packs. If machine-translation fallback is enabled, failed text may also be sent to your selected machine-translation provider.
 
 ## About NyanLex
 

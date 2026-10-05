@@ -21,11 +21,14 @@ import java.util.List;
 public final class ConfirmDialogScreen extends Screen {
     private static final int CANCEL = 1;
     private static final int CONFIRM = 2;
+    private static final int REMEMBER = 3;
 
     private final Screen parent;
     private final String message;
     private final String confirmLabel;
     private final Runnable onConfirm;
+    private java.util.function.Consumer<Boolean> onRemember;
+    private boolean remember;
     private final DialogPanel panel;
 
     public ConfirmDialogScreen(Screen parent, Component title, Component message, Component confirmLabel,
@@ -38,15 +41,34 @@ public final class ConfirmDialogScreen extends Screen {
         this.panel = new DialogPanel(text -> this.font == null ? text.length() * 6 : this.font.width(text));
     }
 
+    /** The preference is committed only with the affirmative action. */
+    public ConfirmDialogScreen rememberChoice(boolean initial, java.util.function.Consumer<Boolean> onRemember) {
+        this.remember = initial;
+        this.onRemember = onRemember;
+        return this;
+    }
+
+    private DialogPanel.Content content() {
+        java.util.ArrayList<DialogPanel.Block> blocks = new java.util.ArrayList<>();
+        blocks.add(new DialogPanel.Text(message, 0));
+        if (onRemember != null) blocks.add(new DialogPanel.Check(REMEMBER,
+                Component.translatable("screen.nyanlex.notice.dont_show_again").getString(), remember));
+        return new DialogPanel.Content(this.title.getString(), blocks,
+                DialogPanel.Footer.of(new DialogPanel.Btn(CANCEL, Component.translatable("gui.cancel").getString()),
+                        new DialogPanel.Btn(CONFIRM, confirmLabel, true)), CANCEL);
+    }
+
     @Override
     protected void init() {
         panel.setNarration(DialogContent.narration((key, args) -> Component.translatable(key, args).getString()));
-        panel.set(new DialogPanel.Content(this.title.getString(),
-                List.of(new DialogPanel.Text(message, 0)),
-                DialogPanel.Footer.of(new DialogPanel.Btn(CANCEL, Component.translatable("gui.cancel").getString()),
-                        new DialogPanel.Btn(CONFIRM, confirmLabel, true)),
-                CANCEL));
+        panel.set(content());
         panel.resize(this.width, this.height);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
+        panel.mouseScrolled((int) mouseX, (int) mouseY, scrollY);
+        return true;
     }
 
     @Override
@@ -55,7 +77,11 @@ public final class ConfirmDialogScreen extends Screen {
     }
 
     private void handle(int id) {
-        if (id == CONFIRM) {
+        if (id == REMEMBER) {
+            remember = !remember;
+            panel.update(content());
+        } else if (id == CONFIRM) {
+            if (onRemember != null) onRemember.accept(remember);
             onConfirm.run();
             close();
         } else if (id == CANCEL) {

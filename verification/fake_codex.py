@@ -2,10 +2,15 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
-log_path = os.environ.get("NYANLEX_FAKE_LOG", "")
-early_turn = os.environ.get("NYANLEX_FAKE_EARLY_TURN", "") == "1"
-completed_first = os.environ.get("NYANLEX_FAKE_COMPLETED_FIRST", "") == "1"
+# Per-invocation fixtures survive production's environment allowlist without
+# adding test-only exceptions to the CLI security boundary.
+fixture_path = Path(__file__).with_suffix(".json")
+fixture = json.loads(fixture_path.read_text(encoding="utf-8-sig")) if fixture_path.exists() else {}
+log_path = fixture.get("log", os.environ.get("NYANLEX_FAKE_LOG", ""))
+early_turn = fixture.get("early", os.environ.get("NYANLEX_FAKE_EARLY_TURN", "")) == "1"
+completed_first = fixture.get("completed", os.environ.get("NYANLEX_FAKE_COMPLETED_FIRST", "")) == "1"
 signed_in = True
 turn_number = 0
 
@@ -68,6 +73,10 @@ for raw in sys.stdin:
                 "defaultReasoningEffort": "medium",
                 "isDefault": True
             }], "nextCursor": "page-2"}
+    elif method == "mcpServerStatus/list":
+        result = {"data": [], "nextCursor": None}
+    elif method == "account/rateLimits/read":
+        result = {}
     elif method == "thread/start":
         result = {"thread": {"id": "thread-inline"}}
     elif method == "turn/start":

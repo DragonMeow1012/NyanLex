@@ -101,6 +101,8 @@ python verification/test-port-verification.py
 ./verification/verify-release-matrix.ps1 -Phase FinalJar
 ```
 
+To resume a failed maintained target, pass `-Projects` with its project key (for example, `-Projects fabric1171`). A selected run reports only that subset; retain the successful reports and hashes for the other targets before treating the complete release matrix as verified.
+
 Port builds require an explicit target-specific `--project-cache-dir`. The driver supplies it; without isolation, changing `-Ptarget` can make Gradle delete a previous target's compiled classes as stale outputs. Successful port builds write `build/<MC>/port-verification.json` with that target's actual named game classpath.
 
 The artifact verifier rejects anonymous inner classes in the composer Mixin. These classes can pass compilation and ordinary selector checks but fail during NeoForge's runtime class transformation. The composer uses the existing Host interface directly and an external platform canvas instead. Static checks also reject public Host method collisions with vanilla classes.

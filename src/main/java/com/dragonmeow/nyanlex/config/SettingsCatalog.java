@@ -64,12 +64,12 @@ public final class SettingsCatalog {
     /** All entries of a page in reading order. */
     public static List<SettingEntry> entries(SettingsPage page) {
         List<SettingEntry> out = new ArrayList<>();
-        for (SettingsRow row : ROWS.get(page)) out.addAll(row.entries());
         if (page == SettingsPage.DISPLAY) out.addAll(DISPLAY_EXTRAS);
+        for (SettingsRow row : ROWS.get(page)) out.addAll(row.entries());
         return out;
     }
 
-    /** The display-page entries that sit below the per-surface rows. */
+    /** The display-page entries that sit above the per-surface rows. */
     public static List<SettingEntry> displayExtras() { return DISPLAY_EXTRAS; }
 
     public static List<SettingEntry> allEntries() {
@@ -204,6 +204,10 @@ public final class SettingsCatalog {
                         .withKeywords("cache", "快取", "缓存", "clear"))));
 
         map.put(SettingsPage.ADVANCED, pairs(List.of(
+                toggle(SettingsPage.ADVANCED, "antigravity", c -> c.antigravityEnabled,
+                        c -> onOff(c.antigravityEnabled),
+                        c -> c.setAntigravityEnabled(!c.antigravityEnabled),
+                        SettingEntry.SideEffect.CLEAR_PENDING),
                 cycle(SettingsPage.ADVANCED, "cooldown",
                         c -> millisState(c.requestCooldownMs),
                         c -> c.requestCooldownMs = nextStep(TIMING_STEPS, c.requestCooldownMs))

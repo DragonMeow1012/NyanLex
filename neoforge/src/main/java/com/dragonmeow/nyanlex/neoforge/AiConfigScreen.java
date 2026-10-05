@@ -194,6 +194,11 @@ public final class AiConfigScreen extends Screen {
                         Component.translatable("screen.nyanlex.ai.openai.api_mode").getString(),
                         !cfg.usesLocalAiCli()),
                 x, y, width, gemini ? this::selectGeminiApiMode : this::selectOpenAiApiMode);
+        if (gemini && !cfg.antigravityEnabled) {
+            addProviderButton(Component.translatable("screen.nyanlex.ai.gemini.policy_title").getString(),
+                    x + width + gap, y, width, () -> showGeminiApiNotice(false));
+            return;
+        }
         addProviderButton(providerLabel(
                         Component.translatable(gemini
                                 ? "screen.nyanlex.ai.gemini.google_mode"
@@ -298,7 +303,7 @@ public final class AiConfigScreen extends Screen {
         AntigravityCliClient client = NyanLexNeoForge.antigravityClient();
         boolean installed = client != null && client.isInstalledCached();
         boolean modelsLoaded = installed && !client.cachedModels().isEmpty();
-        boolean signedIn = modelsLoaded && client.hasAuthenticatedSessionCached();
+        boolean signedIn = modelsLoaded && client.hasConnectedSessionCached();
 
         this.loginButton = Button.builder(
                 Component.translatable(signedIn
@@ -344,12 +349,29 @@ public final class AiConfigScreen extends Screen {
             this.rebuildWidgets();
             return;
         }
-        selectGeminiApiMode();
+        if (NyanLexNeoForge.config().hideGeminiApiNotice) selectGeminiApiMode();
+        else showGeminiApiNotice(true);
     }
 
     private void selectGeminiApiMode() {
+        saveCurrentFields();
+        TranslatorConfig cfg = NyanLexNeoForge.config();
         selectApiProvider("https://generativelanguage.googleapis.com/v1beta/openai",
-                "gemini-3.1-flash-lite");
+                isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")
+                        ? cfg.aiModel : "gemini-3.1-flash-lite");
+    }
+
+    private void showGeminiApiNotice(boolean selectProvider) {
+        if (this.minecraft == null) return;
+        saveCurrentFields();
+        TranslatorConfig cfg = NyanLexNeoForge.config();
+        this.minecraft.setScreen(new ConfirmDialogScreen(this,
+                Component.translatable("screen.nyanlex.ai.gemini.policy_title"),
+                Component.translatable("screen.nyanlex.ai.gemini.policy_message"),
+                Component.translatable("screen.nyanlex.ai.gemini.policy_continue"), () -> {
+                    NyanLexNeoForge.saveConfig();
+                    if (selectProvider) selectGeminiApiMode();
+                }).rememberChoice(cfg.hideGeminiApiNotice, value -> cfg.hideGeminiApiNotice = value));
     }
 
     private void selectOpenAiProvider() {
@@ -406,6 +428,7 @@ public final class AiConfigScreen extends Screen {
     }
 
     private void selectAntigravityProvider() {
+        if (!NyanLexNeoForge.config().antigravityEnabled) return;
         saveCurrentFields();
         TranslatorConfig cfg = NyanLexNeoForge.config();
         if (!isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")) {
@@ -843,7 +866,7 @@ public final class AiConfigScreen extends Screen {
         AntigravityCliClient client = NyanLexNeoForge.antigravityClient();
         boolean installed = client != null && client.isInstalledCached();
         boolean signedIn = installed && !client.cachedModels().isEmpty()
-                && client.hasAuthenticatedSessionCached();
+                && client.hasConnectedSessionCached();
         if (!signedIn) {
             Component line = Component.translatable(installed
                     ? "screen.nyanlex.ai.antigravity.signed_out"
@@ -852,9 +875,7 @@ public final class AiConfigScreen extends Screen {
             return;
         }
         Component line1 = Component.translatable("screen.nyanlex.ai.antigravity.signed_in");
-        String email = client.cachedAccountEmail();
-        Component line2 = Component.literal(email == null || email.isBlank()
-                ? "Google" : maskEmail(email));
+        Component line2 = Component.literal("Google");
         int total = this.font.width(line1) + this.font.width(line2) + 8;
         int x = this.width / 2 - total / 2;
         graphics.drawString(this.font, line1, x, layAccount, 0xFF80FF80, false);

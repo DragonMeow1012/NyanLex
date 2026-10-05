@@ -52,7 +52,7 @@ class SettingsCatalogTest {
         assertEquals(2, SettingsCatalog.entries(SettingsPage.SERVICE).size());
         assertEquals(2, SettingsCatalog.entries(SettingsPage.PACK).size(), "偵測並下載, 清除下載的翻譯包");
         assertEquals(5, SettingsCatalog.entries(SettingsPage.MINE).size());
-        assertEquals(4, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
+        assertEquals(5, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
     }
 
     @Test

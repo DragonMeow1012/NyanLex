@@ -111,17 +111,17 @@ class SettingsModelTest {
         List<SettingsModel.Node> nodes = SettingsModel.nodes(SettingsCategory.DISPLAY);
         assertEquals(1 + 9 + 1, nodes.size());
         for (SettingsModel.Node node : nodes) assertFalse(node.isGroup(), "no folding groups on the display page");
-        assertEquals("all_items", nodes.get(0).card().id());
-        assertEquals(SettingCard.Kind.ALL, nodes.get(0).card().kind());
-        assertEquals("dnt", nodes.get(10).card().id(), "不翻譯詞彙 sits under the surfaces");
-        for (int i = 1; i < 10; i++) {
+        assertEquals("all_items", nodes.get(1).card().id());
+        assertEquals(SettingCard.Kind.ALL, nodes.get(1).card().kind());
+        assertEquals("dnt", nodes.get(0).card().id(), "不翻譯詞彙 sits above all display controls");
+        for (int i = 2; i < 11; i++) {
             SettingCard card = nodes.get(i).card();
             assertEquals(SettingCard.Kind.SURFACE, card.kind());
             assertEquals(SettingEntry.Type.CYCLE, card.entry().type());
             assertEquals(SettingEntry.Type.TOGGLE, card.engineEntry().type());
         }
-        assertEquals("chat", nodes.get(1).card().id());
-        assertEquals("screen", nodes.get(9).card().id());
+        assertEquals("chat", nodes.get(2).card().id());
+        assertEquals("screen", nodes.get(10).card().id());
     }
 
     @Test

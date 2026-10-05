@@ -562,7 +562,7 @@ class SettingsPanelTest {
         assertTrue(general2.texts.stream().anyMatch(t -> t.s().equals("設定")), "keybind card button says 設定");
         assertFalse(general2.texts.stream().anyMatch(t -> t.s().equals("開啟")));
         p.setCategory(SettingsCategory.DISPLAY);
-        p.keyPressed(SettingsPanel.KEY_END, false, false);
+        p.keyPressed(SettingsPanel.KEY_HOME, false, false);
         Rec display = new Rec();
         p.render(display, -1, -1);
         assertTrue(display.texts.stream().anyMatch(t -> t.s().equals("編輯")), "do-not-translate card button says 編輯");

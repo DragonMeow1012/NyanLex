@@ -1,0 +1,329 @@
+{
+  "date": "2026-10-05",
+  "version": "1.0.0",
+  "builds": 62,
+  "coreUnitTests": {
+    "tests": 1786,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2
+  },
+  "maintainedFinalJarTargets": 18,
+  "finalCoreRuns": 20,
+  "finalCodexProtocolRuns": 72,
+  "finalCodeSourceProofs": 92,
+  "expandedArtifactChecks": 44,
+  "runtimeTestedAllTargets": false,
+  "artifacts": [
+    {
+      "target": "fabric/1.14.4",
+      "file": "nyanlex-1.0.0-Fabric-1.14.4.jar",
+      "sha256": "5a526d1a8197dbb652aad8509f7942a60115d261e246e1f8f028032c9146895c"
+    },
+    {
+      "target": "fabric/1.15.2",
+      "file": "nyanlex-1.0.0-Fabric-1.15.2.jar",
+      "sha256": "badc58995a108b49a7cc7454ae45ac1a39e27ae5a5688b95ee41900421b8ecbb"
+    },
+    {
+      "target": "fabric/1.16.5",
+      "file": "nyanlex-1.0.0-Fabric-1.16.5.jar",
+      "sha256": "5bf6ef1781764f821b2cd29541060b8776e01d4dd1fd1d6cc053dffd85adfecc"
+    },
+    {
+      "target": "fabric/1.17",
+      "file": "nyanlex-1.0.0-Fabric-1.17.jar",
+      "sha256": "ac4ecde128682760e7677cd4f8e790f3487098907eb0582861706ca6811e50e5"
+    },
+    {
+      "target": "fabric/1.17.1",
+      "file": "nyanlex-1.0.0-Fabric-1.17.1.jar",
+      "sha256": "4b8967c8e28caa91d126df2e5a66dfa29777e8efd8116f3674be6c8093d06af3"
+    },
+    {
+      "target": "fabric/1.18",
+      "file": "nyanlex-1.0.0-Fabric-1.18.jar",
+      "sha256": "d2cdd8fc538e2ef68c3af5769eec16284a554bc02ef3f21c4d370b39a9f1a7d1"
+    },
+    {
+      "target": "fabric/1.18.1",
+      "file": "nyanlex-1.0.0-Fabric-1.18.1.jar",
+      "sha256": "022aebd0ff1a4344ebccbbb1965792ef95eda4d6fff2960418584c1de37d5f7a"
+    },
+    {
+      "target": "fabric/1.18.2",
+      "file": "nyanlex-1.0.0-Fabric-1.18.2.jar",
+      "sha256": "df0e4bf2264610cf476c3ebcc5e8a4a834de7c2524325f4c5d1af449dacf29b0"
+    },
+    {
+      "target": "fabric/1.19",
+      "file": "nyanlex-1.0.0-Fabric-1.19.jar",
+      "sha256": "4414fb419c49107b7dafec102363295c3e6be2756dcb2bcc3caef492678e99dd"
+    },
+    {
+      "target": "fabric/1.19.1",
+      "file": "nyanlex-1.0.0-Fabric-1.19.1.jar",
+      "sha256": "7e7cf423fad62e0de726d4b7261e4d0324bbc51c4c64e152116f87b444c31d36"
+    },
+    {
+      "target": "fabric/1.19.2",
+      "file": "nyanlex-1.0.0-Fabric-1.19.2.jar",
+      "sha256": "3fd2a05ff40fe3e5d48c4e726fca2fc9d5474143a6f698104ad818e78c47a696"
+    },
+    {
+      "target": "fabric/1.19.3",
+      "file": "nyanlex-1.0.0-Fabric-1.19.3.jar",
+      "sha256": "d48543b596ec96b21f3a8b932d74d8669b5f5bf5091ce8aba7c8b4bc6cb53d98"
+    },
+    {
+      "target": "fabric/1.19.4",
+      "file": "nyanlex-1.0.0-Fabric-1.19.4.jar",
+      "sha256": "a91176c838d58113ed59242054f6a932ed958f9d5ea2f664b314788c4f54b83d"
+    },
+    {
+      "target": "fabric/1.20",
+      "file": "nyanlex-1.0.0-Fabric-1.20.jar",
+      "sha256": "0f746d00817b0411d1b0e8a423245b637654e7774e3f51afcb19b9befd7e960b"
+    },
+    {
+      "target": "fabric/1.20.1",
+      "file": "nyanlex-1.0.0-Fabric-1.20.1.jar",
+      "sha256": "2d6e78b212415cb65fbb26e6b30dd08a2eba06a3db795152a8a143db024b13ec"
+    },
+    {
+      "target": "fabric/1.20.2",
+      "file": "nyanlex-1.0.0-Fabric-1.20.2.jar",
+      "sha256": "94f6939ba387715d36004bf6c8e56f6906bbfe77d8064ee7602ada8c6d99d5ab"
+    },
+    {
+      "target": "fabric/1.20.3",
+      "file": "nyanlex-1.0.0-Fabric-1.20.3.jar",
+      "sha256": "909f10297e72eafe6c4d25828ae04eda1179f87b5d4988bf1911934cbfe43d2f"
+    },
+    {
+      "target": "fabric/1.20.4",
+      "file": "nyanlex-1.0.0-Fabric-1.20.4.jar",
+      "sha256": "85161e1c452987747bfc9b0cdd1555a84cfd09887d8fa96908d6d014a75f5b49"
+    },
+    {
+      "target": "fabric/1.20.5",
+      "file": "nyanlex-1.0.0-Fabric-1.20.5.jar",
+      "sha256": "797035e7537ec56d48adbb55ddeac715aa12e5957568ae48af8fbb9dc6026285"
+    },
+    {
+      "target": "fabric/1.20.6",
+      "file": "nyanlex-1.0.0-Fabric-1.20.6.jar",
+      "sha256": "acf29194adceefe4172b011dadbca1ae8d11877cd64f8046dad33099b78b612c"
+    },
+    {
+      "target": "fabric/1.21",
+      "file": "nyanlex-1.0.0-Fabric-1.21.jar",
+      "sha256": "ecdc6a27579dc0211d2c533155dac005ce7fdd7ff04f3f35b04e24bdfc4f22b6"
+    },
+    {
+      "target": "fabric/1.21.1",
+      "file": "nyanlex-1.0.0-Fabric-1.21.1.jar",
+      "sha256": "94e02d7c83e6be1ecd8b94e25103ebb6d019c117ebeee3af4664e0e4dd0edc66"
+    },
+    {
+      "target": "fabric/1.21.2",
+      "file": "nyanlex-1.0.0-Fabric-1.21.2.jar",
+      "sha256": "c720ab2fc9fe7caf0ff0c5775dc96aaddbc72a9815519030be531a82ebcc0d5c"
+    },
+    {
+      "target": "fabric/1.21.3",
+      "file": "nyanlex-1.0.0-Fabric-1.21.3.jar",
+      "sha256": "da8992fc80669b1e22399a64f7d12bbfbd0f59df61e594961af5b319c20d73cb"
+    },
+    {
+      "target": "fabric/1.21.4",
+      "file": "nyanlex-1.0.0-Fabric-1.21.4.jar",
+      "sha256": "3afbd2a21af330531e9c118f578abbf4dbf7940f61ab28d44396865f2782d533"
+    },
+    {
+      "target": "fabric/1.21.5",
+      "file": "nyanlex-1.0.0-Fabric-1.21.5.jar",
+      "sha256": "f59337fe148c56d4b1063cc45d8011298796076f180e2af9f5266c5ce9ffce1b"
+    },
+    {
+      "target": "fabric/1.21.6",
+      "file": "nyanlex-1.0.0-Fabric-1.21.6.jar",
+      "sha256": "1ddce763fbe3fd0d8ffddb30dec3188bee20fcea7ba8a1b2528e7c805be8904b"
+    },
+    {
+      "target": "fabric/1.21.7",
+      "file": "nyanlex-1.0.0-Fabric-1.21.7.jar",
+      "sha256": "95d3145da7070186f68bc329e4223b0a08f5da431a1323fa2e6e6b4244312742"
+    },
+    {
+      "target": "fabric/1.21.8",
+      "file": "nyanlex-1.0.0-Fabric-1.21.8.jar",
+      "sha256": "2aa27682a9a06f7503e6d915dddd646d407fadaca69d6493623637cbcf8d99f8"
+    },
+    {
+      "target": "fabric/1.21.9",
+      "file": "nyanlex-1.0.0-Fabric-1.21.9.jar",
+      "sha256": "2cf8b5ebea9ea9576e8ae2008b4a7eefca5893b335af6761149fc33692eef8d2"
+    },
+    {
+      "target": "fabric/1.21.10",
+      "file": "nyanlex-1.0.0-Fabric-1.21.10.jar",
+      "sha256": "d3d8ce8152d0f439ac2fd40699cd035857d7957dc8867314d5f16b26989dfc53"
+    },
+    {
+      "target": "fabric/1.21.11",
+      "file": "nyanlex-1.0.0-Fabric-1.21.11.jar",
+      "sha256": "55e9bdb06003e63b4c7ac8e1f5f822d36d82071f4d467c18850491fb81160dce"
+    },
+    {
+      "target": "fabric/26.1",
+      "file": "nyanlex-1.0.0-Fabric-26.1.jar",
+      "sha256": "648a3a6a68efb5705f6272c0827dbda7517d899610bf629298d6790912bd61f4"
+    },
+    {
+      "target": "fabric/26.1.1",
+      "file": "nyanlex-1.0.0-Fabric-26.1.1.jar",
+      "sha256": "a80011404ab996158eec82dcd57fb34d3aa7306c6f8b1eb2e3cbb0ae5234f69a"
+    },
+    {
+      "target": "fabric/26.1.2",
+      "file": "nyanlex-1.0.0-Fabric-26.1.2.jar",
+      "sha256": "fba17d4b174942af00cd2d1c98bc9c84826cc75486ffabdcaca24dc202da888c"
+    },
+    {
+      "target": "fabric/26.2",
+      "file": "nyanlex-1.0.0-Fabric-26.2.jar",
+      "sha256": "d2b7989fdc9b4dc77db879a2e09e78dfafb4e24df213c3a650933fc77bdb9534"
+    },
+    {
+      "target": "fabric/26.3",
+      "file": "nyanlex-1.0.0-Fabric-26.3.jar",
+      "sha256": "19c1aea0891f4bac1ba54b3d1275ae4e59f35e8e5365c3dc64b5a9520ca80314"
+    },
+    {
+      "target": "forge/1.12.2",
+      "file": "nyanlex-1.0.0-Forge-1.12.2.jar",
+      "sha256": "8a3267f7bd5956852e4f572156e9c7990ffa9e07727380aab9623e9d0cf0f9e6"
+    },
+    {
+      "target": "forge/1.13.2",
+      "file": "nyanlex-1.0.0-Forge-1.13.2.jar",
+      "sha256": "d85397400795ac93db6f6889803850fbb2e4d00b87f416f907f9cd2052b42b0c"
+    },
+    {
+      "target": "neoforge/1.20.1",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.1.jar",
+      "sha256": "910d00e279cdb0444afe8fee9f31df2b5829b58c34da3c94bfa3e04a2eaddce7"
+    },
+    {
+      "target": "neoforge/1.20.2",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.2.jar",
+      "sha256": "71b5df3d5d718169cdaeae4caea462060d02e5d3b6f150ced02c8ad93afa45ea"
+    },
+    {
+      "target": "neoforge/1.20.3",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.3.jar",
+      "sha256": "044abdca71a3f1420f40b597f5ff14621228e22ee901b9d9c7922dcb6f825c92"
+    },
+    {
+      "target": "neoforge/1.20.4",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.4.jar",
+      "sha256": "98a87e4162dfaaafba2a275d120718441cf4a0bf14e2ed2f94c611aebbbb4829"
+    },
+    {
+      "target": "neoforge/1.20.5",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.5.jar",
+      "sha256": "e2c99095d4be7a64af46f7404a3c2511ead01e6a779fcbc4069991540e25170e"
+    },
+    {
+      "target": "neoforge/1.20.6",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.6.jar",
+      "sha256": "7b15aa87025c112ac582bc05fa0f017a81ed95f9f0e788c1cf5832455cf26388"
+    },
+    {
+      "target": "neoforge/1.21",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.jar",
+      "sha256": "6cf36c3ad6c19b07950bbf4c16d596b4bf843a0c0826fa0e08a9c6b9ba5a88ba"
+    },
+    {
+      "target": "neoforge/1.21.1",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.1.jar",
+      "sha256": "93b18100e0b1694e9503896d9dd93f67743efddac9880f6a91312fe6f9508f42"
+    },
+    {
+      "target": "neoforge/1.21.2",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.2.jar",
+      "sha256": "59f6b0e74976a03b984778db77c15d2053ec3da09bcc761a86eea27218cfd22a"
+    },
+    {
+      "target": "neoforge/1.21.3",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.3.jar",
+      "sha256": "f04f84d15dc12b95d244827ac9893b9935777920ddc3e6d92d74735fb1370c90"
+    },
+    {
+      "target": "neoforge/1.21.4",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.4.jar",
+      "sha256": "e75481a531cd74147c02362c16b43d434875028bf4af57cf9decd7958644e5ca"
+    },
+    {
+      "target": "neoforge/1.21.5",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.5.jar",
+      "sha256": "5dc4dec6b3c32f6c9a977f4dd75cc008ed764cc484d004bf6787e2c9b9479300"
+    },
+    {
+      "target": "neoforge/1.21.6",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.6.jar",
+      "sha256": "5c8d718a04e8270fc604ea730ac662cbe23b2a26db09b6ea7f415cdb553912da"
+    },
+    {
+      "target": "neoforge/1.21.7",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.7.jar",
+      "sha256": "d818e179ad706f449636fc300a858c637b2b10dac03e0acfd93572fc2179bb5f"
+    },
+    {
+      "target": "neoforge/1.21.8",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.8.jar",
+      "sha256": "1948632592dd4b6376e905328ffb38898cab1dc4de982edcee9942dec88da004"
+    },
+    {
+      "target": "neoforge/1.21.9",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.9.jar",
+      "sha256": "ddebaf37fbce63e28b90d515de4d96a7a6b4dbeb321c4e3e6cde23e4edd54cae"
+    },
+    {
+      "target": "neoforge/1.21.10",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.10.jar",
+      "sha256": "8016c487886d8b5d0cb8e779e4cbe0c04a0c6a7a7b2ad9a1341afd948ca0c420"
+    },
+    {
+      "target": "neoforge/1.21.11",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.11.jar",
+      "sha256": "0383cb4043dc501b09b17df48adb9235f7458051f334cbdb81f02a5653d5ae39"
+    },
+    {
+      "target": "neoforge/26.1",
+      "file": "nyanlex-1.0.0-NeoForge-26.1.jar",
+      "sha256": "de9a2b3231b711a93a4aaffe9754ca4263a706f6ebbceb42e83bf311ca37140b"
+    },
+    {
+      "target": "neoforge/26.1.1",
+      "file": "nyanlex-1.0.0-NeoForge-26.1.1.jar",
+      "sha256": "80ff5b349e796acfe31f88fbc5503bef10731db1a7f12dd27356fc82c384c07e"
+    },
+    {
+      "target": "neoforge/26.1.2",
+      "file": "nyanlex-1.0.0-NeoForge-26.1.2.jar",
+      "sha256": "1cf8063d25ddccaab4277282fd2396eeb6faff798bf36d5800bf6dfb66df92d3"
+    },
+    {
+      "target": "neoforge/26.2",
+      "file": "nyanlex-1.0.0-NeoForge-26.2.jar",
+      "sha256": "69709510469a7b97f0facf193fcc85fc72f4d2f1f48bcbe72bd58cda28f5d738"
+    },
+    {
+      "target": "neoforge/26.3",
+      "file": "nyanlex-1.0.0-NeoForge-26.3.jar",
+      "sha256": "f342364c718f1370a9aadb462df511c3fd66e6a7879e24c35b8db28f10c4256e"
+    }
+  ]
+}

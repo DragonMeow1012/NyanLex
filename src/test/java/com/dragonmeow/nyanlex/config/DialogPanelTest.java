@@ -21,6 +21,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The shared card, the consent box and the gate behind it (inline fakes only). */
 class DialogPanelTest {
 
+    @Test
+    void noticeCheckboxSupportsMouseKeyboardAndKeepsFocusWhenToggled() {
+        DialogPanel panel = new DialogPanel(DialogPanelTest::width);
+        java.util.function.Function<Boolean, DialogPanel.Content> content = selected -> new DialogPanel.Content(
+                "Notice", List.of(new DialogPanel.Text("Terms", 0),
+                        new DialogPanel.Check(3, "Do not show again", selected)),
+                DialogPanel.Footer.of(new DialogPanel.Btn(1, "Cancel"), new DialogPanel.Btn(2, "Continue")), 1);
+        panel.set(content.apply(false));
+        panel.resize(320, 240);
+        panel.keyPressed(SettingsPanel.KEY_TAB, false);
+        assertEquals(3, panel.keyPressed(32, false));
+        int focus = panel.focusIndex();
+        panel.update(content.apply(true));
+        assertEquals(focus, panel.focusIndex());
+        assertEquals(3, panel.keyPressed(32, false));
+        panel.keyPressed(SettingsPanel.KEY_TAB, false);
+        assertEquals(1, panel.keyPressed(257, false));
+        panel.keyPressed(SettingsPanel.KEY_TAB, false);
+        assertEquals(2, panel.keyPressed(257, false));
+        int[] box = panel.buttonRect(3);
+        assertEquals(3, panel.mouseClicked(box[0] + 5, box[1] + 5, 0));
+        assertEquals(1, panel.keyPressed(SettingsPanel.KEY_ESCAPE, false));
+    }
+
     static DialogContent.Lang lang(String code) {
         JsonObject json;
         try (InputStream in = DialogPanelTest.class.getResourceAsStream("/assets/nyanlex/lang/" + code + ".json")) {

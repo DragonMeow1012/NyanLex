@@ -46,8 +46,9 @@ def read_token(path: Path) -> str:
 
 
 class Modrinth:
-    def __init__(self, token: str):
+    def __init__(self, token: str, api: str = API):
         self.headers = {"Authorization": token, "User-Agent": USER_AGENT}
+        self.api = api
 
     def request(self, method: str, route: str, *, payload=None, body=None,
                 content_type=None, authenticated=True):
@@ -57,7 +58,7 @@ class Modrinth:
         headers = dict(self.headers if authenticated else {"User-Agent": USER_AGENT})
         if content_type:
             headers["Content-Type"] = content_type
-        request = Request(API + route, data=body, headers=headers, method=method)
+        request = Request(self.api + route, data=body, headers=headers, method=method)
         for attempt in range(5):
             try:
                 with urlopen(request, timeout=120) as response:
@@ -118,9 +119,15 @@ def changelog(target) -> str:
 
 ### Fixes in this build
 
+- Modern builds hide Antigravity by default. Enable it in Advanced settings after reviewing account, privacy and service risks; official sign-in does not establish third-party integration authorization.
+- CLI translations use dedicated profiles, untrusted-text boundaries, tool restrictions and bounded process handling. Unknown remaining allowance does not block translation; service-reported CLI limits pause requests.
+- Antigravity uses an official pre-tool denial hook. Live testing covered CLI 1.2.16 and selected scenarios; this is not an operating-system sandbox or an all-version guarantee.
+- Antigravity and Gemini notices have independent "Don't show again" checkboxes. API-key mode switches without a popup and preserves the current model; notice buttons use the correct confirmation labels.
+- Do-not-translate terms appear first in their settings section. Remote API connections require HTTPS, local loopback HTTP remains supported, and automatic redirects are disabled.
 - Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
-- Modern Fabric/NeoForge builds can use a Google account through a separately installed Antigravity CLI, including the CLI-reported model and reasoning variants. Install it from [Google's official download page](https://antigravity.google/download).
+- Optional Google sign-in uses a separately installed Antigravity CLI. Install it from [Google's official download page](https://antigravity.google/download).
 - Google machine translation tries a compatible alternate endpoint once when the primary returns a 429 or block page.
+- Existing API-key rotation and individual key cooldown behavior are retained.
 
 Online translation is disabled by default on new installations. Use only the JAR matching this exact Minecraft version and loader. Translation coverage depends on how each mod renders text; text embedded in images is not translated.
 
@@ -279,6 +286,41 @@ def publish(args) -> None:
 
     body = (ROOT / "docs" / "publishing" / "store-description.md").read_text(encoding="utf-8")
     client.request("PATCH", f"/project/{PROJECT_ID}", payload={"body": body})
+    project = client.request("GET", f"/project/{PROJECT_ID}")
+    if project["body"] != body:
+        raise RuntimeError("Final Modrinth project description mismatch")
+
+    disclosure_client = Modrinth(read_token(args.token_file), "https://api.modrinth.com/v3")
+    route = f"/project/{PROJECT_ID}/disclosures"
+    before = disclosure_client.request("GET", route)
+    backup_path = backup_root / "disclosures-before.json"
+    if not backup_path.exists():
+        backup_path.write_text(json.dumps(before, ensure_ascii=False, indent=2), encoding="utf-8")
+    edit = json.loads((ROOT / "docs/publishing/modrinth-disclosures.json").read_text(encoding="utf-8"))
+    # Keep the existing consent model and other disclosures; add the newly
+    # documented recipient to the existing translation-data disclosure.
+    for row in before["disclosures"]:
+        if row["type"] == "telemetry" and not row.get("deleted_at"):
+            data = [entry.replace(
+                "or ChatGPT/Codex through the locally installed Codex CLI.",
+                "ChatGPT/Codex through the locally installed Codex CLI, or Google/Antigravity through the locally installed Antigravity CLI.")
+                for entry in row["data_collected"]]
+            if data != row["data_collected"]:
+                edit["set"].append({"type": "telemetry", "consent": row["consent"], "data_collected": data})
+    disclosure_client.request("PATCH", route, payload=edit)
+    after = disclosure_client.request("GET", route)
+    by_type = {row["type"]: row for row in after["disclosures"] if not row.get("deleted_at")}
+    for expected in edit["set"]:
+        if any(by_type.get(expected["type"], {}).get(key) != value for key, value in expected.items()):
+            raise RuntimeError(f"Final Modrinth disclosure mismatch: {expected['type']}")
+    changed_types = {row["type"] for row in edit["set"]}
+    metadata_keys = {"updated_at", "updated_by", "set_by_moderator", "lock_status", "deleted_at"}
+    for previous in before["disclosures"]:
+        if previous["type"] not in changed_types and not previous.get("deleted_at"):
+            expected = {key: value for key, value in previous.items() if key not in metadata_keys}
+            if any(by_type.get(previous["type"], {}).get(key) != value for key, value in expected.items()):
+                raise RuntimeError(f"Unrelated Modrinth disclosure changed: {previous['type']}")
+    print("MODRINTH_DESCRIPTION_AND_DISCLOSURES_OK", flush=True)
 
     final = client.request("GET", f"/project/{PROJECT_ID}/version")
     final_by_number = {row["version_number"]: row for row in final}

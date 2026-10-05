@@ -1,0 +1,14 @@
+{
+  "set": [
+    {
+      "type": "ai_functionality",
+      "note": "NyanLex optionally translates Minecraft text using a user-selected OpenAI-compatible cloud or local endpoint, a locally installed Codex CLI with ChatGPT sign-in, or, on modern Fabric/NeoForge builds, a locally installed Antigravity CLI with Google sign-in. Antigravity is hidden by default and must be enabled in Advanced settings after reviewing its risks. CLI modes use the signed-in account's allowance; availability and limits depend on the provider. Official sign-in does not establish authorization for this third-party integration or guarantee account safety. Google machine translation and saved offline translations remain available without AI."
+    },
+    {
+      "type": "system_interactions",
+      "note": "When a CLI translation mode is used, NyanLex starts and communicates with the separately installed Codex or Antigravity CLI. Explicit sign-in actions may open the official authentication flow; Antigravity sign-in or sign-out opens a terminal only after the user requests it. Translation uses dedicated local profiles and workspaces, treats game text as untrusted data, and applies tool restrictions; Antigravity also uses a pre-execution hook to deny tool calls. These measures are not an operating-system sandbox. NyanLex does not scan global CLI logs for account details. Mod configuration, API keys and translation caches are stored in the Minecraft instance; official CLIs manage their own authentication and may use the operating system credential store and retain local session or diagnostic data. User-initiated import/export may open a native file chooser and read or write the JSON files the user selects. Do not share configuration directories or logs without checking for sensitive data.",
+      "interactions": []
+    }
+  ],
+  "remove": []
+}

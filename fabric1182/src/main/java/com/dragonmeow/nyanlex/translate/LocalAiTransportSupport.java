@@ -14,6 +14,7 @@ final class LocalAiTransportSupport {
     }
 
     static Request parseRequest(String body) throws IOException {
+        if (body == null || body.length() > 1_000_000) throw new IOException("AI request exceeded the safety limit");
         final JsonObject request;
         try {
             JsonElement parsed = new JsonParser().parse(body);
@@ -23,19 +24,24 @@ final class LocalAiTransportSupport {
         }
 
         String model = string(request, "model");
-        String system = "";
-        String user = "";
         JsonElement messagesElement = request.get("messages");
-        if (messagesElement != null && messagesElement.isJsonArray()) {
-            for (JsonElement element : messagesElement.getAsJsonArray()) {
-                if (!element.isJsonObject()) continue;
-                JsonObject message = element.getAsJsonObject();
-                String role = string(message, "role");
-                if ("system".equals(role)) system = string(message, "content");
-                else if ("user".equals(role)) user = string(message, "content");
-            }
-        }
+        if (messagesElement == null || !messagesElement.isJsonArray()
+                || messagesElement.getAsJsonArray().size() != 2)
+            throw new IOException("CLI translation requires one system message and one game-data message");
+        String system = messageText(messagesElement.getAsJsonArray().get(0), "system");
+        String user = messageText(messagesElement.getAsJsonArray().get(1), "user");
+        if (system.length() + user.length() > 250_000) throw new IOException("Translation input exceeded the safety limit");
         return new Request(model, system, user);
+    }
+
+    private static String messageText(JsonElement element, String role) throws IOException {
+        if (!element.isJsonObject()) throw new IOException("Invalid CLI translation message");
+        JsonObject message = element.getAsJsonObject();
+        JsonElement content = message.get("content");
+        if (!role.equals(string(message, "role")) || content == null || !content.isJsonPrimitive()
+                || !content.getAsJsonPrimitive().isString())
+            throw new IOException("CLI translation accepts text data only, without extra roles or tool input");
+        return content.getAsString();
     }
 
     static String response(String content) {

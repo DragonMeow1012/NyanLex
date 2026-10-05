@@ -48,7 +48,7 @@ public final class UrlHttpTransport implements HttpTransport {
         CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         this.client = HttpClient.newBuilder()
                 .connectTimeout(timeout)
-                .followRedirects(HttpClient.Redirect.NORMAL)
+                .followRedirects(HttpClient.Redirect.NEVER)
                 .cookieHandler(cookies)
                 .build();
     }
@@ -64,16 +64,15 @@ public final class UrlHttpTransport implements HttpTransport {
 
     /**
      * The GET request for {@code url}. A request to Google's key-less translation endpoint is pinned to
-     * HTTP/1.1: that endpoint answers 429 to every HTTP/2 client (whatever the User-Agent) and 200 to the
-     * same request over HTTP/1.1. Every other address, including all AI endpoints, keeps the client's default.
+     * HTTP/1.1 for protocol compatibility. The caller handles bounded endpoint fallback
+     * and rate-limit cooldowns. Other addresses keep the client's default.
      */
     static HttpRequest buildGetRequest(String url, Duration timeout) {
-        URI uri = URI.create(url);
+        URI uri = HttpEndpointPolicy.validate(url);
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(uri)
                 .timeout(timeout)
-                // A browser-like UA reduces the chance of the free endpoint blocking us.
-                .header("User-Agent", "Mozilla/5.0 (NyanLex Mod)")
+                .header("User-Agent", "NyanLex Mod")
                 .GET();
         if (GOOGLE_FREE_HOST.equalsIgnoreCase(uri.getHost())
                 || GOOGLE_FREE_FALLBACK_HOST.equalsIgnoreCase(uri.getHost())) {
@@ -85,7 +84,7 @@ public final class UrlHttpTransport implements HttpTransport {
     @Override
     public String post(String url, String body, Map<String, String> headers) throws IOException {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(url))
+                .uri(HttpEndpointPolicy.validate(url))
                 // AI completions are slower than the free GET endpoint; allow more time.
                 .timeout(Duration.ofSeconds(30))
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));

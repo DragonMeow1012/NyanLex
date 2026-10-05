@@ -2,6 +2,14 @@
 
 The first release under the NyanLex Translator name brings together bilingual chat, item and screen translation, reusable translations and the new chat composer.
 
+## Security and settings update
+
+- Antigravity is hidden by default and can be enabled in Advanced settings after reading the account, service and privacy risks. Official CLI sign-in does not establish authorization for this third-party integration.
+- CLI translation uses dedicated profiles, untrusted-text boundaries, tool restrictions and bounded process lifetimes. Antigravity rejects tool requests through a pre-execution hook. Selected scenarios were tested with CLI 1.2.16; this is not an operating-system sandbox or a guarantee for every CLI version.
+- Antigravity and Gemini API notices have separate **Don't show again** checkboxes and clear confirmation labels. Selecting API-key mode no longer opens a notice or resets an existing Gemini model.
+- Do-not-translate terms appear first in their settings section. Remote API endpoints require HTTPS; local loopback HTTP remains available. Automatic redirects are disabled.
+- Reported CLI rate limits pause requests; unavailable remaining-allowance information does not block translation. Google machine translation retains its alternate-endpoint attempt, and API keys retain individual cooldowns and rotation.
+
 ## Write in your language. Join the conversation.
 
 Enable **Chat input translation**, open chat, and write in the floating panel. Choose a target language (English by default), then select **Translate & fill**. Review or edit the result in the normal chat bar and press Enter when you are ready to send.
@@ -20,7 +28,7 @@ Also included: Google, Gemini, OpenAI, DeepSeek, OpenAI-compatible services, Cha
 
 ## Compatibility and display fixes
 
-- Added Google account sign-in through Antigravity CLI, with live model discovery, account display, login/logout guidance and a bounded connection test.
+- Added optional Google account sign-in through Antigravity CLI, with live model discovery, connection status, login/logout guidance and a bounded connection test. NyanLex does not scan global CLI logs for an account email.
 - Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
 - Google machine translation now tries a compatible alternate endpoint once when the primary endpoint returns a 429 or block page.
 - FTB Quests supports both the older public-instance API and the newer accessor API. Quest tabs, titles and body text now share one refresh path, so pressing `G` changes the displayed text—not only the mode indicator—and completed asynchronous translations appear without toggling twice.
@@ -49,6 +57,14 @@ Validation covers automated tests, per-target builds, packaged classes and metad
 
 這是改名為 NyanLex Translator 後的首版，整合雙語聊天、物品與介面翻譯、既有譯文沿用，以及聊天輸入翻譯浮窗。
 
+### 安全與設定更新
+
+- Antigravity 預設隱藏，可在進階設定閱讀帳號、服務與隱私風險後開啟。官方 CLI 登入不代表本第三方整合已取得授權。
+- CLI 翻譯使用專用設定目錄、不可信文字邊界、工具限制與程序逾時。Antigravity 透過執行前掛鉤拒絕工具請求；已以 CLI 1.2.16 驗證特定情境，不代表作業系統沙箱或所有 CLI 版本的保證。
+- Antigravity 與 Gemini API 說明各有獨立的「不再顯示」勾選框，確認按鈕文字已修正。切換 API 金鑰模式不再彈出通知，也不會重設既有 Gemini 模型。
+- 不翻譯詞彙移至該設定區最上方。遠端 API 限用 HTTPS，本機回送位址仍可使用 HTTP，並停用自動重新導向。
+- CLI 明確回報限流時暫停請求；無法查到剩餘額度不會阻止翻譯。保留 Google 備用入口嘗試，以及 API 金鑰各自冷卻與輪流使用的行為。
+
 ### 用自己的語言，自在回話
 
 開啟 **聊天輸入翻譯** 後，打開聊天框，在小浮窗寫下想說的話。選擇目標語言（預設英文），按 **翻譯並填入**，譯文就會出現在下方聊天欄；確認或修改後，再按 Enter 送出。
@@ -67,7 +83,7 @@ Validation covers automated tests, per-target builds, packaged classes and metad
 
 ### 相容性與顯示修正
 
-- 現代 Fabric／NeoForge 版本新增透過 Antigravity CLI 的 Google 帳號登入，使用該帳號的 Antigravity 額度，並提供即時模型清單、帳號顯示、登入／登出引導及有逾時限制的連線測試。
+- 現代 Fabric／NeoForge 版本新增選用的 Antigravity CLI Google 帳號登入，使用該帳號的 Antigravity 額度，並提供即時模型清單、連線狀態、登入／登出引導及有逾時限制的連線測試；不掃描全域 CLI 日誌取得信箱。
 - 你可以從設定選單開啟翻譯設定；如果入口被其他 UI 模組隱藏，也可以在聊天欄輸入 `/nyanlex`。
 - Google 機器翻譯的主要端點回傳 429 或阻擋頁面時，會改試一次相容的備用端點。
 - FTB Quests 同時相容舊版公開實例 API 與新版存取方法。任務索引、標題和內文統一走同一條刷新路徑，按 `G` 時不再只有模式提示改變；背景翻譯完成後也會直接套用，不必再切換兩次。

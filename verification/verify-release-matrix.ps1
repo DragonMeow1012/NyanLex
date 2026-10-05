@@ -2,6 +2,7 @@
 param(
     [ValidateSet('All', 'Source', 'Build', 'FinalJar')]
     [string]$Phase = 'All',
+    [string[]]$Projects = @(),
     [switch]$DryRun
 )
 
@@ -1409,6 +1410,12 @@ function Invoke-GradleLogged {
 
     $oldJavaHome = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'Process')
     $oldPath = [Environment]::GetEnvironmentVariable('Path', 'Process')
+    $oldJavaTools = [Environment]::GetEnvironmentVariable('JAVA_TOOL_OPTIONS', 'Process')
+    # As in build-ports.ps1, avoid Windows short-TEMP Unix-domain socket failures.
+    $socketFallback = Join-Path $toolRoot '.gradle-agent-home\absent-port-socket-directory'
+    Require (-not (Test-Path -LiteralPath $socketFallback)) 'Socket fallback path must remain absent'
+    [Environment]::SetEnvironmentVariable('JAVA_TOOL_OPTIONS',
+        (($oldJavaTools, ('-Djdk.net.unixdomain.tmpdir="{0}"' -f $socketFallback)) -join ' ').Trim(), 'Process')
     [Environment]::SetEnvironmentVariable('JAVA_HOME', $JdkHome, 'Process')
     [Environment]::SetEnvironmentVariable(
         'Path', (Join-Path $JdkHome 'bin') + [System.IO.Path]::PathSeparator + $oldPath,
@@ -1424,6 +1431,7 @@ function Invoke-GradleLogged {
         Pop-Location
         [Environment]::SetEnvironmentVariable('JAVA_HOME', $oldJavaHome, 'Process')
         [Environment]::SetEnvironmentVariable('Path', $oldPath, 'Process')
+        [Environment]::SetEnvironmentVariable('JAVA_TOOL_OPTIONS', $oldJavaTools, 'Process')
     }
     Require ($exitCode -eq 0) `
         "$Description failed with exit code $exitCode; log: $LogPath"
@@ -1542,8 +1550,13 @@ function Invoke-InlineHarness {
     $gradleLog = Join-Path $invocationRoot 'gradle.log'
     $anchors = [string]::Join(';', [string[]]$Row.RequiredClasses)
 
+    Copy-Item -LiteralPath $fakeCodexPython -Destination (Join-Path $invocationRoot 'fake_codex.py')
+    Copy-Item -LiteralPath $fakeCodex -Destination (Join-Path $invocationRoot 'fake-codex.cmd')
+    @{ log = $fakeLog; early = $EarlyTurn; completed = $CompletedFirst } |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $invocationRoot 'fake_codex.json') -Encoding UTF8
+
     $environment = @{
-        NYANLEX_CODEX_PATH = $fakeCodex
+        NYANLEX_CODEX_PATH = (Join-Path $invocationRoot 'fake-codex.cmd')
         NYANLEX_FAKE_LOG = $fakeLog
         NYANLEX_FAKE_EARLY_TURN = $EarlyTurn
         NYANLEX_FAKE_COMPLETED_FIRST = $CompletedFirst
@@ -1720,6 +1733,21 @@ function Invoke-ProjectInlineSuite {
 }
 
 Assert-MatrixDefinition
+
+# Resume a failed target without repeating already verified JARs. The complete
+# matrix is validated above; the summary below reports only the selected scope.
+if ($Projects.Count -gt 0) {
+    $unknown = @($Projects | Where-Object { $_ -notin $rows.Key })
+    Require ($unknown.Count -eq 0) "Unknown maintained project(s): $($unknown -join ', ')"
+    $rows = @($rows | Where-Object { $_.Key -in $Projects })
+    $expectedProjects = $rows.Count
+    $expectedCoreRuns = 0
+    foreach ($row in $rows) { $expectedCoreRuns += $row.CoreHarnesses.Count }
+    $expectedCodexRuns = $expectedProjects * 4
+    $expectedCodeSourceRuns = $expectedCoreRuns + $expectedCodexRuns
+}
+$expectedForgeGlueRuns = @($rows | ForEach-Object { $_.CoreHarnesses } |
+    Where-Object { $_.Marker -ceq 'INLINE_FORGE_GLUE_OK scenarios=725760' }).Count
 
 $jdkHomes = @{}
 foreach ($major in @(8, 21, 25)) {
@@ -1967,8 +1995,8 @@ Require ($counts.Jars -eq $expectedFinal -and
 Require ($counts.SourceCore -eq $expectedSourceCore -and
         $counts.FinalCore -eq $expectedFinalCore) `
     'Matrix source/final core counts are incomplete'
-Require ($counts.SourceForgeGlue -eq $(if ($expectedSource -eq $expectedProjects) { 2 } else { 0 }) -and
-        $counts.FinalForgeGlue -eq $(if ($expectedFinal -eq $expectedProjects) { 2 } else { 0 })) `
+Require ($counts.SourceForgeGlue -eq $(if ($expectedSource -eq $expectedProjects) { $expectedForgeGlueRuns } else { 0 }) -and
+        $counts.FinalForgeGlue -eq $(if ($expectedFinal -eq $expectedProjects) { $expectedForgeGlueRuns } else { 0 })) `
     'Matrix source/final Forge glue counts are incomplete'
 Require ($counts.SourceCodex -eq $expectedSourceCodex -and
         $counts.SourceProtocol -eq $expectedSourceCodex -and

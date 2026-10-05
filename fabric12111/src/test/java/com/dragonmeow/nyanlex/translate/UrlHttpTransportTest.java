@@ -33,7 +33,7 @@ class UrlHttpTransportTest {
                     "https://" + host + "/translate_a/single?client=gtx&sl=auto&tl=zh-TW&dt=t&q=hello%20world",
                     Duration.ofSeconds(5));
             assertEquals(java.util.Optional.of(java.net.http.HttpClient.Version.HTTP_1_1), request.version(),
-                    host + " answers 429 more readily to HTTP/2 clients");
+                    host + " uses the supported HTTP/1.1 compatibility path");
             assertEquals("GET", request.method());
         }
     }
@@ -96,6 +96,25 @@ class UrlHttpTransportTest {
         IOException error = assertThrows(IOException.class, () -> transport.get(url));
 
         assertTrue(error.getMessage().contains("exceeds " + TEST_LIMIT + " bytes"));
+    }
+
+    @Test
+    void redirectNeverForwardsCredentialsOrText() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger redirected = new java.util.concurrent.atomic.AtomicInteger();
+        String url = serve("/source", exchange -> {
+            exchange.getResponseHeaders().add("Location", "/other");
+            exchange.sendResponseHeaders(307, -1);
+        });
+        server.createContext("/other", exchange -> {
+            redirected.incrementAndGet();
+            sendFixed(exchange, 200, bytes(2));
+            exchange.close();
+        });
+        UrlHttpTransport transport = new UrlHttpTransport(Duration.ofSeconds(3));
+        IOException error = assertThrows(IOException.class, () ->
+                transport.post(url, "SYNTHETIC_GAME_TEXT", Map.of("Authorization", "Bearer SYNTHETIC_ONLY")));
+        assertTrue(error.getMessage().contains("307"));
+        assertEquals(0, redirected.get());
     }
 
     private String serve(String path, ThrowingHandler handler) throws IOException {

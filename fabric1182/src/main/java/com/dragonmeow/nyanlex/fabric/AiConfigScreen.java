@@ -194,6 +194,11 @@ public final class AiConfigScreen extends Screen {
                         new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.openai.api_mode").getString(),
                         !cfg.usesLocalAiCli()),
                 x, y, width, gemini ? this::selectGeminiApiMode : this::selectOpenAiApiMode);
+        if (gemini && !cfg.antigravityEnabled) {
+            addProviderButton(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.gemini.policy_title").getString(),
+                    x + width + gap, y, width, () -> showGeminiApiNotice(false));
+            return;
+        }
         addProviderButton(providerLabel(
                         new net.minecraft.network.chat.TranslatableComponent(gemini
                                 ? "screen.nyanlex.ai.gemini.google_mode"
@@ -298,7 +303,7 @@ public final class AiConfigScreen extends Screen {
         AntigravityCliClient client = NyanLexFabric.antigravityClient();
         boolean installed = client != null && client.isInstalledCached();
         boolean modelsLoaded = installed && !client.cachedModels().isEmpty();
-        boolean signedIn = modelsLoaded && client.hasAuthenticatedSessionCached();
+        boolean signedIn = modelsLoaded && client.hasConnectedSessionCached();
 
         this.loginButton = LegacyButton.builder(
                 new net.minecraft.network.chat.TranslatableComponent(signedIn
@@ -344,12 +349,29 @@ public final class AiConfigScreen extends Screen {
             this.rebuildWidgetsCompat();
             return;
         }
-        selectGeminiApiMode();
+        if (NyanLexFabric.config().hideGeminiApiNotice) selectGeminiApiMode();
+        else showGeminiApiNotice(true);
     }
 
     private void selectGeminiApiMode() {
+        saveCurrentFields();
+        TranslatorConfig cfg = NyanLexFabric.config();
         selectApiProvider("https://generativelanguage.googleapis.com/v1beta/openai",
-                "gemini-3.1-flash-lite");
+                isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")
+                        ? cfg.aiModel : "gemini-3.1-flash-lite");
+    }
+
+    private void showGeminiApiNotice(boolean selectProvider) {
+        if (this.minecraft == null) return;
+        saveCurrentFields();
+        TranslatorConfig cfg = NyanLexFabric.config();
+        this.minecraft.setScreen(new ConfirmDialogScreen(this,
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.gemini.policy_title"),
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.gemini.policy_message"),
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.gemini.policy_continue"), () -> {
+                    NyanLexFabric.saveConfig();
+                    if (selectProvider) selectGeminiApiMode();
+                }).rememberChoice(cfg.hideGeminiApiNotice, value -> cfg.hideGeminiApiNotice = value));
     }
 
     private void selectOpenAiProvider() {
@@ -406,6 +428,7 @@ public final class AiConfigScreen extends Screen {
     }
 
     private void selectAntigravityProvider() {
+        if (!NyanLexFabric.config().antigravityEnabled) return;
         saveCurrentFields();
         TranslatorConfig cfg = NyanLexFabric.config();
         if (!isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")) {
@@ -848,7 +871,7 @@ public final class AiConfigScreen extends Screen {
         AntigravityCliClient client = NyanLexFabric.antigravityClient();
         boolean installed = client != null && client.isInstalledCached();
         boolean signedIn = installed && !client.cachedModels().isEmpty()
-                && client.hasAuthenticatedSessionCached();
+                && client.hasConnectedSessionCached();
         if (!signedIn) {
             Component line = new net.minecraft.network.chat.TranslatableComponent(installed
                     ? "screen.nyanlex.ai.antigravity.signed_out"
@@ -857,9 +880,7 @@ public final class AiConfigScreen extends Screen {
             return;
         }
         Component line1 = new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.antigravity.signed_in");
-        String email = client.cachedAccountEmail();
-        Component line2 = new net.minecraft.network.chat.TextComponent(email == null || email.isBlank()
-                ? "Google" : maskEmail(email));
+        Component line2 = new net.minecraft.network.chat.TextComponent("Google");
         int total = this.font.width(line1) + this.font.width(line2) + 8;
         int x = this.width / 2 - total / 2;
         this.font.draw(graphics, line1, x, layAccount, 0xFF80FF80);

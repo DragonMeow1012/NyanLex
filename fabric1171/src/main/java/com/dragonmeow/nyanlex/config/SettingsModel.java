@@ -250,12 +250,12 @@ public final class SettingsModel {
         for (SettingsCategory category : SettingsCategory.values()) {
             List<Node> nodes = new ArrayList<>();
             if (category == SettingsCategory.DISPLAY) {
+                for (SettingEntry entry : SettingsCatalog.displayExtras()) {
+                    nodes.add(new Node(card(entry, category), null));
+                }
                 nodes.add(new Node(allCard(), null));
                 for (SettingsRow row : SettingsCatalog.rows(SettingsPage.DISPLAY)) {
                     nodes.add(new Node(surfaceCard(row), null));
-                }
-                for (SettingEntry entry : SettingsCatalog.displayExtras()) {
-                    nodes.add(new Node(card(entry, category), null));
                 }
             } else if (category == SettingsCategory.ABOUT) {
                 nodes.add(new Node(new SettingCard("about_info", SettingCard.Kind.INFO, category, null,
