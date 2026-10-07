@@ -271,7 +271,11 @@ def replace_version_file(client: Modrinth, target, path: Path,
         raise RuntimeError("Temporary upload must have a distinct file hash")
     allowed = {(old["filename"], old_hash), (path.name, new_hash), (staging_name, staging_hash)}
 
-    def inspect():
+    def inspect(*, refresh=False):
+        if refresh:
+            # File deletion clears the server cache before committing its DB
+            # transaction. An empty version edit clears it after the commit.
+            client.request("PATCH", route, payload={})
         current = client.request("GET", route)
         if current["project_id"] != PROJECT_ID or current["version_number"] != version_number(target):
             raise RuntimeError("Remote version identity changed")
@@ -298,6 +302,19 @@ def replace_version_file(client: Modrinth, target, path: Path,
             raise RuntimeError("Replacement upload verification failed")
         return current
 
+    def remove_file(digest):
+        try:
+            client.request("DELETE", f"/version_file/{digest}?algorithm=sha512&version_id={remote['id']}")
+        except RuntimeError:
+            current = inspect(refresh=True)
+            if any(row["hashes"]["sha512"] == digest for row in current["files"]):
+                raise
+        else:
+            current = inspect(refresh=True)
+        if any(row["hashes"]["sha512"] == digest for row in current["files"]):
+            raise RuntimeError("Replacement file deletion not confirmed")
+        return current
+
     current = inspect()
     if not find(current, path.name, new_hash):
         if not find(current, staging_name, staging_hash):
@@ -306,8 +323,7 @@ def replace_version_file(client: Modrinth, target, path: Path,
         # Remove the old filename/hash before uploading the exact final bytes.
         # This avoids both same-name conflicts and ambiguous same-hash deletion.
         if find(current, old["filename"], old_hash):
-            client.request("DELETE", f"/version_file/{old_hash}?algorithm=sha512&version_id={remote['id']}")
-        current = inspect()
+            current = remove_file(old_hash)
         if len(current["files"]) != 1 or not find(current, staging_name, staging_hash):
             raise RuntimeError("Original file removal not confirmed")
         current = upload(path, path.name, new_hash)
@@ -321,7 +337,7 @@ def replace_version_file(client: Modrinth, target, path: Path,
     for row in current["files"]:
         if row["filename"] != path.name or row["hashes"]["sha512"] != new_hash:
             digest = row["hashes"]["sha512"]
-            client.request("DELETE", f"/version_file/{digest}?algorithm=sha512&version_id={remote['id']}")
+            current = remove_file(digest)
     final = inspect()
     if len(final["files"]) != 1 or not find(final, path.name, new_hash):
         raise RuntimeError("Replacement file cleanup failed")

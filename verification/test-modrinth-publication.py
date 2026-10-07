@@ -15,6 +15,7 @@ p = importlib.import_module("publish-modrinth")
 class FakeModrinth:
     def __init__(self, version, fail=None):
         self.version = copy.deepcopy(version)
+        self.cached_version = None
         self.fail = fail
         self.events = []
         self.uploads = {}
@@ -23,9 +24,10 @@ class FakeModrinth:
     def request(self, method, route, *, payload=None):
         self.events.append(method)
         if method == "GET":
-            return copy.deepcopy(self.version)
+            return copy.deepcopy(self.cached_version or self.version)
         if method == "PATCH":
             self.version.update(payload)
+            self.cached_version = None
         elif method == "DELETE":
             assert route.startswith("/version_file/"), "Must never delete a version"
             digest = route.split("/version_file/", 1)[1].split("?", 1)[0]
@@ -36,6 +38,8 @@ class FakeModrinth:
             assert any(row["hashes"]["sha512"] in self.downloads_verified for row in remaining)
             if self.fail == "DELETE_STAGING" and "-uploading-" in old["filename"]:
                 raise RuntimeError("Simulated staging deletion failure")
+            if self.fail == "STALE_DELETE_VIEW":
+                self.cached_version = copy.deepcopy(self.version)
             self.version["files"].remove(old)
             if self.fail == "LOST_DELETE_RESPONSE":
                 self.fail = None
@@ -144,12 +148,17 @@ class ReplacementTest(unittest.TestCase):
         self.run_replacement(client)
         self.assert_replaced(client)
 
-    def test_lost_delete_response_resumes(self):
+    def test_lost_delete_response_is_reconciled(self):
         client = FakeModrinth(self.original, "LOST_DELETE_RESPONSE")
-        with self.assertRaises(RuntimeError):
-            self.run_replacement(client)
         self.run_replacement(client)
         self.assert_replaced(client)
+
+    def test_stale_version_cache_after_deletion_is_refreshed(self):
+        client = FakeModrinth(self.original, "STALE_DELETE_VIEW")
+        self.run_replacement(client)
+        self.assert_replaced(client)
+        self.assertIsNone(client.cached_version)
+        self.assertEqual(client.events.count("UPLOAD"), 2)
 
     def test_cleanup_failure_resumes_without_reupload(self):
         client = FakeModrinth(self.original, "DELETE_STAGING")
