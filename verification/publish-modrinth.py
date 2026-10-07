@@ -1,10 +1,9 @@
 """Publish the verified 1.0.0 release matrix to Modrinth.
 
 The command is deliberately opt-in: without ``--apply`` it performs a read-only
-plan. Existing version IDs and download counts are preserved. A replacement
-file is uploaded and verified before the previous file is removed. Refreshed
-files use a hash suffix because Modrinth rejects duplicate filenames within
-one version. File contents are identical to the canonical local package.
+plan. Existing version IDs and download counts are preserved. A temporary JAR
+with identical entries keeps each version downloadable while its canonical
+filename is replaced. Final files retain the canonical name and exact bytes.
 """
 from __future__ import annotations
 
@@ -19,6 +18,7 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import uuid
+import zipfile
 
 from release_matrix import ROOT, VERSION, targets
 
@@ -228,9 +228,17 @@ def edit_payload(target) -> dict:
     return result
 
 
+def verify_file_download(file: dict, expected_sha512: str) -> None:
+    request = Request(file["url"], headers={"User-Agent": USER_AGENT})
+    with urlopen(request, timeout=120) as response:
+        digest = hashlib.file_digest(response, "sha512").hexdigest()
+    if digest != expected_sha512:
+        raise RuntimeError("Downloaded replacement differs from the verified JAR; temporary file retained")
+
+
 def replace_version_file(client: Modrinth, target, path: Path,
                          remote: dict, backup_root: Path) -> None:
-    """Resume safely after upload, metadata update, or old-file removal."""
+    """Keep one downloadable JAR while restoring the canonical filename."""
     route = f"/version/{remote['id']}"
     backup_metadata = backup_root / remote["version_number"] / "metadata.json"
     if backup_metadata.exists():
@@ -245,46 +253,77 @@ def replace_version_file(client: Modrinth, target, path: Path,
     old = remote_file(original)
     old_hash = old["hashes"]["sha512"]
     new_hash = sha(path, "sha512")
-    filename = f"{path.stem}-{sha(path, 'sha256')[:12]}{path.suffix}"
+    staging_name = f"{path.stem}-uploading-{sha(path, 'sha256')[:12]}{path.suffix}"
+    staging = backup_metadata.parent / "staging" / staging_name
+    staging.parent.mkdir(exist_ok=True)
+    shutil.copy2(path, staging)
+    # A distinct ZIP comment gives deletion-by-hash an unambiguous target.
+    # Every executable class, resource, manifest and nested JAR stays identical.
+    with zipfile.ZipFile(staging, "a") as jar:
+        jar.comment = jar.comment + b"\nNyanLex temporary filename replacement\n"
+    with zipfile.ZipFile(path) as source, zipfile.ZipFile(staging) as staged:
+        if source.namelist() != staged.namelist() or staged.testzip() is not None:
+            raise RuntimeError("Temporary upload has invalid ZIP entries")
+        if any(source.read(name) != staged.read(name) for name in source.namelist()):
+            raise RuntimeError("Temporary upload changed JAR contents")
+    staging_hash = sha(staging, "sha512")
+    if staging_hash in (old_hash, new_hash):
+        raise RuntimeError("Temporary upload must have a distinct file hash")
+    allowed = {(old["filename"], old_hash), (path.name, new_hash), (staging_name, staging_hash)}
 
     def inspect():
         current = client.request("GET", route)
         if current["project_id"] != PROJECT_ID or current["version_number"] != version_number(target):
             raise RuntimeError("Remote version identity changed")
-        if any(row["hashes"]["sha512"] not in (old_hash, new_hash)
-               for row in current["files"]):
+        if not current["files"] or any((row["filename"], row["hashes"]["sha512"]) not in allowed
+                                       for row in current["files"]):
             raise RuntimeError("Remote files changed since backup")
         if len({row["hashes"]["sha512"] for row in current["files"]}) != len(current["files"]):
             raise RuntimeError("Ambiguous duplicate file hashes")
         return current
 
-    current = inspect()
-    if not any(row["hashes"]["sha512"] == new_hash for row in current["files"]):
+    def find(current, filename, digest):
+        return next((row for row in current["files"]
+                     if row["filename"] == filename and row["hashes"]["sha512"] == digest), None)
+
+    def upload(local, filename, digest):
         try:
-            client.multipart(route + "/file", {}, path, filename=filename)
+            client.multipart(route + "/file", {}, local, filename=filename)
         except RuntimeError:
-            # A lost response may follow a successful upload. Reconcile before
-            # retrying or touching the existing file.
-            current = inspect()
-            if not any(row["hashes"]["sha512"] == new_hash for row in current["files"]):
+            if not find(inspect(), filename, digest):
                 raise
+        current = inspect()
+        uploaded = find(current, filename, digest)
+        if not uploaded or uploaded["size"] != local.stat().st_size:
+            raise RuntimeError("Replacement upload verification failed")
+        return current
+
     current = inspect()
-    uploaded = [row for row in current["files"] if row["hashes"]["sha512"] == new_hash]
-    if len(uploaded) != 1 or uploaded[0]["size"] != path.stat().st_size:
-        raise RuntimeError("Replacement upload verification failed")
-    edit = edit_payload(target)
-    client.request("PATCH", route, payload=edit)
-    current = inspect()
-    uploaded = [row for row in current["files"] if row["hashes"]["sha512"] == new_hash]
-    if len(uploaded) != 1 or uploaded[0]["size"] != path.stat().st_size or not metadata_matches(current, target):
-        raise RuntimeError("New file or metadata not confirmed; old file retained")
-    # The current API no longer accepts primary_file in version edits.
-    # Keep exactly one verified file; clients fall back to that sole file.
-    for row in current["files"]:
-        if row["hashes"]["sha512"] != new_hash:
+    if not find(current, path.name, new_hash):
+        if not find(current, staging_name, staging_hash):
+            current = upload(staging, staging_name, staging_hash)
+        verify_file_download(find(current, staging_name, staging_hash), staging_hash)
+        # Remove the old filename/hash before uploading the exact final bytes.
+        # This avoids both same-name conflicts and ambiguous same-hash deletion.
+        if find(current, old["filename"], old_hash):
             client.request("DELETE", f"/version_file/{old_hash}?algorithm=sha512&version_id={remote['id']}")
+        current = inspect()
+        if len(current["files"]) != 1 or not find(current, staging_name, staging_hash):
+            raise RuntimeError("Original file removal not confirmed")
+        current = upload(path, path.name, new_hash)
+    if not metadata_matches(current, target):
+        client.request("PATCH", route, payload=edit_payload(target))
+        current = inspect()
+    final_file = find(current, path.name, new_hash)
+    if not final_file or final_file["size"] != path.stat().st_size or not metadata_matches(current, target):
+        raise RuntimeError("Final canonical file or metadata not confirmed; temporary file retained")
+    verify_file_download(final_file, new_hash)
+    for row in current["files"]:
+        if row["filename"] != path.name or row["hashes"]["sha512"] != new_hash:
+            digest = row["hashes"]["sha512"]
+            client.request("DELETE", f"/version_file/{digest}?algorithm=sha512&version_id={remote['id']}")
     final = inspect()
-    if len(final["files"]) != 1 or remote_file(final)["hashes"]["sha512"] != new_hash:
+    if len(final["files"]) != 1 or not find(final, path.name, new_hash):
         raise RuntimeError("Replacement file cleanup failed")
     if final["downloads"] < original["downloads"]:
         raise RuntimeError("Version download count decreased")
@@ -305,7 +344,9 @@ def publish(args) -> None:
         local_sha512 = sha(path, "sha512")
         if remote is None:
             action = "create"
-        elif len(remote["files"]) == 1 and remote_file(remote)["hashes"]["sha512"] == local_sha512:
+        elif (len(remote["files"]) == 1
+              and remote_file(remote)["filename"] == path.name
+              and remote_file(remote)["hashes"]["sha512"] == local_sha512):
             action = "metadata" if not metadata_matches(remote, target) else "skip"
         else:
             action = "replace"
@@ -380,7 +421,8 @@ def publish(args) -> None:
         raise RuntimeError("Final Modrinth version set does not match the 62-target matrix")
     for target, path in files:
         remote = final_by_number[version_number(target)]
-        if len(remote["files"]) != 1 or remote_file(remote)["hashes"]["sha512"] != sha(path, "sha512"):
+        if (len(remote["files"]) != 1 or remote_file(remote)["filename"] != path.name
+                or remote_file(remote)["hashes"]["sha512"] != sha(path, "sha512")):
             raise RuntimeError(f"Final Modrinth hash mismatch for {target.key}")
         if not metadata_matches(remote, target):
             raise RuntimeError(f"Final Modrinth metadata mismatch for {target.key}")
