@@ -23,15 +23,14 @@ class FakeModrinth:
         if self.fail == method:
             raise RuntimeError("Simulated request failure")
         if method == "PATCH":
-            primary = payload["primary_file"][1]
+            # Current Modrinth ignores the removed primary_file edit field.
             self.version.update({k: v for k, v in payload.items() if k != "primary_file"})
-            for row in self.version["files"]:
-                row["primary"] = row["hashes"]["sha512"] == primary
         elif method == "DELETE":
             assert route.startswith("/version_file/"), "Must never delete a version"
             digest = route.split("/version_file/", 1)[1].split("?", 1)[0]
             old = next(row for row in self.version["files"] if row["hashes"]["sha512"] == digest)
-            assert not old["primary"], "Must verify the new primary before deletion"
+            assert len(self.version["files"]) == 2, "Must retain a verified replacement"
+            assert "PATCH" in self.events, "Must update and verify metadata first"
             self.version["files"].remove(old)
 
     def multipart(self, route, payload, path, *, filename=None):
@@ -110,7 +109,7 @@ class ReplacementTest(unittest.TestCase):
         client = FakeModrinth(self.original, "DELETE")
         with self.assertRaises(RuntimeError):
             self.run_replacement(client)
-        self.assertEqual(p.remote_file(client.version)["hashes"]["sha512"], p.sha(self.path, "sha512"))
+        self.assertTrue(any(row["hashes"]["sha512"] == p.sha(self.path, "sha512") for row in client.version["files"]))
         client.fail = None
         self.run_replacement(client)
         self.assert_replaced(client)

@@ -230,7 +230,7 @@ def edit_payload(target) -> dict:
 
 def replace_version_file(client: Modrinth, target, path: Path,
                          remote: dict, backup_root: Path) -> None:
-    """Resume safely after upload, primary-file update, or old-file removal."""
+    """Resume safely after upload, metadata update, or old-file removal."""
     route = f"/version/{remote['id']}"
     backup_metadata = backup_root / remote["version_number"] / "metadata.json"
     if backup_metadata.exists():
@@ -264,7 +264,7 @@ def replace_version_file(client: Modrinth, target, path: Path,
             client.multipart(route + "/file", {}, path, filename=filename)
         except RuntimeError:
             # A lost response may follow a successful upload. Reconcile before
-            # retrying or touching the existing primary file.
+            # retrying or touching the existing file.
             current = inspect()
             if not any(row["hashes"]["sha512"] == new_hash for row in current["files"]):
                 raise
@@ -273,11 +273,13 @@ def replace_version_file(client: Modrinth, target, path: Path,
     if len(uploaded) != 1 or uploaded[0]["size"] != path.stat().st_size:
         raise RuntimeError("Replacement upload verification failed")
     edit = edit_payload(target)
-    edit["primary_file"] = ["sha512", new_hash]
     client.request("PATCH", route, payload=edit)
     current = inspect()
-    if remote_file(current)["hashes"]["sha512"] != new_hash or not metadata_matches(current, target):
-        raise RuntimeError("New primary file or metadata not confirmed; old file retained")
+    uploaded = [row for row in current["files"] if row["hashes"]["sha512"] == new_hash]
+    if len(uploaded) != 1 or uploaded[0]["size"] != path.stat().st_size or not metadata_matches(current, target):
+        raise RuntimeError("New file or metadata not confirmed; old file retained")
+    # The current API no longer accepts primary_file in version edits.
+    # Keep exactly one verified file; clients fall back to that sole file.
     for row in current["files"]:
         if row["hashes"]["sha512"] != new_hash:
             client.request("DELETE", f"/version_file/{old_hash}?algorithm=sha512&version_id={remote['id']}")
