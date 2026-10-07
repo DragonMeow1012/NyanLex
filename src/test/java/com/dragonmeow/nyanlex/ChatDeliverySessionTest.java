@@ -109,7 +109,7 @@ class ChatDeliverySessionTest {
         Entry pending = new Entry(1, false, "pending");
         session.add(pending);
 
-        config.deliverChatTranslationsInOrder = false;
+        config.chatMode = com.dragonmeow.nyanlex.config.DisplayMode.TRANSLATION;
         assertEquals(ChatDeliverySession.TransitionKind.NONE,
                 session.observe(connection, world, profile(config), false).kind());
         assertEquals(1, session.trackedSize());

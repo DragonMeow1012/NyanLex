@@ -1,0 +1,228 @@
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Supplier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.network.chat.Component;
+import com.dragonmeow.nyanlex.config.DisplayMode;
+import com.dragonmeow.nyanlex.config.TranslatorConfig;
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
+import com.dragonmeow.nyanlex.service.ChatDeliverySession;
+import @MAIN@;
+import @ACCESS@;
+import @HISTORY@;
+import sun.misc.Unsafe;
+
+/** Exercises the actual loader adapter with an in-memory game chat, without starting a client. */
+public class ImmediateChatRegression {
+    static final Unsafe MEMORY;
+    static int assertions;
+    static {
+        try {
+            Field f = Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            MEMORY = (Unsafe) f.get(null);
+        } catch (Exception failure) { throw new AssertionError(failure); }
+    }
+    public static class Chat extends ChatComponent implements @ACCESS_SIMPLE@ {
+        List<@HISTORY_TYPE@> history;
+        int additions;
+        int rescales;
+        Chat() { super(null); }
+        @Override public List<@HISTORY_TYPE@> nyanlex$getAllMessages() { return history; }
+        @Override public void @ADD@(Component text) {
+            history.add(0, entry(text));
+            additions++;
+        }
+        @Override public void rescaleChat() { rescales++; }
+    }
+    public static class Screen extends @GUI_BASE@ {
+        Chat chat;
+        Screen() { super(null); }
+        @Override public ChatComponent getChat() { return chat; }
+    }
+    static @HISTORY_TYPE@ entry(Component text) {
+        try {
+            for (Constructor<?> c : GuiMessage.class.getDeclaredConstructors()) {
+                Object[] args = new Object[c.getParameterCount()];
+                Class<?>[] types = c.getParameterTypes();
+                for (int i=0;i<types.length;i++) {
+                    if (types[i] == int.class) args[i] = 42;
+                    else if (types[i] == Component.class || types[i] == Object.class) args[i] = text;
+                }
+                return (GuiMessage)c.newInstance(args);
+            }
+            throw new AssertionError("history constructor missing");
+        } catch (Exception failure) { throw new AssertionError(failure); }
+    }
+    static Object field(Object owner, String name) throws Exception {
+        Field f = owner.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        return f.get(owner);
+    }
+    static void set(Object owner, Class<?> type, String name, Object value) throws Exception {
+        Field f = type.getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(owner, value);
+    }
+    static Object invoke(Object owner, String name, Object... args) throws Exception {
+        for (Method method : owner.getClass().getDeclaredMethods()) {
+            if (method.getName().equals(name) && method.getParameterCount() == args.length) {
+                method.setAccessible(true);
+                try { return method.invoke(owner, args); }
+                catch (InvocationTargetException failure) { throw new AssertionError(name, failure.getCause()); }
+            }
+        }
+        throw new AssertionError("method missing: " + name);
+    }
+    static void check(boolean condition, String message) {
+        assertions++;
+        if (!condition) throw new AssertionError(message);
+    }
+    static String text(@HISTORY_TYPE@ message) { return message.@CONTENT@().getString(); }
+    static Object queue(Object adapter, String text) throws Exception {
+        Object pending = invoke(adapter, "queueChat", Component.literal(text)@PARAM@);
+        invoke(pending, "configureRecovery", 1, true);
+        return pending;
+    }
+    static void complete(Object adapter, Minecraft client, Object pending, String translated, boolean terminal) throws Exception {
+        complete(adapter, client, pending, translated, terminal, DisplayMode.BOTH);
+    }
+    static void complete(Object adapter, Minecraft client, Object pending, String translated, boolean terminal, DisplayMode mode) throws Exception {
+        Supplier<Component> builder = translated == null ? null : () -> Component.literal(translated);
+        invoke(adapter, "completeChatOnClient", client, field(pending,"id"), field(pending,"epoch"),
+                mode, builder, 0, terminal);
+    }
+    public static void main(String[] ignored) throws Exception {
+        Minecraft client = (Minecraft)MEMORY.allocateInstance(Minecraft.class);
+        for(Class<?> type=Minecraft.class;type!=null;type=type.getSuperclass()) {
+            for(Field f:type.getDeclaredFields()) {
+                if (!Modifier.isStatic(f.getModifiers()) && Queue.class.isAssignableFrom(f.getType())) {
+                    f.setAccessible(true);
+                    f.set(client,new ConcurrentLinkedQueue<>());
+                }
+            }
+        }
+        Chat chat = (Chat)MEMORY.allocateInstance(Chat.class);
+        chat.history = new ArrayList<>();
+        Screen screen = (Screen)MEMORY.allocateInstance(Screen.class);
+        screen.chat = chat;
+        @INSTALL_GUI@
+        set(null,Minecraft.class,"instance",client);
+        Class<?> adapterType = Class.forName("@MAIN@");
+        Object adapter=MEMORY.allocateInstance(adapterType);
+        TranslatorConfig config=new TranslatorConfig();
+        set(adapter,adapterType,"config",config);
+        check(config.chatDeliveryMode==ChatDeliveryMode.ORIGINAL_FIRST, "default must show original then backfill");
+        ChatDeliverySession<Object> deliverySession=new ChatDeliverySession<>(entry -> {
+            try { return (Long)field(entry,"id"); }
+            catch(Exception failure) { throw new AssertionError(failure); }
+        }, entry -> {
+            try { return field(entry,"displayedMessage")!=null; }
+            catch(Exception failure) { throw new AssertionError(failure); }
+        },512);
+        set(adapter,adapterType,"chatDelivery",deliverySession);
+        set(adapter,adapterType,"announcementBudget",new ChatDeliverySession.BatchBudget(512,1_000_000));
+        set(adapter,adapterType,"nextChatId",1L);
+
+        Object first = queue(adapter,"First English line");
+        check(chat.additions==1 && text(chat.history.get(0)).equals("First English line"), "original waits for a translation/tick");
+        Object second = queue(adapter,"Second English line");
+        check(chat.additions==2 && text(chat.history.get(0)).equals("Second English line"), "later original waits for an earlier request");
+        complete(adapter,client,second,"第二筆翻譯",true);
+        check(chat.additions==2 && text(chat.history.get(0)).contains("Second English line")
+                && text(chat.history.get(0)).contains("第二筆翻譯"), "ready translation waits or appends a duplicate");
+        check(text(chat.history.get(1)).equals("First English line"), "translation changed another original's position");
+        complete(adapter,client,first,"第一筆翻譯",true);
+        check(chat.additions==2 && text(chat.history.get(1)).contains("第一筆翻譯"), "late first result moved to the tail");
+        check(chat.history.get(1).@TIME@()==42, "translation reset original lifetime");
+
+        Object recovery = queue(adapter,"Recover this line");
+        complete(adapter,client,recovery,null,false);
+        check(text(chat.history.get(0)).equals("Recover this line"), "failed interim result changed the original");
+        complete(adapter,client,recovery,"恢復的翻譯",true);
+        check(chat.additions==3 && text(chat.history.get(0)).contains("恢復的翻譯"), "late recovery was discarded or duplicated");
+        complete(adapter,client,recovery,null,true);
+        check(text(chat.history.get(0)).contains("恢復的翻譯"), "stale failure erased the accepted translation");
+
+        Object cleared = queue(adapter,"Cleared original");
+        chat.history.clear();
+        int additions = chat.additions;
+        complete(adapter,client,cleared,"不得重現",true);
+        check(chat.history.isEmpty() && chat.additions==additions, "cleared chat was resurrected");
+
+        Object translatedOnly = queue(adapter,"Original before translated-only result");
+        check(text(chat.history.get(0)).equals("Original before translated-only result"), "translation-only mode hid the waiting original");
+        complete(adapter,client,translatedOnly,"僅譯文",true,DisplayMode.TRANSLATION);
+        check(text(chat.history.get(0)).equals("僅譯文"), "translation-only display setting changed");
+        additions = chat.additions;
+
+        invoke(adapter,"handleAnnouncementBlock",Component.literal("------------------------")@PARAM@,true,DisplayMode.BOTH,"------------------------");
+        check(chat.additions==additions+1 && text(chat.history.get(0)).contains("------------------------"), "announcement opener waits for a closing frame");
+        invoke(adapter,"handleAnnouncementBlock",Component.literal("Announcement in English")@PARAM@,true,DisplayMode.BOTH,"Announcement in English");
+        check(chat.additions==additions+1 && text(chat.history.get(0)).contains("Announcement in English"), "announcement original waits for paragraph translation");
+        chat.history.clear();
+        Object accepted = invoke(adapter,"handleAnnouncementBlock",Component.literal("New line after clear")@PARAM@,true,DisplayMode.BOTH,"New line after clear");
+        check(Boolean.FALSE.equals(accepted) && chat.history.isEmpty(), "cleared frame lost a new line or resurrected old lines");
+        additions=chat.additions;
+
+        Object profile = queue(adapter,"Before switching language/server");
+        Object session = field(adapter,"chatDelivery");
+        Object transition = invoke(session,"forceOriginalOnly");
+        invoke(adapter,"applyChatTransition",client,transition);
+        complete(adapter,client,profile,"舊設定的譯文",true);
+        check(chat.additions==additions+1 && text(chat.history.get(0)).equals("Before switching language/server"), "profile transition duplicated/changed a received original");
+        check((int)invoke(session,"trackedSize")==0, "retired callbacks remained tracked");
+        Object beforeDisconnect=queue(adapter,"Old server line");
+        Object context=new Object();
+        invoke(session,"observe",context,context,"request",false);
+        Object disconnected=invoke(session,"observe",new Object(),new Object(),"request",false);
+        invoke(adapter,"applyChatTransition",client,disconnected);
+        complete(adapter,client,beforeDisconnect,"舊伺服器譯文",true);
+        check(text(chat.history.get(0)).equals("Old server line"), "old server callback updated a new session");
+        for (ChatDeliveryMode timing : new ChatDeliveryMode[] {ChatDeliveryMode.ORDERED,ChatDeliveryMode.READY_FIRST}) {
+            config.chatDeliveryMode=timing;
+            chat.history.clear(); additions=chat.additions;
+            Object waitingFirst=queue(adapter,"Waiting first");
+            Object waitingSecond=queue(adapter,"Waiting second");
+            check(chat.additions==additions, "waiting mode displayed originals before completion");
+            complete(adapter,client,waitingSecond,"第二筆",true);
+            check(chat.additions==additions+(timing==ChatDeliveryMode.ORDERED?0:1), "waiting mode used the wrong completion order");
+            complete(adapter,client,waitingFirst,"第一筆",true);
+            check(chat.additions==additions+2, "waiting mode lost or duplicated a message");
+            check(text(chat.history.get(0)).contains(timing==ChatDeliveryMode.ORDERED?"第二筆":"第一筆"), "waiting mode displayed the wrong final order");
+        }
+
+        config.chatDeliveryMode=ChatDeliveryMode.ORDERED;
+        chat.history.clear(); additions=chat.additions;
+        Object stalled=queue(adapter,"Stalled original");
+        Object ready=queue(adapter,"Ready after stalled");
+        complete(adapter,client,ready,"已完成",true);
+        set(stalled,stalled.getClass(),"queuedAtNanos",System.nanoTime()-20_000_000_000L);
+        invoke(adapter,"flushStaleChats",client);
+        check(chat.additions==additions+2 && text(chat.history.get(1)).equals("Stalled original"), "timeout failed to release ordered translations with original fallback");
+        complete(adapter,client,stalled,"逾時後補譯",true);
+        check(chat.additions==additions+2 && text(chat.history.get(1)).contains("逾時後補譯"), "timeout recovery moved or duplicated the original");
+
+        chat.history.clear(); additions=chat.additions;
+        Object switched=queue(adapter,"Pending when switching timing");
+        config.chatDeliveryMode=ChatDeliveryMode.ORIGINAL_FIRST;
+        invoke(adapter,"flushStaleChats",client);
+        check(chat.additions==additions+1 && text(chat.history.get(0)).equals("Pending when switching timing"), "switching to original-first did not reveal the pending message");
+        complete(adapter,client,switched,"切換後補譯",true);
+        check(chat.additions==additions+1 && text(chat.history.get(0)).contains("切換後補譯"), "switching timing discarded or duplicated a pending translation");
+
+        config.chatDeliveryMode=ChatDeliveryMode.ORDERED;
+        chat.history.clear(); additions=chat.additions;
+        invoke(adapter,"handleAnnouncementBlock",Component.literal("------------------------")@PARAM@,true,DisplayMode.BOTH,"------------------------");
+        invoke(adapter,"handleAnnouncementBlock",Component.literal("Waiting announcement")@PARAM@,true,DisplayMode.BOTH,"Waiting announcement");
+        check(chat.additions==additions, "ordered announcement leaked originals before translation");
+        config.chatDeliveryMode=ChatDeliveryMode.ORIGINAL_FIRST;
+        invoke(adapter,"flushStaleChats",client);
+        check(chat.additions==additions+1 && text(chat.history.get(0)).contains("Waiting announcement"), "timing switch lost collected announcement lines");
+        invoke(adapter,"applyChatTransition",client,invoke(session,"forceOriginalOnly"));
+        System.out.println("IMMEDIATE_CHAT_PASS assertions="+assertions+" providerCalls=0 clientStarted=false");
+    }
+}

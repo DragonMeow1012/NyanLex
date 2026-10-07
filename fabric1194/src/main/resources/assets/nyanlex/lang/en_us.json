@@ -183,8 +183,6 @@
   "nyanlex.settings.state.translation": "Translated",
   "nyanlex.settings.state.machine": "Machine",
   "nyanlex.settings.state.ai": "AI",
-  "nyanlex.settings.state.ordered": "In order",
-  "nyanlex.settings.state.ready_first": "When ready",
   "nyanlex.settings.unit.seconds": "%s s",
   "nyanlex.settings.master": "Online translation: %s",
   "nyanlex.settings.master.tip": "What is sent: the text you turned translation on for, such as item descriptions and screens; with chat translation on, chat (private messages included) is sent too.\nWhere it goes: the translation service you picked. Machine translation goes to Google Translate (unofficial endpoint); AI goes to the service you set up.\nHow to stop: turn this switch off and nothing more is sent.",
@@ -230,8 +228,6 @@
   "nyanlex.settings.cooldown.tip": "The least time between two sends to the translation service, to avoid being rate limited.",
   "nyanlex.settings.batch": "Batching: %s",
   "nyanlex.settings.batch.tip": "Gather pending text for a short while and send it in one go, so it is sent less often.",
-  "nyanlex.settings.chat_delivery": "Chat translation order: %s",
-  "nyanlex.settings.chat_delivery.tip": "In order: display translations in the original message order. When ready: display each translation as soon as it finishes.",
   "nyanlex.settings.dnt": "Do-not-translate terms",
   "nyanlex.settings.dnt.tip": "These terms always stay in the original language, such as server names.",
   "nyanlex.settings.warmup": "Pre-translate all content",
@@ -469,5 +465,10 @@
   "screen.nyanlex.ai.gemini.policy_message": "Gemini API terms require users to be 18 or older and restrict clients directed toward or likely to be accessed by minors. Bringing your own key does not establish this mod meets that restriction; Google confirmation is still needed.\n\nUnpaid services may use inputs and outputs for improvement and human review. Do not submit sensitive, confidential or personal data. Game chat, private messages and quest text may contain such data; name masking is not anonymization.\n\nProviding clients to users in the EEA, Switzerland or UK requires Paid Services. Access is limited to supported regions.\n\nReview your account, region and use case before proceeding. This notice and continuing do not establish Google authorization. Terms: https://ai.google.dev/gemini-api/terms",
   "screen.nyanlex.ai.antigravity.enable": "Enable",
   "screen.nyanlex.ai.gemini.policy_continue": "Continue",
-  "screen.nyanlex.notice.dont_show_again": "Don't show again"
+  "screen.nyanlex.notice.dont_show_again": "Don't show again",
+  "nyanlex.settings.chat_delivery": "Chat display timing: %s",
+  "nyanlex.settings.state.chat_ordered": "Show translations in order",
+  "nyanlex.settings.state.chat_ready": "Show translations when ready",
+  "nyanlex.settings.state.chat_original": "Show original, then translation",
+  "nyanlex.settings.chat_delivery.tip": "In order: wait for translations and preserve message order. When ready: show each translation as it completes. Original first: show the original immediately, then add its translation in place (default)."
 }

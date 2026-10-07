@@ -1,9 +1,10 @@
 """Publish the verified 1.0.0 release matrix to Modrinth.
 
 The command is deliberately opt-in: without ``--apply`` it performs a read-only
-plan. Existing target versions are replaced one at a time only after their
-metadata and file have been backed up locally. A failed replacement attempts to
-restore the deleted version before stopping.
+plan. Existing version IDs and download counts are preserved. A replacement
+file is uploaded and verified before the previous file is removed. Refreshed
+files use a hash suffix because Modrinth rejects duplicate filenames within
+one version. File contents are identical to the canonical local package.
 """
 from __future__ import annotations
 
@@ -14,7 +15,6 @@ import mimetypes
 from pathlib import Path
 import re
 import shutil
-import sys
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -79,7 +79,7 @@ class Modrinth:
                 raise RuntimeError(f"Modrinth {method} {route} failed: {error}") from error
         raise AssertionError("unreachable")
 
-    def multipart(self, route: str, payload: dict, file_path: Path):
+    def multipart(self, route: str, payload: dict, file_path: Path, *, filename=None):
         boundary = "----NyanLex" + uuid.uuid4().hex
         newline = b"\r\n"
         chunks = [
@@ -90,7 +90,7 @@ class Modrinth:
             json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             f"--{boundary}".encode(),
             (f'Content-Disposition: form-data; name="file"; '
-             f'filename="{file_path.name}"').encode(),
+             f'filename="{filename or file_path.name}"').encode(),
             f"Content-Type: {mimetypes.guess_type(file_path.name)[0] or 'application/java-archive'}".encode(),
             b"",
             file_path.read_bytes(),
@@ -119,6 +119,10 @@ def changelog(target) -> str:
 
 ### Fixes in this build
 
+- October 7 refresh: all 62 JARs rebuilt from source with the .02 echo-fix baseline (1.0.0-echo-fix.20261006.2). Repeated unchanged results stop resubmitting at the echo threshold; keep-original decisions survive restarts, and already-Chinese server notices bypass unnecessary requests.
+- Incoming chat has three modes on modern and legacy builds: show translations in order, show translations when ready, or show the original immediately and add its translation in place (default). Late translations preserve message position and age; cleared messages stay cleared.
+- Restored ordered delivery and fixed mouse/keyboard cycling and saving of the modern chat-mode button.
+- Verified 62 source builds, 27,223 final-JAR core/echo checks and 2,907 modern settings-panel checks. Minecraft 26.1.2 / Fabric passed 20 in-game checks in a local world with a controlled translation service. This does not claim in-game testing of every target or public multiplayer servers.
 - Modern builds hide Antigravity by default. Enable it in Advanced settings after reviewing account, privacy and service risks; official sign-in does not establish third-party integration authorization.
 - CLI translations use dedicated profiles, untrusted-text boundaries, tool restrictions and bounded process handling. Unknown remaining allowance does not block translation; service-reported CLI limits pause requests.
 - Antigravity uses an official pre-tool denial hook. Live testing covered CLI 1.2.16 and selected scenarios; this is not an operating-system sandbox or an all-version guarantee.
@@ -217,12 +221,71 @@ def backup_version(client: Modrinth, version: dict, backup_root: Path) -> Path:
     return target
 
 
-def restore_payload(version: dict) -> dict:
-    keep = ("name", "version_number", "changelog", "dependencies", "game_versions",
-            "version_type", "loaders", "featured", "status", "environment")
-    result = {key: version[key] for key in keep}
-    result.update(project_id=PROJECT_ID, file_parts=["file"], primary_file="file")
+def edit_payload(target) -> dict:
+    result = payload(target)
+    for key in ("project_id", "file_parts", "primary_file"):
+        result.pop(key)
     return result
+
+
+def replace_version_file(client: Modrinth, target, path: Path,
+                         remote: dict, backup_root: Path) -> None:
+    """Resume safely after upload, primary-file update, or old-file removal."""
+    route = f"/version/{remote['id']}"
+    backup_metadata = backup_root / remote["version_number"] / "metadata.json"
+    if backup_metadata.exists():
+        original = json.loads(backup_metadata.read_text(encoding="utf-8"))
+        if original["id"] != remote["id"]:
+            raise RuntimeError("Backup belongs to another version; use a fresh backup root")
+    else:
+        original = remote
+    if len(original["files"]) != 1:
+        raise RuntimeError("Replacement requires a backup of the original single-file version")
+    backup_version(client, original, backup_root)
+    old = remote_file(original)
+    old_hash = old["hashes"]["sha512"]
+    new_hash = sha(path, "sha512")
+    filename = f"{path.stem}-{sha(path, 'sha256')[:12]}{path.suffix}"
+
+    def inspect():
+        current = client.request("GET", route)
+        if current["project_id"] != PROJECT_ID or current["version_number"] != version_number(target):
+            raise RuntimeError("Remote version identity changed")
+        if any(row["hashes"]["sha512"] not in (old_hash, new_hash)
+               for row in current["files"]):
+            raise RuntimeError("Remote files changed since backup")
+        if len({row["hashes"]["sha512"] for row in current["files"]}) != len(current["files"]):
+            raise RuntimeError("Ambiguous duplicate file hashes")
+        return current
+
+    current = inspect()
+    if not any(row["hashes"]["sha512"] == new_hash for row in current["files"]):
+        try:
+            client.multipart(route + "/file", {}, path, filename=filename)
+        except RuntimeError:
+            # A lost response may follow a successful upload. Reconcile before
+            # retrying or touching the existing primary file.
+            current = inspect()
+            if not any(row["hashes"]["sha512"] == new_hash for row in current["files"]):
+                raise
+    current = inspect()
+    uploaded = [row for row in current["files"] if row["hashes"]["sha512"] == new_hash]
+    if len(uploaded) != 1 or uploaded[0]["size"] != path.stat().st_size:
+        raise RuntimeError("Replacement upload verification failed")
+    edit = edit_payload(target)
+    edit["primary_file"] = ["sha512", new_hash]
+    client.request("PATCH", route, payload=edit)
+    current = inspect()
+    if remote_file(current)["hashes"]["sha512"] != new_hash or not metadata_matches(current, target):
+        raise RuntimeError("New primary file or metadata not confirmed; old file retained")
+    for row in current["files"]:
+        if row["hashes"]["sha512"] != new_hash:
+            client.request("DELETE", f"/version_file/{old_hash}?algorithm=sha512&version_id={remote['id']}")
+    final = inspect()
+    if len(final["files"]) != 1 or remote_file(final)["hashes"]["sha512"] != new_hash:
+        raise RuntimeError("Replacement file cleanup failed")
+    if final["downloads"] < original["downloads"]:
+        raise RuntimeError("Version download count decreased")
 
 
 def publish(args) -> None:
@@ -240,7 +303,7 @@ def publish(args) -> None:
         local_sha512 = sha(path, "sha512")
         if remote is None:
             action = "create"
-        elif remote_file(remote)["hashes"]["sha512"] == local_sha512:
+        elif len(remote["files"]) == 1 and remote_file(remote)["hashes"]["sha512"] == local_sha512:
             action = "metadata" if not metadata_matches(remote, target) else "skip"
         else:
             action = "replace"
@@ -264,24 +327,10 @@ def publish(args) -> None:
 
     for action, target, path, remote in operations:
         if action == "metadata":
-            edit = payload(target)
-            for key in ("project_id", "file_parts", "primary_file"):
-                edit.pop(key)
-            client.request("PATCH", f"/version/{remote['id']}", payload=edit)
+            client.request("PATCH", f"/version/{remote['id']}", payload=edit_payload(target))
             print(f"MODRINTH_UPDATED {target.key}", flush=True)
         elif action == "replace":
-            old_file = backup_version(client, remote, backup_root)
-            client.request("DELETE", f"/version/{remote['id']}")
-            try:
-                client.multipart("/version", payload(target), path)
-            except Exception:
-                try:
-                    client.multipart("/version", restore_payload(remote), old_file)
-                    print(f"MODRINTH_RESTORED {target.key}", file=sys.stderr, flush=True)
-                except Exception as restore_error:
-                    print(f"MODRINTH_RESTORE_FAILED {target.key}: {restore_error}",
-                          file=sys.stderr, flush=True)
-                raise
+            replace_version_file(client, target, path, remote, backup_root)
             print(f"MODRINTH_REPLACED {target.key}", flush=True)
 
     body = (ROOT / "docs" / "publishing" / "store-description.md").read_text(encoding="utf-8")
@@ -329,7 +378,7 @@ def publish(args) -> None:
         raise RuntimeError("Final Modrinth version set does not match the 62-target matrix")
     for target, path in files:
         remote = final_by_number[version_number(target)]
-        if remote_file(remote)["hashes"]["sha512"] != sha(path, "sha512"):
+        if len(remote["files"]) != 1 or remote_file(remote)["hashes"]["sha512"] != sha(path, "sha512"):
             raise RuntimeError(f"Final Modrinth hash mismatch for {target.key}")
         if not metadata_matches(remote, target):
             raise RuntimeError(f"Final Modrinth metadata mismatch for {target.key}")

@@ -1,0 +1,17 @@
+import groovy.json.JsonOutput
+allprojects { project ->
+    afterEvaluate {
+        if (!plugins.hasPlugin('java')) return
+        def report = System.getenv('NYANLEX_CHAT_RUNTIME_REPORT')
+        if (report == null) return
+        tasks.create(name: 'exportChatRuntime') {
+            doLast {
+                project.file(report).text = JsonOutput.prettyPrint(JsonOutput.toJson([
+                    classesDir: sourceSets.main.output.classesDirs.singleFile.absolutePath,
+                    resourcesDir: sourceSets.main.output.resourcesDir.absolutePath,
+                    compileClasspath: sourceSets.main.runtimeClasspath.files.collect { it.absolutePath }
+                ])) + '\n'
+            }
+        }
+    }
+}

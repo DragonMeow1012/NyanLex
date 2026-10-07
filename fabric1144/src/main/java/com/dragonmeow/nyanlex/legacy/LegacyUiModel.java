@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.legacy;
 
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -78,7 +79,7 @@ final class LegacyUiModel {
     static final int A_EXPORT = 13;
     static final int A_IMPORT = 14;
     static final int A_COOLDOWN = 15;
-    static final int A_CHAT_ORDER = 16;
+    static final int A_CHAT_DELIVERY = 16;
     static final int A_COMPOSER = 19;
     static final int A_DEBUG = 17;
     static final int A_GITHUB = 18;
@@ -164,10 +165,9 @@ final class LegacyUiModel {
                 break;
             }
             case CAT_ADVANCED: {
+                rows.add(new Row(BUTTON, t.get("config.nyanlex.chat_delivery.short",
+                        t.get(chatDeliveryKey(cfg.chatDeliveryMode))), A_CHAT_DELIVERY));
                 rows.add(new Row(BUTTON, t.get("config.nyanlex.request_cooldown.open"), A_COOLDOWN));
-                rows.add(new Row(BUTTON, t.get("config.nyanlex.chat_delivery.short", t.get(
-                        cfg.deliverChatTranslationsInOrder ? "config.nyanlex.chat_delivery.ordered"
-                                : "config.nyanlex.chat_delivery.ready_first")), A_CHAT_ORDER));
                 rows.add(new Row(BUTTON, t.get("config.nyanlex.debug.short",
                         onOff(t, cfg.debugTranslationOverlay)), A_DEBUG));
                 break;
@@ -196,6 +196,14 @@ final class LegacyUiModel {
      * Navigation actions (opening another screen, the language and export/import actions) are the
      * screen's job and return false here.
      */
+    private static String chatDeliveryKey(ChatDeliveryMode mode) {
+        switch (ChatDeliveryMode.orDefault(mode)) {
+            case ORDERED: return "nyanlex.settings.state.chat_ordered";
+            case READY_FIRST: return "nyanlex.settings.state.chat_ready";
+            default: return "nyanlex.settings.state.chat_original";
+        }
+    }
+
     static boolean perform(int action, LegacyConfig cfg) {
         switch (action) {
             case A_ONLINE:
@@ -213,11 +221,11 @@ final class LegacyUiModel {
             case A_FALLBACK:
                 cfg.disableGoogleFallbackForAi = !cfg.disableGoogleFallbackForAi;
                 return true;
+            case A_CHAT_DELIVERY:
+                cfg.chatDeliveryMode = ChatDeliveryMode.orDefault(cfg.chatDeliveryMode).next();
+                return true;
             case A_COMPOSER:
                 cfg.chatComposerEnabled = !cfg.chatComposerEnabled; return true;
-            case A_CHAT_ORDER:
-                cfg.deliverChatTranslationsInOrder = !cfg.deliverChatTranslationsInOrder;
-                return true;
             case A_DEBUG:
                 cfg.debugTranslationOverlay = !cfg.debugTranslationOverlay;
                 return true;

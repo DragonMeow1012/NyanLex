@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.neoforge;
 
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.cache.DynamicNamespacedStore;
 import com.dragonmeow.nyanlex.cache.LanguageFileStore;
@@ -202,6 +203,7 @@ public final class NyanLexNeoForge {
         java.util.function.Supplier<Component> builder;
         boolean framedByServer;  // inside a server ────── announcement frame: skip our magenta wrap
         Component displayedMessage;
+        boolean translationDelivered;
         PendingBlock block;
         private final RecoveryAssembly.ResultProgress<java.util.function.Supplier<Component>>
                 recoveryProgress = new RecoveryAssembly.ResultProgress<>();
@@ -228,8 +230,8 @@ public final class NyanLexNeoForge {
         boolean mayReceiveRecovery() { return recoveryProgress.mayReceiveRecovery(); }
     }
 
-    /** How long a chat line may wait for its translation before the original is shown anyway. */
-    private static final long CHAT_MAX_WAIT_NANOS = TimeUnit.SECONDS.toNanos(15L);
+    /** Waiting modes fall back to the original if a callback is delayed or lost. */
+    private static final long CHAT_WAIT_NANOS = TimeUnit.SECONDS.toNanos(15L);
     private static final long DISPLAYED_CHAT_RETENTION_NANOS = TimeUnit.MINUTES.toNanos(5L);
 
     private boolean insideServerFrame;
@@ -243,7 +245,7 @@ public final class NyanLexNeoForge {
      * ordering can't break and compact-chat mods can't merge the two frame lines.
      */
     private static final class PendingBlock {
-        final PendingChat holder;                     // the queue slot keeping chat order
+        final PendingChat holder;                     // the slot tracking original and paragraph results
         final DisplayMode mode;
         final List<Component> lines = new ArrayList<>();
         final ChatDeliverySession.BatchBudget budget;
@@ -310,6 +312,13 @@ public final class NyanLexNeoForge {
         PendingBlock block = activeBlock;
         if (!isSystem || !block.addLine(message)) {
             closeAnnouncementBlock(block);
+            return false;
+        }
+        Minecraft client = Minecraft.getInstance();
+        if (client != null && client.gui != null
+                && (block.holder.displayedMessage != null || chatDeliveryMode() == ChatDeliveryMode.ORIGINAL_FIRST)
+                && !displayChat(client, block.holder, pendingOriginal(block.holder))) {
+            retirePending(block.holder);
             return false;
         }
         if (isSep) {
@@ -1882,6 +1891,10 @@ public final class NyanLexNeoForge {
             Minecraft mc = Minecraft.getInstance();
             if (original != null && mc != null && mc.gui != null) mc.gui.getChat().addMessage(original);
         }
+        Minecraft client = Minecraft.getInstance();
+        if (client != null && client.gui != null && chatDeliveryMode() == ChatDeliveryMode.ORIGINAL_FIRST) {
+            displayChat(client, pending, message);
+        }
         return pending;
     }
 
@@ -1909,13 +1922,10 @@ public final class NyanLexNeoForge {
         if (pending == null) return;
         if (!resultAlreadyAccepted && !pending.acceptResult(requestSlot, finalResult)) return;
         builder = pending.retainBuilder(builder);
-        if (pending.displayedMessage != null) {
+        if (pending.translationDelivered) {
             Component translated = builder == null ? null : builder.get();
-            Component replacement = pendingChatDisplay(pending, mode, translated);
-            if (replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, replacement)) {
-                pending.displayedMessage = replacement;
-            } else {
-                // The prior line was cleared/trimmed; do not resurrect it at the tail.
+            if (!displayChat(mc, pending, pendingChatDisplay(pending, mode, translated))) {
+                // A cleared/trimmed original must never return at the tail.
                 retirePending(pending);
                 return;
             }
@@ -1938,31 +1948,34 @@ public final class NyanLexNeoForge {
         return live.acceptResult(requestSlot, finalResult);
     }
 
-    /** Never hold chat hostage: after the bounded wait the original is shown and a
-     *  late translation replaces the shown original when supported. */
+    private ChatDeliveryMode chatDeliveryMode() {
+        return ChatDeliveryMode.orDefault(config == null ? null : config.chatDeliveryMode);
+    }
+
+    /** Release stalled waiting modes and bound late-result tracking. */
     private void flushStaleChats(Minecraft mc) {
         if (mc == null || mc.gui == null) return;
+        if (chatDeliveryMode() == ChatDeliveryMode.ORIGINAL_FIRST) {
+            for (PendingChat pending : chatDelivery.trackedEntries()) {
+                if (pending.displayedMessage == null) displayChat(mc, pending, pendingOriginal(pending));
+            }
+        }
         long now = System.nanoTime();
-        for (PendingChat retired : chatDelivery.retireIf(p -> p.displayedMessage != null
-                && now - p.queuedAtNanos > DISPLAYED_CHAT_RETENTION_NANOS)) retireAnnouncement(retired);
         while (true) {
             flushReadyChats(mc);
-            if (chatDelivery.isQueueEmpty()) break;
             PendingChat head = chatDelivery.peekFirstQueued();
-            if (System.nanoTime() - head.queuedAtNanos < CHAT_MAX_WAIT_NANOS) break;
+            if (head == null || now - head.queuedAtNanos < CHAT_WAIT_NANOS) break;
             chatDelivery.timeoutFirstQueued();
-            Component original = pendingOriginal(head);
-            Component shown = head.mode == DisplayMode.BOTH
-                    ? NeoTextStyle.chatBlock(original, null) : original;
-            head.displayedMessage = shown;
-            mc.gui.getChat().addMessage(shown);
-            if (!head.mayReceiveRecovery()) retirePending(head);
+            if (head.displayedMessage == null) displayChat(mc, head, pendingOriginal(head));
+            head.translationDelivered = true;
         }
+        for (PendingChat retired : chatDelivery.retireIf(p ->
+                now - p.queuedAtNanos > DISPLAYED_CHAT_RETENTION_NANOS)) retireAnnouncement(retired);
     }
 
     private void flushReadyChats(Minecraft mc) {
         for (PendingChat pending :
-                chatDelivery.drainReady(config.deliverChatTranslationsInOrder)) {
+                chatDelivery.drainReady(chatDeliveryMode() == ChatDeliveryMode.ORDERED)) {
             addPendingChat(mc, pending);
             if (!pending.mayReceiveRecovery()) retirePending(pending);
         }
@@ -2024,9 +2037,25 @@ public final class NyanLexNeoForge {
     }
 
     private void addPendingChat(Minecraft mc, PendingChat pending) {
-        Component shown = pendingChatDisplay(pending, pending.mode, pending.builder);
+        if (!displayChat(mc, pending,
+                pendingChatDisplay(pending, pending.mode, pending.builder))) {
+            retirePending(pending);
+            return;
+        }
+        pending.translationDelivered = true;
+    }
+
+    /** Preserve a received line's history position and lifetime while adding translations. */
+    private boolean displayChat(Minecraft mc, PendingChat pending, Component message) {
+        Component shown = message;
+        if (pending.displayedMessage == shown) return true;
+        if (pending.displayedMessage == null) {
+            mc.gui.getChat().addMessage(shown);
+        } else if (!replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, shown)) {
+            return false;
+        }
         pending.displayedMessage = shown;
-        mc.gui.getChat().addMessage(shown);
+        return true;
     }
 
     private static Component pendingChatDisplay(PendingChat pending, DisplayMode mode,
@@ -2035,7 +2064,8 @@ public final class NyanLexNeoForge {
     }
 
     private static Component pendingChatDisplay(PendingChat pending, DisplayMode mode, Component translated) {
-        if (mode == DisplayMode.TRANSLATION) return translated != null ? translated : pending.message;
+        if (translated == null) return pending.message;
+        if (mode == DisplayMode.TRANSLATION) return translated;
         if (mode == DisplayMode.BOTH) return NeoTextStyle.chatBlock(pending.message, translated);
         return pending.message;
     }

@@ -198,8 +198,6 @@
   "nyanlex.settings.state.translation": "訳文のみ",
   "nyanlex.settings.state.machine": "機械翻訳",
   "nyanlex.settings.state.ai": "AI",
-  "nyanlex.settings.state.ordered": "元の順序",
-  "nyanlex.settings.state.ready_first": "完了した順",
   "nyanlex.settings.unit.seconds": "%s 秒",
   "nyanlex.settings.master": "オンライン翻訳: %s",
   "nyanlex.settings.master.tip": "送信する内容: アイテムの説明や画面など、翻訳を有効にしたテキストです。チャット翻訳が有効な場合は、プライベートメッセージを含むチャットも送信します。\n送信先: 選択した翻訳サービスです。機械翻訳は Google 翻訳（非公式エンドポイント）に、AI 翻訳は設定したサービスに送信します。\n停止方法: このスイッチをオフにすると、それ以降は送信しません。",
@@ -245,8 +243,6 @@
   "nyanlex.settings.cooldown.tip": "レート制限を避けるため、翻訳サービスへの送信の間に空ける最短時間です。",
   "nyanlex.settings.batch": "まとめて送信: %s",
   "nyanlex.settings.batch.tip": "翻訳待ちのテキストを少しの間集めてまとめて送信し、送信回数を減らします。",
-  "nyanlex.settings.chat_delivery": "チャット訳文の表示順: %s",
-  "nyanlex.settings.chat_delivery.tip": "「元の順序」は元のメッセージ順に表示します。「完了した順」は翻訳が終わったものから表示します。",
   "nyanlex.settings.dnt": "翻訳しない単語",
   "nyanlex.settings.dnt.tip": "サーバー名など、常に原文のまま表示する単語です。",
   "nyanlex.settings.warmup": "すべてのコンテンツを事前翻訳",
@@ -469,5 +465,10 @@
   "screen.nyanlex.ai.gemini.policy_message": "Gemini API は18歳以上を対象とし、未成年者が利用する可能性が高いアプリにも制限があります。自分のキーを使うだけで本 MOD の適合は保証されず、Google への確認が必要です。\n\n無料サービスの入出力は改善や人手の確認に使われる場合があり、機密情報や個人情報の送信は禁止されています。チャット、私信、クエストの文章にも含まれる場合があります。名前のマスクは匿名化の保証ではありません。\n\nEEA、スイス、英国の利用者に API クライアントを提供する場合は有料サービスが必要です。対応地域のみで利用できます。\n\n続行しても Google の許可を意味しません。アカウント、地域、用途を確認してください：https://ai.google.dev/gemini-api/terms",
   "screen.nyanlex.ai.antigravity.enable": "有効にする",
   "screen.nyanlex.ai.gemini.policy_continue": "続行",
-  "screen.nyanlex.notice.dont_show_again": "今後表示しない"
+  "screen.nyanlex.notice.dont_show_again": "今後表示しない",
+  "nyanlex.settings.chat_delivery": "チャットの表示タイミング：%s",
+  "nyanlex.settings.state.chat_ordered": "受信順に翻訳を表示",
+  "nyanlex.settings.state.chat_ready": "翻訳できた順に表示",
+  "nyanlex.settings.state.chat_original": "原文を先に表示して翻訳を追加",
+  "nyanlex.settings.chat_delivery.tip": "受信順：翻訳を待ってメッセージの順序を維持します。翻訳できた順：完了したものから表示します。原文を先に表示：原文をすぐに表示し、翻訳を同じ位置に追加します（既定）。"
 }

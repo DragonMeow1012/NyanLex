@@ -10,7 +10,10 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ChatComponent.class)
-public abstract class ChatComponentMixin {
+public abstract class ChatComponentMixin implements com.dragonmeow.nyanlex.legacy.LegacyChatComponentAccess {
+    @org.spongepowered.asm.mixin.gen.Accessor("allMessages")
+    public abstract java.util.List<net.minecraft.client.GuiMessage> nyanlex$getAllMessages();
+
     @Inject(method = "addMessage(Lnet/minecraft/network/chat/Component;)V",
             at = @At("HEAD"), cancellable = true)
     private void nyanlex$translate(Component message, CallbackInfo ci) {

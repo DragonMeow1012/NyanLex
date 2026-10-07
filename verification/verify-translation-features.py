@@ -23,17 +23,14 @@ REQUEST_KEYS = [
     "screen.nyanlex.requests.terms.hint",
 ]
 MODERN_SETTINGS_KEYS = ["nyanlex.settings.master", "nyanlex.settings.master.tip",
-                        "nyanlex.settings.export", "nyanlex.settings.import",
-                        "nyanlex.settings.chat_delivery", "nyanlex.settings.state.ordered",
-                        "nyanlex.settings.state.ready_first"]
+                        "nyanlex.settings.export", "nyanlex.settings.import", "nyanlex.settings.chat_delivery", "nyanlex.settings.state.chat_ordered", "nyanlex.settings.state.chat_ready", "nyanlex.settings.state.chat_original"]
 LEGACY_SETTINGS_KEYS = ["config.nyanlex.online", "config.nyanlex.online.desc",
                         "config.nyanlex.requests.open", "config.nyanlex.translations.export",
-                        "config.nyanlex.translations.import", "config.nyanlex.chat_delivery.short",
-                        "config.nyanlex.chat_delivery.ordered", "config.nyanlex.chat_delivery.ready_first"]
+                        "config.nyanlex.translations.import", "config.nyanlex.chat_delivery.short", "nyanlex.settings.state.chat_ordered", "nyanlex.settings.state.chat_ready", "nyanlex.settings.state.chat_original"]
 # The requests screen class name is chosen per tree, so find it by its title key.
 REQUEST_UI_STRING = b"screen.nyanlex.requests.title"
 CONFIG_FIELDS = [b"translationRequestsEnabled", b"doNotTranslateTerms",
-                 b"chatComposerEnabled", b"chatComposerLanguage", b"chatComposerX", b"chatComposerY"]
+                 b"chatDeliveryMode", b"chatComposerEnabled", b"chatComposerLanguage", b"chatComposerX", b"chatComposerY"]
 # Modern core: translate/<name>.class
 MODERN_REQUEST_CLASSES = ["DoNotTranslateMatcher", "RequestGate", "RequestsPausedException"]
 # Legacy core (Java 8) keeps its switch/term code inside the eight synced core files.
@@ -113,6 +110,8 @@ def check_jar(target, path):
     legacy = target in LEGACY_TARGETS
     forge = target.startswith("forge")
     with ZipFile(path) as jar:
+        timing = read_class(jar, PREFIX + "translate/ChatDeliveryMode.class", target, legacy)
+        assert all(value in timing for value in (b"ORDERED", b"READY_FIRST", b"ORIGINAL_FIRST")), (target, "chat timing choices missing")
         assert jar.testzip() is None, path
         mixin_configs = ([] if forge else
                          [json.loads(jar.read(name)) for name in jar.namelist()
@@ -247,9 +246,9 @@ def check_jar(target, path):
 
         ui_class = ("forgelegacy/LegacyUiModel" if forge else "legacy/LegacyUiModel") if legacy else "config/SettingsCatalog"
         ui = read_class(jar, PREFIX + ui_class + ".class", target, legacy)
-        for member in [b"translationRequestsEnabled", b"deliverChatTranslationsInOrder"]:
+        for member in [b"translationRequestsEnabled"]:
             assert member in ui, (target, ui_class, "unwired setting", member)
-        for member in ([b"A_EXPORT", b"A_IMPORT", b"A_ONLINE"] if legacy else [b"EXPORT", b"IMPORT", b"master", b"chat_delivery"]):
+        for member in ([b"A_EXPORT", b"A_IMPORT", b"A_ONLINE"] if legacy else [b"EXPORT", b"IMPORT", b"master"]):
             assert member in ui, (target, ui_class, member)
 
         if target == "forge1122":

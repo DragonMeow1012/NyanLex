@@ -1,6 +1,7 @@
 package com.dragonmeow.nyanlex.legacy;
 
 import com.google.gson.Gson;
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.google.gson.JsonObject;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -1437,13 +1438,26 @@ public final class InlineLegacyCoreSimulation {
         Gson gson = new Gson();
         LegacyConfig missing = LegacyConfig.normalizeLoaded(LegacyConfig.applyUpgradeDefaults(
                 gson.fromJson("{}", LegacyConfig.class), false, false));
-        check(missing.deliverChatTranslationsInOrder,
-                "missing chat delivery field did not retain ordered default");
-        missing.deliverChatTranslationsInOrder = false;
+
         LegacyConfig restored = LegacyConfig.normalizeLoaded(
                 gson.fromJson(gson.toJson(missing), LegacyConfig.class));
-        check(!restored.deliverChatTranslationsInOrder,
-                "explicit ready-first setting did not survive Gson round-trip");
+        check(!gson.toJson(missing).contains("deliverChatTranslationsInOrder"),
+                "obsolete order preference remained in the saved config");
+        check(restored.showOriginal == missing.showOriginal, "display mode did not round-trip");
+        check(missing.chatDeliveryMode == ChatDeliveryMode.ORIGINAL_FIRST, "chat timing default is not original first");
+        for (ChatDeliveryMode expected : new ChatDeliveryMode[] {ChatDeliveryMode.ORDERED, ChatDeliveryMode.READY_FIRST, ChatDeliveryMode.ORIGINAL_FIRST}) {
+            check(LegacyUiModel.perform(LegacyUiModel.A_CHAT_DELIVERY, missing), "chat timing action did not refresh UI");
+            check(missing.chatDeliveryMode == expected, "chat timing UI cycle is wrong");
+        }
+        for (ChatDeliveryMode mode : ChatDeliveryMode.values()) {
+            missing.chatDeliveryMode = mode;
+            LegacyConfig loaded = LegacyConfig.normalizeLoaded(gson.fromJson(gson.toJson(missing), LegacyConfig.class));
+            check(loaded.chatDeliveryMode == mode, "chat timing did not round-trip");
+            check(loaded.snapshotForRequest().chatDeliveryMode == mode, "chat timing snapshot changed");
+        }
+        LegacyConfig invalid = LegacyConfig.normalizeLoaded(gson.fromJson("{\"chatDeliveryMode\":\"invalid\"}", LegacyConfig.class));
+        check(invalid.chatDeliveryMode == ChatDeliveryMode.ORIGINAL_FIRST, "invalid chat timing did not default");
+
     }
 
     private static void testChatRequestProfilePolicy() {
@@ -1454,7 +1468,6 @@ public final class InlineLegacyCoreSimulation {
         base.disableGoogleFallbackForAi = false;
         LegacyChatRequestProfile original = LegacyChatRequestProfile.capture(base, "zh-TW");
         LegacyConfig displayOnly = base.snapshotForRequest();
-        displayOnly.deliverChatTranslationsInOrder = false;
         displayOnly.showOriginal = !displayOnly.showOriginal;
         displayOnly.requestCooldownMs = 999;
         displayOnly.batchWindowMs = 999;

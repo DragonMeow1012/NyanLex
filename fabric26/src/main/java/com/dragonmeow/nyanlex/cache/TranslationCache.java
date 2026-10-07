@@ -136,6 +136,8 @@ public final class TranslationCache {
     private volatile PersistentStore failureStore;
     private final TranslationTemplate templates = new TranslationTemplate();
     private final Map<String, String> memory;
+    /** Serializes terminal decisions with durable writes; never held across a backend call. */
+    private final Object terminalWriteLock = new Object();
 
     private volatile TranslationCache fallback;
     private volatile boolean fallbackHitsProvisional;
@@ -143,8 +145,6 @@ public final class TranslationCache {
     /** Live "send new translation requests" switch. Closed = cache-only: hits are still
      *  served, but no new work is queued or sent and nothing is recorded as a failure. */
     private volatile BooleanSupplier requestGate = () -> true;
-    /** Bound to worker threads around backend calls so a paced request can give up. */
-    private final BooleanSupplier requestGateBinding = this::requestsAllowed;
     private volatile ChurnGuard churnGuard = new ChurnGuard();
 
     private final Map<String, Long> failedUntil = new ConcurrentHashMap<>();
@@ -334,6 +334,18 @@ public final class TranslationCache {
         } catch (RuntimeException ignored) {
             return true;
         }
+    }
+
+    /** Recheck a terminal decision even while the provider is waiting for a send slot.
+     * A mixed batch stays open while it still contains work for another semantic family. */
+    private BooleanSupplier requestGateFor(List<TranslationTemplate.Snapshot> snapshots) {
+        return () -> {
+            if (!requestsAllowed()) return false;
+            for (TranslationTemplate.Snapshot snapshot : snapshots) {
+                if (!keepsOriginalFamily(snapshot)) return true;
+            }
+            return false;
+        };
     }
 
     public void setChurnGuard(ChurnGuard churnGuard) {
@@ -608,6 +620,9 @@ public final class TranslationCache {
         String hit = getCached(source, !exactStyle, false);
         if (hit == null) return null;
         String semanticKey = provisionalSemanticKey(source);
+        // A late fallback may leave a provisional style row after KEEP. Original
+        // text is already final for this family, so final-only callbacks must settle.
+        if (keepsOriginal(semanticKey)) return source;
         if (provisional(semanticKey)) return null;
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
         if (provisional(snapshot.key())) return null;
@@ -802,14 +817,20 @@ public final class TranslationCache {
         if (!requestsAllowed()) return null;
         long expectedGeneration = generation.get();
         long expectedRevision = keyRevision(snapshot.key());
+        if (keepsOriginalFamily(snapshot)) return snapshot.source();
         long debugId = debugSubmitted(List.of(snapshot.key()));
         try {
             TranslationResult result;
-            BooleanSupplier previousGate = RequestGate.bind(requestGateBinding);
+            BooleanSupplier previousGate = RequestGate.bind(requestGateFor(List.of(snapshot)));
             try {
                 result = translator.translate(snapshot.key(), targetLang);
             } finally {
                 RequestGate.restore(previousGate);
+            }
+            if (current(snapshot.key(), expectedGeneration, expectedRevision)
+                    && keepsOriginalFamily(snapshot)) {
+                debugCompleted(debugId, snapshot.key(), TranslationDebugLog.Status.KEEP_ORIGINAL);
+                return snapshot.source();
             }
             if (!usable(snapshot.key(), result.translatedText())) {
                 boolean kept = current(snapshot.key(), expectedGeneration, expectedRevision)
@@ -829,9 +850,9 @@ public final class TranslationCache {
                     ? TranslationDebugLog.Status.FALLBACK : TranslationDebugLog.Status.SUCCESS);
             return snapshot.restore(result.translatedText());
         } catch (RequestsPausedException paused) {
-            // Switched off while waiting for a send slot: nothing was sent, nothing failed.
+            // Switched off or learned KEEP while waiting for a send slot: no failure.
             debugDiscarded(debugId);
-            return null;
+            return keepsOriginalFamily(snapshot) ? snapshot.source() : null;
         } catch (TranslationException | RuntimeException e) {
             if (current(snapshot.key(), expectedGeneration, expectedRevision)) fail(snapshot.key());
             debugCompleted(debugId, TranslationDebugLog.failureFor(e));
@@ -903,6 +924,7 @@ public final class TranslationCache {
             long debugId = 0L;
             try {
                 if (!current(key, expectedGeneration, expectedRevision)) return;
+                if (keepsOriginalFamily(snapshot)) return;
                 if (lookupSnapshot(snapshot, this) == null) {
                     // Queued before new requests were switched off: give up unsent.
                     if (!requestsAllowed()) return;
@@ -916,22 +938,22 @@ public final class TranslationCache {
                     }
                     debugId = debugSubmitted(List.of(key));
                     TranslationResult result;
-                    BooleanSupplier previousGate = RequestGate.bind(requestGateBinding);
+                    BooleanSupplier previousGate = RequestGate.bind(requestGateFor(List.of(snapshot)));
                     try {
                         result = translator.translate(key, targetLang);
                     } finally {
                         RequestGate.restore(previousGate);
                     }
                     boolean usableResult = usable(key, result.translatedText());
-                    boolean kept = !usableResult
-                            && current(key, expectedGeneration, expectedRevision)
-                            && handleUnusableContent(snapshot, result);
-                    if (usableResult && current(key, expectedGeneration, expectedRevision)) {
+                    boolean kept = current(key, expectedGeneration, expectedRevision)
+                            && (keepsOriginalFamily(snapshot) || !usableResult
+                            && handleUnusableContent(snapshot, result));
+                    if (usableResult && !kept && current(key, expectedGeneration, expectedRevision)) {
                         store(snapshot, result.translatedText(), result.fromFallback());
                         failedUntil.remove(key);
                         reviewParagraphOnce(snapshot, result, null, expectedGeneration, expectedRevision);
                     }
-                    debugCompleted(debugId, usableResult || kept ? result.translatedText() : null,
+                    debugCompleted(debugId, kept ? snapshot.key() : usableResult ? result.translatedText() : null,
                             kept ? TranslationDebugLog.Status.KEEP_ORIGINAL
                                     : !usableResult ? TranslationDebugLog.Status.FAILED
                                     : result.fromFallback() ? TranslationDebugLog.Status.FALLBACK
@@ -1100,6 +1122,7 @@ public final class TranslationCache {
 
     private boolean eligible(TranslationTemplate.Snapshot snapshot) {
         return snapshot.hasTranslatableContent()
+                && !keepsOriginalFamily(snapshot)
                 && !backingOff(snapshot.key())
                 && !suppressed(snapshot.key())
                 && !refuseUnsendable(snapshot);
@@ -1217,6 +1240,10 @@ public final class TranslationCache {
 
     private void enqueue(TranslationTemplate.Snapshot snapshot, Callback callback,
                          List<String> surfaceContext, boolean highPriority) {
+        if (keepsOriginalFamily(snapshot)) {
+            deliver(callback, cachedFor(callback));
+            return;
+        }
         boolean rejected = false;
         boolean callbackRejected = false;
         synchronized (queueLock) {
@@ -1636,10 +1663,17 @@ public final class TranslationCache {
      * it is sent exactly as without the copy, and its answer replaces the copy.
      */
     private boolean cachedForRequest(TranslationTemplate.Snapshot snapshot) {
+        if (keepsOriginalFamily(snapshot)) return true;
         if (lookupSnapshot(snapshot, this) != null && !derivedRow(snapshot)) return true;
         if (!hasCsMarkers(snapshot.key())) return false;
         // A §-free projection key equal to the styled key was already read just above.
         return !styleProjectionKey(snapshot).equals(snapshot.key()) && ownFinalProjection(snapshot) != null;
+    }
+
+    /** KEEP belongs to the same semantic key used by the echo counter, including
+     * the original snapshot's live slot layout. A normal plain translation is not KEEP. */
+    private boolean keepsOriginalFamily(TranslationTemplate.Snapshot snapshot) {
+        return snapshot != null && keepsOriginal(contentFailureKey(snapshot));
     }
 
     /** This CS-marked line's own final colour projection restored with its live values, or
@@ -2039,7 +2073,8 @@ public final class TranslationCache {
     private void rememberRetrySnapshot(String stateKey,
                                        TranslationTemplate.Snapshot snapshot) {
         if (stateKey == null || snapshot == null
-                || !sessionRetryDemanded(stateKey, snapshot)) return;
+                || !sessionRetryDemanded(stateKey, snapshot)
+                || keepsOriginalFamily(snapshot)) return;
         retrySnapshots.put(stateKey, snapshot);
         trimMap(retrySnapshots, MAX_TRACKED_RETRY_STATES);
     }
@@ -2163,7 +2198,7 @@ public final class TranslationCache {
         boolean allSucceeded = true;
         try {
             List<TranslationResult> results;
-            BooleanSupplier previousGate = RequestGate.bind(requestGateBinding);
+            BooleanSupplier previousGate = RequestGate.bind(requestGateFor(todo));
             try {
                 if (itemContexts != null) {
                     List<List<String>> contexts = new ArrayList<>(todo.size());
@@ -2193,12 +2228,12 @@ public final class TranslationCache {
                 TranslationTemplate.Snapshot snapshot = todo.get(i);
                 TranslationResult result = results.get(i);
                 boolean usableResult = usable(snapshot.key(), result.translatedText());
-                boolean kept = !usableResult
-                        && current(snapshot.key(), expectedGeneration,
+                boolean kept = current(snapshot.key(), expectedGeneration,
                         expectedRevisions.getOrDefault(snapshot.key(), 0L))
-                        && handleUnusableContent(snapshot, result);
+                        && (keepsOriginalFamily(snapshot) || !usableResult
+                        && handleUnusableContent(snapshot, result));
                 keptOriginal.add(kept);
-                if (usableResult) {
+                if (usableResult && !kept) {
                     if (current(snapshot.key(), expectedGeneration,
                             expectedRevisions.getOrDefault(snapshot.key(), 0L))) {
                         // Batched requests collect every canonical/style-independent
@@ -2214,7 +2249,8 @@ public final class TranslationCache {
                 for (int i = 0; i < todo.size(); i++) {
                     TranslationResult result = results.get(i);
                     TranslationTemplate.Snapshot snapshot = todo.get(i);
-                    if (usable(snapshot.key(), result.translatedText())
+                    if (!keptOriginal.get(i) && !keepsOriginalFamily(snapshot)
+                            && usable(snapshot.key(), result.translatedText())
                             && current(snapshot.key(), expectedGeneration,
                             expectedRevisions.getOrDefault(snapshot.key(), 0L))) {
                         store(snapshot, result.translatedText(), result.fromFallback(), writes);
@@ -2236,7 +2272,7 @@ public final class TranslationCache {
                 TranslationResult result = results.get(i);
                 boolean usableResult = usable(todo.get(i).key(), result.translatedText());
                 boolean kept = keptOriginal.get(i);
-                debugTranslations.add(usableResult || kept ? result.translatedText() : null);
+                debugTranslations.add(kept ? todo.get(i).key() : usableResult ? result.translatedText() : null);
                 debugStatuses.add(kept ? TranslationDebugLog.Status.KEEP_ORIGINAL
                         : !usableResult ? TranslationDebugLog.Status.FAILED
                         : result.fromFallback() ? TranslationDebugLog.Status.FALLBACK
@@ -2337,6 +2373,8 @@ public final class TranslationCache {
 
     private void store(TranslationTemplate.Snapshot snapshot, String translated,
                        boolean isProvisional, WriteBatch writes) {
+        // An older in-flight response cannot reopen a terminal semantic family.
+        if (keepsOriginalFamily(snapshot)) return;
         clearFailureState(snapshot);
         // Styled variants all converge on one durable semantic row. Keep a raw styled
         // row only when the backend damaged its markers so a safe plain projection is
@@ -2395,30 +2433,33 @@ public final class TranslationCache {
 
     private void write(String key, String value, boolean isProvisional, WriteBatch writes) {
         if (!usable(key, value)) return;
-        // First final semantic wording wins until explicit invalidation. A response for a
-        // new CS presentation topology may translate the same term differently; it may add
-        // its own style row, but can never rewrite an existing final semantic row. A final
-        // primary answer still replaces a provisional fallback because provisional rows do
-        // not satisfy hasFinalValue(); neither do session copies derived from a projection.
-        // A complete paragraph may also upgrade readable wording whose wraps were lost.
-        if (hasFinalValue(key, writes)
-                && (isProvisional || !upgradesParagraphLayout(key, value))) return;
-        synchronized (memory) {
-            // A copy derived from a final AI projection ranks between a GT stand-in and a
-            // genuine final row: the stand-in never replaces it, a final answer or import does.
-            if (isProvisional && derivedSemanticRows.contains(key)) return;
-            derivedSemanticRows.remove(key);
-            memory.put(key, value);
-        }
-        markProvisional(key, isProvisional);
-        if (writes != null) writes.add(key, value, isProvisional);
-        else if (isProvisional && provisionalStore != null) {
-            // In the GT file a stand-in is simply a final GT translation; the
-            // "awaiting AI" state lives in this cache's session set, and after a
-            // restart in the fact that only the GT file carries the row.
-            provisionalStore.put(key, value, false);
-        } else if (store != null) {
-            store.put(key, value, isProvisional);
+        synchronized (terminalWriteLock) {
+            if (keepsOriginal(key)) return;
+            // First final semantic wording wins until explicit invalidation. A response for a
+            // new CS presentation topology may translate the same term differently; it may add
+            // its own style row, but can never rewrite an existing final semantic row. A final
+            // primary answer still replaces a provisional fallback because provisional rows do
+            // not satisfy hasFinalValue(); neither do session copies derived from a projection.
+            // A complete paragraph may also upgrade readable wording whose wraps were lost.
+            if (hasFinalValue(key, writes)
+                    && (isProvisional || !upgradesParagraphLayout(key, value))) return;
+            synchronized (memory) {
+                // A copy derived from a final AI projection ranks between a GT stand-in and a
+                // genuine final row: the stand-in never replaces it, a final answer or import does.
+                if (isProvisional && derivedSemanticRows.contains(key)) return;
+                derivedSemanticRows.remove(key);
+                memory.put(key, value);
+            }
+            markProvisional(key, isProvisional);
+            if (writes != null) writes.add(key, value, isProvisional);
+            else if (isProvisional && provisionalStore != null) {
+                // In the GT file a stand-in is simply a final GT translation; the
+                // "awaiting AI" state lives in this cache's session set, and after a
+                // restart in the fact that only the GT file carries the row.
+                provisionalStore.put(key, value, false);
+            } else if (store != null) {
+                store.put(key, value, isProvisional);
+            }
         }
     }
 
@@ -2449,7 +2490,7 @@ public final class TranslationCache {
                                      List<String> surfaceContext, long expectedGeneration,
                                      long expectedRevision) {
         String key = snapshot.key();
-        if (first.fromFallback() || !usable(key, first.translatedText())
+        if (keepsOriginalFamily(snapshot) || first.fromFallback() || !usable(key, first.translatedText())
                 || !ParagraphModel.canReflowBreakLoss(key, first.translatedText())
                 || !current(key, expectedGeneration, expectedRevision)
                 || !paragraphReviews.add(key)) return;
@@ -2457,10 +2498,11 @@ public final class TranslationCache {
         Runnable task = () -> {
             long debugId = 0L;
             try {
-                if (!current(key, expectedGeneration, expectedRevision) || !requestsAllowed()) return;
+                if (!current(key, expectedGeneration, expectedRevision) || !requestsAllowed()
+                        || keepsOriginalFamily(snapshot)) return;
                 debugId = debugSubmitted(List.of(key));
                 TranslationResult reviewed;
-                BooleanSupplier previousGate = RequestGate.bind(requestGateBinding);
+                BooleanSupplier previousGate = RequestGate.bind(requestGateFor(List.of(snapshot)));
                 try {
                     List<TranslationResult> results = translator.translateBatch(
                             List.of(key), language, surfaceContext);
@@ -2471,6 +2513,10 @@ public final class TranslationCache {
                     reviewed = results.get(0);
                 } finally {
                     RequestGate.restore(previousGate);
+                }
+                if (current(key, expectedGeneration, expectedRevision) && keepsOriginalFamily(snapshot)) {
+                    debugCompleted(debugId, snapshot.key(), TranslationDebugLog.Status.KEEP_ORIGINAL);
+                    return;
                 }
                 boolean accepted = !reviewed.fromFallback() && reviewed.failureReason() == null
                         && usable(key, reviewed.translatedText())
@@ -2566,19 +2612,25 @@ public final class TranslationCache {
         }
 
         void flush() {
-            if (values.isEmpty()) return;
-            PersistentStore gtStore = provisionalStore;
-            if (gtStore != null && !provisionalKeys.isEmpty()) {
-                Map<String, String> standIns = new LinkedHashMap<>();
-                for (String key : provisionalKeys) {
-                    String value = values.remove(key);
-                    if (value != null) standIns.put(key, value);
+            synchronized (terminalWriteLock) {
+                // A different worker may have learned KEEP since these writes were
+                // collected. Recheck under the same lock used by the terminal commit.
+                values.keySet().removeIf(TranslationCache.this::keepsOriginal);
+                provisionalKeys.retainAll(values.keySet());
+                if (values.isEmpty()) return;
+                PersistentStore gtStore = provisionalStore;
+                if (gtStore != null && !provisionalKeys.isEmpty()) {
+                    Map<String, String> standIns = new LinkedHashMap<>();
+                    for (String key : provisionalKeys) {
+                        String value = values.remove(key);
+                        if (value != null) standIns.put(key, value);
+                    }
+                    if (!standIns.isEmpty()) gtStore.putBatch(standIns, Set.of());
+                    if (store != null && !values.isEmpty()) store.putBatch(values, Set.of());
+                    return;
                 }
-                if (!standIns.isEmpty()) gtStore.putBatch(standIns, Set.of());
-                if (store != null && !values.isEmpty()) store.putBatch(values, Set.of());
-                return;
+                if (store != null) store.putBatch(values, provisionalKeys);
             }
-            if (store != null) store.putBatch(values, provisionalKeys);
         }
     }
 
@@ -2654,6 +2706,7 @@ public final class TranslationCache {
         if (!requestsAllowed()) return false;
         if (PEEKING.get() != null) return false; // peekFinal: read-only, never wakes the engine
         String semanticKey = provisionalSemanticKey(candidate);
+        if (keepsOriginal(semanticKey)) return false;
         // Migrate any session/disk provisional bit written by an older pre-release raw
         // alias, then use only the canonical key for single-flight, attempts and backoff.
         boolean pending = provisional(semanticKey);
@@ -2683,10 +2736,10 @@ public final class TranslationCache {
             long debugId = 0L;
             try {
                 if (!current(snapshot.key(), expectedGeneration, expectedRevision)) return;
-                if (!requestsAllowed()) return;
+                if (!requestsAllowed() || keepsOriginalFamily(snapshot)) return;
                 debugId = debugSubmitted(List.of(snapshot.key()));
                 TranslationResult result;
-                BooleanSupplier previousGate = RequestGate.bind(requestGateBinding);
+                BooleanSupplier previousGate = RequestGate.bind(requestGateFor(List.of(snapshot)));
                 try {
                     result = translator.translate(snapshot.key(), targetLang);
                 } finally {
@@ -2696,9 +2749,9 @@ public final class TranslationCache {
                 boolean isCurrent = current(snapshot.key(), expectedGeneration, expectedRevision);
                 boolean identity = !usableResult
                         && isIdentityEcho(snapshot.key(), result.translatedText());
-                boolean kept = isCurrent && identity
-                        && learnKeepOriginal(snapshot, result.translatedText());
-                if (!result.fromFallback() && usableResult) {
+                boolean kept = isCurrent && (keepsOriginalFamily(snapshot) || identity
+                        && learnKeepOriginal(snapshot, result.translatedText()));
+                if (!kept && !result.fromFallback() && usableResult) {
                     if (isCurrent) {
                         store(snapshot, result.translatedText(), false);
                         failedUntil.remove(semanticKey);
@@ -2710,7 +2763,7 @@ public final class TranslationCache {
                 } else if (isCurrent && !kept && !identity) {
                     fail(snapshot.key());
                 }
-                debugCompleted(debugId, usableResult || kept ? result.translatedText() : null,
+                debugCompleted(debugId, kept ? snapshot.key() : usableResult ? result.translatedText() : null,
                         kept ? TranslationDebugLog.Status.KEEP_ORIGINAL
                                 : !usableResult ? TranslationDebugLog.Status.FAILED
                                 : result.fromFallback() ? TranslationDebugLog.Status.FALLBACK
@@ -2734,6 +2787,7 @@ public final class TranslationCache {
     private void fail(String key) {
         if (key == null) return;
         TranslationTemplate.Snapshot snapshot = templates.prepare(key);
+        if (keepsOriginalFamily(snapshot)) return;
         if (hasFinalSemantic(snapshot)) {
             if (hasCsMarkers(snapshot.key())) failStyleProjection(snapshot);
             return;
@@ -2778,11 +2832,14 @@ public final class TranslationCache {
     }
 
     private void failStyleProjection(TranslationTemplate.Snapshot snapshot, String reason) {
-        String stateKey = styleFailureKey(snapshot);
-        contentFailures.remove(stateKey);
-        int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
-        trimRetryStateMaps();
-        failTemporarilyState(stateKey, attempt, reason);
+        synchronized (terminalWriteLock) {
+            if (keepsOriginalFamily(snapshot)) return;
+            String stateKey = styleFailureKey(snapshot);
+            contentFailures.remove(stateKey);
+            int attempt = contentRetryAttempts.merge(stateKey, 1, Integer::sum);
+            trimRetryStateMaps();
+            failTemporarilyState(stateKey, attempt, reason);
+        }
         // Presentation-only debt is deliberately passive. Automatically retaining this
         // snapshot made flushBatch() rebuy the same CS topology forever when a provider
         // consistently dropped markers, even though the translated wording was cached.
@@ -2816,6 +2873,14 @@ public final class TranslationCache {
      * is purely additive, never a format break.
      */
     private void failTemporarilyState(String stateKey, int attempt, String reason) {
+        synchronized (terminalWriteLock) {
+            if (keepsOriginal(stateKey)) return;
+            writeTemporaryFailureState(stateKey, attempt, reason);
+        }
+    }
+
+    /** Caller serializes this ledger update with terminal decisions. */
+    private void writeTemporaryFailureState(String stateKey, int attempt, String reason) {
         long now = clock.getAsLong();
         String suffix = failureReasonSuffix(reason);
         if (failureBackoffMs <= 0L) {
@@ -2866,6 +2931,7 @@ public final class TranslationCache {
      */
     private boolean handleUnusableContent(TranslationTemplate.Snapshot snapshot,
                                           TranslationResult result) {
+        if (keepsOriginalFamily(snapshot)) return true;
         String translated = result == null ? null : result.translatedText();
         // The semantic AI wording may already be final while a presentation-only CS
         // projection keeps losing its markers. Such an identity can never mean the
@@ -2951,6 +3017,19 @@ public final class TranslationCache {
     private boolean learnKeepOriginal(TranslationTemplate.Snapshot snapshot, String translated) {
         if (snapshot == null) return false;
         String failureKey = contentFailureKey(snapshot);
+        boolean kept;
+        synchronized (terminalWriteLock) {
+            kept = recordIdentityEcho(snapshot, failureKey);
+        }
+        // Either action may invoke user callbacks or schedule another backend. Keep
+        // both outside the lock that protects short ledger/persistence operations.
+        if (kept) notifyFinalWaiters(failureKey);
+        else requestFallback(snapshot);
+        return kept;
+    }
+
+    private boolean recordIdentityEcho(TranslationTemplate.Snapshot snapshot, String failureKey) {
+        if (keepsOriginal(failureKey)) return true;
         // A valid provider response breaks the malformed/transport-failure streak even
         // when its identity still needs two more confirmations.
         contentRetryAttempts.remove(failureKey);
@@ -2970,7 +3049,6 @@ public final class TranslationCache {
                 failures.put(failureKey, FAILURE_IDENTITY_PREFIX + count + ":" + until);
             }
             rememberRetrySnapshot(failureKey, snapshot);
-            requestFallback(snapshot);
             return false;
         }
 
@@ -2989,7 +3067,6 @@ public final class TranslationCache {
         if (store != null) store.put(failureKey, KEEP_ORIGINAL, false);
         if (failures != null) failures.remove(failureKey);
         retrySnapshots.remove(failureKey);
-        notifyFinalWaiters(failureKey);
         return true;
     }
 
@@ -3090,7 +3167,13 @@ public final class TranslationCache {
             failedUntil.putIfAbsent(key, until);
             trimRetryStateMaps();
             if (!key.startsWith(STYLE_FAILURE_PREFIX)) {
-                rememberRetrySnapshot(key, templates.prepare(key));
+                TranslationTemplate.Snapshot restored = templates.prepare(key);
+                if (sessionRetryDemanded(key, restored) && !keepsOriginalFamily(restored)) {
+                    // Hydration may run again immediately after a backoff expires. Do
+                    // not replace this session's styled retry with a second plain one.
+                    retrySnapshots.putIfAbsent(key, restored);
+                    trimMap(retrySnapshots, MAX_TRACKED_RETRY_STATES);
+                }
             }
             return until;
         } catch (RuntimeException damaged) {

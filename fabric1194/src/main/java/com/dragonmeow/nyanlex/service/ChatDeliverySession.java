@@ -229,6 +229,9 @@ public final class ChatDeliverySession<T> {
         return removed;
     }
 
+    /** Snapshot for revealing queued originals when the user changes display timing. */
+    public synchronized List<T> trackedEntries() { return new ArrayList<>(tracked.values()); }
+
     public synchronized int trackedSize() { return tracked.size(); }
     public synchronized int queuedSize() { return queue.size(); }
     public synchronized long epoch() { return epoch; }

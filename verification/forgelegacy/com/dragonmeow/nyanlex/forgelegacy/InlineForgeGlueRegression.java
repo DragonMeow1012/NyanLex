@@ -146,15 +146,22 @@ public final class InlineForgeGlueRegression {
     private static void configDefaultsAndRoundTrip() {
         Gson gson = new Gson();
         LegacyConfig missingField = LegacyConfig.normalizeLoaded(
-                gson.fromJson("{\"enabled\":true}", LegacyConfig.class));
-        check(missingField != null && missingField.deliverChatTranslationsInOrder,
-                "missing delivery field did not default to ordered");
+                gson.fromJson("{\"enabled\":true,\"deliverChatTranslationsInOrder\":true}", LegacyConfig.class));
+        check(missingField != null && missingField.enabled, "old config did not load");
+        check(!gson.toJson(missingField).contains("deliverChatTranslationsInOrder"),
+                "obsolete order preference remained in the saved config");
+
         LegacyConfig changed = new LegacyConfig();
-        changed.deliverChatTranslationsInOrder = false;
+        check(missingField != null && missingField.enabled, "old config did not load");
+        check(!gson.toJson(missingField).contains("deliverChatTranslationsInOrder"),
+                "obsolete order preference remained in the saved config");
+        changed.showOriginal = false;
+        changed.showOriginal = false;
         LegacyConfig roundTrip = LegacyConfig.normalizeLoaded(
                 gson.fromJson(gson.toJson(changed), LegacyConfig.class));
-        check(roundTrip != null && !roundTrip.deliverChatTranslationsInOrder,
-                "ready-first config did not round-trip");
+        check(roundTrip != null && !roundTrip.showOriginal, "display mode did not round-trip");
+        check(roundTrip != null && !roundTrip.showOriginal, "display mode did not round-trip");
+
     }
 
     private static void templateAdmissionBoundaries() {
@@ -246,7 +253,7 @@ public final class InlineForgeGlueRegression {
         check(cap.queue.drainReady(false).isEmpty(), "late hard-cap completion resurrected an entry");
 
         LoaderFixture timeout = new LoaderFixture();
-        long limit = getStaticLong(NyanLexForge.class, "CHAT_MAX_WAIT_NANOS");
+        long limit = getStaticLong(NyanLexForge.class, "CHAT_RETENTION_NANOS");
         Object expired = timeout.pending(1L, new TextComponentString("old"), "old", true,
                 100L, timeout.connection, timeout.world, timeout.epoch, timeout.profile);
         Object later = timeout.pending(2L, new TextComponentString("later"), "later", true,
@@ -307,8 +314,6 @@ public final class InlineForgeGlueRegression {
                 presentation.epoch, presentation.profile);
         presentation.track(1L, retained);
         presentation.config.showOriginal = !presentation.config.showOriginal;
-        presentation.config.deliverChatTranslationsInOrder =
-                !presentation.config.deliverChatTranslationsInOrder;
         presentation.invoke("syncChatRequestProfile", new Class<?>[] { minecraftClass() },
                 new Object[] { null });
         check(presentation.queue.contains(retained) && presentation.byId.size() == 1,

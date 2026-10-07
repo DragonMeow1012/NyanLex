@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.forgelegacy;
 
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -81,7 +82,8 @@ public final class NyanLexForge {
     private static final long ITEM_WARM_SCAN_INTERVAL_NANOS = 350L * 1000L * 1000L;
 
     private static final int MAX_PENDING_CHATS = 512;
-    private static final long CHAT_MAX_WAIT_NANOS = 15L * 1000L * 1000L * 1000L;
+    private static final long CHAT_WAIT_NANOS = 15L * 1000L * 1000L * 1000L;
+    private static final long CHAT_RETENTION_NANOS = 5L * 60L * 1000L * 1000L * 1000L;
 
     private boolean beginScreenScan(net.minecraft.client.gui.GuiScreen screen) {
         // Typing (chat, sign, book and quill, focused text field, recipe search): let the key through.
@@ -238,6 +240,7 @@ public final class NyanLexForge {
         final LegacyChatRequestProfile requestProfile;
         String translated;
         boolean displayed;
+        ITextComponent displayedMessage;
 
         PendingChat(long id, ChatType type, ITextComponent original, String source,
                     boolean showOriginal, long queuedAtNanos, Object connection,
@@ -426,6 +429,10 @@ public final class NyanLexForge {
                 chatSessionEpoch, chatRequestProfile);
         pendingChats.addLast(pending);
         pendingChatById.put(pending.id, pending);
+        if (chatDeliveryMode() == ChatDeliveryMode.ORIGINAL_FIRST) {
+            minecraft.ingameGUI.addChatMessage(type, pending.original);
+            pending.displayedMessage = pending.original;
+        }
         return pending;
     }
 
@@ -492,19 +499,31 @@ public final class NyanLexForge {
         expireTimedOutChats(minecraft, System.nanoTime());
     }
 
+    private ChatDeliveryMode chatDeliveryMode() {
+        return ChatDeliveryMode.orDefault(config == null ? null : config.chatDeliveryMode);
+    }
+
     private void expireTimedOutChats(Minecraft minecraft, long now) {
-        while (!pendingChats.isEmpty()) {
-            PendingChat head = pendingChats.peekFirst();
-            if (now - head.queuedAtNanos < CHAT_MAX_WAIT_NANOS) break;
-            pendingChats.removeFirst();
-            retireAndDeliver(minecraft, head, head.original);
-            flushReadyChats(minecraft);
+        for (PendingChat pending : pendingChats.entries()) {
+            long limit = pending.displayedMessage == null || chatDeliveryMode() == ChatDeliveryMode.ORDERED
+                    ? CHAT_WAIT_NANOS : CHAT_RETENTION_NANOS;
+            if (now - pending.queuedAtNanos < limit) continue;
+            if (pendingChats.remove(pending)) retireAndDeliver(minecraft, pending, pending.original);
         }
+        flushReadyChats(minecraft);
     }
 
     private void flushReadyChats(Minecraft minecraft) {
         if (minecraft == null || minecraft.ingameGUI == null) return;
-        for (PendingChat pending : pendingChats.drainReady(config.deliverChatTranslationsInOrder)) {
+        if (chatDeliveryMode() == ChatDeliveryMode.ORIGINAL_FIRST) {
+            for (PendingChat pending : pendingChats.entries()) {
+                if (pending.displayedMessage == null) {
+                    minecraft.ingameGUI.addChatMessage(pending.type, pending.original);
+                    pending.displayedMessage = pending.original;
+                }
+            }
+        }
+        for (PendingChat pending : pendingChats.drainReady(chatDeliveryMode() == ChatDeliveryMode.ORDERED)) {
             retireAndDeliver(minecraft, pending, translatedChatMessage(pending, pending.translated));
         }
     }
@@ -522,8 +541,47 @@ public final class NyanLexForge {
         pendingChatById.remove(pending.id);
         pending.displayed = true;
         if (minecraft != null && minecraft.ingameGUI != null) {
-            minecraft.ingameGUI.addChatMessage(pending.type, message);
+            if (pending.displayedMessage == null) {
+                minecraft.ingameGUI.addChatMessage(pending.type, message);
+            } else if (message != pending.displayedMessage) {
+                replaceChatMessage(minecraft.ingameGUI.getChatGUI(), pending.displayedMessage, message);
+            }
         }
+    }
+
+    private static java.lang.reflect.Field chatHistoryField;
+
+    private static boolean replaceChatMessage(net.minecraft.client.gui.GuiNewChat chat,
+                                              ITextComponent previous, ITextComponent replacement) {
+        try {
+            if (chatHistoryField == null) {
+                // Forge's production history field uses SRG names; the development field is named.
+                for (String name : new String[] { "chatLines", "field_146252_h" }) {
+                    try {
+                        chatHistoryField = net.minecraft.client.gui.GuiNewChat.class.getDeclaredField(name);
+                        chatHistoryField.setAccessible(true);
+                        break;
+                    } catch (NoSuchFieldException missing) {
+                        // Try the other verified name for this game version.
+                    }
+                }
+                if (chatHistoryField == null) return false;
+            }
+            @SuppressWarnings("unchecked")
+            java.util.List<net.minecraft.client.gui.ChatLine> messages =
+                    (java.util.List<net.minecraft.client.gui.ChatLine>) chatHistoryField.get(chat);
+            for (int i = 0; i < messages.size(); i++) {
+                net.minecraft.client.gui.ChatLine old = messages.get(i);
+                if (old.getChatComponent() != previous) continue;
+                messages.set(i, new net.minecraft.client.gui.ChatLine(
+                        old.getUpdatedCounter(), replacement, old.getChatLineID()));
+                chat.refreshChat();
+                return true;
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // Keep a foreign or cleared chat history; never resurrect an old message.
+        }
+        return false;
     }
 
     private void syncChatSession(Minecraft minecraft) {

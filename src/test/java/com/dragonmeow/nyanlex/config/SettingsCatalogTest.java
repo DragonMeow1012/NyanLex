@@ -56,6 +56,21 @@ class SettingsCatalogTest {
     }
 
     @Test
+    void chatTimingCyclesThroughThreeDistinctChoices() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        SettingEntry timing = SettingsCatalog.byId("chat_delivery");
+        assertEquals(SettingEntry.Type.CYCLE, timing.type());
+        assertEquals(SettingsCatalog.STATE_CHAT_ORIGINAL, timing.state(cfg).key());
+        timing.press(cfg);
+        assertEquals(SettingsCatalog.STATE_CHAT_ORDERED, timing.state(cfg).key());
+        timing.press(cfg);
+        assertEquals(SettingsCatalog.STATE_CHAT_READY, timing.state(cfg).key());
+        timing.press(cfg);
+        assertEquals(SettingsCatalog.STATE_CHAT_ORIGINAL, timing.state(cfg).key());
+        assertEquals(DisplayMode.BOTH, cfg.chatMode);
+    }
+
+    @Test
     void idsAreUniqueAndKeysWellFormed() {
         Set<String> ids = new HashSet<>();
         for (SettingEntry e : SettingsCatalog.allEntries()) {

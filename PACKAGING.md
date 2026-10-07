@@ -142,6 +142,7 @@ The packager revalidates all 44 ports before creating a staging directory, binds
 - Run core unit tests and `git diff --check`.
 - Back up existing published assets and notes before replacement. Upload the individual JARs plus four ZIPs and checksums to GitHub Release `v1.0.0`.
 - On Modrinth, use one exact Minecraft version and one loader per version; Fabric API is required for Fabric. Compare uploaded file hashes against the verified package.
+- `publish-modrinth.py` preserves existing version IDs and download counts. Replacements use a SHA-256 filename suffix to avoid Modrinth's duplicate-filename restriction; bytes remain identical to the canonical JAR. The new file is uploaded, verified and made primary before the old file is removed. Use a fresh backup root for each release refresh; an interrupted run can resume with that same root. Run `python verification/test-modrinth-publication.py` before changing this upload sequence.
 - Update all four README download tables and release/store support descriptions together. Keep the GitHub default README in Traditional Chinese and Modrinth descriptions in English.
 - Describe the difference between build/static validation and actual game testing, including any unresolved startup failures. Never publish a known-broken artifact.
 

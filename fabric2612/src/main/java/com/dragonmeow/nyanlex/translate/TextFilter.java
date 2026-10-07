@@ -33,6 +33,16 @@ public final class TextFilter {
             "\\u27E6\\s*(?:MT|WS)\\s*\\d+\\s*\\u27E7";
     private static final java.util.regex.Pattern CS_MARKER =
             java.util.regex.Pattern.compile("\\u27E6\\s*/?\\s*CS\\s*\\d+\\s*\\u27E7");
+    /** The complete Traditional Chinese lobby-arrival wording observed in the trace.
+     * A lower-case account name is data here, not English prose. Keep this frame
+     * narrow: other chat wording, name tags and leaderboard rows retain their normal
+     * language checks. Horizontal blanks and paired arrows never consume another line. */
+    private static final String LOCALIZED_LOBBY_JOIN_CORE =
+            "(?:(?:\\[[A-Z]{2,10}\\+{0,3}\\]|\\u27E6\\h*MT\\h*\\d+\\h*\\u27E7)\\h+)?"
+                    + "[A-Za-z0-9_]{3,16}\\h+飄入了大廳[！!]";
+    private static final java.util.regex.Pattern LOCALIZED_LOBBY_JOIN =
+            java.util.regex.Pattern.compile("(?:" + LOCALIZED_LOBBY_JOIN_CORE
+                    + "|>>>\\h+" + LOCALIZED_LOBBY_JOIN_CORE + "\\h+<<<)");
     /** A protected-term placeholder ({@code ⟦0⟧}: player name / do-not-translate term)
      *  or a paragraph break ({@code ⟦PB0⟧}). Neither is wording to translate, and their
      *  digits/letters must not be mistaken for a machine code ("⟦0⟧ XP" is not "0XP"). */
@@ -144,8 +154,19 @@ public final class TextFilter {
         if (isTargetChinese(targetLang)
                 && !knownJapaneseOrKorean
                 && !containsJapaneseKanaOrHangul(languageSample)
-                && isAlreadyChinese(languageSample)) return false;
+                && (isAlreadyChinese(languageSample) || isLocalizedLobbyJoinNotice(t))) return false;
         return true;
+    }
+
+    private static boolean isLocalizedLobbyJoinNotice(String text) {
+        // Styles can split the Chinese wording anywhere, so the cheap prefilter
+        // must not require an uninterrupted phrase before CS markers are removed.
+        if (text.indexOf('飄') < 0 || text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0) return false;
+        // Only remove presentation markers. languageSample() also removes volatile
+        // values/URLs, which could hide extra content and turn a different sentence
+        // into an apparent complete arrival notice.
+        return LOCALIZED_LOBBY_JOIN.matcher(CS_MARKER.matcher(text).replaceAll("").strip())
+                .matches();
     }
 
     static boolean containsJapaneseKanaOrHangul(String text) {

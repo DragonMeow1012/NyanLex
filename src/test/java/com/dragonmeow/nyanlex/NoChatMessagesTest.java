@@ -61,7 +61,7 @@ class NoChatMessagesTest {
         while (matcher.find()) {
             found++;
             String arg = matcher.group(1).trim();
-            assertTrue(arg.equals("decorated") || arg.startsWith("decorate(") || arg.equals("original"),
+            assertTrue(arg.equals("shown") || arg.equals("decorated") || arg.startsWith("decorate(") || arg.equals("original"),
                     "chat only ever gets translated or original chat lines, not mod text: " + arg);
         }
         assertTrue(found >= 3, "the translated chat lines are still added");

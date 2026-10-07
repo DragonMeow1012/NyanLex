@@ -2,6 +2,14 @@
 
 The first release under the NyanLex Translator name brings together bilingual chat, item and screen translation, reusable translations and the new chat composer.
 
+## October 7 refresh: echo .02 and chat display timing
+
+- All **62 JARs** were rebuilt from source with the **.02 echo-fix baseline** (`1.0.0-echo-fix.20261006.2`). Repeated unchanged translation results stop resubmitting after the echo threshold; the keep-original decision survives a restart, and already-Chinese server notices bypass unnecessary translation.
+- Incoming chat now offers three modes across modern and legacy builds: **show translations in order**, **show translations when ready**, or **show the original first, then add its translation in place**. Original-first is the default. Late translations preserve the message's position and age; clearing chat does not bring old messages back.
+- Restored ordered delivery and fixed the modern settings button so both mouse and keyboard can cycle and save all three modes.
+- Validation: 62 Gradle source builds and final-JAR checks, **27,223 core/echo regression checks**, and **2,907 settings-panel checks** across the 57 modern JARs. Minecraft **26.1.2 / Fabric** also passed 20 in-game checks using a local world and controlled translation service. Other targets were not all played in-game; public multiplayer servers were not tested.
+- The mod version remains **1.0.0**. See the [October 7 artifact manifest](https://github.com/DragonMeow1012/NyanLex/blob/main/verification/release-2026-10-07.json) and `SHA256SUMS.txt` for this refreshed build.
+
 ## Security and settings update
 
 - Antigravity is hidden by default and can be enabled in Advanced settings after reading the account, service and privacy risks. Official CLI sign-in does not establish authorization for this third-party integration.
@@ -56,6 +64,14 @@ Validation covers automated tests, per-target builds, packaged classes and metad
 ## 繁體中文
 
 這是改名為 NyanLex Translator 後的首版，整合雙語聊天、物品與介面翻譯、既有譯文沿用，以及聊天輸入翻譯浮窗。
+
+### 10 月 7 日更新：.02 echo 修復與聊天顯示時機
+
+- 全部 **62 個 JAR** 已從原始碼重新建置，採用 **.02 echo 修復基準**（`1.0.0-echo-fix.20261006.2`）。翻譯服務反覆回傳原文達到門檻後會停止重送；保留原文的判定在重啟後仍有效，已是中文的伺服器通知會略過不必要的翻譯。
+- 新舊版本皆提供三種模式：**依序顯示譯文**、**譯文完成即顯示**、**先顯示原文，完成後補譯**。預設先立即顯示原文，翻譯完成後在原位置更新，保留訊息順序與時間；清除聊天後不會重新插入舊訊息。
+- 恢復依序等待翻譯的選項，並修正現代版設定按鈕，滑鼠與鍵盤都能循環切換及儲存三種模式。
+- 已完成 62 個版本的 Gradle 原始碼建置與成品檢查、**27,223 項核心／echo 回歸檢查**，以及 57 個現代版 JAR 的 **2,907 項設定面板檢查**。另以 **Minecraft 26.1.2／Fabric** 在本機世界與可控翻譯服務完成 20 項遊戲內檢查；未宣稱所有版本都已實機遊玩，也尚未測試公開多人伺服器。
+- 模組版本維持 **1.0.0**。本次檔案可透過 [10 月 7 日成品清單](https://github.com/DragonMeow1012/NyanLex/blob/main/verification/release-2026-10-07.json)與 `SHA256SUMS.txt` 核對。
 
 ### 安全與設定更新
 

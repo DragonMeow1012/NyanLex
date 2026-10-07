@@ -1,4 +1,10 @@
 {
+  "com/dragonmeow/nyanlex/fabric/ChatComponentAccess.java": [
+    {
+      "from": "GuiMessage<Component>",
+      "to": "GuiMessage"
+    }
+  ],
   "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
     {
       "from": "net.minecraft.client.GuiMessage<Component>",

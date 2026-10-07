@@ -1334,7 +1334,12 @@ public final class SettingsPanel {
             }
             case BUTTON -> {
                 if (host.enabled(e) && in(mx, my, rc[0], rc[1], rc[2], rc[3])) {
-                    host.runAction(e.action());
+                    if (e.type() == SettingEntry.Type.CYCLE) {
+                        e.press(host.config());
+                        changed();
+                    } else {
+                        host.runAction(e.action());
+                    }
                 }
             }
             case FILE -> {

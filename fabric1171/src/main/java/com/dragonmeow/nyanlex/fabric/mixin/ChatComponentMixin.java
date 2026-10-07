@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /** Exposes the version-native chat history for a late rich-message replacement. */
 @Mixin(ChatComponent.class)
-public abstract class ChatComponentMixin {
+public abstract class ChatComponentMixin implements com.dragonmeow.nyanlex.fabric.ChatComponentAccess {
     @Accessor("allMessages")
     public abstract java.util.List<GuiMessage<Component>> nyanlex$getAllMessages();
 

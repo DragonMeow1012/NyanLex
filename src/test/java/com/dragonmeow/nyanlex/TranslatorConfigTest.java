@@ -1,6 +1,7 @@
 package com.dragonmeow.nyanlex;
 
 import com.dragonmeow.nyanlex.config.DisplayMode;
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.dragonmeow.nyanlex.config.MachineTranslationProvider;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TranslatorConfigTest {
 
     @Test
+    void chatTimingDefaultsAndAllChoicesRoundTrip() {
+        for (String json : new String[] { "{}", "{\"deliverChatTranslationsInOrder\":true}",
+                "{\"chatDeliveryMode\":null}", "{\"chatDeliveryMode\":\"unknown\"}" }) {
+            TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader(json));
+            assertEquals(ChatDeliveryMode.ORIGINAL_FIRST, cfg.chatDeliveryMode);
+        }
+        for (ChatDeliveryMode mode : ChatDeliveryMode.values()) {
+            TranslatorConfig cfg = new TranslatorConfig(); cfg.chatDeliveryMode = mode;
+            StringWriter out = new StringWriter(); cfg.writeTo(out);
+            assertEquals(mode, TranslatorConfig.fromReader(new StringReader(out.toString())).chatDeliveryMode);
+            assertFalse(out.toString().contains("deliverChatTranslationsInOrder"));
+        }
+    }
+
+    @Test
     void defaultsAreSensible() {
         TranslatorConfig cfg = new TranslatorConfig();
         assertEquals("zh-TW", cfg.targetLang);
@@ -27,7 +43,6 @@ class TranslatorConfigTest {
         assertEquals(MachineTranslationProvider.GOOGLE.id(), cfg.machineTranslationProvider);
         assertEquals("gemini-3.1-flash-lite", cfg.aiModel);
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
-        assertTrue(cfg.deliverChatTranslationsInOrder);
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
         assertEquals(DisplayMode.TRANSLATION, cfg.screenTextMode, "新安裝：介面文字預設翻譯");
         assertFalse(cfg.firstRunDone);
@@ -165,7 +180,6 @@ class TranslatorConfigTest {
     void roundTripsThroughJson() {
         TranslatorConfig cfg = new TranslatorConfig();
         cfg.chatMode = DisplayMode.BOTH;
-        cfg.deliverChatTranslationsInOrder = false;
         cfg.scoreboardMode = DisplayMode.ORIGINAL_ONLY;
         cfg.targetLang = "zh-TW";
 
@@ -174,7 +188,6 @@ class TranslatorConfigTest {
 
         TranslatorConfig loaded = TranslatorConfig.fromReader(new StringReader(out.toString()));
         assertEquals(DisplayMode.BOTH, loaded.chatMode);
-        assertFalse(loaded.deliverChatTranslationsInOrder);
         assertEquals(DisplayMode.ORIGINAL_ONLY, loaded.scoreboardMode);
         assertEquals("zh-TW", loaded.targetLang);
     }
@@ -204,7 +217,16 @@ class TranslatorConfigTest {
         TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader("{}"));
         assertEquals("zh-TW", cfg.targetLang);
         assertEquals(DisplayMode.BOTH, cfg.chatMode);
-        assertTrue(cfg.deliverChatTranslationsInOrder);
+    }
+
+    @Test
+    void oldChatOrderPreferenceIsIgnoredAndRemovedWhenSaved() {
+        TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader(
+                "{ \"chatMode\": \"BOTH\", \"deliverChatTranslationsInOrder\": true }"));
+        assertEquals(DisplayMode.BOTH, cfg.chatMode);
+        StringWriter out = new StringWriter();
+        cfg.writeTo(out);
+        assertFalse(out.toString().contains("deliverChatTranslationsInOrder"));
     }
 
     @Test

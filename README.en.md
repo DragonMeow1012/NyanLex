@@ -303,6 +303,8 @@ Async batching, priority queues, disk caches, and failure backoff reduce main-th
 
 Player names are masked from the TAB list. Modern targets skip labels consisting of known mod, shader or technical names and their versions; existing translations still take precedence.
 
+**Chat display timing**: modern and legacy builds offer **Show translations in order**, **Show translations when ready**, and **Show original, then translation**. The default displays the original immediately and adds its translation in the same position when ready, preserving the message's order and age. Bilingual or translation-only display is configured separately.
+
 **Segmented tooltip cache**: long tooltips (title plus multi-line body) cache and restore per segment, so only the segment that actually changed needs a fresh request.
 
 **Settings in seven categories** (Esc > Options > Translation settings...): General, Display, Service, Packs, Translations, Advanced and About, with a search box and an in-game manual. The Quick setup can be run again from General. "Do-not-translate terms" keeps server or brand names in the original language (case-insensitive, whole-word).

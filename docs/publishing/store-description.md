@@ -10,7 +10,7 @@ NyanLex helps you read unfamiliar languages in Minecraft and reply in your own. 
 
 ## Read the game in your language
 
-- **Follow conversations:** show incoming chat with its translation, or choose a translation-only display.
+- **Follow conversations:** incoming chat shows its original text immediately by default, then adds the translation in the same position. Modern and legacy builds also offer ordered translation delivery or showing each translation as soon as it is ready. Choose bilingual or translation-only display separately.
 - **Understand items and quests:** translate item names, descriptions, books and modpack quest text while keeping the original available for comparison. Modern builds support both older and current FTB Quests APIs.
 - **Read interfaces and HUD text:** translate supported menus, tooltips, scoreboards, boss bars, titles, action bars, name tags, advancement notices and supported Jade/WAILA-style object-name overlays. The screen-translation shortcut captures visible text, including hovered tooltips.
 - **Keep useful translations:** reuse saved results and share them through JSON import/export. Supported modern builds also offer translation packs and batch translation before you explore.

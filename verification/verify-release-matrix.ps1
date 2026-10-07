@@ -623,11 +623,9 @@ function Get-SettingsModelPath {
 
 foreach ($row in $rows) {
     $keys = if ($row.HarnessKind -ceq 'modern') {
-        @('nyanlex.settings.chat_delivery', 'nyanlex.settings.state.ordered',
-          'nyanlex.settings.state.ready_first', 'nyanlex.settings.master', 'nyanlex.settings.master.tip')
+        @('nyanlex.settings.master', 'nyanlex.settings.master.tip')
     } else {
-        @('config.nyanlex.chat_delivery.short', 'config.nyanlex.chat_delivery.ordered',
-          'config.nyanlex.chat_delivery.ready_first', 'config.nyanlex.online', 'config.nyanlex.online.desc')
+        @('config.nyanlex.online', 'config.nyanlex.online.desc')
     }
     $row | Add-Member -NotePropertyName DeliveryKeys -NotePropertyValue $keys
 }
@@ -824,14 +822,13 @@ function Get-SourceReadiness {
         $modelCode = [System.IO.File]::ReadAllText($settingsModel)
         $modelCode = [regex]::Replace($modelCode, '(?s)/\*.*?\*/', '')
         $modelCode = [regex]::Replace($modelCode, '(?m)^[ \t]*//.*$', '')
-        foreach ($anchor in @('translationRequestsEnabled', 'deliverChatTranslationsInOrder')) {
+        foreach ($anchor in @('translationRequestsEnabled', 'chatDeliveryMode')) {
             if (-not $modelCode.Contains($anchor)) { $issues += "settings model does not wire $anchor" }
         }
         $uiAnchors = if ($Row.HarnessKind -ceq 'modern') {
-            @('"master"', '"chat_delivery"', 'STATE_ORDERED', 'STATE_READY_FIRST')
+            @('"master"', '"chat_delivery"')
         } else {
-            @('"config.nyanlex.online"', '"config.nyanlex.chat_delivery.short"',
-              '"config.nyanlex.chat_delivery.ordered"', '"config.nyanlex.chat_delivery.ready_first"')
+            @('"config.nyanlex.online"', '"config.nyanlex.chat_delivery.short"')
         }
         foreach ($anchor in $uiAnchors) {
             if (-not $modelCode.Contains($anchor)) { $issues += "settings model does not reference $anchor" }

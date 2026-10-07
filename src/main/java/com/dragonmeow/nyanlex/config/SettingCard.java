@@ -8,7 +8,7 @@ public final class SettingCard {
         TOGGLE,
         /** Slider over discrete steps. */
         SLIDER,
-        /** Button that opens a screen or runs an action. */
+        /** Button that cycles a value, opens a screen or runs an action. */
         BUTTON,
         /** Warm-up card: status, progress bar and pause/resume/stop buttons. */
         WARMUP,

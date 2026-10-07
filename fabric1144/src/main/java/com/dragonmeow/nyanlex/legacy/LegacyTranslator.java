@@ -47,6 +47,7 @@ final class LegacyTranslator {
     private static final int MAX_KEY_BACKOFFS = 256;
     private static final int MAX_SCHEDULED_RETRIES = 512;
     private static final int MAX_AUTO_RETRIES = 1;
+    private static final int ECHO_KEEP_LIMIT = 3;
     private static final int MAX_HIGH_BATCH_BURST = 3;
     private static final int MAX_AI_KEYS = 64;
     private static final int MAX_HTTP_RESPONSE_CHARS = 2_000_000;
@@ -59,6 +60,14 @@ final class LegacyTranslator {
                     + "|\\u27E6\\s*MT\\s*\\d+\\s*\\u27E7)");
     private static final Pattern TEMPLATE_TOKEN = Pattern.compile(
             "\\u27E6\\s*MT\\s*\\d+\\s*\\u27E7", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PRESENTATION_TOKEN = Pattern.compile(
+            "(?i:§[0-9A-FK-ORX])|\\u27E6\\s*/?\\s*CS\\s*\\d+\\s*\\u27E7");
+    private static final String LOCALIZED_LOBBY_JOIN_CORE =
+            "(?:(?:\\[[A-Z]{2,10}\\+{0,3}\\]|\\u27E6\\h*MT\\h*\\d+\\h*\\u27E7)\\h+)?"
+                    + "[A-Za-z0-9_]{3,16}\\h+飄入了大廳[！!]";
+    private static final Pattern LOCALIZED_LOBBY_JOIN = Pattern.compile(
+            "(?:" + LOCALIZED_LOBBY_JOIN_CORE + "|>>>\\h+"
+                    + LOCALIZED_LOBBY_JOIN_CORE + "\\h+<<<)");
 
     /** Inline-test seam; production always uses the real provider branches below. */
     interface TestBackend {
@@ -84,6 +93,8 @@ final class LegacyTranslator {
 
     private static final class Pending {
         final String key, source, target, sourceLang, machineProvider, aiProfile;
+        /** Only the identity ledger uses this projection; request/cache keys stay unchanged. */
+        final String familyKey, familySource;
         final boolean ai;
         final LegacyConfig config;
         /** Live config consulted for translationRequestsEnabled; null falls back to the snapshot. */
@@ -95,7 +106,7 @@ final class LegacyTranslator {
         volatile boolean highPriority;
         volatile boolean cancelled;
         volatile PrioritizedTask queuedTask;
-        boolean completed;
+        volatile boolean completed;
 
         Pending(String key, String source, String target, String sourceLang,
                 String machineProvider, String aiProfile, boolean ai,
@@ -103,6 +114,9 @@ final class LegacyTranslator {
                 int requestGeneration, int autoRetryAttempt) {
             this.key = key;
             this.source = source;
+            this.familySource = semanticSource(source);
+            this.familyKey = key.isEmpty() ? ""
+                    : key.substring(0, key.length() - source.length()) + familySource;
             this.target = target;
             this.sourceLang = sourceLang;
             this.machineProvider = machineProvider;
@@ -366,13 +380,18 @@ final class LegacyTranslator {
         Map<String,String> additions = new LinkedHashMap<String,String>();
         collectImportedRows(file.machine, target, false, provider, config, additions);
         collectImportedRows(file.ai, target, true, provider, config, additions);
-        synchronized (cache) {
-            additions.keySet().removeAll(cache.keySet());
-            if (cache.size() + additions.size() > MAX_CACHE_ENTRIES)
-                throw new java.io.IOException("Legacy translation capacity exceeded (8192); no rows imported");
-            cache.putAll(additions);
+        synchronized (flightLock) {
+            synchronized (cache) {
+                additions.keySet().removeAll(cache.keySet());
+                if (cache.size() + additions.size() > MAX_CACHE_ENTRIES)
+                    throw new java.io.IOException("Legacy translation capacity exceeded (8192); no rows imported");
+                cache.putAll(additions);
+            }
+            for (String key : additions.keySet()) {
+                failedUntil.remove(key);
+                identityEchoes.remove(key);
+            }
         }
-        for (String key : additions.keySet()) failedUntil.remove(key);
         return additions.size();
     }
 
@@ -398,16 +417,26 @@ final class LegacyTranslator {
                                 source, config.doNotTranslateTerms).text();
                         for (boolean ai : new boolean[]{false, true}) {
                             String key = cacheKey(prepared, target, ai, provider, config);
+                            String familySource = semanticSource(prepared);
+                            String familyKey = cacheKey(familySource, target, ai, provider, config);
                             cache.remove(key);
-                            failedUntil.remove(key);
+                            cache.remove(familyKey);
+                            identityEchoes.remove(familyKey);
+                            clearFamilyFailures(key, prepared, familySource);
                             pending.remove(key);
-                            Pending item = inFlight.remove(key);
-                            if (item != null && !item.completed) {
-                                item.cancelled = true;
-                                item.completed = true;
-                                cancelled.addAll(item.waiters);
-                                totalWaiters -= item.waiters.size();
-                                item.waiters.clear();
+                            Iterator<Pending> iterator = inFlight.values().iterator();
+                            while (iterator.hasNext()) {
+                                Pending item = iterator.next();
+                                if (!item.familyKey.equals(familyKey)) continue;
+                                pending.remove(item.key);
+                                iterator.remove();
+                                if (!item.completed) {
+                                    item.cancelled = true;
+                                    item.completed = true;
+                                    cancelled.addAll(item.waiters);
+                                    totalWaiters -= item.waiters.size();
+                                    item.waiters.clear();
+                                }
                             }
                         }
                     }
@@ -429,6 +458,8 @@ final class LegacyTranslator {
     private final Map<String, Pending> inFlight = new LinkedHashMap<String, Pending>();
     private int totalWaiters;
     private final Map<String, FailureBackoff> failedUntil = boundedMap(MAX_FAILURE_BACKOFFS);
+    /** Successful unchanged answers only. Invalid content and transport errors reset a streak. */
+    private final Map<String, Integer> identityEchoes = boundedMap(MAX_FAILURE_BACKOFFS);
     private final Map<String, Long> keyUnavailableUntil = boundedMap(MAX_KEY_BACKOFFS);
     private final AtomicInteger keyCursor = new AtomicInteger();
     private final List<DebugEntry> debug = Collections.synchronizedList(new ArrayList<DebugEntry>());
@@ -638,16 +669,16 @@ final class LegacyTranslator {
     }
 
     String cached(String source, String target, boolean ai) {
+        if (isLocalizedLobbyJoinNotice(source, target, null)) return source;
         LegacyTemplateText.Prepared prepared = LegacyTemplateText.prepare(source);
         if (!prepared.hasTranslatableContent()) return source;
-        // Machine engine: wording the AI engine already produced wins (see cached below).
-        String hit = ai ? null : cache.get(cacheKey(prepared.text(), target, true, "google", null));
-        if (hit == null) hit = cache.get(cacheKey(prepared.text(), target, ai, "google", null));
+        String hit = cachedTemplate(prepared.text(), target, ai, "google", null);
         return hit == null ? null : prepared.restore(hit);
     }
 
     String cached(String source, String target, boolean ai, LegacyConfig config) {
         if (source == null || config == null) return null;
+        if (isLocalizedLobbyJoinNotice(source, target, config)) return source;
         LegacyTemplateText.Prepared prepared =
                 LegacyTemplateText.prepare(source, config.doNotTranslateTerms);
         if (!prepared.hasTranslatableContent()) return source;
@@ -656,9 +687,52 @@ final class LegacyTranslator {
         // Lookup order of the machine engine: the AI cache's wording first (a text the AI engine
         // has already translated is shown whichever engine is selected), then the machine cache.
         // The AI engine itself is unchanged: AI cache, then ask the AI.
-        String hit = ai ? null : cache.get(cacheKey(prepared.text(), target, true, provider, config));
-        if (hit == null) hit = cache.get(cacheKey(prepared.text(), target, ai, provider, config));
+        String hit = cachedTemplate(prepared.text(), target, ai, provider, config);
         return hit == null ? null : prepared.restore(hit);
+    }
+
+    private String cachedTemplate(String source, String target, boolean ai,
+                                  String provider, LegacyConfig config) {
+        String key = cacheKey(source, target, ai, provider, config);
+        String family = semanticSource(source);
+        String familyKey = cacheKey(family, target, ai, provider, config);
+        // AI wording may answer a machine lookup, but an AI identity decision belongs to AI.
+        String hit = null;
+        if (!ai) {
+            String aiKey = cacheKey(source, target, true, provider, config);
+            String aiFamilyKey = cacheKey(family, target, true, provider, config);
+            if (!keepsOriginal(aiKey, source, aiFamilyKey, family)) hit = cache.get(aiKey);
+        }
+        if (hit != null) return hit;
+        if (keepsOriginal(key, source, familyKey, family)) return source;
+        return cache.get(key);
+    }
+
+    private static String semanticSource(String source) {
+        if (source == null) return "";
+        return PRESENTATION_TOKEN.matcher(source).replaceAll("").trim();
+    }
+
+    private boolean keepsOriginal(String key, String source, String familyKey, String family) {
+        String hit = cache.get(familyKey);
+        if (hit != null && hit.trim().equals(family)) return true;
+        hit = cache.get(key);
+        return hit != null && hit.trim().equals(source.trim());
+    }
+
+    private boolean keepsOriginal(Pending item) {
+        return !item.key.isEmpty()
+                && keepsOriginal(item.key, item.source, item.familyKey, item.familySource);
+    }
+
+    /** Target-aware equivalent of the accepted .2 rule; the template/key format is unchanged. */
+    private static boolean isLocalizedLobbyJoinNotice(String source, String target, LegacyConfig config) {
+        if (source == null || source.indexOf('飄') < 0 || source.indexOf('\n') >= 0
+                || source.indexOf('\r') >= 0 || target == null
+                || !target.toLowerCase(java.util.Locale.ROOT).startsWith("zh")) return false;
+        String hint = normalizedSourceLanguage(config);
+        if (hint.startsWith("ja") || hint.startsWith("ko")) return false;
+        return LOCALIZED_LOBBY_JOIN.matcher(semanticSource(source)).matches();
     }
 
     void translate(final String source, final String target, final boolean ai, final boolean highPriority,
@@ -703,6 +777,10 @@ final class LegacyTranslator {
             accept(callback, null);
             return;
         }
+        if (isLocalizedLobbyJoinNotice(source, target, config)) {
+            accept(callback, source);
+            return;
+        }
         final LegacyTemplateText.Prepared prepared =
                 LegacyTemplateText.prepare(source, config.doNotTranslateTerms);
         if (!prepared.hasTranslatableContent()) {
@@ -715,8 +793,7 @@ final class LegacyTranslator {
         final String key = cacheKey(prepared.text(), target, ai, provider, config);
         // Machine engine: a row the AI engine already holds answers first, sends no machine
         // request and writes nothing under the machine key.
-        String hit = ai ? null : cache.get(cacheKey(prepared.text(), target, true, provider, config));
-        if (hit == null) hit = cache.get(key);
+        String hit = cachedTemplate(prepared.text(), target, ai, provider, config);
         if (hit != null) {
             accept(callback, prepared.restore(hit));
             return;
@@ -746,7 +823,7 @@ final class LegacyTranslator {
                 cancelledBeforeFlight = true;
             } else {
                 synchronized (flightLock) {
-                    hit = cache.get(key);
+                    hit = cachedTemplate(prepared.text(), target, ai, provider, config);
                     if (hit == null) {
                         Pending existing = inFlight.get(key);
                         if (existing != null) {
@@ -938,23 +1015,24 @@ final class LegacyTranslator {
         for (Waiter waiter : cancelledWaiters) accept(waiter.callback, null);
     }
 
-    private void processBatch(List<Pending> batch) {
+    private void processBatch(List<Pending> collected) {
         // Master switch closed while this batch waited in the executor queue: cancel, never fail.
-        for (Pending item : batch) {
-            if (!requestsAllowed(item.requestGate, item.config)) cancelItem(item);
+        List<Pending> batch = new ArrayList<Pending>(collected.size());
+        for (Pending item : collected) {
+            if (item.cancelled || item.completed) continue;
+            if (keepsOriginal(item)) completeSuccess(item, item.source);
+            else if (item.requestGeneration != requestGeneration.get()
+                    || !requestsAllowed(item.requestGate, item.config)) cancelItem(item);
+            else batch.add(item);
         }
-        boolean anyActive = false;
-        for (Pending item : batch) if (!item.cancelled && !item.completed) {
-            anyActive = true;
-            break;
-        }
-        if (!anyActive) return;
+        if (batch.isEmpty()) return;
         Pending first = batch.get(0);
         String engine = first.ai ? "AI" : "GT";
         for (Pending item : batch) log(item.config, engine, item.source, "...");
         List<String> translated;
         dispatchingBatch.set(batch);
         try {
+            checkRequestsOpen();
             if (testBackend != null) {
                 List<String> canonicalSources = new ArrayList<String>(batch.size());
                 for (Pending item : batch) canonicalSources.add(item.source);
@@ -979,7 +1057,8 @@ final class LegacyTranslator {
         } catch (RequestsPausedException | com.dragonmeow.nyanlex.translate.RequestsPausedException paused) {
             // Switched off while pacing: nothing was sent, so nothing is recorded as failed.
             for (Pending item : batch) {
-                if (cancelItem(item)) log(item.config, engine, item.source, "paused");
+                if (keepsOriginal(item)) completeSuccess(item, item.source);
+                else if (cancelItem(item)) log(item.config, engine, item.source, "paused");
             }
             return;
         } catch (Exception failure) {
@@ -992,13 +1071,27 @@ final class LegacyTranslator {
             for (Pending item : batch) fail(item, engine, "paragraph lost");
             return;
         }
+        // Process unusable/identity results in their original order before storing usable
+        // style siblings. A malformed answer must reset the streak before a later echo.
         for (int i = 0; i < batch.size(); i++) {
             Pending item = batch.get(i);
             try {
                 String result = translated.get(i);
+                String invalid = validationFailureFor(item.source, result);
+                if (invalid != null) fail(item, engine, invalid);
+                else if (result.trim().equals(item.source.trim())) completeEcho(item);
+            } catch (RuntimeException malformed) {
+                fail(item, engine, malformed);
+            }
+        }
+        for (int i = 0; i < batch.size(); i++) {
+            Pending item = batch.get(i);
+            if (item.completed) continue;
+            try {
+                String result = translated.get(i);
                 String validationFailure = validationFailureFor(item.source, result);
-                if (validationFailure != null || result.trim().equals(item.source.trim())) {
-                    fail(item, engine, validationFailure == null ? "unknown" : validationFailure);
+                if (validationFailure != null) {
+                    fail(item, engine, validationFailure);
                     continue;
                 }
                 if (completeSuccess(item, result)) {
@@ -1041,6 +1134,7 @@ final class LegacyTranslator {
                 System.currentTimeMillis() + retryDelay, failureSequence.incrementAndGet());
         if (!notifyWaiters(item, null, backoff, beforeDispatch)) return false;
         /* Subscribers fail promptly; the single transient retry is cache-warm only. */
+        if (retry && keepsOriginal(item)) return true;
         if (retry && scheduledRetries.incrementAndGet() <= MAX_SCHEDULED_RETRIES) {
             try {
                 retryScheduler.schedule(new Runnable() {
@@ -1064,6 +1158,13 @@ final class LegacyTranslator {
 
     private boolean completeSuccess(Pending item, String translatedTemplate) {
         return notifyWaiters(item, translatedTemplate, null);
+    }
+
+    private boolean completeEcho(Pending item) {
+        long retryDelay = Math.max(250L, item.config.failureBackoffMs);
+        FailureBackoff backoff = new FailureBackoff(System.currentTimeMillis() + retryDelay,
+                failureSequence.incrementAndGet());
+        return notifyWaiters(item, null, backoff, null, true);
     }
 
     private boolean cancelItem(Pending item) {
@@ -1094,13 +1195,57 @@ final class LegacyTranslator {
      */
     private boolean notifyWaiters(Pending item, String translatedTemplate,
                                   FailureBackoff failureBackoff, Runnable beforeDispatch) {
+        return notifyWaiters(item, translatedTemplate, failureBackoff, beforeDispatch, false);
+    }
+
+    private boolean notifyWaiters(Pending item, String translatedTemplate,
+                                  FailureBackoff failureBackoff, Runnable beforeDispatch,
+                                  boolean identityEcho) {
         List<Waiter> waiters;
+        String identityStatus = null;
         synchronized (flightLock) {
             if (item.completed || translatedTemplate != null && item.cancelled) return false;
+            boolean terminal = keepsOriginal(item);
+            if (terminal) {
+                // An older style result/failure may finish after another style learned KEEP.
+                // Preserve the family's identity row and complete this caller with its own source.
+                translatedTemplate = item.source;
+                failureBackoff = null;
+                beforeDispatch = null;
+                clearFamilyFailures(item.key, item.source, item.familySource);
+                identityStatus = "kept original";
+            } else if (identityEcho) {
+                String semanticHit = cache.get(item.familyKey);
+                if (semanticHit != null && !semanticHit.trim().equals(item.familySource)) {
+                    // This wording is already translated. An unchanged styled answer is a
+                    // presentation failure, never evidence that the semantic text is untranslatable.
+                    identityEchoes.remove(item.familyKey);
+                    identityStatus = "failed (unchanged style; semantic translation kept)";
+                } else {
+                    Integer previous = identityEchoes.get(item.familyKey);
+                    int count = previous == null ? 1 : previous.intValue() + 1;
+                    if (count >= ECHO_KEEP_LIMIT) {
+                        // The existing legacy-template-v1 format already supports identity rows.
+                        // A plain semantic row keeps every style without changing any request key.
+                        cache.put(item.familyKey, item.familySource);
+                        identityEchoes.remove(item.familyKey);
+                        clearFamilyFailures(item.key, item.source, item.familySource);
+                        translatedTemplate = item.source;
+                        failureBackoff = null;
+                        terminal = true;
+                        identityStatus = "kept original (echo 3/3)";
+                    } else {
+                        identityEchoes.put(item.familyKey, Integer.valueOf(count));
+                        identityStatus = "failed (unchanged echo " + count + "/3)";
+                    }
+                }
+            } else {
+                identityEchoes.remove(item.familyKey);
+            }
             item.completed = true;
             if (inFlight.get(item.key) == item) inFlight.remove(item.key);
             if (translatedTemplate != null) {
-                cache.put(item.key, translatedTemplate);
+                if (!terminal) cache.put(item.key, translatedTemplate);
                 removeFailure(item.key);
             } else if (failureBackoff != null) {
                 failedUntil.put(item.key, failureBackoff);
@@ -1110,6 +1255,7 @@ final class LegacyTranslator {
             totalWaiters -= waiters.size();
             if (totalWaiters < 0) totalWaiters = 0;
         }
+        if (identityStatus != null) log(item.config, item.ai ? "AI" : "GT", item.source, identityStatus);
         if (beforeDispatch != null) beforeDispatch.run();
         for (Waiter waiter : waiters) {
             String value = translatedTemplate == null
@@ -1117,6 +1263,21 @@ final class LegacyTranslator {
             accept(waiter.callback, value);
         }
         return true;
+    }
+
+    /** Called under flightLock; at most MAX_FAILURE_BACKOFFS entries are examined. */
+    private void clearFamilyFailures(String key, String source, String familySource) {
+        String prefix = key.substring(0, key.length() - source.length());
+        synchronized (failedUntil) {
+            Iterator<String> iterator = failedUntil.keySet().iterator();
+            while (iterator.hasNext()) {
+                String candidate = iterator.next();
+                if (candidate.startsWith(prefix)
+                        && semanticSource(candidate.substring(prefix.length())).equals(familySource)) {
+                    iterator.remove();
+                }
+            }
+        }
     }
 
     private static boolean sameBatch(Pending first, Pending other) {
@@ -1727,7 +1888,9 @@ final class LegacyTranslator {
         List<Pending> batch = dispatchingBatch.get();
         if (batch == null) return;
         for (Pending item : batch) {
-            if (requestsAllowed(item.requestGate, item.config)) return;
+            if (!item.cancelled && !item.completed
+                    && item.requestGeneration == requestGeneration.get()
+                    && requestsAllowed(item.requestGate, item.config) && !keepsOriginal(item)) return;
         }
         throw new RequestsPausedException();
     }

@@ -119,8 +119,6 @@
   "nyanlex.settings.state.translation": "译文",
   "nyanlex.settings.state.machine": "机翻",
   "nyanlex.settings.state.ai": "AI",
-  "nyanlex.settings.state.ordered": "依序",
-  "nyanlex.settings.state.ready_first": "完成即显示",
   "nyanlex.settings.unit.seconds": "%s 秒",
   "nyanlex.settings.master": "在线翻译：%s",
   "nyanlex.settings.master.tip": "发送什么：你开启翻译的文字，例如物品说明与界面；开启聊天翻译时，聊天内容（包含私信）也会发送。\n发送到哪：你选的翻译服务。机翻会发送到 Google 翻译（非官方端点），AI 则发送到你设置的服务。\n怎么停：关掉这个开关，就不会再发送任何文字。",
@@ -166,8 +164,6 @@
   "nyanlex.settings.cooldown.tip": "两次发送翻译之间至少间隔多久，避免被翻译服务限流。",
   "nyanlex.settings.batch": "批量收集：%s",
   "nyanlex.settings.batch.tip": "先收集一小段时间的待翻文字，再一次发送，可以减少发送的次数。",
-  "nyanlex.settings.chat_delivery": "聊天译文顺序：%s",
-  "nyanlex.settings.chat_delivery.tip": "依次：按照原始消息的顺序显示译文。完成即显示：每条翻译完成后立即显示。",
   "nyanlex.settings.dnt": "不翻译词汇",
   "nyanlex.settings.dnt.tip": "这些词汇永远保留原文，例如服务器名称。",
   "nyanlex.settings.warmup": "全内容预热",
@@ -469,5 +465,10 @@
   "screen.nyanlex.ai.gemini.policy_message": "Gemini API 条款要求用户年满 18 岁，并限制面向或很可能由未成年人使用的应用。自备密钥不能保证本模组符合此范围，仍需向 Google 确认。\n\n免费服务可能用于产品改进及人工审核，禁止提交敏感、机密或个人信息。游戏私信、聊天和任务文字可能包含这些信息；名称遮罩并非匿名保证。\n\n向欧洲经济区、瑞士或英国用户提供 API 客户端时，条款要求使用付费服务，且服务仅限支持地区。\n\n继续操作不代表获得 Google 授权。请先确认账号、地区与用途符合官方条款：https://ai.google.dev/gemini-api/terms",
   "screen.nyanlex.ai.antigravity.enable": "确认开启",
   "screen.nyanlex.ai.gemini.policy_continue": "了解并继续",
-  "screen.nyanlex.notice.dont_show_again": "不再显示"
+  "screen.nyanlex.notice.dont_show_again": "不再显示",
+  "nyanlex.settings.chat_delivery": "聊天显示时机：%s",
+  "nyanlex.settings.state.chat_ordered": "依序显示译文",
+  "nyanlex.settings.state.chat_ready": "译文完成即显示",
+  "nyanlex.settings.state.chat_original": "先显示原文，完成后补译",
+  "nyanlex.settings.chat_delivery.tip": "依序显示：等待翻译并保持消息顺序。完成即显示：哪条先翻好就先显示。先显示原文：立即显示原文，完成后在原位置补上译文（默认）。"
 }

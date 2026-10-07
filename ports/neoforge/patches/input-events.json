@@ -725,18 +725,13 @@
       "count": 2
     },
     {
-      "from": "\n            if (replaceChatMessage(mc.gui.hud.getChat(), pending.displayedMessage, replacement)) {\n",
-      "to": "\n            if (replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, replacement)) {\n",
+      "from": "\n        } else if (!replaceChatMessage(mc.gui.hud.getChat(), pending.displayedMessage, shown)) {\n",
+      "to": "\n        } else if (!replaceChatMessage(mc.gui.getChat(), pending.displayedMessage, shown)) {\n",
       "count": 1
     },
     {
       "from": "\n            mc.gui.hud.getChat().addClientSystemMessage(shown);\n",
       "to": "\n            mc.gui.getChat().addMessage(shown);\n",
-      "count": 1
-    },
-    {
-      "from": "\n        mc.gui.hud.getChat().addClientSystemMessage(shown);\n",
-      "to": "\n        mc.gui.getChat().addMessage(shown);\n",
       "count": 1
     },
     {

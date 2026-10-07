@@ -1,6 +1,7 @@
 package com.dragonmeow.nyanlex.config;
 
 import com.dragonmeow.nyanlex.warmup.ItemWarmupDriver;
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
@@ -350,6 +351,32 @@ class SettingsPanelTest {
     }
 
     // ------------------------------------------------------------------ controls
+
+    @Test
+    void chatDeliveryButtonCyclesAndSavesWithMouseAndKeyboard() {
+        for (String code : new String[] {"en_us", "ja_jp", "zh_tw", "zh_cn"}) {
+            for (boolean keyboard : new boolean[] {false, true}) {
+                FakeHost host = new FakeHost();
+                host.lang = code;
+                SettingsPanel p = panel(host, 640, 400);
+                p.setCategory(SettingsCategory.ADVANCED);
+                assertEquals(ChatDeliveryMode.ORIGINAL_FIRST, host.cfg.chatDeliveryMode);
+                for (ChatDeliveryMode expected : new ChatDeliveryMode[] {
+                        ChatDeliveryMode.ORDERED, ChatDeliveryMode.READY_FIRST, ChatDeliveryMode.ORIGINAL_FIRST}) {
+                    if (keyboard) {
+                        for (int i = 0; i < 40 && !"card:chat_delivery#0".equals(p.focusedKey()); i++) p.moveFocus(1);
+                        assertEquals("card:chat_delivery#0", p.focusedKey());
+                        assertTrue(p.keyPressed(SettingsPanel.KEY_ENTER, false, false));
+                    } else {
+                        click(p, p.controlBounds("chat_delivery"));
+                    }
+                    assertEquals(expected, host.cfg.chatDeliveryMode, code + " keyboard=" + keyboard);
+                }
+                assertEquals(3, host.saves);
+                assertTrue(host.actions.isEmpty(), "A cycle changes configuration; it has no screen action");
+            }
+        }
+    }
 
     @Test
     void clickingAToggleCardFlipsTheConfigAndRunsSideEffect() {

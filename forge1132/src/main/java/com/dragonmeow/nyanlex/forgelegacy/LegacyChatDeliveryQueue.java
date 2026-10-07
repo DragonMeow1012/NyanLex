@@ -46,6 +46,8 @@ final class LegacyChatDeliveryQueue<T> {
         return drained;
     }
 
+    synchronized List<T> entries() { return new ArrayList<T>(received); }
+
     synchronized boolean contains(T entry) { return queuedEntries.contains(entry); }
     synchronized boolean isEmpty() { return received.isEmpty(); }
     synchronized int size() { return received.size(); }
@@ -55,6 +57,13 @@ final class LegacyChatDeliveryQueue<T> {
         T entry = received.removeFirst();
         retire(entry);
         return entry;
+    }
+
+    synchronized boolean remove(T entry) {
+        if (!queuedEntries.contains(entry)) return false;
+        removeIdentity(received, entry);
+        retire(entry);
+        return true;
     }
 
     synchronized void clear() {

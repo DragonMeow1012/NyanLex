@@ -1,0 +1,949 @@
+{
+  "date": "2026-10-07",
+  "version": "1.0.0",
+  "builds": 62,
+  "behaviorBaseline": "1.0.0-echo-fix.20261006.2",
+  "chatDeliveryModes": [
+    "ORDERED",
+    "READY_FIRST",
+    "ORIGINAL_FIRST"
+  ],
+  "defaultChatDelivery": "ORIGINAL_FIRST",
+  "method": "Gradle source build and remap/reobfuscation",
+  "cleanFullGradleBuild": false,
+  "sourceInputsUnchangedSinceBuild": true,
+  "exactJarCoreTests": {
+    "targets": 62,
+    "passed": 27223,
+    "failures": 0
+  },
+  "exactJarSettingsPanelTests": {
+    "targets": 57,
+    "passed": 2907
+  },
+  "runtimeTestedAllTargets": false,
+  "runtime": {
+    "minecraft": "26.1.2",
+    "loader": "Fabric 0.19.3",
+    "provider": "controlled loopback HTTP service",
+    "clientStarted": true,
+    "worldLoaded": true,
+    "sha256": "db4f16429c9213d2867d00fdc1ac2c97b84edf88703123f0501e39feec7b16f9",
+    "checks": [
+      {
+        "name": "original displayed before translation",
+        "passed": true
+      },
+      {
+        "name": "later cached translation does not move original",
+        "passed": true
+      },
+      {
+        "name": "original backfilled in same history entry and age",
+        "passed": true
+      },
+      {
+        "name": "ordered waits for preceding unfinished message",
+        "passed": true
+      },
+      {
+        "name": "ordered delivers in receive order",
+        "passed": true
+      },
+      {
+        "name": "ready-first hides untranslated original",
+        "passed": true
+      },
+      {
+        "name": "ready-first emits cached second message first",
+        "passed": true
+      },
+      {
+        "name": "ready-first emits slow message afterward",
+        "passed": true
+      },
+      {
+        "name": "release jar remains byte-identical",
+        "passed": true
+      },
+      {
+        "name": "native Chinese announcement bypassed provider",
+        "passed": true
+      },
+      {
+        "name": "new recorded name exercised provider while persisted KEEP bypassed it",
+        "passed": true
+      },
+      {
+        "name": "echo requests stopped while messages continued",
+        "passed": true
+      },
+      {
+        "name": "Lv020 Herobrine echo units match persisted KEEP or new threshold",
+        "passed": true
+      },
+      {
+        "name": "Lv020 Herobrine persisted keep-original decision",
+        "passed": true
+      },
+      {
+        "name": "Lv020 Herobrine retry debt deleted",
+        "passed": true
+      },
+      {
+        "name": "Lv032 Cookiez echo units match persisted KEEP or new threshold",
+        "passed": true
+      },
+      {
+        "name": "Lv032 Cookiez persisted keep-original decision",
+        "passed": true
+      },
+      {
+        "name": "Lv032 Cookiez retry debt deleted",
+        "passed": true
+      },
+      {
+        "name": "actual UI mouse clicks cycle all three settings",
+        "passed": true
+      },
+      {
+        "name": "final default preference persisted",
+        "passed": true
+      }
+    ],
+    "limitations": [
+      "One real client version tested; not all 62 versions",
+      "Integrated server game/system chat packets; no public server or signed player-chat test",
+      "Recorded trace excerpts replayed as styled/plain chat; no nametag/scoreboard rendering test"
+    ]
+  },
+  "evidenceSha256": {
+    "build-report.json": "78d9b81c012fc433e0ff24e9e231ae3ea12442b13f50bdd090a75c2a8dcc24d8",
+    "all-jar-regressions.json": "f6c6142cfcfd99395cac84ac3eb6c514a7bd4ca12fa4612737620d5268c16400",
+    "panel-jar-regressions.json": "03366968069d97010289effc17126b73e7c9c1ef5d50dc81988b3361b1f9cbcd",
+    "packaging-report.json": "c0f5e16baf33cde8576c78eaae86b63aab7811de26fea76b7a5da6996e244000",
+    "dot2-preservation.json": "18974d41e67dbafd4c30338a975e7a97a5c05c92945621ea39ad2e08778c7e13",
+    "chat-simulations.json": "afe0b709ffa511d5f2c70c54a63c88e87e6f86f2edcfc316a4319d002b5a0f57"
+  },
+  "artifacts": [
+    {
+      "target": "fabric/1.14.4",
+      "file": "nyanlex-1.0.0-Fabric-1.14.4.jar",
+      "sha256": "7777ccb3e268a0b0b77dfc0a236bd9e35faeb4c33395bb835126bca38b35a549",
+      "coreTests": {
+        "tests": 41,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.15.2",
+      "file": "nyanlex-1.0.0-Fabric-1.15.2.jar",
+      "sha256": "2ed0f331706c3473363018fb86c2b464187fe7b121b2a315635980d72b7e10ed",
+      "coreTests": {
+        "tests": 41,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.16.5",
+      "file": "nyanlex-1.0.0-Fabric-1.16.5.jar",
+      "sha256": "1838d98a205024b84598c0e3b1d9527db0a18ca5c499f185c0f73eb39c8b3515",
+      "coreTests": {
+        "tests": 41,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.17",
+      "file": "nyanlex-1.0.0-Fabric-1.17.jar",
+      "sha256": "c03e453bf4c4f38ca97fbd718584181879a812398a5d5548a5833eb604e49243",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.17.1",
+      "file": "nyanlex-1.0.0-Fabric-1.17.1.jar",
+      "sha256": "7a72a69496d55c55846d6769943d33f768534f1c18f54b536148fb939a72aba5",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.18",
+      "file": "nyanlex-1.0.0-Fabric-1.18.jar",
+      "sha256": "7a21cb7077f2a692f1b7d7355bfc02134e605ea3329ede075b39101ffa04630d",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.18.1",
+      "file": "nyanlex-1.0.0-Fabric-1.18.1.jar",
+      "sha256": "40a062f682f950027b142e62d26cd4042ad4a4c1bfc25930a6216c58903f6a77",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.18.2",
+      "file": "nyanlex-1.0.0-Fabric-1.18.2.jar",
+      "sha256": "39bb5bcc009e04330941f187d2eb5045d7638f56600934413b99d70bb4e705d9",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.19",
+      "file": "nyanlex-1.0.0-Fabric-1.19.jar",
+      "sha256": "ebd25fe0bb21ca24c9793553ed9ab42debeb2ab0f0a6a1504cfe64e2b9aabd10",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.19.1",
+      "file": "nyanlex-1.0.0-Fabric-1.19.1.jar",
+      "sha256": "99b63adcc5a7110100bab2aff368675e069b29752068cefc5349ee62f43537b3",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.19.2",
+      "file": "nyanlex-1.0.0-Fabric-1.19.2.jar",
+      "sha256": "c9ea6cd0dc4345ea340c99ddfc9c0e60c14e594d639cbd57653a0a2176720a03",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.19.3",
+      "file": "nyanlex-1.0.0-Fabric-1.19.3.jar",
+      "sha256": "2b164032a434190471097a0673ee933c98dfc56448aca773bb8a647328cc97ac",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.19.4",
+      "file": "nyanlex-1.0.0-Fabric-1.19.4.jar",
+      "sha256": "890d29c9132d44c7f9f5967542abe84d480869e231f5cdcedaa6fe66cbc3c058",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.20",
+      "file": "nyanlex-1.0.0-Fabric-1.20.jar",
+      "sha256": "dd53662e49e7676b2dd6bab36a43ce0ccb558fd0a5e6b402c8e5bdc75a4cfc30",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.20.1",
+      "file": "nyanlex-1.0.0-Fabric-1.20.1.jar",
+      "sha256": "ae0652ec092510b2cd1edf36676aa5af2047e7c487e849a8c3d64be66ff6c150",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.20.2",
+      "file": "nyanlex-1.0.0-Fabric-1.20.2.jar",
+      "sha256": "3f96322bee70331a0e6edef9c2856a8dff062186307a5412c95290eebc41be6d",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.20.3",
+      "file": "nyanlex-1.0.0-Fabric-1.20.3.jar",
+      "sha256": "7bd030455627f60f04f43963d2c53e3f0b0dcba7c20de4d6281a489ba4f3d792",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.20.4",
+      "file": "nyanlex-1.0.0-Fabric-1.20.4.jar",
+      "sha256": "8b4bbf79dfef41135d13bdf380fd266644330a04f4c9cf3aeedfb5f3cedc6217",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.20.5",
+      "file": "nyanlex-1.0.0-Fabric-1.20.5.jar",
+      "sha256": "4d7f945337152548aa8aa0656c1948b5b7b3621faca35b1feec4cfc804ad2fa7",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.20.6",
+      "file": "nyanlex-1.0.0-Fabric-1.20.6.jar",
+      "sha256": "80f8d498429fd685794121eb43fa4a46d3132217ea6199124e35d27d925c78a4",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21",
+      "file": "nyanlex-1.0.0-Fabric-1.21.jar",
+      "sha256": "1b79370975116a0bd5921c68973b49ce0db4cc0d1507aa591b4a99754600e134",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.1",
+      "file": "nyanlex-1.0.0-Fabric-1.21.1.jar",
+      "sha256": "e6d76d2c91697e41dc4ec62f5eb4957d0163d72ec08d0f34fbd29bf4b98778ec",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.2",
+      "file": "nyanlex-1.0.0-Fabric-1.21.2.jar",
+      "sha256": "e6190146f415a582dc9785acaa43577aabea323dd5482369dac41b6c5112cfaf",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.3",
+      "file": "nyanlex-1.0.0-Fabric-1.21.3.jar",
+      "sha256": "4d611e6a61da5fd0c947f0ce77e48d327d8065ff8f6e8153fbfca99e024f51cb",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.4",
+      "file": "nyanlex-1.0.0-Fabric-1.21.4.jar",
+      "sha256": "135d149b4dde37a0ae95b45d55b2eea5a5260198608952c69845f894bea544c5",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.5",
+      "file": "nyanlex-1.0.0-Fabric-1.21.5.jar",
+      "sha256": "01586b6eef5d25a6a3f1397f68e1dc19a752970f1eed95e8ec9f2e987cfc2d7d",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.6",
+      "file": "nyanlex-1.0.0-Fabric-1.21.6.jar",
+      "sha256": "048de33b762413a89c7bcd348b585d6a36c2fb253837c1070691e7cd1ac63358",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.7",
+      "file": "nyanlex-1.0.0-Fabric-1.21.7.jar",
+      "sha256": "8fb6ab43b491d1d2beafc9d2717991d64f81810fa2de06e8ca12240d6e44d409",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.8",
+      "file": "nyanlex-1.0.0-Fabric-1.21.8.jar",
+      "sha256": "14c4aa173d8d12cfc09958cf8a89ee02e1947cfc4469f5c0591a37582def2ba0",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.9",
+      "file": "nyanlex-1.0.0-Fabric-1.21.9.jar",
+      "sha256": "753a59289ea88309a770afd5c61bf732fe3c512481de92a9c38e025e5c9465e2",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.10",
+      "file": "nyanlex-1.0.0-Fabric-1.21.10.jar",
+      "sha256": "a852757ba429fe22581cbf495fe305d038743ebf1e327232e0f7df024d1c3abb",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/1.21.11",
+      "file": "nyanlex-1.0.0-Fabric-1.21.11.jar",
+      "sha256": "be74336fb720af19526ed7036d337ab4cb0562e2d48490dd4388bb372b41a681",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/26.1",
+      "file": "nyanlex-1.0.0-Fabric-26.1.jar",
+      "sha256": "a4100cc60a8ebe90968613e45205f9d8ede582cfc2dff5e182b7564dd69fc597",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/26.1.1",
+      "file": "nyanlex-1.0.0-Fabric-26.1.1.jar",
+      "sha256": "048073122218d130a0374330207aefb4abfdd0eed0a814b2c7a6aefe664fb56e",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/26.1.2",
+      "file": "nyanlex-1.0.0-Fabric-26.1.2.jar",
+      "sha256": "db4f16429c9213d2867d00fdc1ac2c97b84edf88703123f0501e39feec7b16f9",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": true
+    },
+    {
+      "target": "fabric/26.2",
+      "file": "nyanlex-1.0.0-Fabric-26.2.jar",
+      "sha256": "be32066e451c6daa423968d47929ce7c37a4a0df2bde6bd84a7f660242e78430",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "fabric/26.3",
+      "file": "nyanlex-1.0.0-Fabric-26.3.jar",
+      "sha256": "75f248a1b5665d65466fa693ad7d9b6bb086c3bca1a5958f76a43096046b75b0",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "forge/1.12.2",
+      "file": "nyanlex-1.0.0-Forge-1.12.2.jar",
+      "sha256": "a19b93a376c1e223d7532090bcfa482f451e63301597254de43d5b59f33e6d88",
+      "coreTests": {
+        "tests": 41,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "runtimeTested": false
+    },
+    {
+      "target": "forge/1.13.2",
+      "file": "nyanlex-1.0.0-Forge-1.13.2.jar",
+      "sha256": "ddebbbca7005dbbaa38b4ba75ee4b88e719a8d3ba0457afb98b9f48e924085c2",
+      "coreTests": {
+        "tests": 41,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.20.1",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.1.jar",
+      "sha256": "d26b56d1d4e2d6cdba98d448320f3b1b48041193669022e05fefa840a85cee38",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.20.2",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.2.jar",
+      "sha256": "e9f496f8d58389c504ad405b3610227836aa514f966598d66b15af6be4a1d8a3",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.20.3",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.3.jar",
+      "sha256": "d49db102e981d2ee03bfb9697a4f46e240d2800658935f44b7121d9e895c3b97",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.20.4",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.4.jar",
+      "sha256": "72c080481adf6f202146a3c5c89c33860fe27c03f331de49092f93faeb3bb22a",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.20.5",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.5.jar",
+      "sha256": "b2389bf35026b1beeb5535ede84a8bf178384be98ed4d81843053222a19cf2d3",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.20.6",
+      "file": "nyanlex-1.0.0-NeoForge-1.20.6.jar",
+      "sha256": "008daac038c69f94f4a4bcd134301c7151ea68e6fd406c39baf02ed7d6117e6d",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.jar",
+      "sha256": "30685a697fb66b902664ec6a02779fce2fcb803527aaadf98de8ad868f8e4145",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.1",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.1.jar",
+      "sha256": "c40c999ca4166c2f6f1a86e946df04a437433dd91f942ff17529d49a246050a3",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.2",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.2.jar",
+      "sha256": "d36c8608664aada9ae9c5dda1d635126b07ab02230a55742b9d29aaa5b13fc6d",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.3",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.3.jar",
+      "sha256": "62a68bcfbcf479fef0957664ba9b0b4ae455817dbd709098b6a522c248e867c7",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.4",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.4.jar",
+      "sha256": "fae70a474a773a255e9c0cf494f9f33607617e2137d06904e77d9748d51842dc",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.5",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.5.jar",
+      "sha256": "9402895307846a1a1b82a153063a48a2d3a2204332674b6d131853f9c60a1b73",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.6",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.6.jar",
+      "sha256": "563ac71d7e0707f2f5cc4b065442cdacb672a717404e97dda3f94ca3cff14dd6",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.7",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.7.jar",
+      "sha256": "bb0d1eaf849bab900e26fd575b546abd0911fff4be9498a5207e1606d63ef604",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.8",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.8.jar",
+      "sha256": "82f8fafcdd6420ecc2b76d1ee245832ec9cb05697c7b46fce80e3381f792d81e",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.9",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.9.jar",
+      "sha256": "1cd59668b78d6803056bcd0bd4a45a0707d717513acdd37074cfc725645cde41",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.10",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.10.jar",
+      "sha256": "1dbe5ccd40d5a1885e5e4d57203b2bd3fb1515a5559bcf9a03a47c7f4cd70e1e",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/1.21.11",
+      "file": "nyanlex-1.0.0-NeoForge-1.21.11.jar",
+      "sha256": "4b8a63dfa77795784cc64254a2b57c0e8e6fcfd8f306376028e560280144ea1f",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/26.1",
+      "file": "nyanlex-1.0.0-NeoForge-26.1.jar",
+      "sha256": "d4168a8c30c80af81a21a4047561fffe996502ccacce9a41e81874e7826edb7b",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/26.1.1",
+      "file": "nyanlex-1.0.0-NeoForge-26.1.1.jar",
+      "sha256": "5fc152478d619637d6c0498f8cfe42261b6f782ece2f2179213d231eacbab5f2",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/26.1.2",
+      "file": "nyanlex-1.0.0-NeoForge-26.1.2.jar",
+      "sha256": "d89bfae16496f082f4c060c0b79f393ad8625881666a0b6dfd532db8e10c19f1",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/26.2",
+      "file": "nyanlex-1.0.0-NeoForge-26.2.jar",
+      "sha256": "cd54eedf37bfa68062296c4898bd8de33e42d556d4c822f3db5a16e7026bfe64",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    },
+    {
+      "target": "neoforge/26.3",
+      "file": "nyanlex-1.0.0-NeoForge-26.3.jar",
+      "sha256": "9ebf05ef95491eeae7431999a62f993d3f41fda7c92ad3285b33f2dff8bf5f9e",
+      "coreTests": {
+        "tests": 474,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "settingsPanelTests": 51,
+      "runtimeTested": false
+    }
+  ],
+  "archives": [
+    {
+      "file": "NyanLex-1.0.0-all-versions.zip",
+      "sha256": "ff228ac60f02325e3e8f42f08ce11a5d4e5a0c939817014285533aab1194b081"
+    },
+    {
+      "file": "NyanLex-1.0.0-Fabric.zip",
+      "sha256": "20869be2725ddb7c989d561f3725ecbc23d7696b9ccd725a9a9e8ec0c4fe338b"
+    },
+    {
+      "file": "NyanLex-1.0.0-Forge.zip",
+      "sha256": "a4d6766f6cd889351c051f8b9aea7ccf5324d271f222a764c694e9661298ddc3"
+    },
+    {
+      "file": "NyanLex-1.0.0-NeoForge.zip",
+      "sha256": "b193c818579b1c98d0b3c6eabc600a84687f5e718a448974ede3d9aa12333bc2"
+    }
+  ]
+}

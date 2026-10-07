@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.legacy;
 
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -28,7 +29,8 @@ import java.util.concurrent.TimeUnit;
 public final class LegacyTranslatorMod implements ClientModInitializer {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final int MAX_PENDING_CHATS = 512;
-    private static final long CHAT_TRANSLATION_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(15L);
+    private static final long CHAT_WAIT_NANOS = 15L * 1000L * 1000L * 1000L;
+    private static final long CHAT_RETENTION_NANOS = TimeUnit.MINUTES.toNanos(5L);
     /** AI engine only (see {@link #warmVisibleItemNames}); machine engine never auto-scans. */
     private static final long ITEM_WARM_SCAN_INTERVAL_NANOS = TimeUnit.MILLISECONDS.toNanos(350L);
     private static final ThreadLocal<Boolean> INTERNAL_CHAT = new ThreadLocal<Boolean>() {
@@ -87,6 +89,7 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         final long queuedAtNanos = System.nanoTime();
         String translated;
         boolean displayed;
+        Component displayedMessage;
 
         PendingChat(long epoch, Object connection, Object world,
                     LegacyChatRequestProfile requestProfile, Component original,
@@ -243,12 +246,17 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         return true;
     }
 
+    private ChatDeliveryMode chatDeliveryMode() {
+        return ChatDeliveryMode.orDefault(config == null ? null : config.chatDeliveryMode);
+    }
+
     private void enqueueChat(Minecraft minecraft, PendingChat chat) {
         while (pendingChats.size() >= MAX_PENDING_CHATS) {
             PendingChat evicted = pendingChats.removeFirst();
             displayOriginal(minecraft, evicted);
         }
         pendingChats.addLast(chat);
+        if (chatDeliveryMode() == ChatDeliveryMode.ORIGINAL_FIRST) displayChat(minecraft, chat, chat.original);
     }
 
     private void completeChat(Minecraft minecraft, PendingChat chat, String translated) {
@@ -288,14 +296,13 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
         }
         drainReadyChats(minecraft);
         long now = System.nanoTime();
-        PendingChat oldest = pendingChats.peekFirst();
-        while (oldest != null
-                && now - oldest.queuedAtNanos >= CHAT_TRANSLATION_TIMEOUT_NANOS) {
-            pendingChats.removeFirst();
-            displayOriginal(minecraft, oldest);
-            drainReadyChats(minecraft);
-            oldest = pendingChats.peekFirst();
+        for (PendingChat pending : pendingChats.entries()) {
+            long limit = pending.displayedMessage == null || chatDeliveryMode() == ChatDeliveryMode.ORDERED
+                    ? CHAT_WAIT_NANOS : CHAT_RETENTION_NANOS;
+            if (now - pending.queuedAtNanos < limit) continue;
+            if (pendingChats.remove(pending)) displayOriginal(minecraft, pending);
         }
+        drainReadyChats(minecraft);
     }
 
     private void syncChatSession(Minecraft minecraft) {
@@ -328,10 +335,14 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     }
 
     private void drainReadyChats(Minecraft minecraft) {
-        boolean ordered = config == null || config.deliverChatTranslationsInOrder;
-        for (PendingChat chat : pendingChats.drainReady(ordered)) {
+        if (chatDeliveryMode() == ChatDeliveryMode.ORIGINAL_FIRST) {
+            for (PendingChat chat : pendingChats.entries()) {
+                if (chat.displayedMessage == null) displayChat(minecraft, chat, chat.original);
+            }
+        }
+        for (PendingChat chat : pendingChats.drainReady(chatDeliveryMode() == ChatDeliveryMode.ORDERED)) {
             chat.displayed = true;
-            addInternal(minecraft, output(chat));
+            displayChat(minecraft, chat, output(chat));
         }
     }
 
@@ -344,7 +355,36 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
 
     private static void displayOriginal(Minecraft minecraft, PendingChat chat) {
         chat.displayed = true;
-        addInternal(minecraft, chat.original);
+        if (chat.displayedMessage == null) displayChat(minecraft, chat, chat.original);
+    }
+
+    private static void displayChat(Minecraft minecraft, PendingChat chat, Component message) {
+        if (chat.displayedMessage == message) return;
+        if (chat.displayedMessage == null) {
+            addInternal(minecraft, message);
+        } else if (!replaceChatMessage(minecraft.gui.getChat(), chat.displayedMessage, message)) {
+            return;
+        }
+        chat.displayedMessage = message;
+    }
+
+    private static boolean replaceChatMessage(net.minecraft.client.gui.components.ChatComponent chat,
+                                              Component previous, Component replacement) {
+        try {
+            java.util.List<net.minecraft.client.GuiMessage> messages =
+                    ((LegacyChatComponentAccess) (Object) chat).nyanlex$getAllMessages();
+            for (int i = 0; i < messages.size(); i++) {
+                net.minecraft.client.GuiMessage old = messages.get(i);
+                if (old.getMessage() != previous) continue;
+                messages.set(i, new net.minecraft.client.GuiMessage(
+                        old.getAddedTime(), replacement, old.getId()));
+                chat.rescaleChat();
+                return true;
+            }
+        } catch (RuntimeException ignored) {
+            // Foreign or cleared chat history keeps its existing contents.
+        }
+        return false;
     }
 
     private static Component output(PendingChat chat) {

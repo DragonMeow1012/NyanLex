@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.legacy;
 
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import java.util.Locale;
 
 public final class LegacyConfig {
@@ -8,7 +9,7 @@ public final class LegacyConfig {
     boolean enabled = true;
     boolean followGameLanguage = true;
     boolean showOriginal = true;
-    boolean deliverChatTranslationsInOrder = true;
+    public ChatDeliveryMode chatDeliveryMode = ChatDeliveryMode.ORIGINAL_FIRST;
     public boolean chatComposerEnabled = false;
     public String chatComposerLanguage = "en";
     public double chatComposerX = 1.0;
@@ -122,6 +123,7 @@ public final class LegacyConfig {
     static LegacyConfig normalizeLoaded(LegacyConfig loaded) {
         if (loaded == null) return null;
         if (loaded.aiApiKeys == null) loaded.aiApiKeys = new java.util.ArrayList<String>();
+        loaded.chatDeliveryMode = ChatDeliveryMode.orDefault(loaded.chatDeliveryMode);
         loaded.doNotTranslateTerms = normalizeDoNotTranslateTerms(loaded.doNotTranslateTerms);
         if (loaded.chatComposerLanguage == null || loaded.chatComposerLanguage.trim().isEmpty()) loaded.chatComposerLanguage = "en";
         if (loaded.aiKeysByEndpoint == null)
@@ -153,7 +155,7 @@ public final class LegacyConfig {
         copy.enabled = enabled;
         copy.followGameLanguage = followGameLanguage;
         copy.showOriginal = showOriginal;
-        copy.deliverChatTranslationsInOrder = deliverChatTranslationsInOrder;
+        copy.chatDeliveryMode = ChatDeliveryMode.orDefault(chatDeliveryMode);
         copy.translationRequestsEnabled = translationRequestsEnabled;
         copy.firstRunDone = firstRunDone;
         copy.doNotTranslateTerms = doNotTranslateTerms == null

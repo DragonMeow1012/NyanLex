@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.config;
 
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -25,8 +26,9 @@ public final class SettingsCatalog {
     public static final String STATE_TRANSLATION = "nyanlex.settings.state.translation";
     public static final String STATE_MACHINE = "nyanlex.settings.state.machine";
     public static final String STATE_AI = "nyanlex.settings.state.ai";
-    public static final String STATE_ORDERED = "nyanlex.settings.state.ordered";
-    public static final String STATE_READY_FIRST = "nyanlex.settings.state.ready_first";
+    public static final String STATE_CHAT_ORDERED = "nyanlex.settings.state.chat_ordered";
+    public static final String STATE_CHAT_READY = "nyanlex.settings.state.chat_ready";
+    public static final String STATE_CHAT_ORIGINAL = "nyanlex.settings.state.chat_original";
     public static final String UNIT_SECONDS = "nyanlex.settings.unit.seconds";
 
     /** Lang keys used by the screen frame itself (not tied to one entry). */
@@ -108,6 +110,14 @@ public final class SettingsCatalog {
         });
     }
 
+    public static StateText chatDeliveryState(ChatDeliveryMode mode) {
+        return StateText.of(switch (ChatDeliveryMode.orDefault(mode)) {
+            case ORDERED -> STATE_CHAT_ORDERED;
+            case READY_FIRST -> STATE_CHAT_READY;
+            case ORIGINAL_FIRST -> STATE_CHAT_ORIGINAL;
+        });
+    }
+
     public static StateText engineState(boolean ai) { return StateText.of(ai ? STATE_AI : STATE_MACHINE); }
 
     /** Every lang key the catalog and the screen frame rely on (for the lang-file test). */
@@ -118,7 +128,7 @@ public final class SettingsCatalog {
                 KEY_CLEAR_PACKS_CONFIRM_TITLE, KEY_CLEAR_PACKS_CONFIRM_MESSAGE,
                 KEY_CLEAR_PACKS_DONE, KEY_CLEAR_PACKS_NONE,
                 STATE_ON, STATE_OFF, STATE_ORIGINAL, STATE_BOTH, STATE_TRANSLATION, STATE_MACHINE,
-                STATE_AI, STATE_ORDERED, STATE_READY_FIRST, UNIT_SECONDS));
+                STATE_AI, STATE_CHAT_ORDERED, STATE_CHAT_READY, STATE_CHAT_ORIGINAL, UNIT_SECONDS));
         for (SettingEntry entry : allEntries()) {
             if (!keys.contains(entry.labelKey())) keys.add(entry.labelKey());
             if (!keys.contains(entry.tipKey())) keys.add(entry.tipKey());
@@ -204,6 +214,10 @@ public final class SettingsCatalog {
                         .withKeywords("cache", "快取", "缓存", "clear"))));
 
         map.put(SettingsPage.ADVANCED, pairs(List.of(
+                cycle(SettingsPage.ADVANCED, "chat_delivery",
+                        c -> chatDeliveryState(c.chatDeliveryMode),
+                        c -> c.chatDeliveryMode = ChatDeliveryMode.orDefault(c.chatDeliveryMode).next())
+                        .withKeywords("chat", "order", "translation", "聊天", "順序", "顺序", "補譯", "补译"),
                 toggle(SettingsPage.ADVANCED, "antigravity", c -> c.antigravityEnabled,
                         c -> onOff(c.antigravityEnabled),
                         c -> c.setAntigravityEnabled(!c.antigravityEnabled),
@@ -220,10 +234,6 @@ public final class SettingsCatalog {
                         .withSlider(new SettingEntry.Slider(TIMING_STEPS,
                                 c -> c.batchWindowMs, (c, v) -> c.batchWindowMs = v))
                         .withKeywords("batch", "window", "請求", "请求"),
-                toggle(SettingsPage.ADVANCED, "chat_delivery", c -> c.deliverChatTranslationsInOrder,
-                        c -> StateText.of(c.deliverChatTranslationsInOrder ? STATE_ORDERED : STATE_READY_FIRST),
-                        c -> c.deliverChatTranslationsInOrder = !c.deliverChatTranslationsInOrder,
-                        SettingEntry.SideEffect.NONE),
                 toggle(SettingsPage.ADVANCED, "debug", c -> c.debugTranslationOverlay,
                         c -> onOff(c.debugTranslationOverlay),
                         c -> c.debugTranslationOverlay = !c.debugTranslationOverlay,

@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.config;
 
+import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -39,8 +40,7 @@ public final class TranslatorConfig {
     // translated and nothing sent for it) / 雙語 (BOTH) / 譯文 (TRANSLATION). Configured via the
     // in-game 翻譯設定 screen.
     public DisplayMode chatMode = DisplayMode.BOTH;              // 聊天：原文+翻譯 stacked (3-way)
-    /** Preserve received chat order; false displays each translation as soon as it is ready. */
-    public boolean deliverChatTranslationsInOrder = true;
+    public ChatDeliveryMode chatDeliveryMode = ChatDeliveryMode.ORIGINAL_FIRST;
     /** Explicit outgoing drafts; independent of the language used to read the game. */
     public boolean chatComposerEnabled = false;
     public String chatComposerLanguage = "en";
@@ -380,6 +380,7 @@ public final class TranslatorConfig {
         }
         machineTranslationProvider = MachineTranslationProvider.normalize(machineTranslationProvider);
         if (chatMode == null) chatMode = DisplayMode.BOTH;
+        chatDeliveryMode = ChatDeliveryMode.orDefault(chatDeliveryMode);
         if (tooltipMode == null) tooltipMode = DisplayMode.TRANSLATION;
         if (scoreboardMode == null) scoreboardMode = DisplayMode.TRANSLATION;
         if (nameMode == null) nameMode = DisplayMode.TRANSLATION;

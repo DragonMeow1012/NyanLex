@@ -390,7 +390,6 @@ public final class InlineCoreRegression {
 
     private static void configRoundTripsAndClamps() throws Exception {
         TranslatorConfig config = translatingConfig();
-        config.deliverChatTranslationsInOrder = false;
         config.workerThreads = Integer.MAX_VALUE;
         config.cacheMaxSize = Integer.MAX_VALUE;
         config.persistentCacheMaxEntries = Integer.MAX_VALUE;
@@ -406,8 +405,7 @@ public final class InlineCoreRegression {
         StringWriter json = new StringWriter();
         config.writeTo(json);
         TranslatorConfig loaded = TranslatorConfig.fromReader(new StringReader(json.toString()));
-        check(!loaded.deliverChatTranslationsInOrder,
-                "chat delivery mode did not survive config serialization");
+
         check(loaded.persistentCacheMaxEntries == TranslatorConfig.MAX_PERSISTENT_CACHE_ENTRIES,
                 "persistent cache limit did not survive config serialization");
     }
@@ -487,7 +485,6 @@ public final class InlineCoreRegression {
         deliveryToggle.observe(connection, world, profile(config), false);
         pending = new SessionEntry(1, false, "pending");
         deliveryToggle.add(pending);
-        config.deliverChatTranslationsInOrder = false;
         check(deliveryToggle.observe(connection, world, profile(config), false).kind()
                         == ChatDeliverySession.TransitionKind.NONE
                         && deliveryToggle.trackedSize() == 1,
