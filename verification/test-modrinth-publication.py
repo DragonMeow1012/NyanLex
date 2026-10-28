@@ -48,7 +48,10 @@ class FakeModrinth:
     def multipart(self, route, payload, path, *, filename=None):
         self.events.append("UPLOAD")
         staging = "-uploading-" in filename
-        if self.fail == "UPLOAD" or (self.fail == "FINAL_UPLOAD" and not staging):
+        cache_safe = filename == p.cache_safe_filename(path)
+        if (self.fail == "UPLOAD"
+                or (self.fail == "FINAL_UPLOAD" and not staging)
+                or (self.fail == "CACHE_SAFE_UPLOAD" and cache_safe)):
             raise RuntimeError("Simulated upload failure")
         assert route == f"/version/{self.version['id']}/file"
         assert filename not in {row["filename"] for row in self.version["files"]}
@@ -63,8 +66,11 @@ class FakeModrinth:
 
     def verify_download(self, file, expected):
         assert hashlib.sha512(self.uploads[file["filename"]]).hexdigest() == expected
-        if self.fail == "STALE_CDN" and "-uploading-" not in file["filename"]:
-            raise RuntimeError("Simulated stale CDN content")
+        if self.fail in ("STALE_CDN", "STALE_CDN_CACHE_SAFE_UPLOAD") \
+                and "-uploading-" not in file["filename"]:
+            self.fail = ("CACHE_SAFE_UPLOAD" if self.fail == "STALE_CDN_CACHE_SAFE_UPLOAD"
+                         else "STALE_CDN_HANDLED")
+            raise p.DownloadHashMismatch("Simulated stale CDN content")
         self.downloads_verified.add(expected)
 
 
@@ -102,14 +108,16 @@ class ReplacementTest(unittest.TestCase):
         with patch.object(p, "verify_file_download", side_effect=client.verify_download):
             p.replace_version_file(client, self.target, self.path, client.version, self.backups)
 
-    def assert_replaced(self, client):
+    def assert_replaced(self, client, filename=None):
+        filename = filename or self.path.name
         self.assertEqual(client.version["id"], self.original["id"])
         self.assertEqual(client.version["downloads"], 20)
         self.assertEqual(len(client.version["files"]), 1)
         final = p.remote_file(client.version)
-        self.assertEqual(final["filename"], self.path.name)
+        self.assertEqual(final["filename"], filename)
         self.assertEqual(final["hashes"]["sha512"], p.sha(self.path, "sha512"))
-        self.assertEqual(client.uploads[self.path.name], self.path.read_bytes())
+        self.assertEqual(client.uploads[filename], self.path.read_bytes())
+        self.assertTrue(p.published_file_matches(final, self.path))
 
     def test_same_name_update_keeps_canonical_filename_and_exact_bytes(self):
         client = FakeModrinth(self.original)
@@ -169,15 +177,27 @@ class ReplacementTest(unittest.TestCase):
         self.assert_replaced(client)
         self.assertEqual(client.events.count("UPLOAD"), 2)
 
-    def test_stale_download_keeps_verified_staging_file(self):
+    def test_stale_canonical_download_uses_verified_cache_safe_filename(self):
         client = FakeModrinth(self.original, "STALE_CDN")
-        with self.assertRaises(RuntimeError):
-            self.run_replacement(client)
-        self.assertEqual(len(client.version["files"]), 2)
-        self.assertTrue(any("-uploading-" in row["filename"] for row in client.version["files"]))
-        client.fail = None
         self.run_replacement(client)
-        self.assert_replaced(client)
+        fallback = p.cache_safe_filename(self.path)
+        self.assert_replaced(client, fallback)
+        self.assertNotIn(self.path.name, {row["filename"] for row in client.version["files"]})
+        self.assertFalse(any("-uploading-" in row["filename"] for row in client.version["files"]))
+        self.assertEqual(client.events.count("UPLOAD"), 3)
+
+    def test_cache_safe_upload_failure_keeps_verified_staging_and_resumes(self):
+        client = FakeModrinth(self.original, "STALE_CDN_CACHE_SAFE_UPLOAD")
+        with self.assertRaisesRegex(RuntimeError, "Simulated upload failure"):
+            self.run_replacement(client)
+        self.assertEqual(len(client.version["files"]), 1)
+        self.assertIn("-uploading-", client.version["files"][0]["filename"])
+        self.assertIn(client.version["files"][0]["hashes"]["sha512"], client.downloads_verified)
+
+        client.fail = "STALE_CDN"
+        self.run_replacement(client)
+        self.assert_replaced(client, p.cache_safe_filename(self.path))
+        self.assertFalse(any("-uploading-" in row["filename"] for row in client.version["files"]))
 
     def test_unrelated_remote_file_blocks_mutation(self):
         client = FakeModrinth(self.original)

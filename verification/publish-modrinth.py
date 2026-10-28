@@ -30,6 +30,10 @@ USER_AGENT = "DragonMeow1012/NyanLex-release-publisher/1.0.0"
 TOKEN_PATTERN = re.compile(r"mrp_[A-Za-z0-9]+")
 
 
+class DownloadHashMismatch(RuntimeError):
+    """The Modrinth API metadata and downloaded CDN object disagree."""
+
+
 def sha(path: Path, algorithm: str) -> str:
     digest = hashlib.new(algorithm)
     with path.open("rb") as source:
@@ -193,6 +197,19 @@ def remote_file(version: dict) -> dict:
     return primary[0] if primary else version["files"][0]
 
 
+def cache_safe_filename(path: Path) -> str:
+    """Return a deterministic URL-safe name for a stale same-name CDN object."""
+    return f"{path.stem}-{sha(path, 'sha256')[:12]}{path.suffix}"
+
+
+def published_file_matches(file: dict, path: Path) -> bool:
+    return (
+        file["filename"] in (path.name, cache_safe_filename(path))
+        and file["hashes"]["sha512"] == sha(path, "sha512")
+        and file["size"] == path.stat().st_size
+    )
+
+
 def metadata_matches(version: dict, target) -> bool:
     wanted = payload(target)
     dependency_fields = ("project_id", "version_id", "file_name", "dependency_type")
@@ -205,6 +222,9 @@ def metadata_matches(version: dict, target) -> bool:
         and version.get("game_versions") == wanted["game_versions"]
         and version.get("loaders") == wanted["loaders"]
         and version.get("environment") == wanted["environment"]
+        and version.get("version_type") == wanted["version_type"]
+        and version.get("status") == wanted["status"]
+        and version.get("featured") == wanted["featured"]
         and normalized_dependencies(version.get("dependencies", []))
         == normalized_dependencies(wanted["dependencies"])
         and version.get("changelog") == wanted["changelog"]
@@ -239,12 +259,13 @@ def verify_file_download(file: dict, expected_sha512: str) -> None:
     with urlopen(request, timeout=120) as response:
         digest = hashlib.file_digest(response, "sha512").hexdigest()
     if digest != expected_sha512:
-        raise RuntimeError("Downloaded replacement differs from the verified JAR; temporary file retained")
+        raise DownloadHashMismatch(
+            "Downloaded replacement differs from the verified JAR; temporary file retained")
 
 
 def replace_version_file(client: Modrinth, target, path: Path,
                          remote: dict, backup_root: Path) -> None:
-    """Keep one downloadable JAR while restoring the canonical filename."""
+    """Keep one verified JAR under its canonical or cache-safe filename."""
     route = f"/version/{remote['id']}"
     backup_metadata = backup_root / remote["version_number"] / "metadata.json"
     if backup_metadata.exists():
@@ -259,6 +280,7 @@ def replace_version_file(client: Modrinth, target, path: Path,
     old = remote_file(original)
     old_hash = old["hashes"]["sha512"]
     new_hash = sha(path, "sha512")
+    cache_safe_name = cache_safe_filename(path)
     staging_name = f"{path.stem}-uploading-{sha(path, 'sha256')[:12]}{path.suffix}"
     staging = backup_metadata.parent / "staging" / staging_name
     staging.parent.mkdir(exist_ok=True)
@@ -275,7 +297,12 @@ def replace_version_file(client: Modrinth, target, path: Path,
     staging_hash = sha(staging, "sha512")
     if staging_hash in (old_hash, new_hash):
         raise RuntimeError("Temporary upload must have a distinct file hash")
-    allowed = {(old["filename"], old_hash), (path.name, new_hash), (staging_name, staging_hash)}
+    allowed = {
+        (old["filename"], old_hash),
+        (path.name, new_hash),
+        (cache_safe_name, new_hash),
+        (staging_name, staging_hash),
+    }
 
     def inspect(*, refresh=False):
         if refresh:
@@ -321,11 +348,17 @@ def replace_version_file(client: Modrinth, target, path: Path,
             raise RuntimeError("Replacement file deletion not confirmed")
         return current
 
-    current = inspect()
-    if not find(current, path.name, new_hash):
+    def ensure_verified_staging(current):
         if not find(current, staging_name, staging_hash):
             current = upload(staging, staging_name, staging_hash)
         verify_file_download(find(current, staging_name, staging_hash), staging_hash)
+        return current
+
+    current = inspect()
+    canonical = find(current, path.name, new_hash)
+    cache_safe = find(current, cache_safe_name, new_hash)
+    if not canonical and not cache_safe:
+        current = ensure_verified_staging(current)
         # Remove the old filename/hash before uploading the exact final bytes.
         # This avoids both same-name conflicts and ambiguous same-hash deletion.
         if find(current, old["filename"], old_hash):
@@ -336,16 +369,36 @@ def replace_version_file(client: Modrinth, target, path: Path,
     if not metadata_matches(current, target):
         client.request("PATCH", route, payload=edit_payload(target))
         current = inspect()
-    final_file = find(current, path.name, new_hash)
+    canonical = find(current, path.name, new_hash)
+    cache_safe = find(current, cache_safe_name, new_hash)
+    final_file = cache_safe or canonical
     if not final_file or final_file["size"] != path.stat().st_size or not metadata_matches(current, target):
         raise RuntimeError("Final canonical file or metadata not confirmed; temporary file retained")
-    verify_file_download(final_file, new_hash)
+    try:
+        verify_file_download(final_file, new_hash)
+    except DownloadHashMismatch:
+        if final_file["filename"] != path.name:
+            raise
+        # Modrinth's object path contains the filename. If a previously used
+        # canonical path remains stale, keep a freshly downloaded-and-verified
+        # staging JAR available, remove only the bad path, then publish the
+        # exact bytes under a deterministic content-addressed filename.
+        current = ensure_verified_staging(current)
+        current = remove_file(new_hash)
+        if not find(current, staging_name, staging_hash):
+            raise RuntimeError("Verified staging file was lost during CDN fallback")
+        current = upload(path, cache_safe_name, new_hash)
+        final_file = find(current, cache_safe_name, new_hash)
+        if not final_file or final_file["size"] != path.stat().st_size:
+            raise RuntimeError("Cache-safe replacement upload was not confirmed")
+        verify_file_download(final_file, new_hash)
+    final_name = final_file["filename"]
     for row in current["files"]:
-        if row["filename"] != path.name or row["hashes"]["sha512"] != new_hash:
+        if row["filename"] != final_name or row["hashes"]["sha512"] != new_hash:
             digest = row["hashes"]["sha512"]
             current = remove_file(digest)
     final = inspect()
-    if len(final["files"]) != 1 or not find(final, path.name, new_hash):
+    if len(final["files"]) != 1 or not find(final, final_name, new_hash):
         raise RuntimeError("Replacement file cleanup failed")
     if final["downloads"] < original["downloads"]:
         raise RuntimeError("Version download count decreased")
@@ -363,12 +416,10 @@ def publish(args) -> None:
     operations = []
     for target, path in files:
         remote = by_number.get(version_number(target))
-        local_sha512 = sha(path, "sha512")
         if remote is None:
             action = "create"
         elif (len(remote["files"]) == 1
-              and remote_file(remote)["filename"] == path.name
-              and remote_file(remote)["hashes"]["sha512"] == local_sha512):
+              and published_file_matches(remote_file(remote), path)):
             action = "metadata" if not metadata_matches(remote, target) else "skip"
         else:
             action = "replace"
@@ -443,11 +494,12 @@ def publish(args) -> None:
         raise RuntimeError("Final Modrinth version set does not match the 62-target matrix")
     for target, path in files:
         remote = final_by_number[version_number(target)]
-        if (len(remote["files"]) != 1 or remote_file(remote)["filename"] != path.name
-                or remote_file(remote)["hashes"]["sha512"] != sha(path, "sha512")):
+        if len(remote["files"]) != 1 or not published_file_matches(remote_file(remote), path):
             raise RuntimeError(f"Final Modrinth hash mismatch for {target.key}")
         if not metadata_matches(remote, target):
             raise RuntimeError(f"Final Modrinth metadata mismatch for {target.key}")
+        verify_file_download(remote_file(remote), sha(path, "sha512"))
+    print("MODRINTH_DOWNLOADS_OK", flush=True)
     print(f"MODRINTH_PUBLISH_OK project={PROJECT_ID} versions={len(final)}")
 
 
