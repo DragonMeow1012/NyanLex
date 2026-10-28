@@ -220,7 +220,7 @@ Expand a Minecraft series to download an individual build:
 | OpenRouter | Your API key | Enter its OpenAI-compatible service URL and model in the AI settings. |
 | Ollama / LM Studio | Depends on your local server; may be empty | Connects to an OpenAI-compatible server you run. You provide the model. |
 | Other OpenAI-compatible services | Depends on the service | Custom Base URL, model, rotating API keys and glossary. An empty key sends no `Authorization` header. |
-| ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, reasoning effort and token controls, and uses your account's Codex quota. |
+| ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, reasoning-effort and session-token controls, uses your account's Codex quota, and defaults to `gpt-6-luna` / `low`. |
 
 NyanLex does not install either CLI automatically. Sign-in is completed through the local official tool in a browser or terminal; credentials stay with that tool, while NyanLex calls the already signed-in local process.
 

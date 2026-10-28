@@ -220,7 +220,7 @@
 | OpenRouter | 自备 API Key | 在 AI 设置中填入其 OpenAI 兼容服务网址与模型。 |
 | Ollama／LM Studio | 取决于本地服务；无需验证时可留空 | 连接到你自行运行的 OpenAI 兼容服务器；模型需自行准备。 |
 | 其他 OpenAI 兼容服务 | 取决于服务 | 可自定义 Base URL、模型、轮换 API Key 与术语表。Key 留空时不发送 `Authorization` 标头。 |
-| ChatGPT／Codex | ChatGPT 登录 | 所有列出的版本均支持；需先安装 Codex CLI。可选择模型、推理强度并查看 token，使用账户的 Codex 额度。 |
+| ChatGPT／Codex | ChatGPT 登录 | 所有列出的版本均支持；需先安装 Codex CLI。可选择模型、推理强度并查看会话 token，使用账户的 Codex 额度；默认为 `gpt-6-luna`／`low`。 |
 
 NyanLex 不会自动安装上述 CLI。登录流程由本地官方工具在浏览器或终端中完成；账号凭据由官方工具保存，NyanLex 只调用已登录的本地进程。
 
