@@ -6,7 +6,7 @@ The first release under the NyanLex Translator name brings together bilingual ch
 
 - All **62 JARs** now use the full `NyanLex-Translator` artifact name, while the in-game mod list consistently shows **NyanLex Translator**. The `/nyanlex` command is unchanged.
 - API-key fields are masked by default and include a compact show/hide control. A key can be checked when needed without leaving it exposed on the settings screen.
-- ChatGPT/Codex now defaults to **`gpt-6-luna` with low reasoning effort**. Existing saved provider and model choices are preserved.
+- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session-token usage display. The default is **`gpt-6-luna` with low reasoning effort**; existing saved provider and model choices are preserved.
 - Translation-pack discovery runs on the last Quick setup page, after the target language has been confirmed. Players can still check packs later from Pack settings.
 - On supported modern builds, pressing `G` switches translated books back to the original immediately. Those builds also translate the four visible rows of world signs on the client, preserve the sign's colour and glow, fit long translated rows, and return to the untouched original with `G`.
 - Removed the experimental global text-width projection that could make custom server or mod tooltips overlap. Supported renderers keep ownership of their native measurement and layout.
@@ -73,7 +73,7 @@ Validation covers automated tests, per-target builds, packaged classes and metad
 
 - 全部 **62 個 JAR** 統一使用完整的 `NyanLex-Translator` 成品名稱；遊戲模組列表也一致顯示 **NyanLex Translator**。`/nyanlex` 指令維持不變。
 - API 金鑰欄位預設遮罩，右側提供小型顯示／隱藏控制；需要核對時才顯示，不會長時間暴露在設定畫面。
-- ChatGPT／Codex 預設改為 **`gpt-6-luna`、低推理強度**；既有玩家已儲存的服務與模型選擇不會被覆蓋。
+- 所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設為 **`gpt-6-luna`、低推理強度**，既有玩家已儲存的服務與模型選擇不會被覆蓋。
 - 翻譯包改在快速設定最後一頁、目標語言確認後才偵測；之後仍可從翻譯包設定重新檢查。
 - 在支援的現代版本中，翻譯書本後按 `G` 可立即切回原文；這些版本也會在客戶端翻譯世界中告示牌的四行可見文字，保留染色與發光效果、縮放過長譯文，按 `G` 時回到完全未修改的原文。
 - 移除曾造成部分伺服器／模組自訂 tooltip 文字重疊的全域文字量寬投影；各支援渲染器重新掌管自己的原生量測與排版。

@@ -121,7 +121,7 @@ def changelog(target) -> str:
 
 - October 29 refresh: all 62 release JARs use the full `NyanLex-Translator` artifact name, and the in-game mod-list name remains **NyanLex Translator**. The `/nyanlex` command is unchanged.
 - API-key fields are masked by default and include a small show/hide control, so a key can be checked without leaving it permanently exposed on the settings screen.
-- ChatGPT/Codex starts with `gpt-6-luna` at low reasoning effort. Existing saved provider and model choices are preserved.
+- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session-token usage display. The default is `gpt-6-luna` at low reasoning effort; existing saved provider and model choices are preserved.
 - Translation-pack discovery runs on the final Quick setup page, after the player has confirmed the target language. Packs can still be checked later from Pack settings.
 - On supported modern builds, pressing `G` now switches translated books back to the original immediately. Those builds also translate the four visible rows of world signs on the client, preserve sign colour/glow, fit long translated rows, and return to the untouched original with `G`.
 - Removed the experimental global text-width projection that could make custom server or mod tooltips overlap. Each supported renderer keeps ownership of its native measurement and layout.
