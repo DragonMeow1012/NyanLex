@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.fabric;
 
+import com.dragonmeow.nyanlex.config.SecretText;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.translate.AntigravityCliClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
@@ -15,6 +16,9 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.util.FormattedCharSequence;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -24,6 +28,9 @@ import java.util.Locale;
 public final class AiConfigScreen extends Screen {
     private static final String OPENAI_API_URL = "https://api.openai.com/v1";
     private static final int FIELD_W = 320;
+    private static final int KEY_FIELD_W = 256;
+    private static final int KEY_BUTTON_W = 60;
+    private static final int KEY_GAP = 4;
 
     private final Screen parent;
     private EditBox baseUrlBox;
@@ -35,6 +42,7 @@ public final class AiConfigScreen extends Screen {
     private Button effortButton;
     private Button refreshButton;
     private Button testButton;
+    private boolean keysRevealed;
     private boolean busy;
     private boolean initialCodexRefreshStarted;
     private boolean initialAntigravityRefreshStarted;
@@ -63,6 +71,29 @@ public final class AiConfigScreen extends Screen {
     private int layDone;
     /** When even the tightest gaps do not fit, 測試連接 and 完成 share one row. */
     private boolean tight;
+
+    private final class SecretEditBox extends EditBox {
+        SecretEditBox(int x, int y, Component message) {
+            super(AiConfigScreen.this.font, x, y, KEY_FIELD_W, 20, message);
+        }
+
+        @Override
+        protected MutableComponent createNarrationMessage() {
+            return Component.translatable(keysRevealed
+                    ? "screen.nyanlex.ai.keys.visible"
+                    : "screen.nyanlex.ai.keys.hidden");
+        }
+    }
+
+    private FormattedCharSequence formatSecret(String value, int cursor) {
+        return FormattedCharSequence.forward(keysRevealed ? value : SecretText.mask(value), Style.EMPTY);
+    }
+
+    private Component keyVisibilityLabel() {
+        return Component.translatable(keysRevealed
+                ? "screen.nyanlex.ai.keys.hide"
+                : "screen.nyanlex.ai.keys.show");
+    }
 
     private void computeLayout(TranslatorConfig cfg) {
         java.nio.file.Path file = NyanLexFabric.configFilePath();
@@ -224,11 +255,16 @@ public final class AiConfigScreen extends Screen {
         this.modelBox.setValue(cfg.aiModel == null ? "" : cfg.aiModel);
         this.addRenderableWidget(this.modelBox);
 
-        this.keysBox = new EditBox(this.font, x, keysY, FIELD_W, 20,
-                Component.translatable("screen.nyanlex.ai.keys"));
+        this.keysRevealed = false;
+        this.keysBox = new SecretEditBox(x, keysY, Component.translatable("screen.nyanlex.ai.keys"));
         this.keysBox.setMaxLength(8000);
         this.keysBox.setValue(keysForEndpoint(cfg, cfg.aiBaseUrl));
+        this.keysBox.setFormatter(this::formatSecret);
         this.addRenderableWidget(this.keysBox);
+        this.addRenderableWidget(Button.builder(keyVisibilityLabel(), button -> {
+            this.keysRevealed = !this.keysRevealed;
+            button.setMessage(keyVisibilityLabel());
+        }).bounds(x + KEY_FIELD_W + KEY_GAP, keysY, KEY_BUTTON_W, 20).build());
 
         Button[] button = new Button[1];
         button[0] = Button.builder(Component.translatable("screen.nyanlex.ai.test"), b -> {

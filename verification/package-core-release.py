@@ -4,7 +4,7 @@
 This command never compiles, changes JAR contents, or publishes remotely. The
 authoritative build report and original public ZIP must be pinned by SHA256.
 Run with --help for the required paths; output-root must not already contain
-release/, packaging-report.json, or NyanLex-1.0.0-before-echo-fix.zip.
+release/, packaging-report.json, or NyanLex-Translator-1.0.0-before-echo-fix.zip.
 """
 import argparse
 from collections import Counter
@@ -19,18 +19,18 @@ import time
 import zipfile
 import zlib
 
-from release_matrix import ROOT, VERSION, targets
+from release_matrix import PRODUCT_FILE_STEM, ROOT, VERSION, targets
 
 
 ORIGINAL_SHA256 = "e2ed6a521d38f85d0848f4cb13382fb581241214ec68bc5ed9a2c1c3525ec968"
 LOADER_COUNTS = {"fabric": 37, "neoforge": 23, "forge": 2}
 ARCHIVES = {
-    "NyanLex-1.0.0-Fabric.zip": ("fabric",),
-    "NyanLex-1.0.0-NeoForge.zip": ("neoforge",),
-    "NyanLex-1.0.0-Forge.zip": ("forge",),
-    "NyanLex-1.0.0-all-versions.zip": ("fabric", "neoforge", "forge"),
+    f"{PRODUCT_FILE_STEM}-{VERSION}-Fabric.zip": ("fabric",),
+    f"{PRODUCT_FILE_STEM}-{VERSION}-NeoForge.zip": ("neoforge",),
+    f"{PRODUCT_FILE_STEM}-{VERSION}-Forge.zip": ("forge",),
+    f"{PRODUCT_FILE_STEM}-{VERSION}-all-versions.zip": ("fabric", "neoforge", "forge"),
 }
-BACKUP_NAME = "NyanLex-1.0.0-before-echo-fix.zip"
+BACKUP_NAME = f"{PRODUCT_FILE_STEM}-{VERSION}-before-echo-fix.zip"
 
 
 def require(condition, message):

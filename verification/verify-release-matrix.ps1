@@ -13,6 +13,7 @@ Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $releaseVersion = '1.0.0'
+$artifactBaseName = 'NyanLex-Translator'
 # 18 release targets: 16 projects with their own sources, plus fabric263/neoforge263,
 # which compile the fabric26/neoforge26 sources and resources with platform263.
 $expectedProjects = 18
@@ -107,7 +108,7 @@ function New-FabricRow {
         Loader = 'fabric'
         Label = 'Fabric'
         Minecraft = $Minecraft
-        ArtifactName = "nyanlex-$releaseVersion-Fabric-$Minecraft.jar"
+        ArtifactName = "$artifactBaseName-$releaseVersion-Fabric-$Minecraft.jar"
         MetadataKind = 'fabric'
         MetadataEntry = 'fabric.mod.json'
         MinecraftRange = $Minecraft
@@ -169,7 +170,7 @@ function New-TomlRow {
         Loader = $Loader
         Label = $Label
         Minecraft = $Minecraft
-        ArtifactName = "nyanlex-$releaseVersion-$Label-$Minecraft.jar"
+        ArtifactName = "$artifactBaseName-$releaseVersion-$Label-$Minecraft.jar"
         MetadataKind = 'toml'
         MetadataEntry = $MetadataEntry
         MinecraftRange = $MinecraftRange
@@ -199,7 +200,7 @@ function New-Forge1122Row {
         Loader = 'forge'
         Label = 'Forge'
         Minecraft = '1.12.2'
-        ArtifactName = "nyanlex-$releaseVersion-Forge-1.12.2.jar"
+        ArtifactName = "$artifactBaseName-$releaseVersion-Forge-1.12.2.jar"
         MetadataKind = 'forge1122'
         MetadataEntry = 'mcmod.info'
         MinecraftRange = '1.12.2'
@@ -1115,6 +1116,8 @@ function Assert-FabricMetadata {
     $metadata = (Read-ZipEntryText $Archive 'fabric.mod.json') | ConvertFrom-Json
     Require ([string]$metadata.id -ceq 'nyanlex') `
         "$($Row.Key) has wrong Fabric id"
+    Require ([string]$metadata.name -ceq 'NyanLex Translator') `
+        "$($Row.Key) has wrong Fabric display name: $($metadata.name)"
     Require ([string]$metadata.version -ceq $releaseVersion) `
         "$($Row.Key) has wrong Fabric version: $($metadata.version)"
     Require ([string]$metadata.environment -ceq 'client') `
@@ -1147,6 +1150,8 @@ function Assert-Forge1122Metadata {
     })
     Require ($matches.Count -eq 1) `
         "$($Row.Key) must contain one nyanlex mcmod.info record"
+    Require ([string]$matches[0].name -ceq 'NyanLex Translator') `
+        "$($Row.Key) has wrong Forge display name: $($matches[0].name)"
     Require ([string]$matches[0].version -ceq $releaseVersion) `
         "$($Row.Key) has wrong mcmod.info version: $($matches[0].version)"
     Require ([string]$matches[0].mcversion -ceq $Row.MinecraftRange) `
@@ -1178,6 +1183,9 @@ function Assert-TomlMetadata {
     })
     Require ($mainMods.Count -eq 1) `
         "$($Row.Key) must contain one nyanlex TOML mod block"
+    $displayName = Get-TomlValue $mainMods[0] 'displayName'
+    Require ($displayName -ceq 'NyanLex Translator') `
+        "$($Row.Key) has wrong TOML display name: $displayName"
     $tomlVersion = Get-TomlValue $mainMods[0] 'version'
     Require ($tomlVersion -ceq $Row.TomlVersion) `
         "$($Row.Key) has wrong TOML version: $tomlVersion"

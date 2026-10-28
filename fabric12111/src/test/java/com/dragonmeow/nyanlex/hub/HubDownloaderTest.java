@@ -14,6 +14,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -63,6 +64,7 @@ class HubDownloaderTest {
 
         HubPlan plan = downloader.plan("hypixel.net", null, List.of("somemod", "unknownmod"), "zh-TW", state);
 
+        assertEquals("zh-tw", plan.language());
         // Every installed mod gets its own item now, even one the index has never heard
         // of (2026-10-01: the confirmation screen must list ALL installed mods with a
         // status, including "倉庫沒有" for "unknownmod" — not silently drop it).
@@ -181,6 +183,32 @@ class HubDownloaderTest {
     }
 
     @Test
+    void downloadRejectsAPlanForAnotherLanguageBeforeFetchingAnyFile() throws IOException {
+        Map<String, String> responses = new HashMap<>();
+        responses.put(INDEX_URL, "{\"schema\":1,\"servers\":{},\"modpacks\":{},"
+                + "\"mods\":{\"somemod\":{\"zh-tw\":{\"rows\":1,\"bytes\":30,"
+                + "\"sha256\":\"sha-mod\"}}}}");
+        responses.put(BASE + "/mods/somemod/zh-tw.json",
+                translationFileJson("zh-tw", Map.of("Somemod Item", "某物品")));
+        List<String> requested = new ArrayList<>();
+        HubDownloader downloader = new HubDownloader(new HubRepository(
+                recordingTransport(responses, requested), BASE));
+        Path dir = tempDir();
+        HubDownloadState state = new HubDownloadState(dir.resolve("state.json"));
+        HubPlan plan = downloader.planStartupMods(false, null, List.of("somemod"), "zh-TW", state);
+        HubLocalCache cache = new HubLocalCache(dir, "ja-JP");
+        requested.clear();
+
+        IOException failure = assertThrows(IOException.class, () -> downloader.download(
+                plan, cache, state, (downloaded, total, fileName, completed, totalFiles) -> { }, () -> false));
+
+        assertTrue(failure.getMessage().contains("zh-tw"));
+        assertTrue(failure.getMessage().contains("ja-jp"));
+        assertTrue(requested.isEmpty(), "a mismatched plan must be rejected before any pack file is fetched");
+        assertNull(state.sha256(HubSource.mod("somemod"), "zh-tw"));
+    }
+
+    @Test
     void downloadStopsAtCancellationAndKeepsAlreadyMergedFiles() throws IOException {
         Map<String, String> responses = new HashMap<>();
         responses.put(INDEX_URL, "{\"schema\":1,\"servers\":{\"hypixel.net\":{\"zh-tw\":"
@@ -220,6 +248,7 @@ class HubDownloaderTest {
         HubPlan plan = downloader.planStartupMods(true, null, List.of("somemod"), "zh-TW", state);
 
         assertTrue(plan.isEmpty());
+        assertEquals("zh-tw", plan.language());
     }
 
     @Test

@@ -16,6 +16,8 @@ public final class ForgeChatComposer {
     private GuiTextField chat, draft, search;
     private ChatComposerPanel panel;
     private boolean enterHeld;
+    // Opening chat types into vanilla's box; only a resize keeps the draft box focused.
+    private boolean keepDraftFocus;
     private final Minecraft mc = Minecraft.getInstance();
 
     private boolean active(GuiScreen gui) { return panel != null && gui == screen && mc.currentScreen == screen; }
@@ -24,6 +26,7 @@ public final class ForgeChatComposer {
         if (!HookGuard.enter("event.init")) return;
         try {
             if (!(event.getGui() instanceof GuiChat) || !NyanLexForge.config().chatComposerEnabled) return;
+            keepDraftFocus = screen == event.getGui() && draft != null && draft.isFocused();
             String previous = screen == event.getGui() && draft != null ? draft.getText() : ChatComposerPanel.savedDraft();
             if (panel != null) panel.close();
             panel = null;
@@ -48,7 +51,7 @@ public final class ForgeChatComposer {
                 public void position(double x, double y) {
                     NyanLexForge.config().chatComposerX = x; NyanLexForge.config().chatComposerY = y; NyanLexForge.save();
                 }
-                public void fill(String text) { chat.setText(text); draft.setFocused(false); chat.setFocused(true); }
+                public void fill(String text) { chat.setText(text); focusChat(); }
                 public boolean current() { return mc.currentScreen == screen; }
                 public void execute(Runnable action) { mc.addScheduledTask(action); }
                 public void translate(String source, String target, java.util.function.BiConsumer<String, String> callback) {
@@ -61,12 +64,11 @@ public final class ForgeChatComposer {
             });
             panel.resize(screen.width, screen.height);
             draft = new GuiTextField(9108, mc.fontRenderer, panel.inputX(), panel.inputY(), panel.inputWidth(), 20);
-            search = new GuiTextField(9109, mc.fontRenderer, panel.searchX(), panel.searchY(), panel.inputWidth(), 20);
+            search = new GuiTextField(9109, mc.fontRenderer, panel.searchX(), panel.searchY(), panel.searchWidth(), 20);
             search.setMaxStringLength(64);
             draft.setMaxStringLength(256);
             draft.setText(previous);
-            chat.setFocused(false);
-            draft.setFocused(true);
+            if (keepDraftFocus) focusDraft(); else focusChat();
             enterHeld = false;
         } catch (Throwable guardError) {
             HookGuard.fail("event.init", guardError);
@@ -116,6 +118,16 @@ public final class ForgeChatComposer {
         }
     }
 
+    private void focusChat() {
+        if (draft != null) draft.setFocused(false);
+        if (search != null) search.setFocused(false);
+        chat.setFocused(true);
+    }
+    private void focusDraft() {
+        search.setFocused(false);
+        chat.setFocused(false);
+        draft.setFocused(true);
+    }
     private void focusSearch() {
         chat.setFocused(false);
         search.setFocused(panel.choosing());
@@ -124,14 +136,16 @@ public final class ForgeChatComposer {
 
     private boolean click(double x, double y, int button) {
         if (panel.choosing()) {
-            if (x >= panel.searchX() && x < panel.searchX() + panel.inputWidth()
+            if (x >= panel.searchX() && x < panel.searchX() + panel.searchWidth()
                     && y >= panel.searchY() && y < panel.searchY() + 20) search.mouseClicked((int) x, (int) y, button);
             else panel.click(x, y, button);
             focusSearch(); return true;
         }
-        if (!panel.contains(x, y)) { draft.setFocused(false); chat.setFocused(true); return false; }
-        if (y >= panel.inputY() && y < panel.inputY() + 20) {
-            chat.setFocused(false); draft.setFocused(true); draft.mouseClicked(x, y, button);
+        if (!panel.contains(x, y)) { focusChat(); return false; }
+        if (panel.clearContains(x, y)) {
+            draft.setText(""); focusDraft();
+        } else if (y >= panel.inputY() && y < panel.inputY() + 20) {
+            focusDraft(); draft.mouseClicked(x, y, button);
         } else panel.click(x, y, button);
         if (panel.choosing()) focusSearch();
         return true;
@@ -151,7 +165,7 @@ public final class ForgeChatComposer {
             }
             if (!draft.isFocused() || code == 256) return;
             if (enter) { enterHeld = true; panel.submit(); }
-            else if (code == 258) { draft.setFocused(false); chat.setFocused(true); }
+            else if (code == 258) focusChat();
             else draft.keyPressed(code, event.getScanCode(), event.getModifiers());
             panel.observe(); event.setCanceled(true);
         } catch (Throwable guardError) {

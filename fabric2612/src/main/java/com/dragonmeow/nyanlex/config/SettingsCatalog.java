@@ -128,7 +128,8 @@ public final class SettingsCatalog {
                 KEY_CLEAR_PACKS_CONFIRM_TITLE, KEY_CLEAR_PACKS_CONFIRM_MESSAGE,
                 KEY_CLEAR_PACKS_DONE, KEY_CLEAR_PACKS_NONE,
                 STATE_ON, STATE_OFF, STATE_ORIGINAL, STATE_BOTH, STATE_TRANSLATION, STATE_MACHINE,
-                STATE_AI, STATE_CHAT_ORDERED, STATE_CHAT_READY, STATE_CHAT_ORIGINAL, UNIT_SECONDS));
+                STATE_AI, STATE_CHAT_ORDERED, STATE_CHAT_READY, STATE_CHAT_ORIGINAL,
+                UNIT_SECONDS));
         for (SettingEntry entry : allEntries()) {
             if (!keys.contains(entry.labelKey())) keys.add(entry.labelKey());
             if (!keys.contains(entry.tipKey())) keys.add(entry.tipKey());

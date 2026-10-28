@@ -110,6 +110,12 @@ public final class QuickSetupScreen extends Screen {
             return tag;
         }
 
+        private String targetLanguage(boolean followGame, String tag) {
+            return followGame
+                    ? TranslationLanguages.fromMinecraftCode(minecraft.getLanguageManager().getSelected())
+                    : (tag == null ? NyanLexFabric.config().targetLang : tag);
+        }
+
         @Override
         public String keyName(QuickSetupPanel.KeyAction action) {
             KeyMapping key = switch (action) {
@@ -125,9 +131,7 @@ public final class QuickSetupScreen extends Screen {
         public void applyLanguage(boolean followGame, String tag) {
             TranslatorConfig cfg = NyanLexFabric.config();
             cfg.followGameLanguage = followGame;
-            String target = followGame
-                    ? TranslationLanguages.fromMinecraftCode(minecraft.getLanguageManager().getSelected())
-                    : (tag == null ? cfg.targetLang : tag);
+            String target = targetLanguage(followGame, tag);
             if (NyanLexFabric.service() != null) NyanLexFabric.service().setTargetLang(target);
             else cfg.targetLang = target;
             FabricTextStyle.clearRenderMemo();
@@ -135,19 +139,20 @@ public final class QuickSetupScreen extends Screen {
 
         @Override public void onlineChanged() { NyanLexFabric.clearQuestWidgetPending(); }
 
-        @Override public void startPackDetection() { NyanLexFabric.startPackDetection(); }
+        @Override public void startPackDetection(boolean followGame, String tag) {
+            NyanLexFabric.startPackDetection(targetLanguage(followGame, tag));
+        }
 
         @Override public QuickSetupPanel.PackState packState() { return NyanLexFabric.packState(); }
 
         @Override public QuickSetupPanel.PackInfo packInfo() { return NyanLexFabric.packInfo(); }
 
-        @Override public boolean packDownloading() { return NyanLexFabric.packDownloading(); }
-
-        @Override public void startPackDownload() { NyanLexFabric.startPackDownload(); }
+        @Override public void startPackDownload(boolean followGame, String tag) {
+            NyanLexFabric.startPackDownload(targetLanguage(followGame, tag));
+        }
 
         @Override public void close() { QuickSetupScreen.this.onClose(); }
 
-        @Override public long nowMs() { return System.currentTimeMillis(); }
     }
 
     // ------------------------------------------------------------------ input

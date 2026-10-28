@@ -1,4 +1,5 @@
 package com.dragonmeow.nyanlex.forgelegacy;
+import com.dragonmeow.nyanlex.config.SecretText;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
@@ -15,6 +16,7 @@ final class ForgeAiConfigScreen extends GuiScreen implements ForgeButton.Handler
     private GuiTextField endpoint,model,keys;
     private String status="";
     private boolean refreshed;
+    private boolean keysRevealed;
     ForgeAiConfigScreen(GuiScreen p){
         parent=p;
     }
@@ -28,6 +30,7 @@ final class ForgeAiConfigScreen extends GuiScreen implements ForgeButton.Handler
     private void rebuild(){
         buttons.clear();
         children.clear();
+        keysRevealed=false;
         endpoint=model=keys=null;
         LegacyConfig c=NyanLexForge.config();
         int x=width/2-160;
@@ -52,9 +55,12 @@ final class ForgeAiConfigScreen extends GuiScreen implements ForgeButton.Handler
         model=new GuiTextField(21,fontRenderer,x,y+34,320,20);
         model.setMaxStringLength(128);
         model.setText(s(c.aiModel));
-        keys=new GuiTextField(22,fontRenderer,x,y+68,320,20);
+        keys=new GuiTextField(22,fontRenderer,x,y+68,256,20);
         keys.setMaxStringLength(4096);
         keys.setText(keysFor(c,c.aiBaseUrl));
+        keys.setTextFormatter((value,cursor)->keysRevealed?value:SecretText.mask(value));
+        addButton(new ForgeButton(13,x+260,y+68,60,20,
+                I18n.format("screen.nyanlex.ai.keys.show"),this));
         addButton(new ForgeButton(7,x,y+94,320,20,I18n.format("screen.nyanlex.ai.test") ,this));
     }
     private void codex(int x){
@@ -70,6 +76,12 @@ final class ForgeAiConfigScreen extends GuiScreen implements ForgeButton.Handler
     }
     @Override public void onForgeButton(GuiButton b){
         LegacyConfig c=NyanLexForge.config();
+        if(b.id==13){
+            keysRevealed=!keysRevealed;
+            b.displayString=I18n.format(keysRevealed
+                    ?"screen.nyanlex.ai.keys.hide":"screen.nyanlex.ai.keys.show");
+            return;
+        }
         if(b.id==0){
             saveFields();
             NyanLexForge.save();

@@ -46,7 +46,7 @@ public final class HubDownloader {
      */
     public HubPlan planStartupMods(boolean disabled, ModpackIdentity modpack, List<String> loadedModIds,
             String language, HubDownloadState state) throws IOException {
-        if (disabled) return HubPlan.empty();
+        if (disabled) return HubPlan.empty(language);
         HubIndex index = repository.fetchIndex();
         return planFromIndex(index, null, modpack, loadedModIds, language, state);
     }
@@ -78,7 +78,7 @@ public final class HubDownloader {
                 addItem(items, HubSource.mod(modId), modId, language, state, index.mod(modId, language));
             }
         }
-        return new HubPlan(items);
+        return new HubPlan(language, items);
     }
 
     private void addItem(List<HubPlanItem> items, HubSource source, String label, String language,
@@ -98,19 +98,20 @@ public final class HubDownloader {
      */
     public HubDownloadResult download(HubPlan plan, HubLocalCache cache, HubDownloadState state,
             HubDownloadProgressListener listener, BooleanSupplier cancelled) throws IOException {
+        String language = plan.language();
+        if (!language.equals(cache.language())) {
+            throw new IOException("Translation pack plan language " + language
+                    + " does not match active language " + cache.language());
+        }
         List<HubPlanItem> downloadable = plan.downloadable();
         long totalBytes = plan.totalDownloadBytes();
         long downloadedBytes = 0L;
         HubDownloadResult result = HubDownloadResult.empty();
         int total = downloadable.size();
         int completed = 0;
-        // A4: lock the language once, at the moment the job starts — not re-read from
-        // cache.language() per item. The target language can change (via the settings
-        // screen) while this background download is still running; HubLocalCache#setLanguage
-        // would otherwise make later iterations fetch/record against the NEW language while
-        // `plan`'s items (rows/bytes/sha256) were computed for the OLD one, corrupting that
-        // new language's sha256 throttling ledger with a stale/mismatched value.
-        String language = cache.language();
+        // The plan owns the language its item sizes and hashes describe. Keep using it if
+        // the live target changes mid-download; mergeFromFile will safely reject later files
+        // once the cache has switched rather than fetching or recording them as another language.
         for (HubPlanItem item : downloadable) {
             if (cancelled != null && cancelled.getAsBoolean()) {
                 return result.asCancelled();

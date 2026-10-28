@@ -81,6 +81,7 @@ class TranslationServiceTest {
             s.warmTooltipBatchBackground(texts); // the warm-up path
             s.requestItemLines(texts);
             s.warmBookBatch(texts);
+            s.warmWorldTextBatch(texts);
             s.warmScoreboardBatch(texts);
             s.warmNamesBatch(texts);
             s.translateChatSegmentsAsync(texts, r -> { });
@@ -226,6 +227,46 @@ class TranslationServiceTest {
         assertFalse(s.translateChat("Hello").changed());
         assertFalse(s.wantsChatTranslation("Hello"));
         assertEquals(0, calls.get(), "ORIGINAL_ONLY must not call the translator");
+    }
+
+    @Test
+    void temporaryOriginalToggleOverridesAndRestoresEveryConfiguredBookMode() {
+        for (DisplayMode configured : DisplayMode.values()) {
+            TranslatorConfig cfg = TestConfigs.translating();
+            cfg.bookMode = configured;
+            cfg.aiBook = false;
+            TranslationCache machine = new TranslationCache(
+                    inlineTranslator(new AtomicInteger()), cfg.targetLang, DIRECT, 100);
+            machine.importTranslations(java.util.Map.of("Hello", "你好"));
+            TranslationCache ai = new TranslationCache(
+                    inlineTranslator(new AtomicInteger()), cfg.targetLang, DIRECT, 100);
+            TranslationService service = new TranslationService(cfg, machine, ai);
+
+            TranslationDecision configuredBody = service.translateBook("Hello");
+            boolean translatedMode = configured != DisplayMode.ORIGINAL_ONLY;
+            assertEquals(translatedMode, configuredBody.changed(), configured.name());
+            if (translatedMode) {
+                assertEquals(configured, configuredBody.mode());
+                assertEquals(configured == DisplayMode.BOTH ? "Hello\n你好" : "你好",
+                        configuredBody.renderPlain());
+            } else {
+                assertEquals("Hello", configuredBody.renderPlain());
+            }
+
+            assertTrue(service.toggleShowOriginal());
+            assertTrue(service.isShowOriginalOnly());
+            assertEquals(DisplayMode.ORIGINAL_ONLY, service.bookMode());
+            TranslationDecision originalBody = service.translateBook("Hello");
+            assertFalse(originalBody.changed(), configured.name());
+            assertEquals("Hello", originalBody.renderPlain());
+
+            assertFalse(service.toggleShowOriginal());
+            assertFalse(service.isShowOriginalOnly());
+            assertEquals(configured, service.bookMode());
+            TranslationDecision restoredBody = service.translateBook("Hello");
+            assertEquals(translatedMode, restoredBody.changed(), configured.name());
+            if (translatedMode) assertEquals(configured, restoredBody.mode());
+        }
     }
 
     @Test
@@ -700,6 +741,73 @@ class TranslationServiceTest {
         assertEquals(3, seenContexts.get(1).size(),
                 "the new full sidebar is still available to disambiguate the one miss");
         assertEquals("比特: 21", service.translateScoreboardLine("Bits: 21").translated());
+    }
+
+    @Test
+    void worldSignRowsShareOneAiContextAndKeepStableLineKeys() {
+        List<List<String>> seenBatches = new ArrayList<>();
+        List<List<String>> seenContexts = new ArrayList<>();
+        Translator fake = new Translator() {
+            @Override public TranslationResult translate(String text, String targetLang) {
+                return new TranslationResult("譯：" + text, "en");
+            }
+
+            @Override public List<TranslationResult> translateBatch(
+                    List<String> texts, String targetLang, List<String> surfaceContext) {
+                seenBatches.add(new ArrayList<>(texts));
+                seenContexts.add(surfaceContext == null ? null : new ArrayList<>(surfaceContext));
+                return texts.stream().map(text -> new TranslationResult("譯：" + text, "en")).toList();
+            }
+        };
+        TranslatorConfig cfg = TestConfigs.translating();
+        cfg.aiName = true;
+        cfg.nameMode = DisplayMode.TRANSLATION;
+        TranslationService service = service(cfg, fake, DIRECT);
+
+        List<String> first = List.of(
+                "Welcome to our village", "Travel north to the castle",
+                "Beware the ancient dragon", "Market opens at dawn");
+        service.warmWorldTextBatch(first);
+        assertEquals(List.of(first), seenBatches);
+        assertEquals(List.of(first), seenContexts,
+                "the four independent cache keys still travel as one sign context");
+
+        service.warmWorldTextBatch(List.of(
+                "Welcome to our village", "Travel north to the castle",
+                "The ancient dragon is sleeping", "Market opens at dawn"));
+        assertEquals(2, seenBatches.size());
+        assertEquals(List.of("The ancient dragon is sleeping"), seenBatches.get(1),
+                "editing one sign row must not re-buy the other three rows");
+        assertEquals(List.of(
+                "Welcome to our village", "Travel north to the castle",
+                "The ancient dragon is sleeping", "Market opens at dawn"), seenContexts.get(1));
+    }
+
+    @Test
+    void worldSignWarmIsManualForMachineAndGOverridesNameMode() {
+        TranslatorConfig cfg = TestConfigs.translating();
+        cfg.aiName = false;
+        cfg.nameMode = DisplayMode.TRANSLATION;
+        AtomicInteger calls = new AtomicInteger();
+        TranslationCache machine = new TranslationCache(
+                inlineTranslator(calls), cfg.targetLang, DIRECT, 100);
+        machine.importTranslations(java.util.Map.of("Welcome", "歡迎"));
+        TranslationCache ai = new TranslationCache(
+                inlineTranslator(new AtomicInteger()), cfg.targetLang, DIRECT, 100);
+        TranslationService service = new TranslationService(cfg, machine, ai);
+
+        service.warmWorldTextBatch(List.of("Uncached sign row"));
+        assertEquals(0, calls.get(), "visible signs must not auto-buy machine translation");
+        assertTrue(service.translateUi("Welcome").changed());
+
+        assertTrue(service.toggleShowOriginal());
+        assertEquals(DisplayMode.ORIGINAL_ONLY, service.nameMode());
+        assertFalse(service.translateUi("Welcome").changed(),
+                "G must expose the untouched sign source immediately");
+
+        assertFalse(service.toggleShowOriginal());
+        assertEquals(DisplayMode.TRANSLATION, service.nameMode());
+        assertTrue(service.translateUi("Welcome").changed());
     }
 
     @Test

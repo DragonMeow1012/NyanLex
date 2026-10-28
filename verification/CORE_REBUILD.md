@@ -28,7 +28,7 @@ Preserve the original input JARs before replacing any public release assets.
 The original all-versions ZIP used for this change is:
 
 - GitHub release ID: `402472496`, tag `v1.0.0`.
-- Filename: `NyanLex-1.0.0-all-versions.zip`.
+- Filename: `NyanLex-Translator-1.0.0-all-versions.zip`.
 - Size: `65107793` bytes.
 - SHA-256: `e2ed6a521d38f85d0848f4cb13382fb581241214ec68bc5ed9a2c1c3525ec968`.
 - Its 62 JAR hashes match `verification/release-2026-10-05.json`.
@@ -43,9 +43,9 @@ release tag identifies the current binary's source.
 The input directory must have this layout:
 
 ```text
-original-jars/fabric/26.1.2/nyanlex-1.0.0-Fabric-26.1.2.jar
-original-jars/forge/1.12.2/nyanlex-1.0.0-Forge-1.12.2.jar
-original-jars/neoforge/26.3/nyanlex-1.0.0-NeoForge-26.3.jar
+original-jars/fabric/26.1.2/NyanLex-Translator-1.0.0-Fabric-26.1.2.jar
+original-jars/forge/1.12.2/NyanLex-Translator-1.0.0-Forge-1.12.2.jar
+original-jars/neoforge/26.3/NyanLex-Translator-1.0.0-NeoForge-26.3.jar
 ```
 
 All 62 paths come from `verification/release_matrix.py`. The script verifies

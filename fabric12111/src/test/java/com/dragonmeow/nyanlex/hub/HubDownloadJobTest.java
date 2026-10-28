@@ -46,7 +46,7 @@ class HubDownloadJobTest {
         items.add(new HubPlanItem(HubSource.mod("mod-a"), "mod-a", true, 1, 10, false, "sha-a"));
         items.add(new HubPlanItem(HubSource.mod("mod-b"), "mod-b", true, 1, 20, false, "sha-b"));
         items.add(new HubPlanItem(HubSource.mod("mod-c"), "mod-c", true, 1, 30, false, "sha-c"));
-        return new HubPlan(items);
+        return new HubPlan("zh-TW", items);
     }
 
     @Test

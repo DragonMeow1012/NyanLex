@@ -1,7 +1,7 @@
 # Mirror the MC-agnostic core packages from the root tree (src\) — the canonical,
 # unit-tested copy — into the modern source-compatible loader trees. Run after
 # ANY edit under
-# src\main\java\com\dragonmeow\nyanlex\{cache,config,service,style,translate}.
+# src\main\java\com\dragonmeow\nyanlex\{cache,config,hub,service,style,translate,warmup}.
 #
 #   powershell -ExecutionPolicy Bypass -File .\sync-core.ps1
 #   powershell -ExecutionPolicy Bypass -File .\sync-core.ps1 -Check   # report drift only, change nothing
@@ -23,29 +23,64 @@ $copied = 0
 # Copies a file, or, with -Check, only reports that it would have been copied.
 function Put-File {
     param([string]$Source, [string]$Destination)
-    if (-not $Check) { Copy-Item -Force $Source $Destination }
+    if (-not $Check) {
+        $parent = Split-Path -Parent $Destination
+        if (-not (Test-Path -LiteralPath $parent)) {
+            New-Item -ItemType Directory -Force -Path $parent | Out-Null
+        }
+        Copy-Item -Force $Source $Destination
+    }
 }
+
+function Get-RelativeChildPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Base,
+        [Parameter(Mandatory = $true)][string]$Child
+    )
+    $prefix = $Base.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $Child.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Path is not below expected root: $Child (root $Base)"
+    }
+    return $Child.Substring($prefix.Length)
+}
+
+# Authoring utilities under hub\tool are intentionally repository-only. They are
+# not runtime core and must never be copied into loader source trees.
+function Test-ExcludedCoreChild {
+    param(
+        [Parameter(Mandatory = $true)][string]$Package,
+        [Parameter(Mandatory = $true)][string]$Relative
+    )
+    return $Package -eq 'hub' -and $Relative -like 'tool\*'
+}
+
 foreach ($tree in $trees) {
     foreach ($pkg in $corePackages) {
         $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\$pkg"
         $dstDir = Join-Path $root "$tree\src\main\java\com\dragonmeow\nyanlex\$pkg"
         if (-not (Test-Path $srcDir)) { continue }
-        New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+        if (-not $Check) { New-Item -ItemType Directory -Force -Path $dstDir | Out-Null }
 
-        # Copy new/changed files.
-        foreach ($f in Get-ChildItem $srcDir -Filter *.java) {
-            $dst = Join-Path $dstDir $f.Name
+        # Copy new/changed files while preserving nested core packages.
+        foreach ($f in Get-ChildItem $srcDir -Filter *.java -File -Recurse) {
+            $insidePackage = Get-RelativeChildPath $srcDir $f.FullName
+            if (Test-ExcludedCoreChild -Package $pkg -Relative $insidePackage) { continue }
+            $dst = Join-Path $dstDir $insidePackage
             if (-not (Test-Path $dst) -or
                 (Get-FileHash $f.FullName -Algorithm MD5).Hash -ne (Get-FileHash $dst -Algorithm MD5).Hash) {
                 Put-File $f.FullName $dst
-                Write-Output "sync: $tree\$pkg\$($f.Name)"
+                Write-Output "sync: $tree\$pkg\$insidePackage"
                 $copied++
             }
         }
         # Flag strays that exist only in a tree (never delete automatically).
-        foreach ($f in Get-ChildItem $dstDir -Filter *.java) {
-            if (-not (Test-Path (Join-Path $srcDir $f.Name))) {
-                Write-Warning "only in ${tree}: $pkg\$($f.Name) (not in root core - review manually)"
+        if (Test-Path -LiteralPath $dstDir) {
+            foreach ($f in Get-ChildItem $dstDir -Filter *.java -File -Recurse) {
+                $insidePackage = Get-RelativeChildPath $dstDir $f.FullName
+                if (Test-ExcludedCoreChild -Package $pkg -Relative $insidePackage) { continue }
+                if (-not (Test-Path (Join-Path $srcDir $insidePackage))) {
+                    Write-Warning "only in ${tree}: $pkg\$insidePackage (not in root core - review manually)"
+                }
             }
         }
     }
@@ -105,32 +140,44 @@ foreach ($pkg in $corePackages) {
     $srcDir = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\$pkg"
     $dstDir = Join-Path $fabric1171Base $pkg
     if (-not (Test-Path $srcDir)) { continue }
-    New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+    if (-not $Check) { New-Item -ItemType Directory -Force -Path $dstDir | Out-Null }
 
-    foreach ($f in Get-ChildItem $srcDir -Filter *.java) {
-        $relative = "$pkg\$($f.Name)"
+    foreach ($f in Get-ChildItem $srcDir -Filter *.java -File -Recurse) {
+        $insidePackage = Get-RelativeChildPath $srcDir $f.FullName
+        if (Test-ExcludedCoreChild -Package $pkg -Relative $insidePackage) { continue }
+        $relative = "$pkg\$insidePackage"
         if ($fabric1171Excluded -contains $relative) { continue }
 
         $content = Get-Content -LiteralPath $f.FullName -Raw -Encoding UTF8
         $content = Convert-Fabric1171Core $relative $content
-        $dst = Join-Path $dstDir $f.Name
+        $dst = Join-Path $dstDir $insidePackage
         $existing = if (Test-Path $dst) {
             Get-Content -LiteralPath $dst -Raw -Encoding UTF8
         } else {
             $null
         }
         if ($null -eq $existing -or $existing -cne $content) {
-            if (-not $Check) { [System.IO.File]::WriteAllText($dst, $content, $utf8NoBom) }
+            if (-not $Check) {
+                $parent = Split-Path -Parent $dst
+                if (-not (Test-Path -LiteralPath $parent)) {
+                    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+                }
+                [System.IO.File]::WriteAllText($dst, $content, $utf8NoBom)
+            }
             Write-Output "sync: fabric1171\$relative"
             $copied++
         }
     }
 
-    foreach ($f in Get-ChildItem $dstDir -Filter *.java) {
-        $relative = "$pkg\$($f.Name)"
-        if ($fabric1171Excluded -contains $relative) { continue }
-        if (-not (Test-Path (Join-Path $srcDir $f.Name))) {
-            Write-Warning "only in fabric1171: $relative (not in root core - review manually)"
+    if (Test-Path -LiteralPath $dstDir) {
+        foreach ($f in Get-ChildItem $dstDir -Filter *.java -File -Recurse) {
+            $insidePackage = Get-RelativeChildPath $dstDir $f.FullName
+            if (Test-ExcludedCoreChild -Package $pkg -Relative $insidePackage) { continue }
+            $relative = "$pkg\$insidePackage"
+            if ($fabric1171Excluded -contains $relative) { continue }
+            if (-not (Test-Path (Join-Path $srcDir $insidePackage))) {
+                Write-Warning "only in fabric1171: $relative (not in root core - review manually)"
+            }
         }
     }
 }
@@ -159,7 +206,6 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     # either, or fabric12111's test compile fails on the missing main-source classes.
     if ($relative -like 'hub\tool\*') { continue }
     $dst = Join-Path $testDstDir $relative
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
     if (-not (Test-Path $dst) -or
         (Get-FileHash $f.FullName -Algorithm MD5).Hash -ne (Get-FileHash $dst -Algorithm MD5).Hash) {
         Put-File $f.FullName $dst
@@ -171,7 +217,6 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
 # (DebugErrorLog is intentionally not in this list; see the Java 8 block below.)
 foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122', 'forge1132')) {
     $sharedDestination = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\nyanlex\translate"
-    New-Item -ItemType Directory -Force -Path $sharedDestination | Out-Null
     foreach ($sharedName in @('ScreenTranslationCapture.java', 'TranslationFile.java', 'TranslationFileDialog.java',
             'HookHealth.java', 'HookGuard.java', 'ChatComposerPanel.java',
             'MachineTranslationGate.java', 'RequestsPausedException.java', 'RequestGate.java',
@@ -182,6 +227,19 @@ foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122
             Put-File $sharedSource $sharedFile
             $copied++
         }
+    }
+}
+# SecretText is intentionally Java 8-compatible and is the canonical masking helper for every
+# API-key screen, including the five legacy loaders whose other config classes are platform ports.
+$secretSource = Join-Path $root 'src\main\java\com\dragonmeow\nyanlex\config\SecretText.java'
+foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122', 'forge1132')) {
+    $secretDestination = Join-Path $root "$legacyTarget\src\main\java\com\dragonmeow\nyanlex\config"
+    $secretFile = Join-Path $secretDestination 'SecretText.java'
+    if (-not (Test-Path $secretFile) -or
+        (Get-FileHash $secretSource).Hash -ne (Get-FileHash $secretFile).Hash) {
+        Put-File $secretSource $secretFile
+        Write-Output "sync: $legacyTarget\config\SecretText.java (java8)"
+        $copied++
     }
 }
 # The Java 8 DebugErrorLog is a hand-maintained trimmed port (the root one needs Java 11+ APIs and

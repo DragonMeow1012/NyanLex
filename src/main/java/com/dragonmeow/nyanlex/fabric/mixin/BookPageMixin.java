@@ -16,6 +16,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -32,9 +33,9 @@ import java.util.Optional;
  * {@code this.font.split(this.bookAccess.getPage(currentPage), 114)} and caches the
  * result, only re-splitting when {@code cachedPage != currentPage}. So we:</p>
  * <ol>
- *   <li>{@link #nyanlex$forceResplit} forces a re-split every frame while a book
- *       surface is on, so an async translation that arrives a frame or two later is
- *       shown without needing a page flip; and</li>
+ *   <li>{@link #nyanlex$forceResplit} forces a re-split every translated frame, plus
+ *       once whenever G changes the effective mode, so async results and switches back
+ *       to the original cannot leave stale cached page lines behind; and</li>
  *   <li>{@link #nyanlex$translateBookPage} redirects the {@code Font.split} call to
  *       translate the page {@code FormattedText} first (keeps Minecraft's line-wrapping
  *       and the original styling).</li>
@@ -49,14 +50,21 @@ public abstract class BookPageMixin {
     @Shadow
     protected int cachedPage;
 
+    @Unique
+    private DisplayMode nyanlex$lastBookMode;
+
     @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V", at = @At("HEAD"))
     private void nyanlex$forceResplit(GuiGraphics g, int mouseX, int mouseY, float partial, CallbackInfo ci) {
         if (!HookGuard.enter("BookPage.forceResplit")) return;
         try {
             TranslationService service = NyanLexFabric.service();
-            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) {
-                this.cachedPage = -1; // re-split each frame so a late translation appears in place
+            DisplayMode currentMode = service == null
+                    ? DisplayMode.ORIGINAL_ONLY : service.bookMode();
+            if (currentMode != DisplayMode.ORIGINAL_ONLY
+                    || currentMode != this.nyanlex$lastBookMode) {
+                this.cachedPage = -1;
             }
+            this.nyanlex$lastBookMode = currentMode;
         } catch (Throwable guardError) {
             HookGuard.fail("BookPage.forceResplit", guardError);
         }

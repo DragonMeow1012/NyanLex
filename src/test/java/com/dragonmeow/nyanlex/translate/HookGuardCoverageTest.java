@@ -30,6 +30,8 @@ class HookGuardCoverageTest {
             Pattern.compile("^\\s*@(Inject|Redirect|ModifyVariable|ModifyArg)\\b", Pattern.MULTILINE);
     private static final Pattern GUARD_ID =
             Pattern.compile("HookGuard\\.(?:enter|enterSticky|run|runSticky|call)\\(\\s*\"([^\"]+)\"");
+    private static final Pattern INLINE_GUARD_ID =
+            Pattern.compile("HookGuard\\.(?:enter|enterSticky)\\(\\s*\"([^\"]+)\"");
     private static final Pattern FAIL_ID = Pattern.compile("HookGuard\\.fail\\(\\s*\"([^\"]+)\"");
 
     private static String read(Path p) throws IOException {
@@ -57,11 +59,15 @@ class HookGuardCoverageTest {
             Matcher enters = GUARD_ID.matcher(src);
             int guarded = 0;
             while (enters.find()) guarded++;
+            Matcher inlineGuards = INLINE_GUARD_ID.matcher(src);
+            int inlineGuarded = 0;
+            while (inlineGuards.find()) inlineGuarded++;
             Matcher fails = FAIL_ID.matcher(src);
             int caught = 0;
             while (fails.find()) caught++;
             assertEquals(annotated, guarded, file.getFileName() + ": handlers without HookGuard.enter");
-            assertEquals(annotated, caught, file.getFileName() + ": handlers without HookGuard.fail");
+            assertEquals(inlineGuarded, caught,
+                    file.getFileName() + ": inline handlers without HookGuard.fail");
             handlers += annotated;
         }
         assertTrue(handlers >= 20, "suspiciously few handlers found: " + handlers);

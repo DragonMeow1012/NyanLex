@@ -145,6 +145,9 @@ public final class InlineForgeGlueRegression {
 
     private static void configDefaultsAndRoundTrip() {
         Gson gson = new Gson();
+        LegacyConfig defaults = new LegacyConfig();
+        check("gpt-6-luna".equals(defaults.codexModel), "Codex model default is not gpt-6-luna");
+        check("low".equals(defaults.codexReasoningEffort), "Codex effort default is not low");
         LegacyConfig missingField = LegacyConfig.normalizeLoaded(
                 gson.fromJson("{\"enabled\":true,\"deliverChatTranslationsInOrder\":true}", LegacyConfig.class));
         check(missingField != null && missingField.enabled, "old config did not load");

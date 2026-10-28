@@ -40,6 +40,29 @@ class ChatComposerPanelTest {
         panel.resize(800, 600);
         assertEquals(484, panel.inputX());
     }
+    @Test void clearButtonSitsRightOfDraftAndOnlyWhenDraftHasText() {
+        Host host = new Host();
+        ChatComposerPanel panel = new ChatComposerPanel(host);
+        panel.resize(800, 600);
+        int boxEnd = panel.inputX() + panel.inputWidth();
+        assertTrue(panel.clearX() > boxEnd);
+        assertEquals(panel.inputX() + panel.searchWidth(), panel.clearX() + 14);
+        assertTrue(panel.clearContains(panel.clearX() + 7, panel.inputY() + 10));
+        assertFalse(panel.clearContains(boxEnd - 1, panel.inputY() + 10));
+        assertFalse(panel.clearContains(panel.clearX() + 7, panel.inputY() + 20));
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        ChatComposerPanel.Canvas canvas = new ChatComposerPanel.Canvas() {
+            public void fill(int x, int y, int w, int h, int color) {}
+            public void text(String text, int x, int y, int color) { labels.add(text); }
+        };
+        panel.render(canvas);
+        assertTrue(labels.contains("×"));
+        host.draft = "";
+        labels.clear();
+        panel.render(canvas);
+        assertFalse(labels.contains("×"));
+        assertFalse(panel.clearContains(panel.clearX() + 7, panel.inputY() + 10));
+    }
     static final class Host implements ChatComposerPanel.Host {
         String draft = "等我一下", chat = "", language = "en";
         boolean current = true;

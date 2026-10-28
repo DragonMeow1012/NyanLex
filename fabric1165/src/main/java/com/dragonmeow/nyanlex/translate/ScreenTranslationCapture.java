@@ -6,12 +6,17 @@ import java.util.List;
 
 /** One bounded, explicit scan of the current screen's original render inputs. */
 public final class ScreenTranslationCapture {
-    private static final int MAX_SOURCES = 512;
+    private static final int MAX_REQUEST_SOURCES = 512;
+    private static final int MAX_ENTRY_CHARACTERS = 16_384;
+    private static final int MAX_REQUEST_CHARACTERS = 256 * 1024;
+
     private Object screen;
-    private final LinkedHashSet<String> sources = new LinkedHashSet<>();
+    private final LinkedHashSet<String> requestSources = new LinkedHashSet<>();
+    private int requestCharacters;
 
     public void begin(Object currentScreen) {
-        sources.clear();
+        requestSources.clear();
+        requestCharacters = 0;
         screen = currentScreen;
     }
 
@@ -19,21 +24,29 @@ public final class ScreenTranslationCapture {
         return screen != null && screen == currentScreen;
     }
 
-    public void record(Object currentScreen, String source) {
-        if (active(currentScreen) && source != null && !source.trim().isEmpty()
-                && source.length() <= 16384 && sources.size() < MAX_SOURCES) {
-            sources.add(source);
-        }
+    /** Records one backend translation key. Duplicate keys consume no additional budget. */
+    public void recordRequest(Object currentScreen, String requestSource) {
+        if (!active(currentScreen) || !acceptable(requestSource)
+                || requestSources.contains(requestSource)
+                || requestSources.size() >= MAX_REQUEST_SOURCES
+                || requestCharacters > MAX_REQUEST_CHARACTERS - requestSource.length()) return;
+        requestSources.add(requestSource);
+        requestCharacters += requestSource.length();
     }
 
     public List<String> finish(Object currentScreen) {
         if (!active(currentScreen)) return null;
-        List<String> result = new ArrayList<>(sources);
+        List<String> result = new ArrayList<>(requestSources);
         begin(null);
         return result;
     }
 
     public void cancelUnless(Object currentScreen) {
         if (screen != currentScreen) begin(null);
+    }
+
+    private static boolean acceptable(String text) {
+        return text != null && !text.trim().isEmpty()
+                && text.length() <= MAX_ENTRY_CHARACTERS;
     }
 }

@@ -789,14 +789,14 @@ public final class LegacyTranslatorMod implements ClientModInitializer {
     private static void beginScreenCapture(Minecraft mc) {
         if (mc == null || mc.screen == null || !screenTranslationAllowed(mc.screen)) return;
         SCREEN_CAPTURE.begin(mc.screen);
-        SCREEN_CAPTURE.record(mc.screen, mc.screen.getTitle().getString());
+        SCREEN_CAPTURE.recordRequest(mc.screen, mc.screen.getTitle().getString());
     }
 
     private static boolean captureScreenText(String source) {
         Minecraft mc = Minecraft.getInstance();
         if (INTERNAL_RENDER.get() || mc == null || !SCREEN_CAPTURE.active(mc.screen)
                 || !renderingCurrentScreen(mc)) return false;
-        SCREEN_CAPTURE.record(mc.screen, source);
+        SCREEN_CAPTURE.recordRequest(mc.screen, source);
         return true;
     }
 

@@ -16,6 +16,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -30,9 +31,10 @@ import java.util.Optional;
  *
  * <p>{@code BookViewScreen.visitText} lays the current page out via
  * {@code this.font.split(page, 114)} and caches it, only re-splitting when
- * {@code cachedPage != currentPage}. So we (1) force a re-split each frame while a book surface is
- * on, so a late async translation appears without a page flip, and (2) redirect the {@code Font.split}
- * call to translate the page {@code FormattedText} first (keeping Minecraft's wrapping + styling).</p>
+ * {@code cachedPage != currentPage}. So we (1) force a re-split every translated frame and once
+ * whenever G changes the effective mode, so neither async results nor the original view can leave
+ * stale cached lines behind, and (2) redirect the {@code Font.split} call to translate the page
+ * {@code FormattedText} first (keeping Minecraft's wrapping + styling).</p>
  */
 @Mixin(BookViewScreen.class)
 public abstract class BookPageMixin {
@@ -40,14 +42,21 @@ public abstract class BookPageMixin {
     @Shadow
     protected int cachedPage;
 
+    @Unique
+    private DisplayMode nyanlex$lastBookMode;
+
     @Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V", at = @At("HEAD"))
     private void nyanlex$forceResplit(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial, CallbackInfo ci) {
         if (!HookGuard.enter("BookPage.forceResplit")) return;
         try {
             TranslationService service = NyanLexFabric26.service();
-            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) {
-                this.cachedPage = -1; // re-split each frame so a late translation appears in place
+            DisplayMode currentMode = service == null
+                    ? DisplayMode.ORIGINAL_ONLY : service.bookMode();
+            if (currentMode != DisplayMode.ORIGINAL_ONLY
+                    || currentMode != this.nyanlex$lastBookMode) {
+                this.cachedPage = -1;
             }
+            this.nyanlex$lastBookMode = currentMode;
         } catch (Throwable guardError) {
             HookGuard.fail("BookPage.forceResplit", guardError);
         }

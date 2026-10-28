@@ -1,0 +1,14 @@
+{
+  "com/dragonmeow/nyanlex/neoforge/mixin/SignRendererLayoutMixin.java": [
+    {
+      "from": "\nimport net.minecraft.client.renderer.blockentity.SignRenderer;\n",
+      "to": "\nimport net.minecraft.client.renderer.blockentity.AbstractSignRenderer;\n",
+      "count": 1
+    },
+    {
+      "from": "\n/** 1.20–1.21.3 renderer profile; all drawing remains owned by vanilla. */\n@Mixin(SignRenderer.class)\n",
+      "to": "\n/** 1.21.4–1.21.8 abstract renderer profile; all drawing remains owned by vanilla. */\n@Mixin(AbstractSignRenderer.class)\n",
+      "count": 1
+    }
+  ]
+}

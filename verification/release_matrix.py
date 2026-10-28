@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "1.0.0"
+PRODUCT_FILE_STEM = "NyanLex-Translator"
 
 
 @dataclass(frozen=True)
@@ -30,7 +31,7 @@ class Target:
 
     @property
     def filename(self):
-        return f"nyanlex-{VERSION}-{self.label}-{self.minecraft}.jar"
+        return f"{PRODUCT_FILE_STEM}-{VERSION}-{self.label}-{self.minecraft}.jar"
 
     @property
     def build_dir(self):

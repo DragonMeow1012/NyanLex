@@ -2387,6 +2387,7 @@ public final class TranslationService {
         noteHud(HudSurface.NAME_TAG, text);
         return lookup(text, config.nameMode, config.aiName, false, false, false, config.aiName);
     }
+
     public TranslationDecision translateBossBar(String text) {
         noteHud(HudSurface.BOSS_BAR, text);
         return lookup(text, config.bossBarMode, config.aiBossBar, false, false, false,
@@ -2716,6 +2717,14 @@ public final class TranslationService {
         // Manual under the machine engine (see translateBook): reading a book sends nothing.
         if (!config.aiBook) return;
         warmMasked(sources, true, config.bookMode, config.aiBook);
+    }
+
+    /** Warm the four semantic rows of one world sign as a single context-aware AI batch.
+     * Machine translation remains manual: visible signs are collected by {@link
+     * #translateUi(String)} and bought only by the world-text hotkey. */
+    public void warmWorldTextBatch(List<String> sources) {
+        if (!config.aiName) return;
+        warmMasked(sources, true, config.nameMode, config.aiName);
     }
 
     /** Warm stable per-row scoreboard keys together. The complete sidebar remains AI

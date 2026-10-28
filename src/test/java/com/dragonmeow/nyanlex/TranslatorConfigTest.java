@@ -42,6 +42,10 @@ class TranslatorConfigTest {
         assertEquals("auto", cfg.sourceLang);
         assertEquals(MachineTranslationProvider.GOOGLE.id(), cfg.machineTranslationProvider);
         assertEquals("gemini-3.1-flash-lite", cfg.aiModel);
+        assertEquals("gpt-6-luna", TranslatorConfig.DEFAULT_CODEX_MODEL);
+        assertEquals("low", TranslatorConfig.DEFAULT_CODEX_REASONING_EFFORT);
+        assertEquals(TranslatorConfig.DEFAULT_CODEX_MODEL, cfg.codexModel);
+        assertEquals(TranslatorConfig.DEFAULT_CODEX_REASONING_EFFORT, cfg.codexReasoningEffort);
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");
         assertEquals(DisplayMode.TRANSLATION, cfg.tooltipMode, "其他表面預設 只有翻譯");
         assertEquals(DisplayMode.TRANSLATION, cfg.screenTextMode, "新安裝：介面文字預設翻譯");

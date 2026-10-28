@@ -26,7 +26,7 @@ if (spec == null) throw new GradleException("Unknown NeoForge target ${target}; 
 layout.buildDirectory = file("build/${target}")
 version = project.mod_version
 group = project.maven_group
-base { archivesName = 'nyanlex' }
+base { archivesName = 'NyanLex-Translator' }
 
 repositories { mavenCentral() }
 def neoGradleTarget = target in ['1.20.2', '1.20.3', '1.20.5']
@@ -64,7 +64,7 @@ def sourceOverrides = [:]
 def overrideFile = file("overrides/${spec.profile}.json")
 if (overrideFile.exists()) sourceOverrides.putAll(new JsonSlurper().parse(overrideFile))
 def patches = [:]
-def patchFiles = (spec.patchProfiles ?: [spec.profile]).collect { file("patches/${it}.json") }
+def patchFiles = ([spec.profile] + (spec.patchProfiles ?: [])).unique().collect { file("patches/${it}.json") }
 patchFiles.add(file("patches/${target}.json"))
 patchFiles.findAll { it.exists() }.each { patchFile ->
     new JsonSlurper().parse(patchFile).each { path, edits ->

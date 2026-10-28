@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.legacy;
 
+import com.dragonmeow.nyanlex.config.SecretText;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -30,6 +31,7 @@ final class LegacyAiConfigScreen extends Screen {
     private boolean busy;
     private boolean initialRefreshStarted;
     private boolean missingPromptShown;
+    private boolean keysRevealed;
     private String status = "";
 
     LegacyAiConfigScreen(Screen parent) {
@@ -38,6 +40,7 @@ final class LegacyAiConfigScreen extends Screen {
     }
 
     @Override protected void init() {
+        keysRevealed = false;
         LegacyConfig cfg = LegacyTranslatorMod.config();
         int x = width / 2 - FIELD_W / 2;
         boolean openAiPanel = isOpenAiProvider(cfg);
@@ -101,11 +104,28 @@ final class LegacyAiConfigScreen extends Screen {
         modelBox.setMaxLength(128);
         modelBox.setValue(safe(cfg.aiModel));
         addButton(modelBox);
-        keysBox = new EditBox(font, x, keysY, FIELD_W, 20,
-                new TranslatableComponent("screen.nyanlex.ai.keys"));
+        keysBox = new EditBox(font, x, keysY, 256, 20,
+                new TranslatableComponent("screen.nyanlex.ai.keys")) {
+            @Override protected net.minecraft.network.chat.MutableComponent createNarrationMessage() {
+                return new TranslatableComponent(keysRevealed
+                        ? "screen.nyanlex.ai.keys.visible"
+                        : "screen.nyanlex.ai.keys.hidden");
+            }
+        };
         keysBox.setMaxLength(8000);
         keysBox.setValue(keysForEndpoint(cfg, cfg.aiBaseUrl));
+        keysBox.setFormatter((value, cursor) -> keysRevealed
+                ? net.minecraft.util.FormattedCharSequence.forward(value, net.minecraft.network.chat.Style.EMPTY)
+                : net.minecraft.util.FormattedCharSequence.forward(SecretText.mask(value),
+                        net.minecraft.network.chat.Style.EMPTY));
         addButton(keysBox);
+        addButton(new Button(x + 260, keysY, 60, 20,
+                new TranslatableComponent("screen.nyanlex.ai.keys.show"), button -> {
+            keysRevealed = !keysRevealed;
+            button.setMessage(new TranslatableComponent(keysRevealed
+                    ? "screen.nyanlex.ai.keys.hide"
+                    : "screen.nyanlex.ai.keys.show"));
+        }));
         testButton = new Button(x, testY, FIELD_W, 20,
                 new TranslatableComponent("screen.nyanlex.ai.test"), button -> {
             saveApiFields();

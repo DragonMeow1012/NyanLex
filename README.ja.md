@@ -92,7 +92,7 @@ Mod の UI は Minecraft クライアントの言語に従い、英語・日本�
 
 | Fabric · 37 | NeoForge · 23 | Forge · 2 | 全バージョン |
 | --- | --- | --- | --- |
-| [ダウンロード Fabric 版パック](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Fabric.zip) | [ダウンロード NeoForge 版パック](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-NeoForge.zip) | [ダウンロード Forge 版パック](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-Forge.zip) | [ダウンロード 全バージョン](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-1.0.0-all-versions.zip) |
+| [ダウンロード Fabric 版パック](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric.zip) | [ダウンロード NeoForge 版パック](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge.zip) | [ダウンロード Forge 版パック](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Forge.zip) | [ダウンロード 全バージョン](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-all-versions.zip) |
 
 Minecraft の系列を展開して個別版をダウンロード：
 
@@ -101,10 +101,10 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 | Minecraft | Fabric | NeoForge | Forge | Java |
 | --- | --- | --- | --- | ---: |
-| 1.12.2 | — | — | [ダウンロード Forge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.12.2.jar) | 8 |
-| 1.13.2 | — | — | [ダウンロード Forge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Forge-1.13.2.jar) | 8 |
-| 1.14.4 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.14.4.jar) | — | — | 8 |
-| 1.15.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.15.2.jar) | — | — | 8 |
+| 1.12.2 | — | — | [ダウンロード Forge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Forge-1.12.2.jar) | 8 |
+| 1.13.2 | — | — | [ダウンロード Forge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Forge-1.13.2.jar) | 8 |
+| 1.14.4 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.14.4.jar) | — | — | 8 |
+| 1.15.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.15.2.jar) | — | — | 8 |
 
 </details>
 
@@ -113,7 +113,7 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 | Minecraft | Fabric | NeoForge | Forge | Java |
 | --- | --- | --- | --- | ---: |
-| 1.16.5 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.16.5.jar) | — | — | 8 |
+| 1.16.5 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.16.5.jar) | — | — | 8 |
 
 </details>
 
@@ -122,8 +122,8 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 | Minecraft | Fabric | NeoForge | Forge | Java |
 | --- | --- | --- | --- | ---: |
-| 1.17 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.jar) | — | — | 16 |
-| 1.17.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.17.1.jar) | — | — | 16 |
+| 1.17 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.17.jar) | — | — | 16 |
+| 1.17.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.17.1.jar) | — | — | 16 |
 
 </details>
 
@@ -132,9 +132,9 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 | Minecraft | Fabric | NeoForge | Forge | Java |
 | --- | --- | --- | --- | ---: |
-| 1.18 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.jar) | — | — | 17 |
-| 1.18.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.1.jar) | — | — | 17 |
-| 1.18.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.18.2.jar) | — | — | 17 |
+| 1.18 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.18.jar) | — | — | 17 |
+| 1.18.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.18.1.jar) | — | — | 17 |
+| 1.18.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.18.2.jar) | — | — | 17 |
 
 </details>
 
@@ -143,11 +143,11 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 | Minecraft | Fabric | NeoForge | Forge | Java |
 | --- | --- | --- | --- | ---: |
-| 1.19 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.jar) | — | — | 17 |
-| 1.19.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.1.jar) | — | — | 17 |
-| 1.19.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.2.jar) | — | — | 17 |
-| 1.19.3 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.3.jar) | — | — | 17 |
-| 1.19.4 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.19.4.jar) | — | — | 17 |
+| 1.19 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.19.jar) | — | — | 17 |
+| 1.19.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.19.1.jar) | — | — | 17 |
+| 1.19.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.19.2.jar) | — | — | 17 |
+| 1.19.3 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.19.3.jar) | — | — | 17 |
+| 1.19.4 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.19.4.jar) | — | — | 17 |
 
 </details>
 
@@ -156,13 +156,13 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 | Minecraft | Fabric | NeoForge | Forge | Java |
 | --- | --- | --- | --- | ---: |
-| 1.20 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.jar) | — | — | 17 |
-| 1.20.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.1.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.1.jar) | — | 17 |
-| 1.20.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.2.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.2.jar) | — | 17 |
-| 1.20.3 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.3.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.3.jar) | — | 17 |
-| 1.20.4 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.4.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.4.jar) | — | 17 |
-| 1.20.5 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.5.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.5.jar) | — | 21 |
-| 1.20.6 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.20.6.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.20.6.jar) | — | 21 |
+| 1.20 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.20.jar) | — | — | 17 |
+| 1.20.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.20.1.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.20.1.jar) | — | 17 |
+| 1.20.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.20.2.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.20.2.jar) | — | 17 |
+| 1.20.3 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.20.3.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.20.3.jar) | — | 17 |
+| 1.20.4 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.20.4.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.20.4.jar) | — | 17 |
+| 1.20.5 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.20.5.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.20.5.jar) | — | 21 |
+| 1.20.6 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.20.6.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.20.6.jar) | — | 21 |
 
 </details>
 
@@ -171,18 +171,18 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 | Minecraft | Fabric | NeoForge | Forge | Java |
 | --- | --- | --- | --- | ---: |
-| 1.21 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.jar) | — | 21 |
-| 1.21.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.1.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.1.jar) | — | 21 |
-| 1.21.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.2.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.2.jar) | — | 21 |
-| 1.21.3 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.3.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.3.jar) | — | 21 |
-| 1.21.4 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.4.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.4.jar) | — | 21 |
-| 1.21.5 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.5.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.5.jar) | — | 21 |
-| 1.21.6 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.6.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.6.jar) | — | 21 |
-| 1.21.7 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.7.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.7.jar) | — | 21 |
-| 1.21.8 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.8.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.8.jar) | — | 21 |
-| 1.21.9 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.9.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.9.jar) | — | 21 |
-| 1.21.10 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.10.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.10.jar) | — | 21 |
-| 1.21.11 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-1.21.11.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-1.21.11.jar) | — | 21 |
+| 1.21 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.jar) | — | 21 |
+| 1.21.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.1.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.1.jar) | — | 21 |
+| 1.21.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.2.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.2.jar) | — | 21 |
+| 1.21.3 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.3.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.3.jar) | — | 21 |
+| 1.21.4 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.4.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.4.jar) | — | 21 |
+| 1.21.5 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.5.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.5.jar) | — | 21 |
+| 1.21.6 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.6.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.6.jar) | — | 21 |
+| 1.21.7 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.7.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.7.jar) | — | 21 |
+| 1.21.8 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.8.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.8.jar) | — | 21 |
+| 1.21.9 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.9.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.9.jar) | — | 21 |
+| 1.21.10 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.10.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.10.jar) | — | 21 |
+| 1.21.11 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-1.21.11.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-1.21.11.jar) | — | 21 |
 
 </details>
 
@@ -191,11 +191,11 @@ Minecraft の系列を展開して個別版をダウンロード：
 
 | Minecraft | Fabric | NeoForge | Forge | Java |
 | --- | --- | --- | --- | ---: |
-| 26.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.jar) | — | 25 |
-| 26.1.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.1.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.1.jar) | — | 25 |
-| 26.1.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.1.2.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.1.2.jar) | — | 25 |
-| 26.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.2.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.2.jar) | — | 25 |
-| 26.3 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-Fabric-26.3.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/nyanlex-1.0.0-NeoForge-26.3.jar) | — | 25 |
+| 26.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-26.1.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-26.1.jar) | — | 25 |
+| 26.1.1 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-26.1.1.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-26.1.1.jar) | — | 25 |
+| 26.1.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-26.1.2.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-26.1.2.jar) | — | 25 |
+| 26.2 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-26.2.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-26.2.jar) | — | 25 |
+| 26.3 | [ダウンロード Fabric JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-Fabric-26.3.jar) | [ダウンロード NeoForge JAR](https://github.com/DragonMeow1012/NyanLex/releases/download/v1.0.0/NyanLex-Translator-1.0.0-NeoForge-26.3.jar) | — | 25 |
 
 </details>
 
@@ -299,7 +299,7 @@ Fabric 1.17 以降と NeoForge：
 
 **チャット入力の翻訳**：「一般」で有効にしてからチャットを開き、下書きを入力します。保存済みの位置がなければ右下に表示され、タイトルバーのドラッグで移動できます。翻訳先は英語が初期設定で、言語名やコードから検索できます。Esc でチャットを閉じても、同じゲームセッション中は下書きが残り、次に開いたときに続きを入力できます。「翻訳して入力」を押した後、チャット欄の翻訳を確認し、Enter キーで送信します。
 
-対応するすべてのバージョンで、ChatGPT／Codex へのログイン、モデルと推論レベルの選択、セッションのトークン表示を利用できます。初期設定は `gpt-5.6-terra`／`medium` です。
+対応するすべてのバージョンで、ChatGPT／Codex へのログイン、モデルと推論レベルの選択、セッションのトークン表示を利用できます。初期設定は `gpt-6-luna`／`low` です。
 
 非同期バッチ、優先度付きキュー、ディスクキャッシュ、失敗時のバックオフにより、メインスレッドの処理と重複リクエストを減らします。送信間隔と収集時間はどちらも初期値が 5 秒で、無効または 1～10 秒の合計 11 段階から選べます。
 

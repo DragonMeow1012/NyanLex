@@ -17,6 +17,11 @@ VERSION = "1.0.0"
 ROOT = Path(__file__).resolve().parent.parent
 LEGACY_TARGETS = [target.project for target in BASE_TARGETS if target.java == 8]
 PREFIX = "com/dragonmeow/nyanlex/"
+INTERMEDIARY_BINARY_NAMES = {
+    "net.minecraft.client.gui.screens.inventory.BookViewScreen": ["net.minecraft.class_3872"],
+    "net.minecraft.world.level.block.entity.SignBlockEntity": ["net.minecraft.class_2625"],
+    "net.minecraft.world.level.block.entity.SignText": ["net.minecraft.class_8242"],
+}
 REQUEST_KEYS = [
     "screen.nyanlex.requests.title",
     "screen.nyanlex.requests.terms",
@@ -89,8 +94,11 @@ def registered_client_mixin(jar, configs, simple_name, target, legacy):
 
 
 def contains_binary_name(bytecode, dotted_name):
-    encoded = dotted_name.encode()
-    return encoded in bytecode or encoded.replace(b".", b"/") in bytecode
+    candidates = [dotted_name]
+    candidates.extend(INTERMEDIARY_BINARY_NAMES.get(dotted_name, []))
+    return any((encoded := candidate.encode()) in bytecode
+               or encoded.replace(b".", b"/") in bytecode
+               for candidate in candidates)
 
 
 def key_values(text, extension, key):
@@ -131,6 +139,81 @@ def check_jar(target, path):
             )
         if not legacy:
             read_class(jar, PREFIX + "service/OutgoingChatTranslator.class", target, False)
+
+            book = registered_client_mixin(
+                jar, mixin_configs, "BookPageMixin", target, False)
+            for marker in [b"nyanlex$lastBookMode", b"bookMode", b"ORIGINAL_ONLY"]:
+                assert marker in book, (target, "book G-mode cache invalidation", marker)
+            assert any(marker in book for marker in (b"nyanlex$forceResplit", b"nyanlex$resplit")), (
+                target, "book G-mode cache invalidation hook")
+            assert any(marker in book for marker in (b"nyanlex$translateBookPage", b"nyanlex$page")), (
+                target, "book page translation hook")
+
+            # Platforms with the generic screen-text surface must leave already-laid-out book
+            # rows to BookPageMixin. This is independent of which final GUI draw overloads a
+            # Minecraft version exposes.
+            generic_gui = [config for config in mixin_configs
+                           if "GuiGraphicsTextMixin" in config.get("client", [])]
+            if generic_gui:
+                assert len(generic_gui) == 1, (target, "generic GUI mixin registration")
+                ordered_platforms = [name for name in jar.namelist()
+                                     if name.startswith(PREFIX) and name.endswith(".class")
+                                     and b"screenTextFcs" in jar.read(name)]
+                assert len(ordered_platforms) == 1, (
+                    target, "ordered screen-text platform boundary", ordered_platforms)
+                ordered_platform = read_class(
+                    jar, ordered_platforms[0], target, legacy)
+                assert contains_binary_name(
+                    ordered_platform,
+                    "net.minecraft.client.gui.screens.inventory.BookViewScreen"), (
+                    target, "book rows must not re-enter generic screen translation")
+
+            # 1.17+ world signs translate only at their four-row client render cache.
+            # Keeping the translated cache inside this mixin (separate from vanilla's
+            # original cache) is what makes G switch back immediately without mutating
+            # SignText/SignBlockEntity or any server/NBT state.
+            sign = registered_client_mixin(
+                jar, mixin_configs, "SignTextMixin", target, False)
+            # Vanilla member names are remapped inside production Fabric JARs.
+            # Check NyanLex-owned semantic markers here; check-port-mixins.py
+            # separately resolves and validates the actual target descriptors.
+            for marker in [b"worldSignLines", b"WorldSign.renderMessages",
+                           b"nyanlex$projectedLines", b"nyanlex$preparedLines",
+                           b"WorldSignRenderScope"]:
+                assert marker in sign, (target, "world-sign render projection", marker)
+            for forbidden in [b"setMessage", b"setText", b"CompoundTag"]:
+                assert forbidden not in sign, (target, "world-sign data mutation", forbidden)
+            expected_owner = ("net.minecraft.world.level.block.entity.SignBlockEntity"
+                              if target in {"fabric1171", "fabric1182", "fabric1194"}
+                              else "net.minecraft.world.level.block.entity.SignText")
+            assert contains_binary_name(sign, expected_owner), (
+                target, "world-sign cache owner", expected_owner)
+            sign_renderer = registered_client_mixin(
+                jar, mixin_configs, "SignRendererLayoutMixin", target, False)
+            for marker in [b"fitTranslatedRows", b"WorldSignRenderAdapter",
+                           b"SignRendererLayout.fitTranslatedRows"]:
+                assert marker in sign_renderer, (target, "world-sign renderer fit", marker)
+            adapters = [name for name in jar.namelist()
+                        if name.startswith(PREFIX) and name.endswith("/WorldSignRenderAdapter.class")]
+            assert len(adapters) == 1, (target, "world-sign renderer adapter", adapters)
+            adapter = read_class(jar, adapters[0], target, False)
+            for marker in [b"WorldSignRenderScope", b"fitScale", b"scale"]:
+                assert marker in adapter, (target, "world-sign complete-row fit", marker)
+            scope = read_class(
+                jar, PREFIX + "translate/WorldSignRenderScope.class", target, False)
+            for marker in [b"begin", b"active", b"end", b"fitScale"]:
+                assert marker in scope, (target, "world-sign render scope", marker)
+            sign_platforms = [name for name in jar.namelist()
+                              if name.startswith(PREFIX) and name.endswith(".class")
+                              and b"worldSignLines" in jar.read(name)]
+            assert len(sign_platforms) == 2, (
+                target, "world-sign projection boundary", sign_platforms)
+            # One hit is the platform entry point and the other is the mixin caller.
+            platform_name = next(name for name in sign_platforms
+                                 if not name.endswith("/SignTextMixin.class"))
+            sign_platform = read_class(jar, platform_name, target, False)
+            for marker in [b"worldSign", b"warmWorldTextBatch", b"translateUi", b"nameMode"]:
+                assert marker in sign_platform, (target, "world-sign surface policy", marker)
 
         # Jade object names and advancement toast titles are available from 1.16.5.
         # Both are optional-at-runtime boundaries: the JAR must still load when Jade is
@@ -200,6 +283,8 @@ def check_jar(target, path):
         bytecode = read_entry(jar, PREFIX + service + ".class", target)
         for method in [b"retranslateScreen", b"exportTranslations", b"importTranslations"]:
             assert method in bytecode, (target, method)
+        if not legacy:
+            assert b"warmWorldTextBatch" in bytecode, (target, b"warmWorldTextBatch")
 
         # 1.0.7 request switch + do-not-translate terms in the core.
         if legacy:
@@ -291,9 +376,9 @@ def main():
     modern = sum(target.source_project not in LEGACY_TARGETS for target in selected)
     print("TRANSLATION_FEATURE_ARTIFACTS_OK version={} targets={} sharing={} screen_scan={} "
           "legacy_java8={} request_switch={} do_not_translate={} requests_ui={} "
-          "jade={} advancements={} durable_counts={}".format(
+          "jade={} advancements={} world_signs={} durable_counts={}".format(
               VERSION, len(results), len(results), len(results), sum(target.java == 8 for target in selected),
-              len(results), len(results), len(results), compatibility, compatibility, modern))
+              len(results), len(results), len(results), compatibility, compatibility, modern, modern))
 
 
 if __name__ == "__main__":

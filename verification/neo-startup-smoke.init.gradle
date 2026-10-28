@@ -7,7 +7,7 @@ allprojects { project ->
         if (!plugins.hasPlugin('net.neoforged.moddev')) return
         def script = gradle.startParameter.initScripts.find { it.name == 'neo-startup-smoke.init.gradle' }
         if (script == null) throw new GradleException('Cannot locate the startup smoke init script')
-        def releaseJar = file(findProperty('smokeJar') ?: "build/${findProperty('target')}/libs/nyanlex-${version}-NeoForge-${findProperty('target')}.jar")
+        def releaseJar = file(findProperty('smokeJar') ?: "build/${findProperty('target')}/libs/NyanLex-Translator-${version}-NeoForge-${findProperty('target')}.jar")
         if (!releaseJar.isFile()) throw new GradleException("Build the release JAR first: ${releaseJar}")
         def smoke = sourceSets.create('startupSmoke')
         smoke.java.setSrcDirs([new File(script.parentFile, 'neo-startup-smoke/java')])

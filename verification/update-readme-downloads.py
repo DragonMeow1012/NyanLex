@@ -91,10 +91,10 @@ def render(filename: str) -> str:
              "| Fabric · 37 | NeoForge · 23 | Forge · 2 | " + text["all"] + " |",
              "| --- | --- | --- | --- |",
              "| " + " | ".join([
-                 link(f"NyanLex-{VERSION}-Fabric.zip", f"Fabric {text['bundle']}", text),
-                 link(f"NyanLex-{VERSION}-NeoForge.zip", f"NeoForge {text['bundle']}", text),
-                 link(f"NyanLex-{VERSION}-Forge.zip", f"Forge {text['bundle']}", text),
-                 link(f"NyanLex-{VERSION}-all-versions.zip", text["all"], text),
+                 link(f"NyanLex-Translator-{VERSION}-Fabric.zip", f"Fabric {text['bundle']}", text),
+                 link(f"NyanLex-Translator-{VERSION}-NeoForge.zip", f"NeoForge {text['bundle']}", text),
+                 link(f"NyanLex-Translator-{VERSION}-Forge.zip", f"Forge {text['bundle']}", text),
+                 link(f"NyanLex-Translator-{VERSION}-all-versions.zip", text["all"], text),
              ]) + " |", "", text["expand"], ""]
 
     for label, prefixes in groups:

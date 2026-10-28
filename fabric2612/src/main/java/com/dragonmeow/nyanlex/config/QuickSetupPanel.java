@@ -2,13 +2,14 @@ package com.dragonmeow.nyanlex.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 快速設定: the questionnaire (welcome, language, how to translate, how to show, translation
  * packs when some exist, done), drawn on a {@link DialogPanel} without any Minecraft type.
  *
  * <p>Nothing is applied until 完成: every answer is only remembered here, the configuration
- * is not touched and nothing is sent. 稍後再設定 and Escape change nothing except marking the
+ * is not touched and no translation-pack download starts. 稍後再設定 and Escape change nothing except marking the
  * questionnaire as answered. The way-to-translate page starts with no option chosen (it is the
  * consent page); choosing AI opens the AI settings and only moves on when they are complete.</p>
  */
@@ -62,22 +63,19 @@ public final class QuickSetupPanel {
         /** Online translation has just been switched on or off by 完成. */
         default void onlineChanged() { }
 
-        /** Starts looking for translation packs in the background (only ever downloads a public index). */
-        void startPackDetection();
+        /** Starts looking for translation packs for the staged language (only downloads a public index). */
+        void startPackDetection(boolean followGame, String tag);
 
         PackState packState();
 
         PackInfo packInfo();
 
-        boolean packDownloading();
-
-        /** Starts downloading the found packs in the background (no player text is sent). */
-        void startPackDownload();
+        /** Starts downloading the found packs after the staged language has been applied by 完成. */
+        void startPackDownload(boolean followGame, String tag);
 
         /** The screen is done: close it. */
         void close();
 
-        long nowMs();
     }
 
     static final int ID_LATER = 1;
@@ -96,9 +94,6 @@ public final class QuickSetupPanel {
     static final int ID_PACK_DOWNLOAD = 51;
     static final int ID_REBIND = 60;
 
-    /** How long the questionnaire waits for the pack check before it treats it as "nothing found". */
-    static final long PACK_WAIT_MS = 4000L;
-
     private static final int C_MUTED = 0xFFA4A9B8;
 
     private final Host host;
@@ -113,11 +108,12 @@ public final class QuickSetupPanel {
     private TranslatorConfig draft;
     private boolean packSkipped;
     private boolean packWaiting;
-    private long packWaitStart;
     private boolean packsShown;
+    private boolean packDetectionStarted;
+    private boolean detectedFollowGame;
+    private String detectedTag;
     private boolean finished;
-    private boolean downloadStarted;
-    private boolean shownDownloading;
+    private boolean downloadRequested;
 
     public QuickSetupPanel(Host host) {
         this.host = host;
@@ -175,7 +171,7 @@ public final class QuickSetupPanel {
             case METHOD -> go(Page.LANGUAGE);
             case DISPLAY -> go(Page.METHOD);
             case PACKS -> go(Page.DISPLAY);
-            case DONE -> go(packsShown && !downloadStarted ? Page.PACKS : Page.DISPLAY);
+            case DONE -> go(packsShown ? Page.PACKS : Page.DISPLAY);
             default -> { }
         }
     }
@@ -206,15 +202,21 @@ public final class QuickSetupPanel {
     }
 
     private void afterDisplay() {
+        if (!packDetectionMatchesSelection()) {
+            packDetectionStarted = true;
+            detectedFollowGame = followGame;
+            detectedTag = tag;
+            downloadRequested = false;
+            host.startPackDetection(followGame, tag);
+        }
         PackState state = host.packState();
         packsShown = false;
-        if (state == PackState.FOUND && !downloadStarted) {
+        if (state == PackState.FOUND) {
             packsShown = true;
             packSkipped = false;
             go(Page.PACKS);
-        } else if (state == PackState.DETECTING && !downloadStarted) {
+        } else if (state == PackState.DETECTING) {
             packWaiting = true;
-            packWaitStart = host.nowMs();
             page = Page.PACKS;
             rebuild(true);
         } else {
@@ -222,7 +224,12 @@ public final class QuickSetupPanel {
         }
     }
 
-    /** Called every frame: moves on from the "checking your mods" wait when the answer or the time limit arrives. */
+    private boolean packDetectionMatchesSelection() {
+        return packDetectionStarted && detectedFollowGame == followGame
+                && (followGame || Objects.equals(detectedTag, tag));
+    }
+
+    /** Called every frame: moves on from the "checking your mods" page when the background answer arrives. */
     public void tick() {
         if (page == Page.PACKS && packWaiting) {
             PackState state = host.packState();
@@ -231,11 +238,10 @@ public final class QuickSetupPanel {
                 packsShown = true;
                 packSkipped = false;
                 rebuild(true);
-            } else if (state != PackState.DETECTING || host.nowMs() - packWaitStart > PACK_WAIT_MS) {
+            } else if (state != PackState.DETECTING) {
                 go(Page.DONE);
             }
         }
-        if (page == Page.DONE && downloadStarted && host.packDownloading() != shownDownloading) rebuild(false);
     }
 
     // ------------------------------------------------------------------ results from other screens
@@ -254,9 +260,18 @@ public final class QuickSetupPanel {
 
     /** The language list returned: {@code follow} the game language, or the language with {@code newTag}. */
     public void languageChosen(boolean follow, String newTag) {
+        boolean changed = followGame != follow || (!follow && newTag != null && !Objects.equals(tag, newTag));
+        if (changed) clearPackSelection();
         followGame = follow;
         if (!follow && newTag != null) tag = newTag;
         rebuild(false);
+    }
+
+    private void clearPackSelection() {
+        packDetectionStarted = false;
+        packsShown = false;
+        packSkipped = false;
+        downloadRequested = false;
     }
 
     /** A screen that was opened from here closed: re-read what it may have changed (key names). */
@@ -289,6 +304,7 @@ public final class QuickSetupPanel {
         cfg.firstRunDone = true;
         host.saveConfig();
         if (wasOnline != cfg.translationRequestsEnabled) host.onlineChanged();
+        if (downloadRequested) host.startPackDownload(followGame, tag);
         finished = true;
         host.close();
     }
@@ -319,14 +335,12 @@ public final class QuickSetupPanel {
     private void handle(int id) {
         switch (id) {
             case ID_LATER -> later();
-            case ID_START -> {
-                host.startPackDetection();
-                go(Page.LANGUAGE);
-            }
+            case ID_START -> go(Page.LANGUAGE);
             case ID_BACK -> back();
             case ID_NEXT -> next();
             case ID_DONE -> finish();
             case ID_LANG_FOLLOW -> {
+                if (!followGame) clearPackSelection();
                 followGame = true;
                 rebuild(false);
             }
@@ -342,11 +356,11 @@ public final class QuickSetupPanel {
             case ID_METHOD_AI -> host.openAiSettings();
             case ID_PACK_SKIP -> {
                 packSkipped = true;
+                downloadRequested = false;
                 rebuild(false);
             }
             case ID_PACK_DOWNLOAD -> {
-                downloadStarted = true;
-                host.startPackDownload();
+                downloadRequested = true;
                 go(Page.DONE);
             }
             case ID_REBIND -> host.openKeybinds();
@@ -383,8 +397,8 @@ public final class QuickSetupPanel {
 
     private String t(String key, Object... args) { return host.text(key, args); }
 
-    private int totalSteps() {
-        return 4 + (packsShown || host.packState() == PackState.FOUND ? 1 : 0);
+    int totalSteps() {
+        return 4 + (packsShown ? 1 : 0);
     }
 
     private DialogPanel.Content content() {
@@ -467,9 +481,8 @@ public final class QuickSetupPanel {
                 blocks.add(new DialogPanel.Text(t("nyanlex.setup.done.rebind"), 0));
                 blocks.add(new DialogPanel.Row(List.of(new DialogPanel.Btn(ID_REBIND, t("nyanlex.setup.done.rebind_btn")))));
                 blocks.add(new DialogPanel.Text(t("nyanlex.setup.done.menu"), 0));
-                shownDownloading = downloadStarted && host.packDownloading();
-                if (shownDownloading) {
-                    blocks.add(new DialogPanel.Text(t("nyanlex.setup.done.downloading"), DialogPanel.C_TITLE));
+                if (downloadRequested) {
+                    blocks.add(new DialogPanel.Text(t("nyanlex.setup.done.download_after_done"), DialogPanel.C_TITLE));
                 }
                 blocks.add(new DialogPanel.Text(t("nyanlex.setup.done.note"), C_MUTED));
                 footer = DialogPanel.Footer.of(new DialogPanel.Btn(ID_BACK, t("nyanlex.setup.back")),
@@ -538,7 +551,7 @@ public final class QuickSetupPanel {
                 "nyanlex.setup.packs.download", "nyanlex.setup.packs.skipped", "nyanlex.setup.packs.note",
                 "nyanlex.setup.done.title", "nyanlex.setup.done.keys", "nyanlex.setup.done.key.item",
                 "nyanlex.setup.done.key.screen", "nyanlex.setup.done.key.toggle", "nyanlex.setup.done.rebind",
-                "nyanlex.setup.done.rebind_btn", "nyanlex.setup.done.menu", "nyanlex.setup.done.downloading",
+                "nyanlex.setup.done.rebind_btn", "nyanlex.setup.done.menu", "nyanlex.setup.done.download_after_done",
                 "nyanlex.setup.done.note", "nyanlex.setup.key.unset");
     }
 

@@ -80,13 +80,13 @@
       "count": 1
     },
     {
-      "from": "\n        if (fcs != null && Minecraft.getInstance().gui.screen() != null\n",
-      "to": "\n        if (fcs != null && Minecraft.getInstance().screen != null\n",
+      "from": "\n        if (fcs != null && mc.gui.screen() != null\n",
+      "to": "\n        if (fcs != null && mc.screen != null\n",
       "count": 1
     },
     {
-      "from": "\n                && Minecraft.getInstance().gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
-      "to": "\n                && Minecraft.getInstance().screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "from": "\n                && (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)\n",
+      "to": "\n                && (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)\n",
       "count": 1
     },
     {
@@ -95,8 +95,8 @@
       "count": 1
     },
     {
-      "from": "\n        if (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
-      "to": "\n        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen)) return fcs;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen)) return fcs;\n",
       "count": 1
     },
     {
@@ -170,8 +170,8 @@
       "count": 1
     },
     {
-      "from": "\n                    TOOLTIP_CAPTURE.record(tooltipClient.gui.screen(), source);\n",
-      "to": "\n                    TOOLTIP_CAPTURE.record(tooltipClient.screen, source);\n",
+      "from": "\n                    TOOLTIP_CAPTURE.recordRequest(tooltipClient.gui.screen(), source);\n",
+      "to": "\n                    TOOLTIP_CAPTURE.recordRequest(tooltipClient.screen, source);\n",
       "count": 1
     },
     {
@@ -205,8 +205,8 @@
       "count": 1
     },
     {
-      "from": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.gui.screen(), request);\n",
-      "to": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.screen, request);\n",
+      "from": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.recordRequest(mc.gui.screen(), request);\n",
+      "to": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.recordRequest(mc.screen, request);\n",
       "count": 1
     },
     {

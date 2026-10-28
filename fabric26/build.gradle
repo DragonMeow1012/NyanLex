@@ -10,7 +10,7 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: nyanlex-1.0.7-Fabric-26.2.jar (name-version-loader-mcversion)
+// Final jar name: NyanLex-Translator-1.0.0-Fabric-26.2.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.
     exclude 'assets/nyanslate/**', 'assets/mctranslator/**'

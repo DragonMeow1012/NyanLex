@@ -1,5 +1,6 @@
 package com.dragonmeow.nyanlex.fabric;
 
+import com.dragonmeow.nyanlex.config.SecretText;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.translate.AntigravityCliClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
@@ -14,6 +15,9 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.util.FormattedCharSequence;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,6 +27,9 @@ import java.util.Locale;
 public final class AiConfigScreen extends Screen {
     private static final String OPENAI_API_URL = "https://api.openai.com/v1";
     private static final int FIELD_W = 320;
+    private static final int KEY_FIELD_W = 256;
+    private static final int KEY_BUTTON_GAP = 4;
+    private static final int KEY_BUTTON_W = 60;
 
     private final Screen parent;
     private EditBox baseUrlBox;
@@ -34,6 +41,7 @@ public final class AiConfigScreen extends Screen {
     private Button effortButton;
     private Button refreshButton;
     private Button testButton;
+    private boolean keysRevealed;
     private boolean busy;
     private boolean initialCodexRefreshStarted;
     private boolean initialAntigravityRefreshStarted;
@@ -210,6 +218,7 @@ public final class AiConfigScreen extends Screen {
 
     private void initApi(int x) {
         TranslatorConfig cfg = NyanLexFabric.config();
+        this.keysRevealed = false;
         int baseY = layBase;
         int modelY = layModel;
         int keysY = layKeys;
@@ -224,11 +233,26 @@ public final class AiConfigScreen extends Screen {
         this.modelBox.setValue(cfg.aiModel == null ? "" : cfg.aiModel);
         this.addRenderableWidget(this.modelBox);
 
-        this.keysBox = new EditBox(this.font, x, keysY, FIELD_W, 20,
-                Component.translatable("screen.nyanlex.ai.keys"));
+        this.keysBox = new EditBox(this.font, x, keysY, KEY_FIELD_W, 20,
+                Component.translatable("screen.nyanlex.ai.keys")) {
+            @Override
+            protected MutableComponent createNarrationMessage() {
+                return Component.translatable(keysRevealed
+                        ? "screen.nyanlex.ai.keys.visible"
+                        : "screen.nyanlex.ai.keys.hidden");
+            }
+        };
+        this.keysBox.addFormatter((value, cursor) -> this.keysRevealed ? null
+                : FormattedCharSequence.forward(SecretText.mask(value), Style.EMPTY));
         this.keysBox.setMaxLength(8000);
         this.keysBox.setValue(keysForEndpoint(cfg, cfg.aiBaseUrl));
         this.addRenderableWidget(this.keysBox);
+        this.addRenderableWidget(Button.builder(Component.translatable("screen.nyanlex.ai.keys.show"), b -> {
+            this.keysRevealed = !this.keysRevealed;
+            b.setMessage(Component.translatable(this.keysRevealed
+                    ? "screen.nyanlex.ai.keys.hide"
+                    : "screen.nyanlex.ai.keys.show"));
+        }).bounds(x + KEY_FIELD_W + KEY_BUTTON_GAP, keysY, KEY_BUTTON_W, 20).build());
 
         Button[] button = new Button[1];
         button[0] = Button.builder(Component.translatable("screen.nyanlex.ai.test"), b -> {

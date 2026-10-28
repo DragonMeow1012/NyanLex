@@ -2,13 +2,17 @@
 
 The first release under the NyanLex Translator name brings together bilingual chat, item and screen translation, reusable translations and the new chat composer.
 
-## October 7 refresh: echo .02 and chat display timing
+## October 29 refresh: safer settings and renderer-owned layout
 
-- All **62 JARs** were rebuilt from source with the **.02 echo-fix baseline** (`1.0.0-echo-fix.20261006.2`). Repeated unchanged translation results stop resubmitting after the echo threshold; the keep-original decision survives a restart, and already-Chinese server notices bypass unnecessary translation.
-- Incoming chat now offers three modes across modern and legacy builds: **show translations in order**, **show translations when ready**, or **show the original first, then add its translation in place**. Original-first is the default. Late translations preserve the message's position and age; clearing chat does not bring old messages back.
-- Restored ordered delivery and fixed the modern settings button so both mouse and keyboard can cycle and save all three modes.
-- Validation: 62 Gradle source builds and final-JAR checks, **27,223 core/echo regression checks**, and **2,907 settings-panel checks** across the 57 modern JARs. Minecraft **26.1.2 / Fabric** also passed 20 in-game checks using a local world and controlled translation service. Other targets were not all played in-game; public multiplayer servers were not tested.
-- The mod version remains **1.0.0**. See the [October 7 artifact manifest](https://github.com/DragonMeow1012/NyanLex/blob/main/verification/release-2026-10-07.json) and `SHA256SUMS.txt` for this refreshed build.
+- All **62 JARs** now use the full `NyanLex-Translator` artifact name, while the in-game mod list consistently shows **NyanLex Translator**. The `/nyanlex` command is unchanged.
+- API-key fields are masked by default and include a compact show/hide control. A key can be checked when needed without leaving it exposed on the settings screen.
+- ChatGPT/Codex now defaults to **`gpt-6-luna` with low reasoning effort**. Existing saved provider and model choices are preserved.
+- Translation-pack discovery runs on the last Quick setup page, after the target language has been confirmed. Players can still check packs later from Pack settings.
+- On supported modern builds, pressing `G` switches translated books back to the original immediately. Those builds also translate the four visible rows of world signs on the client, preserve the sign's colour and glow, fit long translated rows, and return to the untouched original with `G`.
+- Removed the experimental global text-width projection that could make custom server or mod tooltips overlap. Supported renderers keep ownership of their native measurement and layout.
+- OCR was evaluated but deliberately **not included**. This refresh adds no OCR model, native OCR runtime, screenshot text scan or OCR data disclosure; text embedded only in images remains outside translation coverage.
+- Existing chat timing and echo protections remain: ordered, ready-first and original-first delivery modes; persistent keep-original decisions; and bypassing unnecessary requests for already-Chinese text.
+- The mod version remains **1.0.0**. The replacement package is published only after all 62 loader/version artifacts pass the full build, metadata, Mixin and checksum gates. Minecraft **26.1.2 / Fabric** was also checked interactively for book switching and translated tooltip display; this is not an in-game certification of every target, modpack or public server.
 
 ## Security and settings update
 
@@ -65,13 +69,17 @@ Validation covers automated tests, per-target builds, packaged classes and metad
 
 這是改名為 NyanLex Translator 後的首版，整合雙語聊天、物品與介面翻譯、既有譯文沿用，以及聊天輸入翻譯浮窗。
 
-### 10 月 7 日更新：.02 echo 修復與聊天顯示時機
+### 10 月 29 日更新：更安全的設定與由原渲染器掌管版面
 
-- 全部 **62 個 JAR** 已從原始碼重新建置，採用 **.02 echo 修復基準**（`1.0.0-echo-fix.20261006.2`）。翻譯服務反覆回傳原文達到門檻後會停止重送；保留原文的判定在重啟後仍有效，已是中文的伺服器通知會略過不必要的翻譯。
-- 新舊版本皆提供三種模式：**依序顯示譯文**、**譯文完成即顯示**、**先顯示原文，完成後補譯**。預設先立即顯示原文，翻譯完成後在原位置更新，保留訊息順序與時間；清除聊天後不會重新插入舊訊息。
-- 恢復依序等待翻譯的選項，並修正現代版設定按鈕，滑鼠與鍵盤都能循環切換及儲存三種模式。
-- 已完成 62 個版本的 Gradle 原始碼建置與成品檢查、**27,223 項核心／echo 回歸檢查**，以及 57 個現代版 JAR 的 **2,907 項設定面板檢查**。另以 **Minecraft 26.1.2／Fabric** 在本機世界與可控翻譯服務完成 20 項遊戲內檢查；未宣稱所有版本都已實機遊玩，也尚未測試公開多人伺服器。
-- 模組版本維持 **1.0.0**。本次檔案可透過 [10 月 7 日成品清單](https://github.com/DragonMeow1012/NyanLex/blob/main/verification/release-2026-10-07.json)與 `SHA256SUMS.txt` 核對。
+- 全部 **62 個 JAR** 統一使用完整的 `NyanLex-Translator` 成品名稱；遊戲模組列表也一致顯示 **NyanLex Translator**。`/nyanlex` 指令維持不變。
+- API 金鑰欄位預設遮罩，右側提供小型顯示／隱藏控制；需要核對時才顯示，不會長時間暴露在設定畫面。
+- ChatGPT／Codex 預設改為 **`gpt-6-luna`、低推理強度**；既有玩家已儲存的服務與模型選擇不會被覆蓋。
+- 翻譯包改在快速設定最後一頁、目標語言確認後才偵測；之後仍可從翻譯包設定重新檢查。
+- 在支援的現代版本中，翻譯書本後按 `G` 可立即切回原文；這些版本也會在客戶端翻譯世界中告示牌的四行可見文字，保留染色與發光效果、縮放過長譯文，按 `G` 時回到完全未修改的原文。
+- 移除曾造成部分伺服器／模組自訂 tooltip 文字重疊的全域文字量寬投影；各支援渲染器重新掌管自己的原生量測與排版。
+- 曾評估 OCR，但本次明確**不納入**：沒有 OCR 模型、原生 OCR 執行環境、畫面影像掃字或新增 OCR 資料揭露；只存在圖片裡的文字仍不在翻譯範圍。
+- 既有聊天顯示時機與 echo 防護均保留：依序、完成即顯示、先原文後補譯三種模式；保留原文判定可跨重啟沿用；已是中文的內容略過不必要請求。
+- 模組版本維持 **1.0.0**。只有在 62 個 Loader／Minecraft 成品全部通過建置、metadata、Mixin 與雜湊關卡後才會替換公開檔案。另以 **Minecraft 26.1.2／Fabric** 實際檢查書本切換與 tooltip 譯文顯示；不代表所有版本、整合包或公開伺服器都已通過實機驗證。
 
 ### 安全與設定更新
 

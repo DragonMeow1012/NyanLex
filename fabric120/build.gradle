@@ -10,7 +10,7 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: nyanlex-1.0.7-Fabric-1.20.1.jar
+// Final jar name: NyanLex-Translator-1.0.0-Fabric-1.20.1.jar
 tasks.named('remapJar') {
     archiveClassifier = "Fabric-${project.minecraft_version}"
 }

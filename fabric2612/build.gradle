@@ -10,7 +10,7 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: nyanlex-1.0.7-Fabric-26.1.2.jar (name-version-loader-mcversion)
+// Final jar name: NyanLex-Translator-1.0.0-Fabric-26.1.2.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.
     exclude 'assets/nyanslate/**', 'assets/mctranslator/**'
@@ -30,6 +30,13 @@ dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    // Minecraft supplies Gson at runtime; the declaration keeps core tests independent
+    // from the game bootstrap.
+    testImplementation 'com.google.code.gson:gson:2.11.0'
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 java {
@@ -42,6 +49,13 @@ java {
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = "UTF-8"
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
 }
 
 processResources {

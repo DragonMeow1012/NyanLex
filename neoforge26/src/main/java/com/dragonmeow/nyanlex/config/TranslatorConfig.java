@@ -26,7 +26,7 @@ public final class TranslatorConfig {
     public static final String AI_PROVIDER_CODEX = "codex";
     public static final String AI_PROVIDER_ANTIGRAVITY = "antigravity";
     public static final String DEFAULT_CODEX_MODEL = "gpt-6-luna";
-    public static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
+    public static final String DEFAULT_CODEX_REASONING_EFFORT = "low";
     public static final String DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.7-flash-low";
     public static final int MAX_WORKER_THREADS = 8;
     public static final int MAX_MEMORY_CACHE_ENTRIES = 50_000;
@@ -48,7 +48,7 @@ public final class TranslatorConfig {
     public double chatComposerY = 1.0;
     public DisplayMode tooltipMode = DisplayMode.TRANSLATION;    // 物品名稱／說明（提示與手持共用）(3-way)
     public DisplayMode scoreboardMode = DisplayMode.TRANSLATION; // 記分板 (on/off)
-    public DisplayMode nameMode = DisplayMode.TRANSLATION;       // 名牌 / 全息 (on/off)
+    public DisplayMode nameMode = DisplayMode.TRANSLATION;       // 名牌 / 全息 / 告示牌 (on/off)
     public DisplayMode bossBarMode = DisplayMode.TRANSLATION;    // Boss 血條名稱 (on/off)
     public DisplayMode titleMode = DisplayMode.TRANSLATION;      // 標題 / 副標題 (on/off)
     public DisplayMode actionBarMode = DisplayMode.TRANSLATION;  // 動作列訊息 (on/off)

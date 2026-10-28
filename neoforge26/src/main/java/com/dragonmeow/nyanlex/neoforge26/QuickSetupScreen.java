@@ -111,6 +111,12 @@ public final class QuickSetupScreen extends Screen {
             return tag;
         }
 
+        private String targetLanguage(boolean followGame, String tag) {
+            return followGame
+                    ? TranslationLanguages.fromMinecraftCode(minecraft.getLanguageManager().getSelected())
+                    : (tag == null ? NyanLexNeoForge26.config().targetLang : tag);
+        }
+
         @Override
         public String keyName(QuickSetupPanel.KeyAction action) {
             KeyMapping key = switch (action) {
@@ -126,9 +132,7 @@ public final class QuickSetupScreen extends Screen {
         public void applyLanguage(boolean followGame, String tag) {
             TranslatorConfig cfg = NyanLexNeoForge26.config();
             cfg.followGameLanguage = followGame;
-            String target = followGame
-                    ? TranslationLanguages.fromMinecraftCode(minecraft.getLanguageManager().getSelected())
-                    : (tag == null ? cfg.targetLang : tag);
+            String target = targetLanguage(followGame, tag);
             if (NyanLexNeoForge26.service() != null) NyanLexNeoForge26.service().setTargetLang(target);
             else cfg.targetLang = target;
             Neo26TextStyle.clearRenderMemo();
@@ -136,19 +140,20 @@ public final class QuickSetupScreen extends Screen {
 
         @Override public void onlineChanged() { NyanLexNeoForge26.clearQuestWidgetPending(); }
 
-        @Override public void startPackDetection() { NyanLexNeoForge26.startPackDetection(); }
+        @Override public void startPackDetection(boolean followGame, String tag) {
+            NyanLexNeoForge26.startPackDetection(targetLanguage(followGame, tag));
+        }
 
         @Override public QuickSetupPanel.PackState packState() { return NyanLexNeoForge26.packState(); }
 
         @Override public QuickSetupPanel.PackInfo packInfo() { return NyanLexNeoForge26.packInfo(); }
 
-        @Override public boolean packDownloading() { return NyanLexNeoForge26.packDownloading(); }
-
-        @Override public void startPackDownload() { NyanLexNeoForge26.startPackDownload(); }
+        @Override public void startPackDownload(boolean followGame, String tag) {
+            NyanLexNeoForge26.startPackDownload(targetLanguage(followGame, tag));
+        }
 
         @Override public void close() { QuickSetupScreen.this.onClose(); }
 
-        @Override public long nowMs() { return System.currentTimeMillis(); }
     }
 
     // ------------------------------------------------------------------ input

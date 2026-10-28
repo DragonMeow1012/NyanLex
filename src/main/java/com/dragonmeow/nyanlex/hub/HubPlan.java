@@ -1,5 +1,7 @@
 package com.dragonmeow.nyanlex.hub;
 
+import com.dragonmeow.nyanlex.cache.LanguageFileStore;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -10,14 +12,21 @@ import java.util.List;
  * show before the player presses "confirm download".
  */
 public final class HubPlan {
+    private final String language;
     private final List<HubPlanItem> items;
 
-    public HubPlan(List<HubPlanItem> items) {
+    public HubPlan(String language, List<HubPlanItem> items) {
+        this.language = LanguageFileStore.languageTag(language);
         this.items = List.copyOf(items);
     }
 
-    public static HubPlan empty() {
-        return new HubPlan(List.of());
+    public static HubPlan empty(String language) {
+        return new HubPlan(language, List.of());
+    }
+
+    /** Normalized target language this plan's availability, sizes and hashes describe. */
+    public String language() {
+        return language;
     }
 
     public List<HubPlanItem> items() {

@@ -165,7 +165,7 @@ public final class NyanLexForge {
                     || renderingScreen != mc.currentScreen || mc.currentScreen instanceof net.minecraft.client.gui.GuiChat
                     || !instance.config.enabled) return source;
             if (SCREEN_CAPTURE.active(renderingScreen)) {
-                SCREEN_CAPTURE.record(renderingScreen, source);
+                SCREEN_CAPTURE.recordRequest(renderingScreen, source);
                 return source;
             }
             if (translatedScreen != renderingScreen || !screenSources.contains(source)) return source;
@@ -647,7 +647,7 @@ public final class NyanLexForge {
             if (!config.enabled || event.getStack() == null || event.getStack().isEmpty() || event.getLines().isEmpty()) return;
             tooltipRenderedThisTick = true;
             if (SCREEN_CAPTURE.active(renderingScreen)) {
-                for (String source : event.getLines()) SCREEN_CAPTURE.record(renderingScreen, source);
+                for (String source : event.getLines()) SCREEN_CAPTURE.recordRequest(renderingScreen, source);
                 return;
             }
             String target = currentTarget();
@@ -912,7 +912,7 @@ public final class NyanLexForge {
      */
     private void translateVisibleLines(List<String> lines, boolean highPriority) {
         if (SCREEN_CAPTURE.active(renderingScreen)) {
-            for (String source : lines) SCREEN_CAPTURE.record(renderingScreen, source);
+            for (String source : lines) SCREEN_CAPTURE.recordRequest(renderingScreen, source);
             return;
         }
         String target = currentTarget();

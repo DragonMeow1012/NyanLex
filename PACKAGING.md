@@ -121,28 +121,28 @@ The default output is `mods-jar/1.0.0-expanded`, preserving the previous `mods-j
 
 ```text
 mods-jar/1.0.0-expanded/
-  fabric/<MC>/nyanlex-1.0.0-Fabric-<MC>.jar
-  neoforge/<MC>/nyanlex-1.0.0-NeoForge-<MC>.jar
-  forge/<MC>/nyanlex-1.0.0-Forge-<MC>.jar
-  NyanLex-1.0.0-Fabric.zip
-  NyanLex-1.0.0-NeoForge.zip
-  NyanLex-1.0.0-Forge.zip
-  NyanLex-1.0.0-all-versions.zip
+  fabric/<MC>/NyanLex-Translator-1.0.0-Fabric-<MC>.jar
+  neoforge/<MC>/NyanLex-Translator-1.0.0-NeoForge-<MC>.jar
+  forge/<MC>/NyanLex-Translator-1.0.0-Forge-<MC>.jar
+  NyanLex-Translator-1.0.0-Fabric.zip
+  NyanLex-Translator-1.0.0-NeoForge.zip
+  NyanLex-Translator-1.0.0-Forge.zip
+  NyanLex-Translator-1.0.0-all-versions.zip
   SHA256SUMS.txt
 ```
 
-The packager revalidates all 44 ports before creating a staging directory, binds copied files to verified hashes, checks all 62 JARs and four ZIP contents, and performs a guarded atomic folder swap with rollback. The checksum file contains 66 entries: 62 JARs and four ZIPs. Generated binaries are ignored by Git.
+The packager revalidates all 44 ports before creating a staging directory, binds copied files to verified hashes, checks all 62 JARs and four loader ZIP contents, and performs a guarded atomic folder swap with rollback. The checksum file contains 66 entries: 62 JARs and four loader ZIPs. Generated binaries are ignored by Git.
 
 ## Publication checklist
 
-- Confirm 62 JARs, four ZIPs and one checksum file; compare every JAR to its build output.
+- Confirm 62 JARs, four loader ZIPs and one checksum file; compare every JAR to its build output.
 - Confirm exact Minecraft/loader metadata, Java levels, client-side declarations, entrypoint classes, icons and four UI locales.
 - Check Fabric API's actual mod ID for each pinned API artifact. Older targets may use `fabric`; newer ones use `fabric-api`. Do not infer the ID solely from the Minecraft major version.
 - Confirm no earlier project-name directories, screenshot drivers, translation-hub content or authoring/test tools are packaged.
 - Run core unit tests and `git diff --check`.
-- Back up existing published assets and notes before replacement. Upload the individual JARs plus four ZIPs and checksums to GitHub Release `v1.0.0`.
+- Back up existing published assets and notes before replacement. Upload the individual JARs plus four loader ZIPs and checksums to GitHub Release `v1.0.0`.
 - On Modrinth, use one exact Minecraft version and one loader per version; Fabric API is required for Fabric. Compare uploaded file hashes against the verified package.
-- `publish-modrinth.py` preserves existing version IDs and download counts, and keeps the canonical filename `nyanlex-1.0.0-<Loader>-<Minecraft>.jar`. During replacement, a temporary JAR with identical entries and a different ZIP comment keeps the version downloadable; the distinct hash makes file deletion unambiguous. It is removed after the canonical file is uploaded and downloaded again with its exact expected hash. Each deletion is followed by an empty version edit to refresh the server's version cache after the deletion transaction; lost deletion responses are reconciled against that refreshed state. Final validation requires one file with the canonical name and bytes, with no temporary suffix. The current API ignores the former `primary_file` edit field. Use a fresh backup root for each release refresh; an interrupted run can resume with that same root. Run `python verification/test-modrinth-publication.py` before changing this upload sequence.
+- `publish-modrinth.py` preserves existing version IDs and download counts, and keeps the canonical filename `NyanLex-Translator-1.0.0-<Loader>-<Minecraft>.jar`. During replacement, a temporary JAR with identical entries and a different ZIP comment keeps the version downloadable; the distinct hash makes file deletion unambiguous. It is removed after the canonical file is uploaded and downloaded again with its exact expected hash. Each deletion is followed by an empty version edit to refresh the server's version cache after the deletion transaction; lost deletion responses are reconciled against that refreshed state. Final validation requires one file with the canonical name and bytes, with no temporary suffix. The current API ignores the former `primary_file` edit field. Use a fresh backup root for each release refresh; an interrupted run can resume with that same root. Run `python verification/test-modrinth-publication.py` before changing this upload sequence.
 - Update all four README download tables and release/store support descriptions together. Keep the GitHub default README in Traditional Chinese and Modrinth descriptions in English.
 - Describe the difference between build/static validation and actual game testing, including any unresolved startup failures. Never publish a known-broken artifact.
 

@@ -18,13 +18,13 @@ Assert ($unsubscribes.Count -eq 1) `
 $thread = $threads[0]
 $turn = $turns[0]
 $unsubscribe = $unsubscribes[0]
-Assert ($thread.params.model -eq 'gpt-5.6-terra') 'wrong Codex model'
+Assert ($thread.params.model -eq 'gpt-6-luna') 'wrong Codex model'
 Assert ($thread.params.approvalPolicy -eq 'never') 'approval policy is not never'
 Assert ($thread.params.sandbox -eq 'read-only') 'sandbox is not read-only'
 Assert ($thread.params.ephemeral -eq $true) 'translation thread is not ephemeral'
 Assert ($thread.params.personality -eq 'none') 'personality is not disabled'
 Assert ($thread.params.serviceTier -eq 'priority') 'priority service tier was not selected'
-Assert ($turn.params.effort -eq 'medium') 'reasoning effort is not medium'
+Assert ($turn.params.effort -eq 'low') 'reasoning effort is not low'
 Assert ($turn.params.summary -eq 'none') 'reasoning summary is not disabled'
 Assert ($turn.params.serviceTier -eq 'priority') 'turn priority service tier missing'
 Assert ($turn.params.input[0].text -eq 'Bloom Boat with Chest') 'source text was modified before Codex'

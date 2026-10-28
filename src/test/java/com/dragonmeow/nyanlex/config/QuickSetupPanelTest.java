@@ -26,17 +26,20 @@ class QuickSetupPanelTest {
         int downloads;
         int closes;
         int onlineChanges;
+        final List<String> events = new ArrayList<>();
         boolean appliedFollow;
         String appliedTag;
+        boolean detectedFollow;
+        String detectedTag;
+        boolean downloadedFollow;
+        String downloadedTag;
         int applyCalls;
         QuickSetupPanel.PackState packs = QuickSetupPanel.PackState.IDLE;
-        boolean downloading;
-        long now;
 
         FakeHost(String code) { lang = DialogPanelTest.lang(code); }
 
         @Override public TranslatorConfig config() { return cfg; }
-        @Override public void saveConfig() { saves++; }
+        @Override public void saveConfig() { events.add("save"); saves++; }
         @Override public String text(String key, Object... args) { return lang.get(key, args); }
         @Override public int textWidth(String text) { return DialogPanelTest.width(text); }
         @Override public boolean aiConfigured() { return ai; }
@@ -53,20 +56,29 @@ class QuickSetupPanelTest {
             };
         }
         @Override public void applyLanguage(boolean followGame, String tag) {
+            events.add("apply");
             applyCalls++;
             appliedFollow = followGame;
             appliedTag = tag;
         }
         @Override public void onlineChanged() { onlineChanges++; }
-        @Override public void startPackDetection() { detections++; }
+        @Override public void startPackDetection(boolean followGame, String tag) {
+            events.add("detect");
+            detections++;
+            detectedFollow = followGame;
+            detectedTag = tag;
+        }
         @Override public QuickSetupPanel.PackState packState() { return packs; }
         @Override public QuickSetupPanel.PackInfo packInfo() {
             return new QuickSetupPanel.PackInfo(2, "3.4 MB", List.of("ModA　2.0 MB", "ModB　1.4 MB"));
         }
-        @Override public boolean packDownloading() { return downloading; }
-        @Override public void startPackDownload() { downloads++; downloading = true; }
+        @Override public void startPackDownload(boolean followGame, String tag) {
+            events.add("download");
+            downloads++;
+            downloadedFollow = followGame;
+            downloadedTag = tag;
+        }
         @Override public void close() { closes++; }
-        @Override public long nowMs() { return now; }
     }
 
     private static final class Rec implements UiCanvas {
@@ -139,7 +151,7 @@ class QuickSetupPanelTest {
     // ------------------------------------------------------------------ nothing happens before 完成
 
     @Test
-    void nothingIsSentSavedOrChangedBeforeDone() {
+    void nothingIsSavedDownloadedOrChangedBeforeDone() {
         FakeHost host = new FakeHost("zh_tw");
         String before = json(host.cfg);
         QuickSetupPanel p = panel(host);
@@ -342,7 +354,7 @@ class QuickSetupPanelTest {
     }
 
     @Test
-    void aPackCheckThatIsStillRunningShowsAShortWaitThenDecides() {
+    void aPackCheckWaitsForItsTerminalResult() {
         FakeHost host = new FakeHost("zh_tw");
         host.packs = QuickSetupPanel.PackState.DETECTING;
         QuickSetupPanel p = panel(host);
@@ -353,24 +365,12 @@ class QuickSetupPanelTest {
         assertEquals(QuickSetupPanel.Page.PACKS, p.page());
         assertTrue(texts(p).contains("正在檢查你安裝的模組…"), texts(p).toString());
         Rec c = new Rec();
-        host.now = 1000;
         p.render(c, -1, -1);
         assertEquals(QuickSetupPanel.Page.PACKS, p.page(), "still waiting");
         host.packs = QuickSetupPanel.PackState.FOUND;
         p.render(c, -1, -1);
         assertEquals(QuickSetupPanel.Page.PACKS, p.page());
         assertTrue(String.join("", texts(p)).contains("你安裝的 2 個模組有現成的翻譯包（共 3.4 MB）"), texts(p).toString());
-
-        FakeHost slow = new FakeHost("zh_tw");
-        slow.packs = QuickSetupPanel.PackState.DETECTING;
-        QuickSetupPanel q = panel(slow);
-        toMethodPage(q);
-        press(q, QuickSetupPanel.ID_METHOD_MACHINE);
-        press(q, QuickSetupPanel.ID_NEXT);
-        press(q, QuickSetupPanel.ID_NEXT);
-        slow.now = QuickSetupPanel.PACK_WAIT_MS + 1;
-        q.render(new Rec(), -1, -1);
-        assertEquals(QuickSetupPanel.Page.DONE, q.page(), "timed out: treated as nothing found");
 
         FakeHost none = new FakeHost("zh_tw");
         none.packs = QuickSetupPanel.PackState.DETECTING;
@@ -385,7 +385,7 @@ class QuickSetupPanelTest {
     }
 
     @Test
-    void downloadingPacksStartsAtOnceWithoutWaitingForDoneAndSendsNoText() {
+    void downloadingPacksWaitsForDoneSoTheChosenLanguageIsAppliedFirst() {
         FakeHost host = new FakeHost("zh_tw");
         host.packs = QuickSetupPanel.PackState.FOUND;
         QuickSetupPanel p = panel(host);
@@ -396,14 +396,17 @@ class QuickSetupPanelTest {
         press(p, QuickSetupPanel.ID_NEXT);
         assertEquals(QuickSetupPanel.Page.PACKS, p.page());
         press(p, QuickSetupPanel.ID_PACK_DOWNLOAD);
-        assertEquals(1, host.downloads, "the download starts now");
-        assertEquals(QuickSetupPanel.Page.DONE, p.page(), "and the next page opens by itself");
+        assertEquals(0, host.downloads, "the download waits until 完成 applies the staged language");
+        assertEquals(QuickSetupPanel.Page.DONE, p.page());
         assertEquals(before, json(host.cfg), "the settings are still not touched");
         assertFalse(host.cfg.translationRequestsEnabled);
-        assertTrue(texts(p).contains("翻譯包正在背景下載，完成後會通知你。"), texts(p).toString());
-        host.downloading = false;
-        p.render(new Rec(), -1, -1);
-        assertFalse(texts(p).contains("翻譯包正在背景下載，完成後會通知你。"), "the note goes away when the download is over");
+        assertTrue(texts(p).contains("按下「完成」後，翻譯包會在背景下載。"), texts(p).toString());
+        press(p, QuickSetupPanel.ID_DONE);
+        assertEquals(1, host.downloads);
+        assertTrue(host.events.indexOf("apply") < host.events.indexOf("save"), host.events.toString());
+        assertTrue(host.events.indexOf("save") < host.events.indexOf("download"), host.events.toString());
+        assertEquals(host.appliedFollow, host.downloadedFollow);
+        assertEquals(host.appliedTag, host.downloadedTag);
     }
 
     @Test
@@ -430,7 +433,7 @@ class QuickSetupPanelTest {
         FakeHost host = new FakeHost("zh_tw");
         QuickSetupPanel p = panel(host);
         press(p, QuickSetupPanel.ID_START);
-        assertEquals(1, host.detections, "the pack check starts when the questions start, and only reads a public index");
+        assertEquals(0, host.detections, "the pack check must not start on the welcome page");
         assertTrue(p.followGame());
         assertTrue(texts(p).contains("要把遊戲文字翻成哪種語言？"));
         assertTrue(p.dialog().shownLabels().contains("跟隨遊戲語言（繁體中文）"), p.dialog().shownLabels().toString());
@@ -443,12 +446,47 @@ class QuickSetupPanelTest {
         assertEquals(0, host.applyCalls, "chosen, not applied");
         press(p, QuickSetupPanel.ID_NEXT);
         assertEquals(QuickSetupPanel.Page.METHOD, p.page());
+        assertEquals(0, host.detections, "language and method pages still perform no network check");
         press(p, QuickSetupPanel.ID_METHOD_MACHINE);
         press(p, QuickSetupPanel.ID_NEXT);
+        assertEquals(QuickSetupPanel.Page.DISPLAY, p.page());
+        assertEquals(0, host.detections, "the display choices are still local drafts");
         press(p, QuickSetupPanel.ID_NEXT);
+        assertEquals(1, host.detections, "the final step starts the pack check");
+        assertFalse(host.detectedFollow);
+        assertEquals("ja-JP", host.detectedTag);
+        assertEquals(0, host.applyCalls, "detecting with the draft language does not apply it early");
         press(p, QuickSetupPanel.ID_DONE);
         assertFalse(host.appliedFollow);
         assertEquals("ja-JP", host.appliedTag);
+    }
+
+    @Test
+    void changingLanguageClearsTheOldPackStepAndStartsANewDetection() {
+        FakeHost host = new FakeHost("zh_tw");
+        host.packs = QuickSetupPanel.PackState.FOUND;
+        QuickSetupPanel p = panel(host);
+        toDisplayPage(p, QuickSetupPanel.ID_METHOD_MACHINE);
+        press(p, QuickSetupPanel.ID_NEXT);
+        assertEquals(QuickSetupPanel.Page.PACKS, p.page());
+        assertEquals(5, p.totalSteps());
+        assertEquals(1, host.detections);
+
+        press(p, QuickSetupPanel.ID_PACK_SKIP);
+        press(p, QuickSetupPanel.ID_BACK);
+        press(p, QuickSetupPanel.ID_BACK);
+        press(p, QuickSetupPanel.ID_BACK);
+        assertEquals(QuickSetupPanel.Page.LANGUAGE, p.page());
+        p.languageChosen(false, "ja-JP");
+        assertEquals(4, p.totalSteps(), "the old language's pack page must not affect the new flow");
+
+        press(p, QuickSetupPanel.ID_NEXT);
+        press(p, QuickSetupPanel.ID_METHOD_MACHINE);
+        press(p, QuickSetupPanel.ID_NEXT);
+        press(p, QuickSetupPanel.ID_NEXT);
+        assertEquals(2, host.detections);
+        assertFalse(host.detectedFollow);
+        assertEquals("ja-JP", host.detectedTag);
     }
 
     @Test
@@ -602,7 +640,7 @@ class QuickSetupPanelTest {
         QuickSetupPanel p = panel(host);
         toDisplayPage(p, QuickSetupPanel.ID_METHOD_MACHINE);
         List<String> shown = texts(p);
-        for (String name : List.of("全部項目", "聊天", "物品提示", "記分板", "名牌", "Boss 血條", "標題", "動作列", "書籍", "介面")) {
+        for (String name : List.of("全部項目", "聊天", "物品提示", "記分板", "名牌與告示牌", "Boss 血條", "標題", "動作列", "書籍", "介面")) {
             assertTrue(shown.contains(name), name + " in " + shown);
         }
         assertTrue(shown.contains("顯示方式") && shown.contains("翻譯服務"), "column headers: " + shown);
@@ -654,7 +692,7 @@ class QuickSetupPanelTest {
         toDisplayPage(p, QuickSetupPanel.ID_METHOD_MACHINE);
         String before = json(host.cfg);
         press(p, engine(2)); // 物品提示 -> AI
-        press(p, mode(4)); // 名牌: 譯文 -> 不翻譯
+        press(p, mode(4)); // 名牌與告示牌: 譯文 -> 不翻譯
         assertEquals(before, json(host.cfg), "the configuration is untouched while the rows change");
         assertEquals(0, host.saves);
         assertTrue(p.draft().aiTooltip);

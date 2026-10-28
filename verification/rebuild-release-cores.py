@@ -280,6 +280,8 @@ def check_metadata(target, jar, port_checks):
         metadata = json.loads(jar.read('fabric.mod.json'))
         require(metadata['id'] == 'nyanlex' and metadata['version'] == VERSION,
                 f'Incorrect Fabric identity/version: {target.key}')
+        require(metadata['name'] == 'NyanLex Translator',
+                f'Incorrect Fabric display name: {target.key}')
         require(metadata['environment'] == 'client', f'Not a client mod: {target.key}')
         deps = metadata['depends']
         require(deps['minecraft'] == target.minecraft and deps['java'] == f'>={target.java}',
@@ -297,6 +299,7 @@ def check_metadata(target, jar, port_checks):
         rows = json.loads(jar.read('mcmod.info'))
         require(len(rows) == 1 and rows[0]['modid'] == 'nyanlex' and rows[0]['version'] == VERSION
                 and rows[0]['mcversion'] == target.minecraft, 'Incorrect Forge 1.12.2 metadata')
+        require(rows[0]['name'] == 'NyanLex Translator', 'Incorrect Forge 1.12.2 display name')
         require(rows[0]['logoFile'].lstrip('/') in names, 'Missing Forge 1.12.2 icon')
         main = PREFIX + 'forgelegacy/NyanLexForge.class'
         require(main in names, 'Missing Forge 1.12.2 entrypoint')
@@ -307,6 +310,8 @@ def check_metadata(target, jar, port_checks):
     require(metadata['modLoader'] == 'javafml', f'Incorrect FML loader: {target.key}')
     mods = [row for row in metadata['mods'] if row['modId'] == 'nyanlex']
     require(len(mods) == 1, f'Incorrect FML mod identity: {target.key}')
+    require(mods[0]['displayName'] == 'NyanLex Translator',
+            f'Incorrect FML display name: {target.key}')
     declared_version = mods[0]['version']
     if target.key == 'forge/1.13.2':
         # Forge 1.13.2 expands this standard macro from its retained manifest.

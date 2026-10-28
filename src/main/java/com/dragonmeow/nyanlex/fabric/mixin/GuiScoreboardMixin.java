@@ -171,7 +171,8 @@ public abstract class GuiScoreboardMixin {
             // Do not fall back to translating this isolated row: the outer hook already
             // queued its complete blank-line-delimited paragraph (or intentionally kept it).
             Component translated = text == null ? null : nyanlex$takeScoreboardRow(text);
-            Component toDraw = translated == null ? text : translated;
+            Component toDraw = translated == null || NyanLexFabric.projectionSuppressed()
+                    ? text : translated;
             Component rendered = toDraw;
             return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(
                     () -> g.drawString(font, rendered, x, y, color, shadow));
@@ -244,7 +245,7 @@ public abstract class GuiScoreboardMixin {
                                              Function<String, TranslationDecision> fn) {
         if (fn != null && text != null) {
             Component translated = FabricTextStyle.renderTranslated(surfaceId, text, fn);
-            if (translated != null) {
+            if (translated != null && !NyanLexFabric.projectionSuppressed()) {
                 int center = x + font.width(text) / 2; // keep the original's centre
                 java.util.List<Component> lines = FabricTextStyle.splitLines(translated);
                 if (lines.size() <= 1) {

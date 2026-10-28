@@ -17,7 +17,7 @@ new File(repositoryRoot, 'gradle.properties').withInputStream { commonProperties
 
 version = providers.gradleProperty('mod_version').getOrElse(commonProperties.getProperty('mod_version'))
 group = 'com.dragonmeow.nyanlex'
-base.archivesName = 'nyanlex'
+base.archivesName = 'NyanLex-Translator'
 layout.buildDirectory = file("build/${target}")
 
 repositories {

@@ -15,6 +15,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -27,12 +28,22 @@ import java.util.Optional;
 public abstract class BookPageMixin {
     @Shadow private int cachedPage;
 
+    /** The page lines are cached by Minecraft, so a G-mode transition must invalidate them once. */
+    @Unique
+    private DisplayMode nyanlex$lastBookMode;
+
     @Inject(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;IIF)V", at = @At("HEAD"), require = 0)
     private void nyanlex$resplit(PoseStack pose, int mouseX, int mouseY, float partial, CallbackInfo ci) {
         if (!HookGuard.enter("BookPage.resplit")) return;
         try {
             TranslationService service = NyanLexFabric.service();
-            if (service != null && service.bookMode() != DisplayMode.ORIGINAL_ONLY) cachedPage = -1;
+            DisplayMode currentMode = service == null
+                    ? DisplayMode.ORIGINAL_ONLY : service.bookMode();
+            if (currentMode != DisplayMode.ORIGINAL_ONLY
+                    || currentMode != nyanlex$lastBookMode) {
+                cachedPage = -1;
+            }
+            nyanlex$lastBookMode = currentMode;
         } catch (Throwable guardError) {
             HookGuard.fail("BookPage.resplit", guardError);
         }

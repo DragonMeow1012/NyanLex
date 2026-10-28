@@ -19,12 +19,12 @@ public final class InlineCodexSimulation{
             check(client.awaitLogin(login.loginId(),Duration.ofSeconds(3)),"ChatGPT login event was not completed");
             List<CodexAppServerClient.ModelOption> models=client.listModels();
             check(models.size()==2,"paginated model/list did not return two models");
-            CodexAppServerClient.ModelOption terra=models.get(0);
-            check("gpt-5.6-terra".equals(terra.model()),"terra was not first/default model");
-            check(terra.reasoningEfforts().contains("medium"),"terra medium effort missing");
-            check(terra.serviceTiers().contains("priority"),"terra priority tier missing");
+            CodexAppServerClient.ModelOption luna=models.get(0);
+            check("gpt-6-luna".equals(luna.model()),"luna was not first/default model");
+            check(luna.reasoningEfforts().contains("low"),"luna low effort missing");
+            check(luna.serviceTiers().contains("priority"),"luna priority tier missing");
             long started=System.nanoTime();
-            String translated=client.complete("gpt-5.6-terra","medium","Translate only.","Bloom Boat with Chest");
+            String translated=client.complete("gpt-6-luna","low","Translate only.","Bloom Boat with Chest");
             elapsed=(System.nanoTime()-started)/1_000_000L;
             check("帶有箱子的花船".equals(translated),"translation payload mismatch: "+translated);
             check(elapsed<3000L,"completion waited too long: "+elapsed+" ms");

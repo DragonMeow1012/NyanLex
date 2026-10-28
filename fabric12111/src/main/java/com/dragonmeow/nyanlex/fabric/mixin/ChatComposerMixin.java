@@ -27,6 +27,8 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
     @Unique private EditBox nyanlex$draft;
     @Unique private EditBox nyanlex$search;
     @Unique private boolean nyanlex$enterHeld;
+    // Opening chat types into vanilla's box; only a resize keeps the draft box focused.
+    @Unique private boolean nyanlex$keepDraftFocus;
     @Unique private ChatComposerPanel nyanlex$composer;
     @Unique private String[][] nyanlex$languageRows;
     protected ChatComposerMixin(Component title) { super(title); }
@@ -38,6 +40,7 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
             if (NyanLexFabric.config() == null || !NyanLexFabric.config().chatComposerEnabled
                     || input.getValue().startsWith("/")) return;
             String draft = nyanlex$draft == null ? ChatComposerPanel.savedDraft() : nyanlex$draft.getValue();
+            nyanlex$keepDraftFocus = nyanlex$draft != null && nyanlex$draft.isFocused();
             if (nyanlex$composer != null) nyanlex$composer.close();
             nyanlex$languageRows = nyanlex$languages();
             nyanlex$composer = new ChatComposerPanel(this);
@@ -45,13 +48,13 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
             nyanlex$draft = new EditBox(font, nyanlex$composer.inputX(), nyanlex$composer.inputY(),
                     nyanlex$composer.inputWidth(), 20, Component.translatable("nyanlex.composer.title"));
             nyanlex$search = new EditBox(font, nyanlex$composer.searchX(), nyanlex$composer.searchY(),
-                    nyanlex$composer.inputWidth(), 20, Component.translatable("screen.nyanlex.language.search"));
+                    nyanlex$composer.searchWidth(), 20, Component.translatable("screen.nyanlex.language.search"));
             nyanlex$search.setMaxLength(64);
             nyanlex$search.setResponder(text -> nyanlex$composer.search(text));
             nyanlex$draft.setMaxLength(256);
             nyanlex$draft.setValue(draft);
             nyanlex$draft.setResponder(text -> nyanlex$composer.observe());
-            nyanlex$focusDraft();
+            if (nyanlex$keepDraftFocus) nyanlex$focusDraft(); else nyanlex$focusChat();
         } catch (Throwable guardError) {
             HookGuard.fail("ChatComposer.initComposer", guardError);
         }
@@ -77,9 +80,7 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
     }
     @Unique @Override public void fill(String text) {
         input.setValue(text);
-        nyanlex$draft.setFocused(false);
-        input.setFocused(true);
-        setFocused(input);
+        nyanlex$focusChat();
     }
     @Unique @Override public boolean current() { return minecraft.screen == this; }
     @Unique @Override public void execute(Runnable action) { minecraft.execute(action); }
@@ -103,6 +104,12 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
             nyanlex$search.setFocused(true);
         } else nyanlex$focusDraft();
     }
+    @Unique private void nyanlex$focusChat() {
+        if (nyanlex$draft != null) nyanlex$draft.setFocused(false);
+        if (nyanlex$search != null) nyanlex$search.setFocused(false);
+        input.setFocused(true);
+        setFocused(input);
+    }
     @Unique private void nyanlex$focusDraft() {
         if (nyanlex$composer == null) return;
         nyanlex$search.setFocused(false);
@@ -114,7 +121,8 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
     private void nyanlex$initialFocus(CallbackInfo ci) {
         if (!HookGuard.enter("ChatComposer.initialFocus")) return;
         try {
-     nyanlex$focusDraft();
+            if (nyanlex$draft == null) return;
+            if (nyanlex$keepDraftFocus) nyanlex$focusDraft(); else nyanlex$focusChat();
         } catch (Throwable guardError) {
             HookGuard.fail("ChatComposer.initialFocus", guardError);
         }
@@ -162,19 +170,21 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
             if (nyanlex$composer == null) return;
             if (nyanlex$composer.choosing()) {
                 if (event.y() >= nyanlex$composer.searchY() && event.y() < nyanlex$composer.searchY() + 20
-                        && event.x() >= nyanlex$composer.searchX() && event.x() < nyanlex$composer.searchX() + nyanlex$composer.inputWidth())
+                        && event.x() >= nyanlex$composer.searchX() && event.x() < nyanlex$composer.searchX() + nyanlex$composer.searchWidth())
                     nyanlex$search.mouseClicked(event, doubleClick);
                 else nyanlex$composer.click(event.x(), event.y(), event.button());
                 nyanlex$focusSearch(); ci.setReturnValue(true); return;
             }
             boolean inside = nyanlex$composer.contains(event.x(), event.y());
             if (inside) {
-                if (event.y() >= nyanlex$composer.inputY() && event.y() < nyanlex$composer.inputY() + 20) {
+                if (nyanlex$composer.clearContains(event.x(), event.y())) {
+                    nyanlex$draft.setValue(""); nyanlex$focusDraft();
+                } else if (event.y() >= nyanlex$composer.inputY() && event.y() < nyanlex$composer.inputY() + 20) {
                     nyanlex$focusDraft(); nyanlex$draft.mouseClicked(event, doubleClick);
                 } else nyanlex$composer.click(event.x(), event.y(), event.button());
                 if (nyanlex$composer.choosing()) nyanlex$focusSearch();
                 ci.setReturnValue(true);
-            } else { nyanlex$draft.setFocused(false); input.setFocused(true); setFocused(input); }
+            } else nyanlex$focusChat();
         } catch (Throwable guardError) {
             HookGuard.fail("ChatComposer.clickComposer", guardError);
         }
@@ -211,7 +221,7 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
             if (nyanlex$composer == null || !nyanlex$draft.isFocused()) return;
             if (key == 256) return;
             if (key == 257 || key == 335) { nyanlex$enterHeld = true; nyanlex$composer.submit(); }
-            else if (key == 258) { nyanlex$draft.setFocused(false); input.setFocused(true); setFocused(input); }
+            else if (key == 258) nyanlex$focusChat();
             else nyanlex$draft.keyPressed(event);
             ci.setReturnValue(true);
         } catch (Throwable guardError) {

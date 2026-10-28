@@ -6,7 +6,7 @@
 gradle -p ports/fabric-modern --project-cache-dir "$PWD/ports/fabric-modern/.gradle/targets/1.21.6" '-Ptarget=1.21.6' build
 ```
 
-The artifact is `build/<target>/libs/nyanlex-<mod_version>-Fabric-<target>.jar` relative to this directory. `mod_version` comes from the repository's root `gradle.properties`. Always pass a target-specific `--project-cache-dir`: changing `-Ptarget` while sharing task history can make Gradle remove the previous target's classes as stale outputs. The command above isolates that history under `.gradle/targets/<target>`.
+The artifact is `build/<target>/libs/NyanLex-Translator-<mod_version>-Fabric-<target>.jar` relative to this directory. `mod_version` comes from the repository's root `gradle.properties`. Always pass a target-specific `--project-cache-dir`: changing `-Ptarget` while sharing task history can make Gradle remove the previous target's classes as stale outputs. The command above isolates that history under `.gradle/targets/<target>`.
 
 ## Source ownership
 

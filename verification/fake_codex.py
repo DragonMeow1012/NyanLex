@@ -66,11 +66,11 @@ for raw in sys.stdin:
             }], "nextCursor": None}
         else:
             result = {"data": [{
-                "model": "gpt-5.6-terra",
-                "displayName": "GPT-5.6 Terra",
+                "model": "gpt-6-luna",
+                "displayName": "GPT-6 Luna",
                 "supportedReasoningEfforts": [{"reasoningEffort": "low"}, {"reasoningEffort": "medium"}, {"reasoningEffort": "high"}],
                 "serviceTiers": [{"id": "default"}, {"id": "priority"}],
-                "defaultReasoningEffort": "medium",
+                "defaultReasoningEffort": "low",
                 "isDefault": True
             }], "nextCursor": "page-2"}
     elif method == "mcpServerStatus/list":

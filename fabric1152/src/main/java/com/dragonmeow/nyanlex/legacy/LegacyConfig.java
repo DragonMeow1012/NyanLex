@@ -4,8 +4,8 @@ import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import java.util.Locale;
 
 public final class LegacyConfig {
-    static final String DEFAULT_CODEX_MODEL = "gpt-5.6-terra";
-    static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
+    static final String DEFAULT_CODEX_MODEL = "gpt-6-luna";
+    static final String DEFAULT_CODEX_REASONING_EFFORT = "low";
     boolean enabled = true;
     boolean followGameLanguage = true;
     boolean showOriginal = true;

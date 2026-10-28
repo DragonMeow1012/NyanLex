@@ -5,7 +5,7 @@ plugins {
 
 version = project.mod_version
 group = project.maven_group
-base { archivesName = 'nyanlex' }
+base { archivesName = project.archives_base_name }
 
 tasks.named('jar') {
     // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.

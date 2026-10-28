@@ -41,6 +41,7 @@ public final class ChatComposerPanel {
     private String lastDraft, lastChat;
     private String search = "";
     private static final int SEARCH_HEIGHT = 36;
+    private static final int CLEAR_SIZE = 14;
     public static final int HEIGHT = 90;
 
     public ChatComposerPanel(Host host) { this.host = host; }
@@ -61,7 +62,13 @@ public final class ChatComposerPanel {
     private static int clamp(int n, int min, int max) { return Math.max(min, Math.min(max, n)); }
     public int inputX() { return x + 8; }
     public int inputY() { return y + 23; }
-    public int inputWidth() { return width - 16; }
+    // The draft box leaves room on its right for the clear button; search keeps the full row.
+    public int inputWidth() { return width - 16 - CLEAR_SIZE - 2; }
+    public int searchWidth() { return width - 16; }
+    public int clearX() { return x + width - 8 - CLEAR_SIZE; }
+    public boolean clearContains(double mx, double my) {
+        return !host.draft().isEmpty() && inside(mx, my, clearX(), inputY(), CLEAR_SIZE, 20);
+    }
     public boolean busy() { return busy; }
     public boolean contains(double mx, double my) { return inside(mx, my, x, y, width, HEIGHT); }
     public boolean choosing() { return choosing; }
@@ -229,6 +236,10 @@ public final class ChatComposerPanel {
                 ? targetLabel.replace("%s", language) : targetLabel + language;
         g.text(fit(targetLabel + " ▾", width / 2 - 24), x + 13, y + 54, 0xFFFFFFFF);
         g.text(fit(label(busy ? "working" : "fill"), width / 2 - 20), x + width / 2 + 5, y + 54, 0xFFFFFFFF);
+        if (!host.draft().isEmpty()) {
+            g.fill(clearX(), inputY(), CLEAR_SIZE, 20, 0xFF4A3F55);
+            g.text("×", clearX() + (CLEAR_SIZE - host.textWidth("×")) / 2, inputY() + 6, 0xFFFFFFFF);
+        }
         g.text(fit(label(status), width - 16), x + 8, y + 76,
                 "ready".equals(status) ? 0xFF8EE5B1 : 0xFFC6C8D3);
     }

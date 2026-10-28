@@ -1,0 +1,44 @@
+package com.dragonmeow.nyanlex.fabric.mixin;
+
+import com.dragonmeow.nyanlex.fabric.WorldSignRenderAdapter;
+import com.dragonmeow.nyanlex.translate.HookGuard;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.blockentity.SignRenderer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
+
+import java.util.function.Function;
+
+/** 1.17–1.18 renderer profile: vanilla sign text has a fixed 90 px row width. */
+@Mixin(SignRenderer.class)
+public abstract class SignRendererLayoutMixin {
+    @Shadow @Final private Font font;
+
+    @Redirect(
+            method = "render(Lnet/minecraft/world/level/block/entity/SignBlockEntity;F"
+                    + "Lcom/mojang/blaze3d/vertex/PoseStack;"
+                    + "Lnet/minecraft/client/renderer/MultiBufferSource;II)V",
+            at = @At(value = "INVOKE", target =
+                    "Lnet/minecraft/world/level/block/entity/SignBlockEntity;"
+                            + "getRenderMessages(ZLjava/util/function/Function;)"
+                            + "[Lnet/minecraft/util/FormattedCharSequence;"),
+            require = 1)
+    private FormattedCharSequence[] nyanlex$fitTranslatedRows(
+            SignBlockEntity sign, boolean filtered,
+            Function<Component, FormattedCharSequence> layout,
+            SignBlockEntity renderedSign, float partialTick, PoseStack pose,
+            MultiBufferSource buffers, int packedLight, int packedOverlay) {
+        return HookGuard.call("SignRendererLayout.fitTranslatedRows",
+                () -> WorldSignRenderAdapter.fit(
+                        90, pose, this.font, () -> sign.getRenderMessages(filtered, layout)),
+                () -> sign.getRenderMessages(filtered, layout));
+    }
+}

@@ -119,10 +119,14 @@ def changelog(target) -> str:
 
 ### Fixes in this build
 
-- October 7 refresh: all 62 JARs rebuilt from source with the .02 echo-fix baseline (1.0.0-echo-fix.20261006.2). Repeated unchanged results stop resubmitting at the echo threshold; keep-original decisions survive restarts, and already-Chinese server notices bypass unnecessary requests.
-- Incoming chat has three modes on modern and legacy builds: show translations in order, show translations when ready, or show the original immediately and add its translation in place (default). Late translations preserve message position and age; cleared messages stay cleared.
-- Restored ordered delivery and fixed mouse/keyboard cycling and saving of the modern chat-mode button.
-- Verified 62 source builds, 27,223 final-JAR core/echo checks and 2,907 modern settings-panel checks. Minecraft 26.1.2 / Fabric passed 20 in-game checks in a local world with a controlled translation service. This does not claim in-game testing of every target or public multiplayer servers.
+- October 29 refresh: all 62 release JARs use the full `NyanLex-Translator` artifact name, and the in-game mod-list name remains **NyanLex Translator**. The `/nyanlex` command is unchanged.
+- API-key fields are masked by default and include a small show/hide control, so a key can be checked without leaving it permanently exposed on the settings screen.
+- ChatGPT/Codex starts with `gpt-6-luna` at low reasoning effort. Existing saved provider and model choices are preserved.
+- Translation-pack discovery runs on the final Quick setup page, after the player has confirmed the target language. Packs can still be checked later from Pack settings.
+- On supported modern builds, pressing `G` now switches translated books back to the original immediately. Those builds also translate the four visible rows of world signs on the client, preserve sign colour/glow, fit long translated rows, and return to the untouched original with `G`.
+- Removed the experimental global text-width projection that could make custom server or mod tooltips overlap. Each supported renderer keeps ownership of its native measurement and layout.
+- OCR was evaluated but intentionally not included: this release adds no OCR model, native OCR runtime, screenshot text scan, or OCR data disclosure. Text embedded only in images remains outside translation coverage.
+- The existing three incoming-chat delivery modes remain available: ordered, ready-first, or original-first with the translation added in place (default). Echo suppression, keep-original persistence and Chinese-text bypass remain in place.
 - Modern builds hide Antigravity by default. Enable it in Advanced settings after reviewing account, privacy and service risks; official sign-in does not establish third-party integration authorization.
 - CLI translations use dedicated profiles, untrusted-text boundaries, tool restrictions and bounded process handling. Unknown remaining allowance does not block translation; service-reported CLI limits pause requests.
 - Antigravity uses an official pre-tool denial hook. Live testing covered CLI 1.2.16 and selected scenarios; this is not an operating-system sandbox or an all-version guarantee.
@@ -134,6 +138,8 @@ def changelog(target) -> str:
 - Existing API-key rotation and individual key cooldown behavior are retained.
 
 Online translation is disabled by default on new installations. Use only the JAR matching this exact Minecraft version and loader. Translation coverage depends on how each mod renders text; text embedded in images is not translated.
+
+All 62 loader/version artifacts are rebuilt and statically verified before this refresh is published. Minecraft 26.1.2 / Fabric was also tested interactively for the book toggle and translated tooltip display. This does not claim an in-game playthrough of every target or compatibility certification for every modpack/server.
 
 [Full documentation](https://github.com/DragonMeow1012/NyanLex/blob/main/README.en.md)"""
 

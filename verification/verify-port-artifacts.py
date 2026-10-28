@@ -46,6 +46,7 @@ def check_metadata(target, jar):
     if target.loader == "fabric":
         metadata = json.loads(jar.read("fabric.mod.json"))
         require(metadata["id"] == "nyanlex" and metadata["version"] == VERSION, "Incorrect mod identity/version")
+        require(metadata["name"] == "NyanLex Translator", "Incorrect Fabric display name")
         require(metadata["environment"] == "client", "Not client-only")
         deps = metadata["depends"]
         api_id = spec.get("fabricApiId", "fabric-api")
@@ -63,6 +64,7 @@ def check_metadata(target, jar):
     require(metadata["modLoader"] == "javafml", "Incorrect NeoForge mod loader")
     mods = [mod for mod in metadata["mods"] if mod["modId"] == "nyanlex"]
     require(len(mods) == 1 and mods[0]["version"] == VERSION, "Incorrect NeoForge identity/version")
+    require(mods[0]["displayName"] == "NyanLex Translator", "Incorrect NeoForge display name")
     deps = metadata["dependencies"]["nyanlex"]
     require({dep["modId"] for dep in deps} == {"minecraft", "neoforge"}, "Incorrect NeoForge dependencies")
     game = next(dep for dep in deps if dep["modId"] == "minecraft")

@@ -655,13 +655,13 @@
       "count": 1
     },
     {
-      "from": "\n        if (fcs != null && Minecraft.getInstance().gui.screen() != null\n",
-      "to": "\n        if (fcs != null && Minecraft.getInstance().screen != null\n",
+      "from": "\n        if (fcs != null && mc.gui.screen() != null\n",
+      "to": "\n        if (fcs != null && mc.screen != null\n",
       "count": 1
     },
     {
-      "from": "\n                && Minecraft.getInstance().gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
-      "to": "\n                && Minecraft.getInstance().screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "from": "\n                && (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)\n",
+      "to": "\n                && (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)\n",
       "count": 1
     },
     {
@@ -670,8 +670,8 @@
       "count": 1
     },
     {
-      "from": "\n        if (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
-      "to": "\n        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;\n",
+      "from": "\n                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen)) return fcs;\n",
+      "to": "\n                || mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen)) return fcs;\n",
       "count": 1
     },
     {
@@ -765,8 +765,8 @@
       "count": 1
     },
     {
-      "from": "\n                    TOOLTIP_CAPTURE.record(tooltipClient.gui.screen(), source);\n",
-      "to": "\n                    TOOLTIP_CAPTURE.record(tooltipClient.screen, source);\n",
+      "from": "\n                    TOOLTIP_CAPTURE.recordRequest(tooltipClient.gui.screen(), source);\n",
+      "to": "\n                    TOOLTIP_CAPTURE.recordRequest(tooltipClient.screen, source);\n",
       "count": 1
     },
     {
@@ -800,8 +800,8 @@
       "count": 1
     },
     {
-      "from": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.gui.screen(), request);\n",
-      "to": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.screen, request);\n",
+      "from": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.recordRequest(mc.gui.screen(), request);\n",
+      "to": "\n        for (String request : Neo26TextStyle.requestLines(source)) SCREEN_CAPTURE.recordRequest(mc.screen, request);\n",
       "count": 1
     },
     {
@@ -1063,6 +1063,18 @@
     {
       "from": "\n            method = \"text(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V\",\n",
       "to": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V\",\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/SignRendererLayoutMixin.java": [
+    {
+      "from": "\n            method = \"submitSignText(Lnet/minecraft/client/renderer/blockentity/state/SignRenderState;\"\n                    + \"Lcom/mojang/blaze3d/vertex/PoseStack;\"\n                    + \"Lnet/minecraft/client/renderer/SubmitNodeCollector;\"\n                    + \"Lnet/minecraft/world/level/block/entity/SignText;)V\",\n",
+      "to": "\n            method = \"submitSignText(Lnet/minecraft/client/renderer/blockentity/state/SignRenderState;\"\n                    + \"Lcom/mojang/blaze3d/vertex/PoseStack;\"\n                    + \"Lnet/minecraft/client/renderer/SubmitNodeCollector;Z)V\",\n",
+      "count": 1
+    },
+    {
+      "from": "\n            SignRenderState state, PoseStack pose, SubmitNodeCollector collector,\n            SignText renderedText) {\n",
+      "to": "\n            SignRenderState state, PoseStack pose, SubmitNodeCollector collector,\n            boolean front) {\n",
       "count": 1
     }
   ],

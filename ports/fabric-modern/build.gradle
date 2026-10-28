@@ -20,7 +20,7 @@ def releaseProperties = new Properties()
 new File(repositoryRoot, 'gradle.properties').withInputStream { releaseProperties.load(it) }
 version = releaseProperties.getProperty('mod_version')
 group = 'com.dragonmeow.nyanlex'
-base { archivesName = 'nyanlex' }
+base { archivesName = 'NyanLex-Translator' }
 layout.buildDirectory = file("build/${target}")
 
 repositories {

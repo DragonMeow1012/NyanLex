@@ -15,6 +15,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SettingsPanelTest {
@@ -60,7 +61,6 @@ class SettingsPanelTest {
                 ItemWarmupDriver.PauseReason.NONE, 0, 0, 0, false);
         String clipboard = "";
         String lang = "zh_tw";
-
         @Override public TranslatorConfig config() { return cfg; }
         @Override public void saveConfig() { saves++; }
         @Override public String text(String key, Object... args) { return lookup(lang, key, args); }

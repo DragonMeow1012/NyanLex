@@ -19,6 +19,7 @@ import com.dragonmeow.nyanlex.hub.HubDownloader;
 import com.dragonmeow.nyanlex.hub.HubLocalCache;
 import com.dragonmeow.nyanlex.hub.HubPaths;
 import com.dragonmeow.nyanlex.hub.HubPlan;
+import com.dragonmeow.nyanlex.hub.HubPlanDiscovery;
 import com.dragonmeow.nyanlex.hub.HubRepository;
 import com.dragonmeow.nyanlex.hub.ModpackDetector;
 import com.dragonmeow.nyanlex.hub.ModpackIdentity;
@@ -114,10 +115,8 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static HubDownloadState hubDownloadState;
     private static HubDownloader hubDownloader;
     private static final HubDownloadJob hubDownloadJob = new HubDownloadJob();
+    private static final HubPlanDiscovery packDiscovery = new HubPlanDiscovery();
     private static boolean firstStartTried;
-    private static volatile com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState packState =
-            com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.IDLE;
-    private static volatile HubPlan packPlan;
     private static volatile boolean keybindMigrationChecked;
 
     private static KeyMapping modeKey;
@@ -839,12 +838,12 @@ public final class NyanLexFabric implements ClientModInitializer {
 
     /** State of the background pack check started by the questionnaire. */
     public static com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState packState() {
-        return packState;
+        return com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.valueOf(packDiscovery.state().name());
     }
 
     /** The mods that have a pack worth downloading, as one text line each, with the total size. */
     public static com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo packInfo() {
-        HubPlan plan = packPlan;
+        HubPlan plan = packDiscovery.plan();
         if (plan == null) return new com.dragonmeow.nyanlex.config.QuickSetupPanel.PackInfo(0, "", List.of());
         List<String> lines = new ArrayList<>();
         for (var item : plan.downloadable()) {
@@ -858,38 +857,22 @@ public final class NyanLexFabric implements ClientModInitializer {
      * Looks, in the background, for translation packs for the installed mods. This only reads the
      * public pack index (a plain GET); no player text and no list of mods is sent anywhere.
      */
-    public static void startPackDetection() {
-        if (hubDownloader == null || config == null
-                || packState == com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.DETECTING) return;
-        packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.DETECTING;
-        packPlan = null;
-        runHubBackground(() -> {
-            try {
-                List<String> modIds = loadedModIds();
-                Optional<ModpackIdentity> modpack = ModpackDetector.detect(hubCandidateRoots(), modIds, null);
-                HubPlan plan = hubDownloader.planStartupMods(false, modpack.orElse(null), modIds,
-                        config.targetLang, hubDownloadState);
-                if (plan.downloadable().isEmpty()) {
-                    packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.NONE;
-                } else {
-                    packPlan = plan;
-                    packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.FOUND;
-                }
-            } catch (IOException | RuntimeException e) {
-                packState = com.dragonmeow.nyanlex.config.QuickSetupPanel.PackState.FAILED;
-            }
+    public static void startPackDetection(String targetLanguage) {
+        if (hubDownloader == null || config == null) return;
+        packDiscovery.start(targetLanguage, hubExecutor(), language -> {
+            List<String> modIds = loadedModIds();
+            Optional<ModpackIdentity> modpack = ModpackDetector.detect(hubCandidateRoots(), modIds, null);
+            return hubDownloader.planStartupMods(false, modpack.orElse(null), modIds,
+                    language, hubDownloadState);
         });
     }
 
-    /** Downloads the packs found by {@link #startPackDetection()} in the background. */
-    public static void startPackDownload() {
-        HubPlan plan = packPlan;
-        if (plan == null || hubDownloader == null || hubDownloadJob.isRunning()) return;
+    /** Downloads a matching plan after 完成 has switched the live cache to this language. */
+    public static void startPackDownload(String targetLanguage) {
+        HubPlan plan = packDiscovery.planFor(targetLanguage);
+        if (plan == null || hubDownloader == null || hubLocalCache == null || hubDownloadJob.isRunning()
+                || !plan.language().equals(hubLocalCache.language())) return;
         hubDownloadJob.start(plan, hubDownloader, hubLocalCache, hubDownloadState, hubExecutor());
-    }
-
-    public static boolean packDownloading() {
-        return hubDownloadJob.isRunning();
     }
 
     /** An API key or authenticated local account provider makes the AI service usable. */
@@ -1101,15 +1084,15 @@ public final class NyanLexFabric implements ClientModInitializer {
 
     public static net.minecraft.util.FormattedCharSequence screenText(net.minecraft.util.FormattedCharSequence fcs) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return fcs;
-        if (fcs != null && Minecraft.getInstance().screen != null
-                && Minecraft.getInstance().screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;
+        Minecraft mc = Minecraft.getInstance();
+        if (fcs != null && mc.screen != null
+                && (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)
+                || mc.screen instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen)) return fcs;
         if (fcs != null && captureScreenText(FabricTextStyle.toComponent(fcs))) return fcs;
         TranslationService s = service;
         if (s == null || fcs == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return fcs;
-        Minecraft mc = Minecraft.getInstance();
         if (!renderingCurrentScreen(mc)
                 || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) return fcs;
-        if (mc.screen.getClass().getName().startsWith(QUEST_UI_PACKAGE)) return fcs;
         Component source = FabricTextStyle.toComponent(fcs);
         Component styled = FabricTextStyle.renderTranslated(
                 "screenTextFcs", source, s::translateScreenText);
@@ -1265,6 +1248,33 @@ public final class NyanLexFabric implements ClientModInitializer {
      *  name as a whole token is a real player's tag and stays verbatim. */
     public static Component nameTag(Component c) {
         return nameTag(null, c);
+    }
+
+    /** Projects the four visible rows of a world sign without changing its client data.
+     * The renderer keeps ownership of dye colour, glow, outline and row geometry. */
+    public static Component[] worldSignLines(Component[] source) {
+        TranslationService s = service;
+        if (s == null || source == null || source.length != 4
+                || s.nameMode() == DisplayMode.ORIGINAL_ONLY) return source;
+
+        java.util.List<String> requests = new java.util.ArrayList<>(4);
+        for (Component line : source) {
+            String request = FabricTextStyle.requestText(line);
+            if (!request.isBlank()) requests.add(request);
+        }
+        if (!requests.isEmpty()) s.warmWorldTextBatch(requests);
+
+        Component[] projected = source.clone();
+        boolean changed = false;
+        for (int i = 0; i < source.length; i++) {
+            Component translated = FabricTextStyle.renderTranslated(
+                    "worldSign", source[i], s::translateUi);
+            if (translated != null && !translated.equals(source[i])) {
+                projected[i] = translated;
+                changed = true;
+            }
+        }
+        return changed ? projected : source;
     }
 
     private static Component translateNameTag(Component c) {
@@ -2175,7 +2185,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         Minecraft captureClient = Minecraft.getInstance();
         if (captureClient != null && lines != null && TOOLTIP_CAPTURE.active(captureClient.screen)) {
             for (String source : tooltipParagraphPlan(stack, lines, FabricTextStyle::paragraphRequestText).sources()) {
-                TOOLTIP_CAPTURE.record(captureClient.screen, source);
+                TOOLTIP_CAPTURE.recordRequest(captureClient.screen, source);
             }
             return;
         }
@@ -2518,7 +2528,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || source == null || !SCREEN_CAPTURE.active(mc.screen)) return false;
         if (!widgetInput && !renderingCurrentScreen(mc)) return false;
-        for (String request : FabricTextStyle.requestLines(source)) SCREEN_CAPTURE.record(mc.screen, request);
+        for (String request : FabricTextStyle.requestLines(source)) SCREEN_CAPTURE.recordRequest(mc.screen, request);
         return true;
     }
 

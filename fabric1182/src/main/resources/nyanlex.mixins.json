@@ -13,6 +13,8 @@
     "FontSplitMixin",
     "GuiScoreboardMixin",
     "OptionsScreenMixin",
+    "SignRendererLayoutMixin",
+    "SignTextMixin",
     "AdvancementToastMixin",
     "ChatComposerMixin"
   ],

@@ -246,6 +246,7 @@ public abstract class HudMixin {
                 nyanlex$scoreboardSources.removeFirst();
                 toDraw = nyanlex$scoreboardRendered.removeFirst();
             }
+            if (NyanLexFabric26.projectionSuppressed()) toDraw = text;
             Component rendered = toDraw;
             com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(
                     () -> g.text(font, rendered, x, y, color, shadow));
@@ -330,7 +331,7 @@ public abstract class HudMixin {
                                               Function<String, TranslationDecision> fn) {
         if (fn != null && text != null) {
             Component translated = Fabric26TextStyle.renderTranslated(surfaceId, text, fn);
-            if (translated != null) {
+            if (translated != null && !NyanLexFabric26.projectionSuppressed()) {
                 int center = x + font.width(text) / 2; // keep the original's centre
                 List<Component> lines = Fabric26TextStyle.splitLines(translated);
                 if (lines.size() <= 1) {
