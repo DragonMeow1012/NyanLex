@@ -35,7 +35,8 @@ LEGACY_SETTINGS_KEYS = ["config.nyanlex.online", "config.nyanlex.online.desc",
 # The requests screen class name is chosen per tree, so find it by its title key.
 REQUEST_UI_STRING = b"screen.nyanlex.requests.title"
 CONFIG_FIELDS = [b"translationRequestsEnabled", b"doNotTranslateTerms",
-                 b"chatDeliveryMode", b"chatComposerEnabled", b"chatComposerLanguage", b"chatComposerX", b"chatComposerY"]
+                 b"chatDeliveryMode", b"chatComposerEnabled", b"chatComposerLanguage", b"chatComposerX", b"chatComposerY",
+                 b"aiFastMode", b"hideAiFastModeNotice", b"aiModelsByEndpoint", b"rememberApiModel", b"apiModelFor"]
 # Modern core: translate/<name>.class
 MODERN_REQUEST_CLASSES = ["DoNotTranslateMatcher", "RequestGate", "RequestsPausedException"]
 # Legacy core (Java 8) keeps its switch/term code inside the eight synced core files.
@@ -311,17 +312,31 @@ def check_jar(target, path):
                     jar, PREFIX + "cache/" + name + ".class", target, False)
                 assert b"size" in cache_class, (target, name, "durable size contract")
 
+        catalog = read_class(jar, PREFIX + "translate/ApiModelCatalog.class", target, legacy)
+        assert b"supportedGenerationMethods" in catalog and b"nextPageToken" in catalog, (target, "model discovery")
+        ai_screens = [name for name in jar.namelist() if name.startswith(PREFIX)
+                      and name.endswith(("AiConfigScreen.class", "AiScreen.class"))]
+        assert ai_screens, (target, "missing AI settings screen")
+        for name in ai_screens:
+            screen = read_class(jar, name, target, legacy)
+            for marker in [b"aiFastMode", b"readApiModels", b"screen.nyanlex.ai.fast.off"]:
+                assert marker in screen, (target, name, marker)
         languages = ["en_us", "ja_jp", "zh_tw", "zh_cn"]
         extension = "lang" if target == "forge1122" else "json"
         for language in languages:
             text = read_entry(jar, "assets/nyanlex/lang/" + language + "." + extension, target).decode("utf-8")
             settings_keys = LEGACY_SETTINGS_KEYS if legacy else MODERN_SETTINGS_KEYS
             for key in REQUEST_KEYS + settings_keys + ["key.nyanlex.screenscan",
+                    "screen.nyanlex.ai.fast.on", "screen.nyanlex.ai.fast.off", "screen.nyanlex.ai.fast.message",
+                    "screen.nyanlex.ai.api.read_models", "screen.nyanlex.ai.api.model_picker.title",
                     "nyanlex.composer.title", "nyanlex.composer.fill", "nyanlex.composer.paused",
                     "config.nyanlex.composer" if legacy else "nyanlex.settings.composer"]:
                 values = key_values(text, extension, key)
                 assert len(values) == 1, (target, language, key, len(values))
                 assert values[0].strip(), (target, language, key, "empty value")
+            if language == "zh_tw":
+                assert key_values(text, extension, "screen.nyanlex.ai.fast.on") == ["快速模式：開"], (target, "outdated fast-mode label")
+                assert key_values(text, extension, "screen.nyanlex.ai.fast.off") == ["快速模式：關"], (target, "outdated fast-mode label")
 
         # 1.0.7 settings UI: some class of this JAR opens the requests/terms screen.
         request_ui = sorted(name for name in jar.namelist()

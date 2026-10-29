@@ -23,6 +23,16 @@ import java.util.Locale;
 /** Searchable model picker shared by the ChatGPT and Google sign-in modes. */
 public final class Neo26LocalAiModelScreen extends OptionsSubScreen {
     private final boolean antigravity;
+    private List<String> apiModels;
+    private String apiActiveModel;
+    private java.util.function.Consumer<String> onApiSelection;
+
+    public Neo26LocalAiModelScreen withApiModels(List<String> models, String active, java.util.function.Consumer<String> selected) {
+        this.apiModels = List.copyOf(models);
+        this.apiActiveModel = active;
+        this.onApiSelection = selected;
+        return this;
+    }
     private ModelSelectionList modelList;
     private EditBox search;
 
@@ -30,7 +40,8 @@ public final class Neo26LocalAiModelScreen extends OptionsSubScreen {
         super(parent, Minecraft.getInstance().options, Component.translatable(
                 NyanLexNeoForge26.config().usesAntigravity()
                         ? "screen.nyanlex.ai.antigravity.model_picker.title"
-                        : "screen.nyanlex.ai.codex.model_picker.title"));
+                        : NyanLexNeoForge26.config().usesCodex() ? "screen.nyanlex.ai.codex.model_picker.title"
+                        : "screen.nyanlex.ai.api.model_picker.title"));
         this.antigravity = NyanLexNeoForge26.config().usesAntigravity();
         this.layout.setFooterHeight(36);
     }
@@ -87,6 +98,11 @@ public final class Neo26LocalAiModelScreen extends OptionsSubScreen {
     }
 
     private void choose(ModelChoice option) {
+        if (this.onApiSelection != null) {
+            this.onApiSelection.accept(option.model());
+            this.minecraft.setScreenAndShow(this.lastScreen);
+            return;
+        }
         TranslatorConfig cfg = NyanLexNeoForge26.config();
         if (this.antigravity) {
             cfg.antigravityModel = option.model();
@@ -106,6 +122,8 @@ public final class Neo26LocalAiModelScreen extends OptionsSubScreen {
     }
 
     private List<ModelChoice> models() {
+        if (this.apiModels != null) return this.apiModels.stream()
+                .map(id -> new ModelChoice(id, id)).collect(java.util.stream.Collectors.toList());
         if (this.antigravity) {
             AntigravityCliClient client = NyanLexNeoForge26.antigravityClient();
             return client == null ? List.of() : client.cachedModels().stream()
@@ -119,6 +137,7 @@ public final class Neo26LocalAiModelScreen extends OptionsSubScreen {
     }
 
     private String activeModel() {
+        if (this.apiModels != null) return this.apiActiveModel;
         TranslatorConfig cfg = NyanLexNeoForge26.config();
         return this.antigravity ? cfg.antigravityModel : cfg.codexModel;
     }

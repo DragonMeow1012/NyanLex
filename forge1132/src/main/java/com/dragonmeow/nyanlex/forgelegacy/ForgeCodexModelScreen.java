@@ -8,6 +8,20 @@ import java.util.List;
 import java.util.Locale;
 final class ForgeCodexModelScreen extends GuiScreen implements ForgeButton.Handler{
     private final GuiScreen parent;
+    private List<LegacyCodexClient.ModelOption> apiModels;
+    private java.util.function.Consumer<String> onApiSelection;
+    ForgeCodexModelScreen withApiModels(List<String> models,java.util.function.Consumer<String> selected){
+        apiModels=new ArrayList<LegacyCodexClient.ModelOption>();
+        for(String id:models)apiModels.add(new LegacyCodexClient.ModelOption(id,id,
+                java.util.Collections.<String>emptyList(),java.util.Collections.<String>emptyList(),"",false));
+        onApiSelection=selected;
+        return this;
+    }
+    private List<LegacyCodexClient.ModelOption> catalog(){
+        if(apiModels!=null)return apiModels;
+        LegacyCodexClient c=NyanLexForge.codexClient();
+        return c==null?java.util.Collections.<LegacyCodexClient.ModelOption>emptyList():c.cachedModels();
+    }
     private GuiTextField search;
     private final List<LegacyCodexClient.ModelOption> shown=new ArrayList<LegacyCodexClient.ModelOption>();
     private int page,selected=-1;
@@ -22,8 +36,7 @@ final class ForgeCodexModelScreen extends GuiScreen implements ForgeButton.Handl
     private void rebuild(){
         String q=search==null?"":search.getText().trim().toLowerCase(Locale.ROOT);
         shown.clear();
-        LegacyCodexClient c=NyanLexForge.codexClient();
-        if(c!=null)for(LegacyCodexClient.ModelOption o:c.cachedModels())if(q.isEmpty()||o.model().toLowerCase(Locale.ROOT).contains(q)||o.displayName().toLowerCase(Locale.ROOT).contains(q))shown.add(o);
+        for(LegacyCodexClient.ModelOption o:catalog())if(q.isEmpty()||o.model().toLowerCase(Locale.ROOT).contains(q)||o.displayName().toLowerCase(Locale.ROOT).contains(q))shown.add(o);
         int pages=Math.max(1,(shown.size()+7)/8);
         if(page>=pages)page=pages-1;
         buttons.clear();
@@ -68,6 +81,7 @@ final class ForgeCodexModelScreen extends GuiScreen implements ForgeButton.Handl
     private void apply(){
         if(selected>=0&&selected<shown.size()){
             LegacyCodexClient.ModelOption o=shown.get(selected);
+            if(onApiSelection!=null){onApiSelection.accept(o.model());mc.displayGuiScreen(parent);return;}
             LegacyConfig c=NyanLexForge.config();
             c.codexModel=o.model();
             ForgeAiConfigScreen.normalizeEffort(c,o);
@@ -107,7 +121,7 @@ final class ForgeCodexModelScreen extends GuiScreen implements ForgeButton.Handl
     }
     @Override public void render(int x,int y,float d){
         drawDefaultBackground();
-        drawCenteredString(fontRenderer,"Choose Codex model",width/2,8,0xFFFFFF);
+        drawCenteredString(fontRenderer,net.minecraft.client.resources.I18n.format(apiModels==null?"screen.nyanlex.ai.codex.model_picker.title":"screen.nyanlex.ai.api.model_picker.title"),width/2,8,0xFFFFFF);
         search.drawTextField(x,y,d);
         super.render(x,y,d);
     }

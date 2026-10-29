@@ -22,6 +22,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenAiTranslatorTest {
 
+    @Test
+    void premiumSpeedRequiresExplicitOptInAndDoesNotLeakToOtherProviders() throws Exception {
+        for (String endpoint : List.of("https://api.openai.com/v1", "codex://app-server", "https://api.deepseek.com")) {
+            for (boolean fast : List.of(false, true)) {
+                List<String> bodies = new ArrayList<>();
+                HttpTransport fake = new HttpTransport() {
+                    @Override public String get(String url) { throw new UnsupportedOperationException(); }
+                    @Override public String post(String url, String body, Map<String, String> headers) {
+                        bodies.add(body);
+                        return chatJson("1. 測試");
+                    }
+                };
+                new OpenAiTranslator(fake, () -> new AiSettings(endpoint, "gpt-5.6-luna", List.of("test-key"), List.of(), fast))
+                        .translateBatch(List.of("Test"), "zh-TW");
+                assertFalse(bodies.isEmpty());
+                for (String body : bodies) {
+                    var json = com.google.gson.JsonParser.parseString(body).getAsJsonObject();
+                    if (endpoint.contains("deepseek")) assertFalse(json.has("service_tier"));
+                    else assertEquals(fast ? "priority" : "default", json.get("service_tier").getAsString());
+                    if (endpoint.startsWith("https://api.openai.com/")) assertFalse(json.has("temperature"));
+                }
+            }
+        }
+    }
+
     /** Inline fake transport: returns canned chat-completions JSON; records the request. */
     private static String chatJson(String content) {
         return rawChatJson(anchorNumberedFixture(content));

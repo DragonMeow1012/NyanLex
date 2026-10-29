@@ -1306,7 +1306,7 @@ public final class NyanLexNeoForge {
                 transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
                 machinePacer);
         OpenAiTranslator apiAi = new OpenAiTranslator(transport,
-                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
+                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary, config.aiFastMode),
                 new RequestPacer(() -> config.requestCooldownMs));
         apiAi.setTokenUsage(tokenUsage);
         codexClient = new CodexAppServerClient(
@@ -2978,7 +2978,7 @@ public final class NyanLexNeoForge {
             String msg;
             try {
                 OpenAiTranslator ai = new OpenAiTranslator(transport,
-                        () -> new AiSettings(baseUrl, model, keys),
+                        () -> new AiSettings(baseUrl, model, keys, java.util.Collections.emptyList(), config.aiFastMode),
                         new RequestPacer(() -> config == null ? 0L : config.requestCooldownMs));
                 ai.setTokenUsage(tokenUsage);
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();

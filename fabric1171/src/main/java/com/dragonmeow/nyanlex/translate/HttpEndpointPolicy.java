@@ -6,6 +6,18 @@ import java.net.URI;
 public final class HttpEndpointPolicy {
     private HttpEndpointPolicy() { }
 
+    /** Only the official OpenAI endpoint has the documented OpenAI billing tiers. */
+    public static boolean isOpenAi(String url) {
+        try {
+            URI uri = validate(url);
+            return "https".equalsIgnoreCase(uri.getScheme())
+                    && "api.openai.com".equalsIgnoreCase(uri.getHost())
+                    && (uri.getPort() == -1 || uri.getPort() == 443);
+        } catch (RuntimeException invalid) {
+            return false;
+        }
+    }
+
     public static URI validate(String url) {
         URI uri = URI.create(url);
         String host = uri.getHost();

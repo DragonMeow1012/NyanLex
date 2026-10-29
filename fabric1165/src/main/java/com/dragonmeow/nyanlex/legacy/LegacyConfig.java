@@ -33,7 +33,29 @@ public final class LegacyConfig {
     /** 1.0.7 UI round 3: machine-translation fallback defaults to off ("補譯關"). */
     boolean disableGoogleFallbackForAi = true;
     String aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
-    String aiModel = "gemini-3.1-flash-lite";
+    String aiModel = "gemini-3.5-flash-lite";
+    /** Premium speed is opt-in, independently of model and reasoning effort. */
+    public boolean aiFastMode = false;
+    public boolean hideAiFastModeNotice = false;
+    public java.util.Map<String, String> aiModelsByEndpoint = new java.util.HashMap<>();
+
+    /** Remember the current manual or catalog selection before changing providers. */
+    public void rememberApiModel() {
+        if (aiModelsByEndpoint == null) aiModelsByEndpoint = new java.util.HashMap<>();
+        if (aiBaseUrl != null && aiModel != null) {
+            aiModelsByEndpoint.put(aiBaseUrl.trim().replaceAll("/+$", ""), aiModel);
+        }
+    }
+
+    public String apiModelFor(String url, String initialModel) {
+        String key = url == null ? "" : url.trim().replaceAll("/+$", "");
+        if (aiModelsByEndpoint != null && aiModelsByEndpoint.containsKey(key)) {
+            String saved = aiModelsByEndpoint.get(key);
+            if (saved != null) return saved;
+        }
+        return initialModel;
+    }
+
     boolean aiUseCodex = false;
     String codexModel = DEFAULT_CODEX_MODEL;
     String codexReasoningEffort = DEFAULT_CODEX_REASONING_EFFORT;
@@ -126,6 +148,7 @@ public final class LegacyConfig {
         loaded.chatDeliveryMode = ChatDeliveryMode.orDefault(loaded.chatDeliveryMode);
         loaded.doNotTranslateTerms = normalizeDoNotTranslateTerms(loaded.doNotTranslateTerms);
         if (loaded.chatComposerLanguage == null || loaded.chatComposerLanguage.trim().isEmpty()) loaded.chatComposerLanguage = "en";
+        if (loaded.aiModelsByEndpoint == null) loaded.aiModelsByEndpoint = new java.util.HashMap<>();
         if (loaded.aiKeysByEndpoint == null)
             loaded.aiKeysByEndpoint = new java.util.LinkedHashMap<String, String>();
         if (loaded.codexModel == null || loaded.codexModel.trim().isEmpty())
@@ -168,6 +191,10 @@ public final class LegacyConfig {
         copy.disableGoogleFallbackForAi = disableGoogleFallbackForAi;
         copy.aiBaseUrl = aiBaseUrl;
         copy.aiModel = aiModel;
+        copy.aiFastMode = aiFastMode;
+        copy.hideAiFastModeNotice = hideAiFastModeNotice;
+        copy.aiModelsByEndpoint = aiModelsByEndpoint == null ? new java.util.HashMap<String, String>()
+                : new java.util.HashMap<String, String>(aiModelsByEndpoint);
         copy.aiUseCodex = aiUseCodex;
         copy.codexModel = codexModel;
         copy.codexReasoningEffort = codexReasoningEffort;

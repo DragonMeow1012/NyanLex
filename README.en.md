@@ -223,6 +223,10 @@ Expand a Minecraft series to download an individual build:
 | Other OpenAI-compatible services | Depends on the service | Custom Base URL, model, rotating API keys and glossary. An empty key sends no `Authorization` header. |
 | ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, reasoning-effort and session-token controls, uses your account's Codex quota, and defaults to `gpt-6-luna` / `low`. |
 
+The initial API model is `gpt-5.6-luna` for OpenAI and `gemini-3.5-flash-lite` for Gemini. Use **Read models** to fetch the service’s model list and fill the model field, or type a model manually. Switching providers preserves the model saved for each service.
+
+OpenAI API and ChatGPT/Codex offer a **Fast mode** toggle, off by default for standard service. Enabling it shows a warning about increased API charges or Codex allowance usage, with a “do not show again” option. Availability depends on the model and account.
+
 NyanLex does not install either CLI automatically. Sign-in is completed through the local official tool in a browser or terminal; credentials stay with that tool, while NyanLex calls the already signed-in local process.
 
 Antigravity is hidden by default. Read and confirm its risks in Advanced settings to reveal Google sign-in. Disabling it while selected also disables online translation; unconfirmed older configurations do the same to prevent silent fallback to another provider. Google individual terms restrict third-party access and permit account suspension. Official CLI use does not establish authorization for public integration; Google confirmation is still required.

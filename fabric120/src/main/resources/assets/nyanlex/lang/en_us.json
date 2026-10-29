@@ -474,5 +474,15 @@
   "screen.nyanlex.ai.keys.show": "Show key",
   "screen.nyanlex.ai.keys.hide": "Hide key",
   "screen.nyanlex.ai.keys.hidden": "API key hidden",
-  "screen.nyanlex.ai.keys.visible": "API key visible"
+  "screen.nyanlex.ai.keys.visible": "API key visible",
+  "screen.nyanlex.ai.fast.on": "Fast mode: On",
+  "screen.nyanlex.ai.fast.off": "Fast mode: Off",
+  "screen.nyanlex.ai.fast.title": "Enable Fast mode?",
+  "screen.nyanlex.ai.fast.message": "Fast mode increases your API bill or consumes ChatGPT / Codex allowance faster. Availability depends on the selected model and account. Your model and reasoning effort stay unchanged. Enable Fast mode?",
+  "screen.nyanlex.ai.fast.enable": "Enable",
+  "screen.nyanlex.ai.api.read_models": "Read models",
+  "screen.nyanlex.ai.api.loading_models": "Loading available models...",
+  "screen.nyanlex.ai.api.no_models": "No text models returned. You can still enter a model manually.",
+  "screen.nyanlex.ai.api.models_failed": "Could not load models: %s. Manual entry is still available.",
+  "screen.nyanlex.ai.api.model_picker.title": "Choose API model"
 }

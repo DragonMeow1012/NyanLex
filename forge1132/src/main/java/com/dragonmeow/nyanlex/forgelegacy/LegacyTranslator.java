@@ -1291,7 +1291,8 @@ final class LegacyTranslator {
         if (!first.aiProfile.equals(other.aiProfile)) return false;
         if (first.config.aiUseCodex) return true;
         return first.config.aiApiKeys.equals(other.config.aiApiKeys)
-                && first.config.aiKeysByEndpoint.equals(other.config.aiKeysByEndpoint);
+                && first.config.aiKeysByEndpoint.equals(other.config.aiKeysByEndpoint)
+                && first.config.aiFastMode == other.config.aiFastMode;
     }
 
     private static int batchChars(String source) {
@@ -1672,7 +1673,7 @@ final class LegacyTranslator {
                     + " and every ⟦MTn⟧ placeholder exactly."
                     + " Return translation only.";
             // Re-check the send switch after startup and account pacing, before the billable turn.
-            return client.complete(model, effort, systemPrompt, text, new Runnable() {
+            return client.complete(model, effort, systemPrompt, text, config.aiFastMode, new Runnable() {
                 @Override public void run() { checkRequestsOpen(); }
             });
         }
@@ -1729,7 +1730,10 @@ final class LegacyTranslator {
         String endpoint = base.endsWith("/chat/completions") ? base : base + "/chat/completions";
         JsonObject root = new JsonObject();
         root.addProperty("model", config.aiModel);
-        root.addProperty("temperature", 0.1);
+        if (com.dragonmeow.nyanlex.translate.HttpEndpointPolicy.isOpenAi(config.aiBaseUrl)) {
+            root.addProperty("service_tier", config.aiFastMode ? "priority" : "default");
+        }
+        if (!com.dragonmeow.nyanlex.translate.HttpEndpointPolicy.isOpenAi(config.aiBaseUrl)) root.addProperty("temperature", 0.1);
         JsonArray messages = new JsonArray();
         JsonObject system = new JsonObject();
         system.addProperty("role", "system");

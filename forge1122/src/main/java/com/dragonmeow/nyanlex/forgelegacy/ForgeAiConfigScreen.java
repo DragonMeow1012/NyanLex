@@ -17,6 +17,7 @@ final class ForgeAiConfigScreen extends GuiScreen{
     private String status="";
     private boolean refreshed;
     private boolean keysRevealed;
+    private boolean loadingModels;
     ForgeAiConfigScreen(GuiScreen p){
         parent=p;
     }
@@ -51,9 +52,12 @@ final class ForgeAiConfigScreen extends GuiScreen{
         endpoint=new GuiTextField(20,fontRenderer,x,y,320,20);
         endpoint.setMaxStringLength(512);
         endpoint.setText(s(c.aiBaseUrl));
-        model=new GuiTextField(21,fontRenderer,x,y+34,320,20);
+        model=new GuiTextField(21,fontRenderer,x,y+34,228,20);
         model.setMaxStringLength(128);
         model.setText(s(c.aiModel));
+        GuiButton catalog=new GuiButton(14,x+234,y+34,86,20,I18n.format("screen.nyanlex.ai.api.read_models"));
+        catalog.enabled=!loadingModels;
+        addButton(catalog);
         keys=new GuiTextField(22,fontRenderer,x,y+68,256,20){
             @Override public void drawTextBox(){
                 if(keysRevealed){super.drawTextBox();return;}
@@ -74,20 +78,28 @@ final class ForgeAiConfigScreen extends GuiScreen{
         keys.setMaxStringLength(4096);
         keys.setText(keysFor(c,c.aiBaseUrl));
         addButton(new GuiButton(13,x+260,y+68,60,20,I18n.format("screen.nyanlex.ai.keys.show")));
-        addButton(new GuiButton(7,x,y+94,320,20,I18n.format("screen.nyanlex.ai.test")));
+        addButton(new GuiButton(7,x,y+94,open?157:320,20,I18n.format("screen.nyanlex.ai.test")));
+            if(open)fastButton(x+163,y+94);
+    }
+    private void fastButton(int x,int y){
+        addButton(new GuiButton(15,x,y,157,20,I18n.format(NyanLexForge.config().aiFastMode
+                ?"screen.nyanlex.ai.fast.on":"screen.nyanlex.ai.fast.off")));
     }
     private void codex(int x){
         LegacyCodexClient cl=NyanLexForge.codexClient();
         boolean signed=cl!=null&&cl.isSignedInCached();
+        fastButton(x+163,130);
         addButton(new GuiButton(5,x,48,157,20,label("API key",false)));
         addButton(new GuiButton(6,x+163,48,157,20,label("ChatGPT login",true)));
         addButton(new GuiButton(8,x,78,320,20,signed?I18n.format("screen.nyanlex.ai.codex.logout"):I18n.format("screen.nyanlex.ai.codex.login")));
         addButton(new GuiButton(9,x,104,252,20,"Model: "+NyanLexForge.config().codexModel));
         addButton(new GuiButton(10,x+258,104,62,20,I18n.format("screen.nyanlex.ai.codex.refresh")));
-        addButton(new GuiButton(11,x,130,320,20,"Reasoning: "+NyanLexForge.config().codexReasoningEffort));
+        addButton(new GuiButton(11,x,130,157,20,"Reasoning: "+NyanLexForge.config().codexReasoningEffort));
         addButton(new GuiButton(12,x,156,320,20,I18n.format("screen.nyanlex.ai.test")));
     }
     @Override protected void actionPerformed(GuiButton b)throws IOException{
+        if(b.id==14){readApiModels();return;}
+        if(b.id==15){toggleFastMode();return;}
         LegacyConfig c=NyanLexForge.config();
         if(b.id==13){
             keysRevealed=!keysRevealed;
@@ -101,10 +113,10 @@ final class ForgeAiConfigScreen extends GuiScreen{
             mc.displayGuiScreen(parent);
             return;
         }
-        if(b.id==1)switchApi(GEMINI,"gemini-3.1-flash-lite");
+        if(b.id==1)switchApi(GEMINI,"gemini-3.5-flash-lite");
         if(b.id==2)switchApi("https://api.deepseek.com","deepseek-chat");
-        if(b.id==3)switchApi(c.aiBaseUrl,c.aiModel);
-        if(b.id==4)switchApi(OPENAI,"gpt-5.4-mini");
+        if(b.id==3)switchApi("http://127.0.0.1:11434/v1","");
+        if(b.id==4)switchApi(OPENAI,"gpt-5.6-luna");
         if(b.id==5){
             saveFields();
             c.aiUseCodex=false;
@@ -112,7 +124,11 @@ final class ForgeAiConfigScreen extends GuiScreen{
         }
         if(b.id==6){
             saveFields();
+            String openAiKeys=keysFor(c,OPENAI);
+            c.rememberApiModel();
             c.aiBaseUrl=OPENAI;
+            c.aiModel=c.apiModelFor(OPENAI,"gpt-5.6-luna");
+            c.aiApiKeys=parse(openAiKeys);
             c.aiUseCodex=true;
             rebuild();
             refresh(false);
@@ -130,21 +146,76 @@ final class ForgeAiConfigScreen extends GuiScreen{
         if(b.id==11)mc.displayGuiScreen(new ForgeCodexEffortScreen(this));
         if(b.id==12)test();
     }
+    private void toggleFastMode(){
+        saveFields();
+        final LegacyConfig c=NyanLexForge.config();
+        if(c.aiFastMode||c.hideAiFastModeNotice){
+            c.aiFastMode=!c.aiFastMode;
+            NyanLexForge.save();
+            rebuild();
+            return;
+        }
+        mc.displayGuiScreen(new ForgeFastModeScreen(this,remember->{
+            c.aiFastMode=true;
+            c.hideAiFastModeNotice=remember;
+            NyanLexForge.save();
+        }));
+    }
+    private void readApiModels(){
+        if(loadingModels)return;
+        saveFields();
+        NyanLexForge.save();
+        final String url=endpoint.getText().trim();
+        final List<String> apiKeys=parse(keys.getText());
+        loadingModels=true;
+        status=I18n.format("screen.nyanlex.ai.api.loading_models");
+        rebuild();
+        async("api-models",()->{
+            try{
+                final List<String> models=com.dragonmeow.nyanlex.translate.ApiModelCatalog.load(url,apiKeys);
+                mc.addScheduledTask(()->{
+                    loadingModels=false;
+                    if(mc.currentScreen!=this||NyanLexForge.config().aiUseCodex||endpoint==null
+                            ||!url.equals(endpoint.getText().trim())||!apiKeys.equals(parse(keys.getText())))return;
+                    saveFields();
+                    if(models.isEmpty()){status=I18n.format("screen.nyanlex.ai.api.no_models");rebuild();return;}
+                    status = "";
+                    mc.displayGuiScreen(new ForgeCodexModelScreen(this).withApiModels(models,selected->{
+                        LegacyConfig cfg=NyanLexForge.config();
+                        cfg.aiModel=selected;
+                        cfg.rememberApiModel();
+                        NyanLexForge.save();
+                    }));
+                });
+            }catch(Exception e){
+                mc.addScheduledTask(()->{
+                    loadingModels=false;
+                    if(mc.currentScreen!=this||endpoint==null||!url.equals(endpoint.getText().trim()))return;
+                    saveFields();
+                    status=I18n.format("screen.nyanlex.ai.api.models_failed",err(e));
+                    rebuild();
+                });
+            }
+        });
+    }
     private void switchApi(String url,String def){
         saveFields();
         LegacyConfig c=NyanLexForge.config();
-        boolean changed=!same(c.aiBaseUrl,url);
+        String savedKeys=keysFor(c,url);
+        c.rememberApiModel();
         c.aiUseCodex=false;
         c.aiBaseUrl=url;
-        if(changed)c.aiModel=def;
-        c.aiApiKeys=parse(keysFor(c,url));
+        c.aiModel=c.apiModelFor(url,def);
+        c.aiApiKeys=parse(savedKeys);
+        NyanLexForge.save();
         rebuild();
     }
     private void saveFields(){
         LegacyConfig c=NyanLexForge.config();
-        if(c.aiUseCodex||endpoint==null)return;
+        if(c.aiUseCodex||endpoint==null){c.rememberApiModel();return;}
         c.aiBaseUrl=endpoint.getText().trim();
         c.aiModel=model.getText().trim();
+        c.rememberApiModel();
         c.aiApiKeys=parse(keys.getText());
         c.aiKeysByEndpoint.put(key(c.aiBaseUrl),keys.getText());
     }
@@ -303,6 +374,7 @@ final class ForgeAiConfigScreen extends GuiScreen{
     private static String keysFor(LegacyConfig c,String u){
         String v=c.aiKeysByEndpoint.get(key(u));
         if(v!=null)return v;
+        if(!key(u).equals(key(c.aiBaseUrl)))return "";
         StringBuilder b=new StringBuilder();
         for(String x:c.aiApiKeys){
             if(x==null||x.trim().isEmpty())continue;

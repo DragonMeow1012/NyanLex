@@ -17,11 +17,28 @@ import java.util.Locale;
 /** Searchable live Codex model catalog for the Java 8 GUI API. */
 final class LegacyCodexModelScreen extends Screen {
     private final Screen parent;
+    private List<LegacyCodexClient.ModelOption> apiModels;
+    private java.util.function.Consumer<String> onApiSelection;
+
+    LegacyCodexModelScreen withApiModels(List<String> models, java.util.function.Consumer<String> selected) {
+        apiModels = new ArrayList<LegacyCodexClient.ModelOption>();
+        for (String id : models) apiModels.add(new LegacyCodexClient.ModelOption(id, id,
+                java.util.Collections.<String>emptyList(), java.util.Collections.<String>emptyList(), "", false));
+        onApiSelection = selected;
+        return this;
+    }
+
+    private List<LegacyCodexClient.ModelOption> catalog() {
+        if (apiModels != null) return apiModels;
+        LegacyCodexClient client = LegacyTranslatorMod.codexClient();
+        return client == null ? java.util.Collections.<LegacyCodexClient.ModelOption>emptyList() : client.cachedModels();
+    }
     private ModelList models;
     private EditBox search;
 
     LegacyCodexModelScreen(Screen parent) {
-        super(new TranslatableComponent("screen.nyanlex.ai.codex.model_picker.title"));
+        super(new TranslatableComponent(LegacyTranslatorMod.config().aiUseCodex
+                ? "screen.nyanlex.ai.codex.model_picker.title" : "screen.nyanlex.ai.api.model_picker.title"));
         this.parent = parent;
     }
 
@@ -38,6 +55,11 @@ final class LegacyCodexModelScreen extends Screen {
 
     private void applyAndClose() {
         ModelEntry selected = models == null ? null : models.getSelected();
+        if (selected != null && onApiSelection != null) {
+            onApiSelection.accept(selected.option.model());
+            minecraft.setScreen(parent);
+            return;
+        }
         if (selected != null) {
             LegacyConfig cfg = LegacyTranslatorMod.config();
             cfg.codexModel = selected.option.model();
@@ -75,13 +97,12 @@ final class LegacyCodexModelScreen extends Screen {
             String needle = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
             List<ModelEntry> entries = new ArrayList<ModelEntry>();
             ModelEntry selected = null;
-            LegacyCodexClient client = LegacyTranslatorMod.codexClient();
-            if (client != null) for (LegacyCodexClient.ModelOption option : client.cachedModels()) {
+            for (LegacyCodexClient.ModelOption option : catalog()) {
                 if (!needle.isEmpty() && !option.model().toLowerCase(Locale.ROOT).contains(needle)
                         && !option.displayName().toLowerCase(Locale.ROOT).contains(needle)) continue;
                 ModelEntry entry = new ModelEntry(option);
                 entries.add(entry);
-                if (option.model().equals(LegacyTranslatorMod.config().codexModel)) selected = entry;
+                if (option.model().equals(apiModels == null ? LegacyTranslatorMod.config().codexModel : LegacyTranslatorMod.config().aiModel)) selected = entry;
             }
             replaceEntries(entries);
             setSelected(selected);

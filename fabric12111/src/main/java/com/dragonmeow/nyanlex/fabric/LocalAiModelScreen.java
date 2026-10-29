@@ -24,6 +24,16 @@ import java.util.Locale;
 /** Searchable Codex model picker matching the translation-language selection UI. */
 public final class LocalAiModelScreen extends OptionsSubScreen {
     private final boolean antigravity;
+    private List<String> apiModels;
+    private String apiActiveModel;
+    private java.util.function.Consumer<String> onApiSelection;
+
+    public LocalAiModelScreen withApiModels(List<String> models, String active, java.util.function.Consumer<String> selected) {
+        this.apiModels = List.copyOf(models);
+        this.apiActiveModel = active;
+        this.onApiSelection = selected;
+        return this;
+    }
     private ModelSelectionList modelList;
     private EditBox search;
 
@@ -31,7 +41,8 @@ public final class LocalAiModelScreen extends OptionsSubScreen {
         super(parent, Minecraft.getInstance().options, Component.translatable(
                 NyanLexFabric.config().usesAntigravity()
                         ? "screen.nyanlex.ai.antigravity.model_picker.title"
-                        : "screen.nyanlex.ai.codex.model_picker.title"));
+                        : NyanLexFabric.config().usesCodex() ? "screen.nyanlex.ai.codex.model_picker.title"
+                        : "screen.nyanlex.ai.api.model_picker.title"));
         this.antigravity = NyanLexFabric.config().usesAntigravity();
         this.layout.setFooterHeight(36);
     }
@@ -87,6 +98,11 @@ public final class LocalAiModelScreen extends OptionsSubScreen {
     }
 
     private void choose(ModelChoice option) {
+        if (this.onApiSelection != null) {
+            this.onApiSelection.accept(option.model());
+            this.minecraft.setScreen(this.lastScreen);
+            return;
+        }
         TranslatorConfig cfg = NyanLexFabric.config();
         if (this.antigravity) {
             cfg.antigravityModel = option.model();
@@ -106,6 +122,8 @@ public final class LocalAiModelScreen extends OptionsSubScreen {
     }
 
     private List<ModelChoice> models() {
+        if (this.apiModels != null) return this.apiModels.stream()
+                .map(id -> new ModelChoice(id, id)).collect(java.util.stream.Collectors.toList());
         if (this.antigravity) {
             AntigravityCliClient client = NyanLexFabric.antigravityClient();
             return client == null ? List.of() : client.cachedModels().stream()
@@ -119,6 +137,7 @@ public final class LocalAiModelScreen extends OptionsSubScreen {
     }
 
     private String activeModel() {
+        if (this.apiModels != null) return this.apiActiveModel;
         TranslatorConfig cfg = NyanLexFabric.config();
         return this.antigravity ? cfg.antigravityModel : cfg.codexModel;
     }

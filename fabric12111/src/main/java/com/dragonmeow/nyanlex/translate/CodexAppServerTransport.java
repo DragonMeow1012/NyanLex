@@ -33,7 +33,7 @@ public final class CodexAppServerTransport implements HttpTransport {
     public String post(String url, String body, Map<String, String> headers) throws IOException {
         LocalAiTransportSupport.Request request = LocalAiTransportSupport.parseRequest(body);
         String translated = client.complete(request.model(), reasoningEffort.get(),
-                request.system(), request.user());
+                request.system(), request.user(), request.fastMode());
         return LocalAiTransportSupport.response(translated);
     }
 }

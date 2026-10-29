@@ -145,6 +145,7 @@ public final class AiConfigScreen extends Screen {
                 layTest = y;
                 y += 20;
                 layStatus = y + 2;
+                y += 12;
             }
             layDone = Math.max(y + 4, 210);
             if (layDone + 20 <= this.height - 4) {
@@ -180,7 +181,7 @@ public final class AiConfigScreen extends Screen {
             initApi(x);
         }
         this.addRenderableWidget(LegacyButton.builder(new net.minecraft.network.chat.TranslatableComponent("gui.done"), b -> this.onClose())
-                .bounds(tight ? this.width / 2 + 3 : this.width / 2 - 100, layDone, tight ? FIELD_W / 2 - 3 : 200, 20).build());
+                .bounds(tight ? (!cfg.usesLocalAiCli() && isOpenAiProvider(cfg) ? x + 216 : this.width / 2 + 3) : this.width / 2 - 100, layDone, tight ? (!cfg.usesLocalAiCli() && isOpenAiProvider(cfg) ? 104 : FIELD_W / 2 - 3) : 200, 20).build());
 
         if (cfg.usesCodex() && !this.initialCodexRefreshStarted) {
             this.initialCodexRefreshStarted = true;
@@ -250,10 +251,14 @@ public final class AiConfigScreen extends Screen {
         this.baseUrlBox.setValue(cfg.aiBaseUrl == null ? "" : cfg.aiBaseUrl);
         this.addRenderableWidget(this.baseUrlBox);
 
-        this.modelBox = new EditBox(this.font, x, modelY, FIELD_W, 20, new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.model"));
+        this.modelBox = new EditBox(this.font, x, modelY, 228, 20, new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.model"));
         this.modelBox.setMaxLength(128);
         this.modelBox.setValue(cfg.aiModel == null ? "" : cfg.aiModel);
         this.addRenderableWidget(this.modelBox);
+        Button catalog = LegacyButton.builder(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.api.read_models"), b -> readApiModels())
+                .bounds(x + 234, modelY, 86, 20).build();
+        catalog.active = !this.busy;
+        this.addRenderableWidget(catalog);
 
         this.keysRevealed = false;
         this.keysBox = new SecretEditBox(x, keysY,
@@ -282,9 +287,80 @@ public final class AiConfigScreen extends Screen {
                             button[0].setMessage(new net.minecraft.network.chat.TextComponent(result));
                         }
                     });
-        }).bounds(x, testY, tight ? FIELD_W / 2 - 3 : FIELD_W, 20).build();
+        }).bounds(x, testY, isOpenAiProvider(cfg) ? (tight ? 102 : 157) : (tight ? FIELD_W / 2 - 3 : FIELD_W), 20).build();
         this.testButton = button[0];
         this.addRenderableWidget(button[0]);
+        if (isOpenAiProvider(cfg)) addFastModeButton(x + (tight ? 108 : 163), testY, tight ? 102 : 157);
+    }
+
+
+    private void addFastModeButton(int x, int y, int width) {
+        TranslatorConfig cfg = NyanLexFabric.config();
+        this.addRenderableWidget(LegacyButton.builder(new net.minecraft.network.chat.TranslatableComponent(cfg.aiFastMode
+                ? "screen.nyanlex.ai.fast.on" : "screen.nyanlex.ai.fast.off"), b -> toggleFastMode())
+                .bounds(x, y, width, 20).build());
+    }
+
+    private void toggleFastMode() {
+        saveCurrentFields();
+        TranslatorConfig cfg = NyanLexFabric.config();
+        if (cfg.aiFastMode || cfg.hideAiFastModeNotice) {
+            cfg.aiFastMode = !cfg.aiFastMode;
+            NyanLexFabric.saveConfig();
+            this.rebuildWidgetsCompat();
+            return;
+        }
+        this.minecraft.setScreen(new ConfirmDialogScreen(this,
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.fast.title"),
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.fast.message"),
+                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.fast.enable"), () -> {
+                    cfg.aiFastMode = true;
+                    NyanLexFabric.saveConfig();
+                }).rememberChoice(false, value -> cfg.hideAiFastModeNotice = value));
+    }
+
+    private void readApiModels() {
+        if (this.busy || this.minecraft == null) return;
+        saveApiFields();
+        NyanLexFabric.saveConfig();
+        final String endpoint = this.baseUrlBox.getValue().trim();
+        final List<String> keys = parseKeys(this.keysBox.getValue());
+        this.busy = true;
+        this.status = new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.api.loading_models").getString();
+        this.rebuildWidgetsCompat();
+        runAsync("nyanlex-api-models", () -> {
+            try {
+                List<String> models = com.dragonmeow.nyanlex.translate.ApiModelCatalog.load(endpoint, keys);
+                onMain(() -> {
+                    this.busy = false;
+                    if (!isCurrentScreen() || NyanLexFabric.config().usesLocalAiCli()
+                            || !endpoint.equals(this.baseUrlBox.getValue().trim())
+                            || !keys.equals(parseKeys(this.keysBox.getValue()))) return;
+                    if (models.isEmpty()) {
+                        setStatus(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.api.no_models").getString(), true);
+                        return;
+                    }
+                    saveApiFields();
+                    status = "";
+                    this.minecraft.setScreen(new LocalAiModelScreen(this).withApiModels(models,
+                            NyanLexFabric.config().aiModel, selected -> {
+                                TranslatorConfig cfg = NyanLexFabric.config();
+                                cfg.aiModel = selected;
+                                cfg.rememberApiModel();
+                                NyanLexFabric.saveConfig();
+                            }));
+                });
+            } catch (Exception error) {
+                onMain(() -> {
+                    this.busy = false;
+                    if (isCurrentScreen() && !NyanLexFabric.config().usesLocalAiCli()
+                            && endpoint.equals(this.baseUrlBox.getValue().trim())) {
+                        saveApiFields();
+                        setStatus(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.api.models_failed", errorMessage(error)).getString(), true);
+                    }
+                });
+            }
+        });
     }
 
     private void initCodex(int x) {
@@ -322,10 +398,11 @@ public final class AiConfigScreen extends Screen {
         this.addRenderableWidget(this.refreshButton);
 
         this.effortButton = LegacyButton.builder(effortLabel(), b -> openEffortPicker())
-                .bounds(x, layEffort, FIELD_W, 20).build();
+                .bounds(x, layEffort, 157, 20).build();
         this.effortButton.active = signedIn && !this.busy
                 && selectedModel().map(option -> !option.reasoningEfforts().isEmpty()).orElse(false);
         this.addRenderableWidget(this.effortButton);
+        addFastModeButton(x + 163, layEffort, 157);
 
         this.testButton = LegacyButton.builder(
                 new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.test"),
@@ -383,6 +460,7 @@ public final class AiConfigScreen extends Screen {
 
     private void selectGeminiProvider() {
         if (isGeminiProvider(NyanLexFabric.config())) {
+            saveCurrentFields();
             this.rebuildWidgetsCompat();
             return;
         }
@@ -395,7 +473,7 @@ public final class AiConfigScreen extends Screen {
         TranslatorConfig cfg = NyanLexFabric.config();
         selectApiProvider("https://generativelanguage.googleapis.com/v1beta/openai",
                 isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")
-                        ? cfg.aiModel : "gemini-3.1-flash-lite");
+                        ? cfg.aiModel : "gemini-3.5-flash-lite");
     }
 
     private void showGeminiApiNotice(boolean selectProvider) {
@@ -413,6 +491,7 @@ public final class AiConfigScreen extends Screen {
 
     private void selectOpenAiProvider() {
         if (isOpenAiProvider(NyanLexFabric.config())) {
+            saveCurrentFields();
             this.rebuildWidgetsCompat();
             return;
         }
@@ -422,11 +501,10 @@ public final class AiConfigScreen extends Screen {
     private void selectOpenAiApiMode() {
         TranslatorConfig cfg = NyanLexFabric.config();
         saveCurrentFields();
-        boolean alreadyOpenAiApi = isEndpoint(cfg.aiBaseUrl, OPENAI_API_URL);
         String openAiKeys = keysForEndpoint(cfg, OPENAI_API_URL);
         cfg.selectAiProvider(TranslatorConfig.AI_PROVIDER_API);
         cfg.aiBaseUrl = OPENAI_API_URL;
-        if (!alreadyOpenAiApi) cfg.aiModel = "gpt-5.4-mini";
+        cfg.aiModel = cfg.apiModelFor(OPENAI_API_URL, "gpt-5.6-luna");
         cfg.aiApiKeys = parseKeys(openAiKeys);
         NyanLexFabric.saveConfig();
         FabricTextStyle.clearRenderMemo();
@@ -440,7 +518,7 @@ public final class AiConfigScreen extends Screen {
         String providerKeys = keysForEndpoint(cfg, url);
         cfg.selectAiProvider(TranslatorConfig.AI_PROVIDER_API);
         cfg.aiBaseUrl = url;
-        cfg.aiModel = model;
+        cfg.aiModel = cfg.apiModelFor(url, model);
         cfg.aiApiKeys = parseKeys(providerKeys);
         NyanLexFabric.saveConfig();
         FabricTextStyle.clearRenderMemo();
@@ -454,7 +532,7 @@ public final class AiConfigScreen extends Screen {
         if (!isEndpoint(cfg.aiBaseUrl, OPENAI_API_URL)) {
             String openAiKeys = keysForEndpoint(cfg, OPENAI_API_URL);
             cfg.aiBaseUrl = OPENAI_API_URL;
-            cfg.aiModel = "gpt-5.4-mini";
+            cfg.aiModel = cfg.apiModelFor(OPENAI_API_URL, "gpt-5.6-luna");
             cfg.aiApiKeys = parseKeys(openAiKeys);
         }
         cfg.selectAiProvider(TranslatorConfig.AI_PROVIDER_CODEX);
@@ -472,7 +550,7 @@ public final class AiConfigScreen extends Screen {
             String geminiUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
             String geminiKeys = keysForEndpoint(cfg, geminiUrl);
             cfg.aiBaseUrl = geminiUrl;
-            cfg.aiModel = "gemini-3.1-flash-lite";
+            cfg.aiModel = cfg.apiModelFor(geminiUrl, "gemini-3.5-flash-lite");
             cfg.aiApiKeys = parseKeys(geminiKeys);
         }
         cfg.selectAiProvider(TranslatorConfig.AI_PROVIDER_ANTIGRAVITY);
@@ -488,12 +566,14 @@ public final class AiConfigScreen extends Screen {
         String url = this.baseUrlBox.getValue().trim();
         cfg.aiBaseUrl = url;
         cfg.aiModel = this.modelBox.getValue().trim();
+        cfg.rememberApiModel();
         cfg.aiApiKeys = parseKeys(this.keysBox.getValue());
         cfg.aiKeysByEndpoint.put(endpointKey(url), this.keysBox.getValue());
     }
 
     private void saveCurrentFields() {
         if (!NyanLexFabric.config().usesLocalAiCli()) saveApiFields();
+        NyanLexFabric.config().rememberApiModel();
     }
 
     private void refreshCodexSession(boolean userInitiated) {

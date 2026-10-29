@@ -508,5 +508,16 @@
   "nyanlex.settings.state.chat_ready": "譯文完成即顯示",
   "nyanlex.settings.state.chat_original": "先顯示原文，完成後補譯",
   "nyanlex.settings.chat_delivery.tip": "依序顯示：等待翻譯並維持訊息順序。完成即顯示：哪筆先翻好就先顯示。先顯示原文：立即顯示原文，完成後在原位置補上譯文（預設）。",
-  "config.nyanlex.chat_delivery.short": "聊天顯示：%s"
+  "config.nyanlex.chat_delivery.short": "聊天顯示：%s",
+  "screen.nyanlex.ai.fast.on": "快速模式：開",
+  "screen.nyanlex.ai.fast.off": "快速模式：關",
+  "screen.nyanlex.ai.fast.title": "要開啟快速模式嗎？",
+  "screen.nyanlex.ai.fast.message": "快速模式會增加 API 帳單費用，或加快 ChatGPT／Codex 額度消耗。能否使用取決於所選模型與帳戶；模型與推理強度不變。是否開啟？",
+  "screen.nyanlex.ai.fast.enable": "開啟快速模式",
+  "screen.nyanlex.ai.api.read_models": "讀取模型",
+  "screen.nyanlex.ai.api.loading_models": "正在讀取可用模型…",
+  "screen.nyanlex.ai.api.no_models": "服務商沒有回傳文字模型，仍可手動輸入。",
+  "screen.nyanlex.ai.api.models_failed": "讀取模型失敗：%s。仍可手動輸入。",
+  "screen.nyanlex.ai.api.model_picker.title": "選擇 API 模型",
+  "screen.nyanlex.notice.dont_show_again": "不再顯示"
 }

@@ -31,7 +31,8 @@ final class LocalAiTransportSupport {
         String system = messageText(messagesElement.getAsJsonArray().get(0), "system");
         String user = messageText(messagesElement.getAsJsonArray().get(1), "user");
         if (system.length() + user.length() > 250_000) throw new IOException("Translation input exceeded the safety limit");
-        return new Request(model, system, user);
+        return new Request(model, system, user, "priority".equals(string(request, "service_tier"))
+                || "fast".equals(string(request, "service_tier")));
     }
 
     private static String messageText(JsonElement element, String role) throws IOException {
@@ -66,6 +67,6 @@ final class LocalAiTransportSupport {
         }
     }
 
-    record Request(String model, String system, String user) {
+    record Request(String model, String system, String user, boolean fastMode) {
     }
 }

@@ -427,6 +427,11 @@ final class LegacyCodexClient implements AutoCloseable {
      */
     synchronized String complete(String model, String effort, String systemPrompt, String userPrompt,
                     Runnable beforeTurn) throws IOException {
+        return complete(model, effort, systemPrompt, userPrompt, false, beforeTurn);
+    }
+
+    synchronized String complete(String model, String effort, String systemPrompt, String userPrompt,
+                    boolean fastMode, Runnable beforeTurn) throws IOException {
         limits.check();
         if ((systemPrompt == null ? 0 : systemPrompt.length()) + (userPrompt == null ? 0 : userPrompt.length()) > 250_000)
             throw new IOException("Translation input exceeded the safety limit");
@@ -438,7 +443,7 @@ final class LegacyCodexClient implements AutoCloseable {
         catch (IOException unavailable) { if (unavailable instanceof CliRequestLimits.LimitedException) throw unavailable; }
         limits.check();
         if (model == null || model.trim().isEmpty()) throw new IOException("No Codex model selected");
-        String serviceTier = preferredServiceTier(model);
+        String serviceTier = requestedServiceTier(model, fastMode);
 
         JsonObject threadParams = new JsonObject();
         threadParams.addProperty("model", model);
@@ -1450,14 +1455,21 @@ final class LegacyCodexClient implements AutoCloseable {
         return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
-    private String preferredServiceTier(String model) {
+    private String requestedServiceTier(String model, boolean fastMode) throws IOException {
+        if (!fastMode) return "default";
         for (ModelOption option : cachedModels) {
-            if (option.model().equals(model) && option.serviceTiers().contains("priority")) {
-                return "priority";
+            if (option.model().equals(model)) {
+                if (option.serviceTiers().contains("fast")) return "fast";
+                if (option.serviceTiers().contains("priority")) return "priority";
+                if (!option.serviceTiers().isEmpty()) {
+                    throw new IOException("Fast mode is unavailable for this Codex model. Disable Fast mode or choose another model.");
+                }
             }
         }
-        return null;
+        // Older catalogs omit tier metadata; the server validates the explicit opt-in.
+        return "priority";
     }
+
 
     private static List<String> minimalAppServerCommand(String executable) {
         Objects.requireNonNull(executable, "executable");

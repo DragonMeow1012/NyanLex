@@ -274,11 +274,8 @@ public final class CodexAppServerClient implements AutoCloseable {
                 // Also fills the signed-in cache (otherwise only the settings screen does),
                 // so the retry gate does not read "signed out" in a fresh session.
                 AccountSnapshot account = readAccount(false);
-                // The model catalog decides whether the service tier (priority) the model
-                // supports is sent. It used to be fetched only when the AI settings screen was
-                // opened, so a fresh session silently ran without it; load it here so the
-                // behaviour does not depend on having visited that screen. Configured model,
-                // effort and tier choice are untouched -- this only fills the lookup table.
+                // Load supported tiers before the first request. Standard remains the default;
+                // premium tiers are considered only when the user has enabled fast mode.
                 if (account.signedIn() && cachedModels.isEmpty()) listModels();
             } catch (IOException ignored) {
                 // The first real request reports the actual error.
@@ -467,16 +464,21 @@ public final class CodexAppServerClient implements AutoCloseable {
      */
     public String complete(String model, String effort, String systemPrompt, String userPrompt)
             throws IOException {
+        return complete(model, effort, systemPrompt, userPrompt, false);
+    }
+
+    public String complete(String model, String effort, String systemPrompt, String userPrompt,
+                           boolean fastMode) throws IOException {
         synchronized (translationLock) {
             limits.check();
-            return completeSerial(model, effort, systemPrompt, userPrompt);
+            return completeSerial(model, effort, systemPrompt, userPrompt, fastMode);
         }
     }
 
     public void setRequestCooldown(LongSupplier cooldown) { limits.setCooldown(cooldown); }
     public long blockedUntil() { return limits.blockedUntil(); }
 
-    private String completeSerial(String model, String effort, String systemPrompt, String userPrompt)
+    private String completeSerial(String model, String effort, String systemPrompt, String userPrompt, boolean fastMode)
             throws IOException {
         if (model == null || model.isBlank()) throw new IOException("No Codex model selected");
         if ((systemPrompt == null ? 0 : systemPrompt.length()) + (userPrompt == null ? 0 : userPrompt.length()) > 250_000)
@@ -494,7 +496,7 @@ public final class CodexAppServerClient implements AutoCloseable {
             if (unavailable instanceof CliRequestLimits.LimitedException) throw unavailable;
         }
         limits.check();
-        String serviceTier = preferredServiceTier(model);
+        String serviceTier = requestedServiceTier(model, fastMode);
 
         JsonObject threadParams = new JsonObject();
         threadParams.addProperty("model", model);
@@ -1423,13 +1425,19 @@ public final class CodexAppServerClient implements AutoCloseable {
         return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
-    private String preferredServiceTier(String model) {
+    private String requestedServiceTier(String model, boolean fastMode) throws IOException {
+        if (!fastMode) return "default";
         for (ModelOption option : cachedModels) {
-            if (option.model().equals(model) && option.serviceTiers().contains("priority")) {
-                return "priority";
+            if (option.model().equals(model)) {
+                if (option.serviceTiers().contains("fast")) return "fast";
+                if (option.serviceTiers().contains("priority")) return "priority";
+                if (!option.serviceTiers().isEmpty()) {
+                    throw new IOException("Fast mode is unavailable for this Codex model. Disable Fast mode or choose another model.");
+                }
             }
         }
-        return null;
+        // Older catalogs omit tier metadata; the server validates the explicit opt-in.
+        return "priority";
     }
 
     private static List<String> minimalAppServerCommand(String executable) {

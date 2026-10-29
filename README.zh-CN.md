@@ -223,6 +223,10 @@
 | 其他 OpenAI 兼容服务 | 取决于服务 | 可自定义 Base URL、模型、轮换 API Key 与术语表。Key 留空时不发送 `Authorization` 标头。 |
 | ChatGPT／Codex | ChatGPT 登录 | 所有列出的版本均支持；需先安装 Codex CLI。可选择模型、推理强度并查看会话 token，使用账户的 Codex 额度；默认为 `gpt-6-luna`／`low`。 |
 
+API 初次选用的默认模型为 OpenAI `gpt-5.6-luna`、Gemini `gemini-3.5-flash-lite`。可点“读取模型”获取当前服务的模型列表并选择填入，也可直接手动输入；切换服务商会保留各服务已设置的模型。
+
+OpenAI API 与 ChatGPT／Codex 都提供快速模式开关，默认关闭、使用标准模式。启用前会提醒 API 费用或 Codex 额度消耗可能增加，并可勾选不再显示；实际可用性取决于模型与账号。
+
 NyanLex 不会自动安装上述 CLI。登录流程由本地官方工具在浏览器或终端中完成；账号凭据由官方工具保存，NyanLex 只调用已登录的本地进程。
 
 Antigravity 默认隐藏，须在「高级」阅读风险并确认后显示 Google 登录。关闭时若正使用该来源，在线翻译也会关闭；旧配置尚未确认风险时相同，避免自动转送其他服务。Google 个人版条款限制第三方访问并可能停用账号；官方 CLI 不代表公开集成授权，仍须向 Google 确认。

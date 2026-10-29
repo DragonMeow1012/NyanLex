@@ -653,7 +653,11 @@ public final class OpenAiTranslator implements Translator {
         String model = s.model();
         JsonObject root = new JsonObject();
         root.addProperty("model", model);
-        root.addProperty("temperature", 0.3);
+        if (HttpEndpointPolicy.isOpenAi(s.baseUrl()) || "codex://app-server".equals(s.baseUrl())) {
+            // Explicit standard prevents a provider/project default from enabling premium billing.
+            root.addProperty("service_tier", s.fastMode() ? "priority" : "default");
+        }
+        if (!HttpEndpointPolicy.isOpenAi(s.baseUrl())) root.addProperty("temperature", 0.3);
         if (noReasoning && wantsNoReasoning(model)) {
             // Gemini Flash models may enable dynamic thinking on the OpenAI-compatible
             // layer; short translation lines do not benefit from those extra tokens.

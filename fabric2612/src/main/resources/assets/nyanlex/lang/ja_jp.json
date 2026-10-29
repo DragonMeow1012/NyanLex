@@ -474,5 +474,15 @@
   "nyanlex.settings.state.chat_ordered": "受信順に翻訳を表示",
   "nyanlex.settings.state.chat_ready": "翻訳できた順に表示",
   "nyanlex.settings.state.chat_original": "原文を先に表示して翻訳を追加",
-  "nyanlex.settings.chat_delivery.tip": "受信順：翻訳を待ってメッセージの順序を維持します。翻訳できた順：完了したものから表示します。原文を先に表示：原文をすぐに表示し、翻訳を同じ位置に追加します（既定）。"
+  "nyanlex.settings.chat_delivery.tip": "受信順：翻訳を待ってメッセージの順序を維持します。翻訳できた順：完了したものから表示します。原文を先に表示：原文をすぐに表示し、翻訳を同じ位置に追加します（既定）。",
+  "screen.nyanlex.ai.fast.on": "高速モード：オン",
+  "screen.nyanlex.ai.fast.off": "高速モード：オフ",
+  "screen.nyanlex.ai.fast.title": "高速モードを有効にしますか？",
+  "screen.nyanlex.ai.fast.message": "高速モードでは API の料金が増えるか、ChatGPT／Codex の利用枠をより速く消費します。利用可否はモデルとアカウントによります。モデルと思考の強度は変わりません。有効にしますか？",
+  "screen.nyanlex.ai.fast.enable": "有効にする",
+  "screen.nyanlex.ai.api.read_models": "モデル取得",
+  "screen.nyanlex.ai.api.loading_models": "利用可能なモデルを取得中…",
+  "screen.nyanlex.ai.api.no_models": "テキストモデルが返されませんでした。手動入力も利用できます。",
+  "screen.nyanlex.ai.api.models_failed": "モデル取得に失敗：%s。手動入力も利用できます。",
+  "screen.nyanlex.ai.api.model_picker.title": "API モデルを選択"
 }

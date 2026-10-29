@@ -474,5 +474,15 @@
   "nyanlex.settings.state.chat_ordered": "Show translations in order",
   "nyanlex.settings.state.chat_ready": "Show translations when ready",
   "nyanlex.settings.state.chat_original": "Show original, then translation",
-  "nyanlex.settings.chat_delivery.tip": "In order: wait for translations and preserve message order. When ready: show each translation as it completes. Original first: show the original immediately, then add its translation in place (default)."
+  "nyanlex.settings.chat_delivery.tip": "In order: wait for translations and preserve message order. When ready: show each translation as it completes. Original first: show the original immediately, then add its translation in place (default).",
+  "screen.nyanlex.ai.fast.on": "Fast mode: On",
+  "screen.nyanlex.ai.fast.off": "Fast mode: Off",
+  "screen.nyanlex.ai.fast.title": "Enable Fast mode?",
+  "screen.nyanlex.ai.fast.message": "Fast mode increases your API bill or consumes ChatGPT / Codex allowance faster. Availability depends on the selected model and account. Your model and reasoning effort stay unchanged. Enable Fast mode?",
+  "screen.nyanlex.ai.fast.enable": "Enable",
+  "screen.nyanlex.ai.api.read_models": "Read models",
+  "screen.nyanlex.ai.api.loading_models": "Loading available models...",
+  "screen.nyanlex.ai.api.no_models": "No text models returned. You can still enter a model manually.",
+  "screen.nyanlex.ai.api.models_failed": "Could not load models: %s. Manual entry is still available.",
+  "screen.nyanlex.ai.api.model_picker.title": "Choose API model"
 }

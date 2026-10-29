@@ -474,5 +474,15 @@
   "screen.nyanlex.ai.keys.show": "显示密钥",
   "screen.nyanlex.ai.keys.hide": "隐藏密钥",
   "screen.nyanlex.ai.keys.hidden": "API 密钥已隐藏",
-  "screen.nyanlex.ai.keys.visible": "API 密钥当前可见"
+  "screen.nyanlex.ai.keys.visible": "API 密钥当前可见",
+  "screen.nyanlex.ai.fast.on": "快速模式：开",
+  "screen.nyanlex.ai.fast.off": "快速模式：关",
+  "screen.nyanlex.ai.fast.title": "要开启快速模式吗？",
+  "screen.nyanlex.ai.fast.message": "快速模式会增加 API 账单费用，或加快 ChatGPT／Codex 额度消耗。能否使用取决于所选模型与账户；模型与推理强度不变。是否开启？",
+  "screen.nyanlex.ai.fast.enable": "开启快速模式",
+  "screen.nyanlex.ai.api.read_models": "读取模型",
+  "screen.nyanlex.ai.api.loading_models": "正在读取可用模型…",
+  "screen.nyanlex.ai.api.no_models": "服务商没有返回文本模型，仍可手动输入。",
+  "screen.nyanlex.ai.api.models_failed": "读取模型失败：%s。仍可手动输入。",
+  "screen.nyanlex.ai.api.model_picker.title": "选择 API 模型"
 }

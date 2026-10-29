@@ -1243,7 +1243,7 @@ public final class NyanLexFabric implements ClientModInitializer {
                 transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
                 machinePacer);
         OpenAiTranslator apiAi = new OpenAiTranslator(transport,
-                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary),
+                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary, config.aiFastMode),
                 new RequestPacer(() -> config.requestCooldownMs));
         apiAi.setTokenUsage(tokenUsage);
         Path codexRoot = configPath.getParent();
@@ -1259,7 +1259,7 @@ public final class NyanLexFabric implements ClientModInitializer {
                 () -> config.codexReasoningEffort);
         OpenAiTranslator codexAi = new OpenAiTranslator(codexTransport,
                 () -> new AiSettings("codex://app-server", config.codexModel,
-                        java.util.Collections.emptyList(), config.aiGlossary),
+                        java.util.Collections.emptyList(), config.aiGlossary, config.aiFastMode),
                 RequestPacer.disabled());
         antigravityClient = new AntigravityCliClient(
                 codexRoot.resolve(MOD_ID + "-antigravity-workspace"));
@@ -2678,7 +2678,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         Thread t = new Thread(() -> {
             String msg;
             try {
-                OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys));
+                OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys, java.util.Collections.emptyList(), config.aiFastMode));
                 ai.setTokenUsage(tokenUsage);
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
                 msg = Component.translatable("message.nyanlex.success", "Hello, world → " + out).getString();
@@ -2704,7 +2704,7 @@ public final class NyanLexFabric implements ClientModInitializer {
             try {
                 OpenAiTranslator ai = new OpenAiTranslator(codexTransport,
                         () -> new AiSettings("codex://app-server", config.codexModel,
-                                java.util.Collections.emptyList(), config.aiGlossary),
+                                java.util.Collections.emptyList(), config.aiGlossary, config.aiFastMode),
                         RequestPacer.disabled());
                 String translated = ai.translate("Hello, world", "zh-TW").translatedText();
                 result = "Hello, world -> " + translated;

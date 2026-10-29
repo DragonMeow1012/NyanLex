@@ -60,7 +60,7 @@ final class LegacyAiConfigScreen extends Screen {
         addProviderButton(providerLabel("Gemini", !cfg.aiUseCodex && isEndpoint(cfg.aiBaseUrl,
                 "https://generativelanguage.googleapis.com/v1beta/openai")), x, y, w,
                 () -> selectApi("https://generativelanguage.googleapis.com/v1beta/openai",
-                        "gemini-3.1-flash-lite"));
+                        "gemini-3.5-flash-lite"));
         addProviderButton(providerLabel("OpenAI", isOpenAiProvider(cfg)), x + w + gap, y, w,
                 this::selectOpenAi);
         addProviderButton(providerLabel("DeepSeek", !cfg.aiUseCodex
@@ -98,10 +98,14 @@ final class LegacyAiConfigScreen extends Screen {
         baseUrlBox.setMaxLength(256);
         baseUrlBox.setValue(safe(cfg.aiBaseUrl));
         addButton(baseUrlBox);
-        modelBox = new EditBox(font, x, modelY, FIELD_W, 20, "Model");
+        modelBox = new EditBox(font, x, modelY, 228, 20, "Model");
         modelBox.setMaxLength(128);
         modelBox.setValue(safe(cfg.aiModel));
         addButton(modelBox);
+        Button catalog = new Button(x + 234, modelY, 86, 20,
+                new TranslatableComponent("screen.nyanlex.ai.api.read_models").getString(), button -> readApiModels());
+        catalog.active = !busy;
+        addButton(catalog);
         keysBox = new EditBox(font, x, keysY, 256, 20,
                 new TranslatableComponent("screen.nyanlex.ai.keys").getString()) {
             @Override public String getNarrationMessage() {
@@ -121,7 +125,7 @@ final class LegacyAiConfigScreen extends Screen {
                     ? "screen.nyanlex.ai.keys.hide"
                     : "screen.nyanlex.ai.keys.show").getString());
         }));
-        testButton = new Button(x, testY, FIELD_W, 20,
+        testButton = new Button(x, testY, openAiPanel ? 157 : FIELD_W, 20,
                 new TranslatableComponent("screen.nyanlex.ai.test").getString(), button -> {
             saveApiFields();
             button.active = false;
@@ -133,6 +137,7 @@ final class LegacyAiConfigScreen extends Screen {
             });
         });
         addButton(testButton);
+        if (openAiPanel) addFastButton(x + 163, testY);
     }
 
     private void initCodex(int x) {
@@ -155,11 +160,12 @@ final class LegacyAiConfigScreen extends Screen {
                 button -> refreshCodex(true));
         refresh.active = signedIn && !busy && client != null;
         addButton(refresh);
-        Button effort = new Button(x, 130, FIELD_W, 20, effortLabel(),
+        Button effort = new Button(x, 130, 157, 20, effortLabel(),
                 button -> minecraft.setScreen(new LegacyCodexEffortScreen(this)));
         effort.active = signedIn && !busy && selectedModel() != null
                 && !selectedModel().reasoningEfforts().isEmpty();
         addButton(effort);
+        addFastButton(x + 163, 130);
         testButton = new Button(x, 156, FIELD_W, 20,
                 new TranslatableComponent("screen.nyanlex.ai.test").getString(),
                 button -> testCodex());
@@ -167,8 +173,80 @@ final class LegacyAiConfigScreen extends Screen {
         addButton(testButton);
     }
 
+
+    private void addFastButton(int x, int y) {
+        addButton(new Button(x, y, 157, 20,
+                new TranslatableComponent(LegacyTranslatorMod.config().aiFastMode ? "screen.nyanlex.ai.fast.on" : "screen.nyanlex.ai.fast.off").getString(), b -> toggleFastMode()));
+    }
+
+    private void toggleFastMode() {
+        saveApiFields();
+        final LegacyConfig cfg = LegacyTranslatorMod.config();
+        if (cfg.aiFastMode || cfg.hideAiFastModeNotice) {
+            cfg.aiFastMode = !cfg.aiFastMode;
+            saveAndRebuild();
+            return;
+        }
+        final boolean[] remember = {false};
+        minecraft.setScreen(new ConfirmScreen(confirmed -> {
+            if (confirmed) {
+                cfg.aiFastMode = true;
+                cfg.hideAiFastModeNotice = remember[0];
+                LegacyTranslatorMod.saveConfig();
+            }
+            minecraft.setScreen(LegacyAiConfigScreen.this);
+        }, new TranslatableComponent("screen.nyanlex.ai.fast.title"),
+                new TranslatableComponent("screen.nyanlex.ai.fast.message")) {
+            @Override protected void init() {
+                super.init();
+                addButton(new Button(width / 2 - 150, height - 28, 300, 20,
+                        "[ ] " + new TranslatableComponent("screen.nyanlex.notice.dont_show_again").getString(), b -> {
+                    remember[0] = !remember[0];
+                    b.setMessage(((remember[0] ? "[x] " : "[ ] ") + new TranslatableComponent("screen.nyanlex.notice.dont_show_again").getString()));
+                }));
+            }
+        });
+    }
+
+    private void readApiModels() {
+        if (busy) return;
+        saveApiFields();
+        LegacyTranslatorMod.saveConfig();
+        final String endpoint = baseUrlBox.getValue().trim();
+        final List<String> keys = parseKeys(keysBox.getValue());
+        setBusy(true, new TranslatableComponent("screen.nyanlex.ai.api.loading_models").getString());
+        runAsync("nyanlex-api-models", () -> {
+            try {
+                final List<String> models = com.dragonmeow.nyanlex.translate.ApiModelCatalog.load(endpoint, keys);
+                onMain(() -> {
+                    busy = false;
+                    if (minecraft.screen != this || LegacyTranslatorMod.config().aiUseCodex
+                            || !endpoint.equals(baseUrlBox.getValue().trim()) || !keys.equals(parseKeys(keysBox.getValue()))) return;
+                    saveApiFields();
+                    if (models.isEmpty()) { setStatus(new TranslatableComponent("screen.nyanlex.ai.api.no_models").getString(), true); return; }
+                    status = "";
+                    minecraft.setScreen(new LegacyCodexModelScreen(this).withApiModels(models, selected -> {
+                        LegacyConfig cfg = LegacyTranslatorMod.config();
+                        cfg.aiModel = selected;
+                        cfg.rememberApiModel();
+                        LegacyTranslatorMod.saveConfig();
+                    }));
+                });
+            } catch (Exception e) {
+                onMain(() -> {
+                    busy = false;
+                    if (minecraft.screen == this && !LegacyTranslatorMod.config().aiUseCodex
+                            && endpoint.equals(baseUrlBox.getValue().trim())) {
+                        saveApiFields();
+                        setStatus(new TranslatableComponent("screen.nyanlex.ai.api.models_failed", error(e)).getString(), true);
+                    }
+                });
+            }
+        });
+    }
+
     private void selectOpenAi() {
-        if (isOpenAiProvider(LegacyTranslatorMod.config())) rebuild();
+        if (isOpenAiProvider(LegacyTranslatorMod.config())) { saveApiFields(); rebuild(); }
         else selectOpenAiApi();
     }
 
@@ -176,10 +254,9 @@ final class LegacyAiConfigScreen extends Screen {
         LegacyConfig cfg = LegacyTranslatorMod.config();
         saveApiFields();
         String keys = keysForEndpoint(cfg, OPENAI_API_URL);
-        boolean same = isEndpoint(cfg.aiBaseUrl, OPENAI_API_URL);
         cfg.aiUseCodex = false;
         cfg.aiBaseUrl = OPENAI_API_URL;
-        if (!same) cfg.aiModel = "gpt-5.4-mini";
+        cfg.aiModel = cfg.apiModelFor(OPENAI_API_URL, "gpt-5.6-luna");
         cfg.aiApiKeys = parseKeys(keys);
         saveAndRebuild();
     }
@@ -189,7 +266,7 @@ final class LegacyAiConfigScreen extends Screen {
         LegacyConfig cfg = LegacyTranslatorMod.config();
         if (!isEndpoint(cfg.aiBaseUrl, OPENAI_API_URL)) {
             cfg.aiBaseUrl = OPENAI_API_URL;
-            cfg.aiModel = "gpt-5.4-mini";
+            cfg.aiModel = cfg.apiModelFor(OPENAI_API_URL, "gpt-5.6-luna");
             cfg.aiApiKeys = parseKeys(keysForEndpoint(cfg, OPENAI_API_URL));
         }
         cfg.aiUseCodex = true;
@@ -202,16 +279,20 @@ final class LegacyAiConfigScreen extends Screen {
         String keys = keysForEndpoint(cfg, url);
         cfg.aiUseCodex = false;
         cfg.aiBaseUrl = url;
-        cfg.aiModel = model;
+        cfg.aiModel = cfg.apiModelFor(url, model);
         cfg.aiApiKeys = parseKeys(keys);
         saveAndRebuild();
     }
 
     private void saveApiFields() {
-        if (baseUrlBox == null || modelBox == null || keysBox == null) return;
+        if (LegacyTranslatorMod.config().aiUseCodex || baseUrlBox == null || modelBox == null || keysBox == null) {
+            LegacyTranslatorMod.config().rememberApiModel();
+            return;
+        }
         LegacyConfig cfg = LegacyTranslatorMod.config();
         cfg.aiBaseUrl = baseUrlBox.getValue().trim();
         cfg.aiModel = modelBox.getValue().trim();
+        cfg.rememberApiModel();
         cfg.aiApiKeys = parseKeys(keysBox.getValue());
         cfg.aiKeysByEndpoint.put(endpointKey(cfg.aiBaseUrl), keysBox.getValue());
     }
@@ -428,6 +509,7 @@ final class LegacyAiConfigScreen extends Screen {
     private static String keysForEndpoint(LegacyConfig cfg, String url) {
         String saved = cfg.aiKeysByEndpoint.get(endpointKey(url));
         if (saved != null) return saved;
+        if (!endpointKey(url).equals(endpointKey(cfg.aiBaseUrl))) return "";
         StringBuilder out = new StringBuilder();
         for (String key : cfg.aiApiKeys) { if (key == null || key.trim().isEmpty()) continue;
             if (out.length() > 0) out.append(", "); out.append(key.trim()); }

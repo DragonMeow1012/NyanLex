@@ -223,6 +223,10 @@
 | 其他 OpenAI 相容服務 | 依服務設定 | 可自訂 Base URL、模型、多把輪替金鑰與詞彙表。金鑰留空時不送出 `Authorization` 標頭。 |
 | ChatGPT／Codex | ChatGPT 登入 | 所有表列版本均支援；需先安裝 Codex CLI。可選模型、推理強度並查看 token，使用帳號的 Codex 額度；預設為 `gpt-6-luna`／`low`。 |
 
+API 初次選用的預設模型為 OpenAI `gpt-5.6-luna`、Gemini `gemini-3.5-flash-lite`。可按「讀取模型」取得目前服務的模型清單並選取填入，也可直接手動輸入；切換服務商會保留各服務已設定的模型。
+
+OpenAI API 與 ChatGPT／Codex 都提供快速模式開關，預設關閉、使用標準模式。啟用前會提醒 API 費用或 Codex 額度消耗可能增加，並可勾選不再顯示；實際可用性依模型與帳號而定。
+
 NyanLex 不會自動安裝上述 CLI。登入流程由本機 CLI 開啟瀏覽器或終端機完成；帳號憑證由官方工具保存，NyanLex 只呼叫已登入的本機程序。
 
 Antigravity 預設隱藏，須在「進階」閱讀風險並確認後才會顯示 Google 登入。關閉時若正使用此來源，線上翻譯也會關閉；舊設定尚未確認風險亦同，避免悄悄改送其他服務。Google 個人版條款明文限制第三方軟體存取並可能停用帳號，官方 CLI 不構成公開整合授權；此授權仍須向 Google 確認。

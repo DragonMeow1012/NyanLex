@@ -73,8 +73,29 @@ public final class TranslatorConfig {
 
     /** OpenAI-compatible base URL (chat/completions is appended). Default: Gemini (high free quota). */
     public String aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
-    /** Model id, e.g. {@code gemini-3.1-flash-lite}, {@code gpt-5.4-mini}, {@code deepseek-chat}. */
-    public String aiModel = "gemini-3.1-flash-lite";
+    /** Model id, e.g. {@code gemini-3.5-flash-lite}, {@code gpt-5.6-luna}, {@code deepseek-chat}. */
+    public String aiModel = "gemini-3.5-flash-lite";
+    /** Premium speed is opt-in, independently of model and reasoning effort. */
+    public boolean aiFastMode = false;
+    public boolean hideAiFastModeNotice = false;
+    public java.util.Map<String, String> aiModelsByEndpoint = new java.util.HashMap<>();
+
+    /** Remember the current manual or catalog selection before changing providers. */
+    public void rememberApiModel() {
+        if (aiModelsByEndpoint == null) aiModelsByEndpoint = new java.util.HashMap<>();
+        if (aiBaseUrl != null && aiModel != null) {
+            aiModelsByEndpoint.put(aiBaseUrl.trim().replaceAll("/+$", ""), aiModel);
+        }
+    }
+
+    public String apiModelFor(String url, String initialModel) {
+        String key = url == null ? "" : url.trim().replaceAll("/+$", "");
+        if (aiModelsByEndpoint != null && aiModelsByEndpoint.containsKey(key)) {
+            String saved = aiModelsByEndpoint.get(key);
+            if (saved != null) return saved;
+        }
+        return initialModel;
+    }
     /** One or more API keys (for the active endpoint); rotated round-robin and on failure. */
     public java.util.List<String> aiApiKeys = new java.util.ArrayList<>();
 
@@ -406,6 +427,7 @@ public final class TranslatorConfig {
             antigravityModel = DEFAULT_ANTIGRAVITY_MODEL;
         }
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
+        if (aiModelsByEndpoint == null) aiModelsByEndpoint = new java.util.HashMap<>();
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
         doNotTranslateTerms = normalizedTerms(doNotTranslateTerms);
         termOverrides = normalizedTermOverrides(termOverrides);

@@ -41,7 +41,9 @@ class TranslatorConfigTest {
         assertEquals("zh-TW", cfg.targetLang);
         assertEquals("auto", cfg.sourceLang);
         assertEquals(MachineTranslationProvider.GOOGLE.id(), cfg.machineTranslationProvider);
-        assertEquals("gemini-3.1-flash-lite", cfg.aiModel);
+        assertEquals("gemini-3.5-flash-lite", cfg.aiModel);
+        assertFalse(cfg.aiFastMode);
+        assertFalse(cfg.hideAiFastModeNotice);
         assertEquals("gpt-6-luna", TranslatorConfig.DEFAULT_CODEX_MODEL);
         assertEquals("low", TranslatorConfig.DEFAULT_CODEX_REASONING_EFFORT);
         assertEquals(TranslatorConfig.DEFAULT_CODEX_MODEL, cfg.codexModel);
@@ -59,6 +61,30 @@ class TranslatorConfigTest {
         assertEquals(5000, cfg.batchWindowMs);
         assertEquals(5000, cfg.requestCooldownMs, "送出間隔預設 5 秒");
         assertEquals(TranslatorConfig.PACING_DEFAULTS_VERSION, cfg.pacingDefaultsVersion);
+    }
+
+    @Test
+    void apiModelSelectionsSurviveSwitchingAndReloadWithoutOverwritingManualValues() {
+        TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader(
+                "{\"aiBaseUrl\":\"https://api.openai.com/v1/\",\"aiModel\":\"my-selected-model\",\"aiModelsByEndpoint\":null}"));
+        assertFalse(cfg.aiFastMode, "upgrades must never opt into premium billing");
+        cfg.rememberApiModel();
+        cfg.aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
+        cfg.aiModel = cfg.apiModelFor(cfg.aiBaseUrl, "gemini-3.5-flash-lite");
+        assertEquals("gemini-3.5-flash-lite", cfg.aiModel);
+        cfg.aiModel = "my-gemini-selection";
+        cfg.rememberApiModel();
+        cfg.aiFastMode = true;
+        cfg.hideAiFastModeNotice = true;
+        StringWriter out = new StringWriter(); cfg.writeTo(out);
+        TranslatorConfig restored = TranslatorConfig.fromReader(new StringReader(out.toString()));
+        assertEquals("my-selected-model", restored.apiModelFor("https://api.openai.com/v1", "gpt-5.6-luna"));
+        assertEquals("my-gemini-selection", restored.apiModelFor(cfg.aiBaseUrl, "gemini-3.5-flash-lite"));
+        assertTrue(restored.aiFastMode);
+        assertTrue(restored.hideAiFastModeNotice);
+        restored.aiModel = "";
+        restored.rememberApiModel();
+        assertEquals("", restored.apiModelFor(restored.aiBaseUrl, "do-not-overwrite-explicit-blank"));
     }
 
     @Test
