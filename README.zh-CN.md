@@ -226,9 +226,9 @@
 
 API 初次选用的默认模型为 OpenAI `gpt-5.6-luna`、Gemini `gemini-3.5-flash-lite`。可点“读取模型”获取当前服务的模型列表并选择填入，也可直接手动输入；切换服务商会保留各服务已设置的模型。
 
-OpenAI API 与 ChatGPT／Codex 都提供快速模式开关，默认关闭、使用标准模式。启用前会提醒 API 费用或 Codex 额度消耗可能增加，并可勾选不再显示；实际可用性取决于模型与账号。
+OpenAI API、ChatGPT／Codex 与 Claude 都提供各自的快速模式开关，默认关闭、使用标准模式。第一次启用前会提醒 API 费用或账号额度消耗可能增加，并可勾选不再显示；实际可用性取决于模型与账号。
 
-Claude 使用你自己的 Anthropic API Key，按 Anthropic 官方定价计费；密钥只会发送到 `api.anthropic.com`。点“读取模型”可从列表中选择模型；默认为 Claude Haiku 5.5（`claude-haiku-5-5`），思考强度默认为 `medium`，均可在设置界面调整。Claude 的快速模式是独立开关（默认关闭），费用约为一般的 2 倍，且仅部分模型支持，不支持时会自动改用一般速度。Claude Max／Team 方案每月附带 API 额度，关联 Claude Console 后即可使用该组织的 API Key。
+Claude 使用你自己的 Anthropic API Key，按 Anthropic 官方定价计费；密钥只会发送到 `api.anthropic.com`。点“读取模型”可从列表中选择模型；默认为 Claude Haiku 5.5（`claude-haiku-5-5`），思考强度默认为 `medium`，均可在设置界面调整。Claude 快速模式的费用约为一般的 2 倍，且仅部分模型支持；不支持时会自动改用一般速度，并在测试结果第二行提示。测试连接结果直接显示在按钮下方，不会再打开窗口。Claude Max／Team 方案每月附带 API 额度，关联 Claude Console 后即可使用该组织的 API Key。
 
 所有 API 服务商（Gemini、OpenAI、DeepSeek、Claude 与自定义端点）的“思考强度”统一为六档：关闭（最快）、`low`、`medium`、`high`、`xhigh`、`max`，初始值都是 `medium`。已选择的强度会保留；模型只支持部分档位时，请求会采用可用的相近设置。部分模型无法完全关闭思考，会使用允许的最低设置；不接受思考参数时会自动重试并在本次游戏期间记住。
 

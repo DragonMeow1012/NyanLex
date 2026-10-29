@@ -18,7 +18,7 @@
 
 - 翻譯聊天、物品名稱、提示框、介面、書本、成就通知與支援的 HUD 文字，可選原文、譯文或兩者並列；現代版本同時相容新舊 FTB Quests API，並支援 Jade／WAILA 類物件名稱提示。
 - 重複使用本機快取及已下載翻譯包；切換 AI 服務或模型後，已有譯文仍可沿用。
-- 支援 Google、Gemini、OpenAI、DeepSeek、OpenRouter、Ollama、LM Studio 等相容服務，以及 ChatGPT／Codex 與 Google／Antigravity 登入。所有表列版本都提供 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示，預設為 `gpt-6-luna`／`medium`，並使用帳號的 Codex 額度。API 服務可能需要自備金鑰與支付費用；Google 登入使用該帳號的 Antigravity 額度。
+- 支援 Google、Gemini、OpenAI、DeepSeek、Claude、OpenRouter、Ollama、LM Studio 等相容服務，以及 ChatGPT／Codex 與 Google／Antigravity 登入。所有表列版本都提供 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示，預設為 `gpt-6-luna`／`medium`，並使用帳號的 Codex 額度。Claude 預設為 Haiku 5.5／`medium`，可讀取模型清單。OpenAI API、ChatGPT／Codex 與 Claude 的快速模式預設關閉；第一次開啟會警告費用或帳號額度消耗可能增加，並可勾選不再顯示。API 服務可能需要自備金鑰與支付費用；Google 登入使用該帳號的 Antigravity 額度。
 - 現代版使用 AI 時自動翻譯已開啟的區域；使用 Google 時聊天自動翻譯，其餘按需觸發：物品按 `R`，介面或 HUD 按 `P`。已有翻譯兩種模式都能顯示。
 - 現代版提供「全內容預熱」，右側展開分類可勾選「物品名稱與說明」及「介面文字」，預設全部。任務標題、描述歸在介面文字；按開始或繼續才執行，已有譯文會略過。部分內容進入世界後才載入。
 - 預熱可暫停、繼續或停止；切換 AI 模型後按繼續，會檢查新模型狀態。Google 的 429 暫停保護仍保留。
