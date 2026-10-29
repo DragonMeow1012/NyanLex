@@ -326,16 +326,23 @@ def replace_version_file(client: Modrinth, target, path: Path,
                      if row["filename"] == filename and row["hashes"]["sha512"] == digest), None)
 
     def upload(local, filename, digest):
+        upload_error = None
         try:
             client.multipart(route + "/file", {}, local, filename=filename)
-        except RuntimeError:
-            if not find(inspect(), filename, digest):
-                raise
-        current = inspect()
-        uploaded = find(current, filename, digest)
-        if not uploaded or uploaded["size"] != local.stat().st_size:
-            raise RuntimeError("Replacement upload verification failed")
-        return current
+        except RuntimeError as error:
+            # A completed upload can still race the version GET or the request
+            # can time out after Modrinth accepted it. Confirm remote state
+            # before deciding whether the upload failed.
+            upload_error = error
+        for attempt in range(8):
+            current = inspect(refresh=attempt > 0)
+            uploaded = find(current, filename, digest)
+            if uploaded and uploaded["size"] == local.stat().st_size:
+                return current
+            time.sleep(min(attempt + 1, 5))
+        if upload_error is not None:
+            raise upload_error
+        raise RuntimeError("Replacement upload verification failed")
 
     def remove_file(digest):
         try:

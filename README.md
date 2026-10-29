@@ -226,9 +226,9 @@
 
 API 初次選用的預設模型為 OpenAI `gpt-5.6-luna`、Gemini `gemini-3.5-flash-lite`。可按「讀取模型」取得目前服務的模型清單並選取填入，也可直接手動輸入；切換服務商會保留各服務已設定的模型。
 
-OpenAI API、ChatGPT／Codex 與 Claude 都提供各自的快速模式開關，預設關閉、使用標準模式。第一次啟用前會提醒 API 費用或帳號額度消耗可能增加，並可勾選不再顯示；實際可用性依模型與帳號而定。
+OpenAI API、ChatGPT／Codex 與 Claude 都可選快速模式，預設關閉。第一次開啟會提醒可能增加費用或帳號額度消耗，並可勾選不再顯示。
 
-Claude 使用你自己的 Anthropic API Key，依 Anthropic 官方計價收費；金鑰只會送到 `api.anthropic.com`。按「讀取模型」可從清單選擇模型；預設為 Claude Haiku 5.5（`claude-haiku-5-5`），思考強度預設為 `medium`，都能在設定畫面調整。Claude 快速模式的費用約為一般的 2 倍，且僅部分模型支援；不支援時會自動改用一般速度，並在測試結果第二行提示。測試連線結果直接顯示在按鈕下方，不會另開視窗。Claude Max／Team 方案每月附有 API 額度，連結 Claude Console 後即可使用該組織的 API Key。
+Claude 使用自己的 Anthropic API Key，可讀取模型清單；預設為 Claude Haiku 5.5（`claude-haiku-5-5`）／`medium`。測試結果會顯示在按鈕下方；模型不支援快速模式時會自動改用一般速度。
 
 所有 API 服務商（Gemini、OpenAI、DeepSeek、Claude 與自訂端點）的「思考強度」統一為六檔：關閉（最快）、`low`、`medium`、`high`、`xhigh`、`max`，初始值都是 `medium`。已選擇的強度會保留；各模型只支援部分檔位時，請求會採用可用的相近設定。部分模型無法完全關閉思考，會使用允許的最低設定；不接受思考參數的模型會自動重試並在本次遊戲期間記住。
 
