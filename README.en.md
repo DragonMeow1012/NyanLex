@@ -222,7 +222,7 @@ Expand a Minecraft series to download an individual build:
 | OpenRouter | Your API key | Enter its OpenAI-compatible service URL and model in the AI settings. |
 | Ollama / LM Studio | Depends on your local server; may be empty | Connects to an OpenAI-compatible server you run. You provide the model. |
 | Other OpenAI-compatible services | Depends on the service | Custom Base URL, model, rotating API keys and glossary. An empty key sends no `Authorization` header. |
-| ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, reasoning-effort and session-token controls, uses your account's Codex quota, and defaults to `gpt-6-luna` / `low`. |
+| ChatGPT/Codex | ChatGPT sign-in | Available on every listed target; install Codex CLI first. Includes model, reasoning-effort and session-token controls, uses your account's Codex quota, and defaults to `gpt-6-luna` / `medium`. |
 
 The initial API model is `gpt-5.6-luna` for OpenAI and `gemini-3.5-flash-lite` for Gemini. Use **Read models** to fetch the service’s model list and fill the model field, or type a model manually. Switching providers preserves the model saved for each service.
 
@@ -230,7 +230,7 @@ OpenAI API and ChatGPT/Codex offer a **Fast mode** toggle, off by default for st
 
 Claude uses your own Anthropic API key and is billed at Anthropic’s published rates; the key is sent only to `api.anthropic.com`. Use **Read models** to pick a model from the list. The default is Claude Haiku 5.5 (`claude-haiku-5-5`) with the effort level set to `medium`, and both can be changed in the settings screen. Claude has its own **Fast mode** switch (off by default); it costs about twice the standard rate and only some models support it, otherwise standard speed is used automatically. Claude Max and Team plans include a monthly API credit; once your Claude Console organization is linked to the plan, you can use that organization’s API key.
 
-Every API service (Gemini, OpenAI, DeepSeek, Claude and custom endpoints) has a **Reasoning effort** button in the settings screen: choose Default (the model decides), Off (fastest), or one of the levels the service offers. Claude defaults to `medium`, Gemini and DeepSeek default to Off, and OpenAI and custom endpoints send no reasoning setting by default. Some models cannot turn thinking off completely and use the lowest setting they allow. If a model rejects the chosen setting, the request is resent without it and the model is remembered for the rest of the game session.
+Every API service (Gemini, OpenAI, DeepSeek, Claude and custom endpoints) offers six reasoning-strength choices: Off (fastest), `low`, `medium`, `high`, `xhigh`, and `max`. New settings start at `medium`; saved choices are retained. Models with fewer supported levels use the closest available setting. If a model cannot disable thinking completely, the lowest allowed setting is used. Unsupported parameters are retried without the field and remembered for the session.
 
 NyanLex does not install either CLI automatically. Sign-in is completed through the local official tool in a browser or terminal; credentials stay with that tool, while NyanLex calls the already signed-in local process.
 
@@ -307,7 +307,7 @@ If your keybinds look reset after upgrading: this release changes the mod id fro
 <details>
 <summary>More settings and translation behavior</summary>
 
-Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-6-luna` / `low`.
+Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session token usage; the default is `gpt-6-luna` / `medium`.
 
 Async batching, priority queues, disk caches, and failure backoff reduce main-thread work and duplicate requests. The send interval and collection window both default to 5 seconds, with 11 settings: Off or 1–10 seconds.
 

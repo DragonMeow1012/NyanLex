@@ -192,8 +192,8 @@ class ChatDeliverySessionTest {
         ChatRequestProfile geminiBefore = profile(gemini);
         gemini.rememberApiEffort(gemini.aiBaseUrl, "low");
         assertFalse(geminiBefore.equals(profile(gemini)));
-        gemini.rememberApiEffort(gemini.aiBaseUrl, "off");
-        assertEquals(geminiBefore, profile(gemini), "off is Gemini's default, so nothing changed");
+        gemini.rememberApiEffort(gemini.aiBaseUrl, "medium");
+        assertEquals(geminiBefore, profile(gemini), "medium is Gemini's default, so nothing changed");
         gemini.aiBaseUrl = "https://api.openai.com/v1";
         ChatRequestProfile openAiBefore = profile(gemini);
         gemini.rememberApiEffort("https://api.openai.com/v1", "high");

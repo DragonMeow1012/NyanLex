@@ -5,7 +5,7 @@ import java.util.Locale;
 
 public final class LegacyConfig {
     static final String DEFAULT_CODEX_MODEL = "gpt-6-luna";
-    static final String DEFAULT_CODEX_REASONING_EFFORT = "low";
+    static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
     boolean enabled = true;
     boolean followGameLanguage = true;
     boolean showOriginal = true;

@@ -215,7 +215,8 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
 }
 # Minecraft-independent regressions also run against the 26.1.2 core used for
 # live provider and UI checks. Loader-specific tests stay in their own tree.
-foreach ($relative in @('TemplateTextTest.java', 'TextFilterTest.java', 'translate\AnthropicTransportTest.java')) {
+foreach ($relative in @('TemplateTextTest.java', 'TextFilterTest.java', 'translate\AnthropicTransportTest.java',
+        'translate\ReasoningEffortTest.java', 'TranslatorConfigTest.java', 'AiProviderConfigTest.java', 'OpenAiTranslatorTest.java')) {
     $source = Join-Path $testSrcDir $relative
     $destination = Join-Path $root "fabric2612\src\test\java\com\dragonmeow\nyanlex\$relative"
     if (-not (Test-Path $destination) -or

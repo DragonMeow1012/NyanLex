@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-29",
+  "baselineCommit": "803111961097933a1e837d8aea11c7166f1f09b7",
+  "changes": [
+    "Connection results render below the test button; long text wraps within the available space. The information-only popup is removed.",
+    "Claude's unsupported-fast-mode notice remains and begins on a separate line below the result.",
+    "The API-key storage-path paragraph and Gemini API terms popup are removed, including unused UI strings and notice preference.",
+    "API effort pickers show off, low, medium, high, xhigh, max. New API and Codex settings start at medium; explicit saved selections are preserved.",
+    "Existing provider capability handling clamps unavailable effort levels at request time; the six-choice UI does not make unsupported levels available in the provider.",
+    "README translations and shared source trees are synchronized."
+  ],
+  "verification": {
+    "rootTests": {"tests": 1914, "failures": 0, "errors": 0, "skipped": 2},
+    "fabric2612Tests": {"tests": 357, "failures": 0, "errors": 0, "skipped": 0},
+    "modernCompiles": "root, fabric1171, fabric1182, fabric1194, fabric120, fabric12111, fabric2612, fabric26, neoforge, neoforge120, neoforge26 passed",
+    "coreSyncDrift": 0,
+    "legacyForgeCoreSyncDrift": 0,
+    "languageJson": "valid",
+    "liveClient": "Fabric 26.1.2, isolated test instance",
+    "liveObservations": [
+      "Six effort choices visible, with medium selected on an empty provider preference map.",
+      "API-key path paragraph absent.",
+      "Claude connection succeeded inline; unsupported speed notice rendered on the second line without a modal.",
+      "Selecting Gemini and selecting its API mode again both opened settings directly without a terms dialog."
+    ],
+    "claudeRequest": {
+      "model": "claude-haiku-5-5",
+      "effort": "medium",
+      "unsupportedSpeedResponseMs": 425,
+      "standardRetryResponseMs": 1861,
+      "inputTokens": 663,
+      "outputTokens": 117,
+      "thinkingTokensWithinOutput": 104,
+      "totalReportedTokens": 780
+    },
+    "finalTestSettings": {"onlineTranslation": false, "claudeFastMode": false}
+  },
+  "artifact": {
+    "filename": "NyanLex-Translator-1.0.0-Fabric-26.1.2.jar",
+    "sha256": "fc1fbab5e19eaf10523d67e4958a0a5c9add6a5ef11af1417d9c64b0d9ba8811"
+  },
+  "scope": "26.1.2 packaged and launched. Other modern source trees compiled; legacy Codex default and resource cleanup synchronized. No additional provider live tests or release-site uploads."
+}

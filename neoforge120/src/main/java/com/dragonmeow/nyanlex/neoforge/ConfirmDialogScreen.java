@@ -14,8 +14,8 @@ import org.lwjgl.glfw.GLFW;
 import java.util.List;
 
 /**
- * A question or information message on the shared, scrollable card. Tab and
- * Shift+Tab move the frame, Enter or Space press the framed button, Escape closes.
+ * A yes/no question on the shared card: [取消] at the left, the action at the right, nothing focused
+ * when it opens, Tab and Shift+Tab move the frame, Enter or Space press the framed button, Escape cancels.
  */
 public final class ConfirmDialogScreen extends Screen {
     private static final int CANCEL = 1;
@@ -29,10 +29,6 @@ public final class ConfirmDialogScreen extends Screen {
     private java.util.function.Consumer<Boolean> onRemember;
     private boolean remember;
     private final DialogPanel panel;
-
-    public static ConfirmDialogScreen information(Screen parent, Component title, Component message) {
-        return new ConfirmDialogScreen(parent, title, message, Component.translatable("gui.done"), null);
-    }
 
     public ConfirmDialogScreen(Screen parent, Component title, Component message, Component confirmLabel,
                                Runnable onConfirm) {
@@ -56,11 +52,9 @@ public final class ConfirmDialogScreen extends Screen {
         blocks.add(new DialogPanel.Text(message, 0));
         if (onRemember != null) blocks.add(new DialogPanel.Check(REMEMBER,
                 Component.translatable("screen.nyanlex.notice.dont_show_again").getString(), remember));
-        DialogPanel.Footer footer = onConfirm == null
-                ? DialogPanel.Footer.of(null, new DialogPanel.Btn(CANCEL, confirmLabel, true))
-                : DialogPanel.Footer.of(new DialogPanel.Btn(CANCEL, Component.translatable("gui.cancel").getString()),
-                        new DialogPanel.Btn(CONFIRM, confirmLabel, true));
-        return new DialogPanel.Content(this.title.getString(), blocks, footer, CANCEL);
+        return new DialogPanel.Content(this.title.getString(), blocks,
+                DialogPanel.Footer.of(new DialogPanel.Btn(CANCEL, Component.translatable("gui.cancel").getString()),
+                        new DialogPanel.Btn(CONFIRM, confirmLabel, true)), CANCEL);
     }
 
     @Override
@@ -85,7 +79,7 @@ public final class ConfirmDialogScreen extends Screen {
         if (id == REMEMBER) {
             remember = !remember;
             panel.update(content());
-        } else if (id == CONFIRM && onConfirm != null) {
+        } else if (id == CONFIRM) {
             if (onRemember != null) onRemember.accept(remember);
             onConfirm.run();
             close();

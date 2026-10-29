@@ -47,11 +47,10 @@ public final class AiConfigScreen extends Screen {
     private boolean initialCodexRefreshStarted;
     private boolean initialAntigravityRefreshStarted;
     private String status = "";
+    private String wrappedStatus;
+    private List<String> statusLines = List.of();
 
-    // Vertical layout, computed once per init() so the widgets and the text agree. The key notice wraps
-    // to as many lines as the full file path needs; everything below it moves down and, when the
-    // screen is short, the gaps shrink.
-    private List<String> noticeLines = List.of();
+    // Compute widget and text positions together; shrink gaps on short screens.
     private int layProv;
     private int layMode;
     private int layBaseLabel;
@@ -96,10 +95,7 @@ public final class AiConfigScreen extends Screen {
     }
 
     private void computeLayout(TranslatorConfig cfg) {
-        java.nio.file.Path file = NyanLexFabric.configFilePath();
-        String path = file == null ? "" : file.toAbsolutePath().toString();
-        String text = new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.key_notice", path).getString();
-        noticeLines = com.dragonmeow.nyanlex.config.UiText.wrap(text, Math.max(80, this.width - 12), this.font::width);
+        wrappedStatus = null;
         boolean accountModes = isOpenAiProvider(cfg) || isGeminiProvider(cfg);
         boolean localCli = cfg.usesLocalAiCli();
         int[] gaps = {10, 6, 4, 2};
@@ -108,7 +104,7 @@ public final class AiConfigScreen extends Screen {
         for (int gi = 0; gi < gaps.length; gi++) {
             int g = gaps[gi];
             int small = Math.min(g, 6);
-            int end = 17 + noticeLines.size() * 10;
+            int end = 17;
             layAccount = end + 3;
             layProv = end + (localCli ? 17 : 7);
             int y = layProv + 20;
@@ -130,7 +126,7 @@ public final class AiConfigScreen extends Screen {
                 layQuota = y;
                 y += 10;
                 layStatus = y;
-                y += 10;
+                y += statusHeight();
             } else {
                 y += Math.min(g, 4);
                 layBaseLabel = y;
@@ -145,7 +141,7 @@ public final class AiConfigScreen extends Screen {
                 layTest = y;
                 y += 20;
                 layStatus = y + 2;
-                y += 12;
+                y += 2 + statusHeight();
             }
             layDone = Math.max(y + 4, 210);
             if (layDone + 20 <= this.height - 4) {
@@ -226,11 +222,7 @@ public final class AiConfigScreen extends Screen {
                         new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.openai.api_mode").getString(),
                         !cfg.usesLocalAiCli()),
                 x, y, width, gemini ? this::selectGeminiApiMode : this::selectOpenAiApiMode);
-        if (gemini && !cfg.antigravityEnabled) {
-            addProviderButton(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.gemini.policy_title").getString(),
-                    x + width + gap, y, width, () -> showGeminiApiNotice(false));
-            return;
-        }
+        if (gemini && !cfg.antigravityEnabled) return;
         addProviderButton(providerLabel(
                         new net.minecraft.network.chat.TranslatableComponent(gemini
                                 ? "screen.nyanlex.ai.gemini.google_mode"
@@ -287,14 +279,7 @@ public final class AiConfigScreen extends Screen {
     }
 
     private void showConnectionTestResult(String result) {
-        if (this.testButton != null) {
-            this.testButton.active = true;
-            this.testButton.setMessage(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.test"));
-        }
-        if (isCurrentScreen()) {
-            this.minecraft.setScreen(ConfirmDialogScreen.information(this,
-                    new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.test"), new net.minecraft.network.chat.TextComponent(result)));
-        }
+        setStatus(result, false);
     }
 
 
@@ -468,8 +453,7 @@ public final class AiConfigScreen extends Screen {
             this.rebuildWidgetsCompat();
             return;
         }
-        if (NyanLexFabric.config().hideGeminiApiNotice) selectGeminiApiMode();
-        else showGeminiApiNotice(true);
+        selectGeminiApiMode();
     }
 
     private void selectGeminiApiMode() {
@@ -478,19 +462,6 @@ public final class AiConfigScreen extends Screen {
         selectApiProvider("https://generativelanguage.googleapis.com/v1beta/openai",
                 isEndpoint(cfg.aiBaseUrl, "https://generativelanguage.googleapis.com/v1beta/openai")
                         ? cfg.aiModel : "gemini-3.5-flash-lite");
-    }
-
-    private void showGeminiApiNotice(boolean selectProvider) {
-        if (this.minecraft == null) return;
-        saveCurrentFields();
-        TranslatorConfig cfg = NyanLexFabric.config();
-        this.minecraft.setScreen(new ConfirmDialogScreen(this,
-                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.gemini.policy_title"),
-                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.gemini.policy_message"),
-                new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.gemini.policy_continue"), () -> {
-                    NyanLexFabric.saveConfig();
-                    if (selectProvider) selectGeminiApiMode();
-                }).rememberChoice(cfg.hideGeminiApiNotice, value -> cfg.hideGeminiApiNotice = value));
     }
 
     private void selectOpenAiProvider() {
@@ -673,13 +644,7 @@ public final class AiConfigScreen extends Screen {
             this.testButton.active = false;
             this.testButton.setMessage(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.testing"));
         }
-        NyanLexFabric.testCodex(result -> {
-            this.status = result;
-            if (this.testButton != null) {
-                this.testButton.active = true;
-                this.testButton.setMessage(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.test"));
-            }
-        });
+        NyanLexFabric.testCodex(this::showConnectionTestResult);
     }
 
     private void refreshAntigravitySession(boolean userInitiated) {
@@ -764,13 +729,7 @@ public final class AiConfigScreen extends Screen {
             this.testButton.active = false;
             this.testButton.setMessage(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.testing"));
         }
-        NyanLexFabric.testAntigravity(result -> {
-            this.status = result;
-            if (this.testButton != null) {
-                this.testButton.active = true;
-                this.testButton.setMessage(new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.test"));
-            }
-        });
+        NyanLexFabric.testAntigravity(this::showConnectionTestResult);
     }
 
     private void openModelPicker() {
@@ -828,7 +787,7 @@ public final class AiConfigScreen extends Screen {
             return;
         }
         if (efforts.contains(cfg.codexReasoningEffort)) return;
-        String defaultEffort = selected.defaultReasoningEffort();
+        String defaultEffort = TranslatorConfig.DEFAULT_CODEX_REASONING_EFFORT;
         cfg.codexReasoningEffort = defaultEffort != null && efforts.contains(defaultEffort)
                 ? defaultEffort : efforts.get(0);
     }
@@ -933,7 +892,6 @@ public final class AiConfigScreen extends Screen {
         GuiComponent.drawCenteredString(graphics, this.font, this.title, this.width / 2, 4, 0xFFFFFFFF);
 
         TranslatorConfig cfg = NyanLexFabric.config();
-        drawKeyNotice(graphics);
         if (cfg.usesLocalAiCli()) {
             if (cfg.usesCodex()) drawCodexAccount(graphics);
             else drawAntigravityState(graphics);
@@ -943,28 +901,38 @@ public final class AiConfigScreen extends Screen {
                             ? "screen.nyanlex.ai.codex.quota_notice"
                             : "screen.nyanlex.ai.antigravity.quota_notice"),
                     this.width / 2, layQuota, 0xFFA4A9B8);
-            if (!this.status.isBlank()) {
-                GuiComponent.drawCenteredString(graphics, this.font, new net.minecraft.network.chat.TextComponent(this.status),
-                        this.width / 2, layStatus, 0xFFFFD080);
-            }
+            drawStatus(graphics);
         } else {
             int x = this.width / 2 - FIELD_W / 2;
             this.font.draw(graphics, new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.endpoint"), x, layBaseLabel, 0xFFA0A0A0);
             this.font.draw(graphics, new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.model"), x, layModelLabel, 0xFFA0A0A0);
             this.font.draw(graphics, new net.minecraft.network.chat.TranslatableComponent("screen.nyanlex.ai.keys"), x, layKeysLabel, 0xFFA0A0A0);
-            if (!this.status.isBlank()) {
-                GuiComponent.drawCenteredString(graphics, this.font, new net.minecraft.network.chat.TextComponent(this.status),
-                        this.width / 2, layStatus, 0xFFFFD080);
-            }
+            drawStatus(graphics);
         }
     }
 
-    /** The always-visible notice: where the API keys live (the full path, wrapped) and that they never leave this computer. */
-    private void drawKeyNotice(PoseStack graphics) {
-        int y = 17;
-        for (String line : noticeLines) {
-            this.font.draw(graphics, line, 6, y, 0xFFA4A9B8);
-            y += 10;
+    private List<String> statusLines() {
+        if (!java.util.Objects.equals(wrappedStatus, status)) {
+            wrappedStatus = status;
+            statusLines = com.dragonmeow.nyanlex.config.UiText.wrap(status, FIELD_W, this.font::width);
+        }
+        return statusLines;
+    }
+
+    private int statusHeight() {
+        return Math.max(1, Math.min(4, statusLines().size())) * 10;
+    }
+
+    private void drawStatus(PoseStack graphics) {
+        List<String> lines = statusLines();
+        int bottom = tight ? this.height - 4 : layDone - 4;
+        int count = Math.min(lines.size(), Math.min(4, Math.max(0, (bottom - layStatus) / 10)));
+        for (int i = 0; i < count; i++) {
+            String line = lines.get(i);
+            if (i == count - 1 && count < lines.size()) {
+                line = com.dragonmeow.nyanlex.config.UiText.fit(line + "…", FIELD_W, this.font::width);
+            }
+            GuiComponent.drawCenteredString(graphics, this.font, line, this.width / 2, layStatus + i * 10, 0xFFFFD080);
         }
     }
 

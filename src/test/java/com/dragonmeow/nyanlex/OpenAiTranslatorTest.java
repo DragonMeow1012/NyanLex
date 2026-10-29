@@ -300,7 +300,7 @@ class OpenAiTranslatorTest {
         assertTrue(bodyFor(OPENAI_URL, "gpt-5.6-luna", "high").contains("\"reasoning_effort\":\"high\""));
         assertTrue(bodyFor(OPENAI_URL, "gpt-5.6-luna", "off").contains("\"reasoning_effort\":\"none\""));
         assertTrue(bodyFor(OPENAI_URL, "gpt-5.6-luna", "max").contains("\"reasoning_effort\":\"max\""));
-        assertTrue(bodyFor(GEMINI_URL, "gemini-3.5-flash-lite", "minimal").contains("\"reasoning_effort\":\"minimal\""));
+        assertTrue(bodyFor(GEMINI_URL, "gemini-3.5-flash-lite", "minimal").contains("\"reasoning_effort\":\"low\""));
         assertTrue(bodyFor(GEMINI_URL, "gemini-3.5-flash-lite", "off").contains("\"reasoning_effort\":\"none\""));
         assertTrue(bodyFor(CUSTOM_URL, "some-model", "medium").contains("\"reasoning_effort\":\"medium\""));
         assertTrue(bodyFor(CUSTOM_URL, "some-model", "off").contains("\"reasoning_effort\":\"none\""));
@@ -313,30 +313,30 @@ class OpenAiTranslatorTest {
         assertTrue(deepseekMax.contains("\"reasoning_effort\":\"max\""), deepseekMax);
         assertFalse(deepseekMax.contains("\"thinking\""), deepseekMax);
 
-        // default sends nothing, whatever the service
+        // The retired default choice resolves to medium, clamped to provider capability.
         for (String url : List.of(OPENAI_URL, GEMINI_URL, DEEPSEEK_URL, CUSTOM_URL)) {
             String body = bodyFor(url, "any-model", "default");
-            assertFalse(body.contains("reasoning_effort") || body.contains("\"thinking\""), url + " " + body);
+            assertTrue(body.contains("\"reasoning_effort\":\"" + (url.equals(DEEPSEEK_URL) ? "low" : "medium") + "\""), url + " " + body);
         }
     }
 
     @Test
     void anUnsetStrengthMeansTheServiceDefaultNotAModelNameGuess() throws Exception {
-        // Gemini and DeepSeek default to off; the model's name no longer matters
+        // All services start at medium; the model name does not decide the default.
         for (String model : List.of("gemini-2.5-flash-lite", "gemini-3.5-pro", "anything-else")) {
-            assertTrue(bodyFor(GEMINI_URL, model, null).contains("\"reasoning_effort\":\"none\""), model);
+            assertTrue(bodyFor(GEMINI_URL, model, null).contains("\"reasoning_effort\":\"medium\""), model);
         }
-        assertTrue(bodyFor(DEEPSEEK_URL, "deepseek-flash", null).contains("\"thinking\":{\"type\":\"disabled\"}"));
-        assertTrue(bodyFor(GEMINI_URL, "gemini-3.5-flash-lite", "not-a-level").contains("\"reasoning_effort\":\"none\""),
+        assertTrue(bodyFor(DEEPSEEK_URL, "deepseek-flash", null).contains("\"reasoning_effort\":\"low\""));
+        assertTrue(bodyFor(GEMINI_URL, "gemini-3.5-flash-lite", "not-a-level").contains("\"reasoning_effort\":\"medium\""),
                 "an unusable value is the same as no value");
-        // OpenAI and custom endpoints send nothing, even for a name that used to be special-cased
-        assertFalse(bodyFor(OPENAI_URL, "gpt-4o-mini", null).contains("reasoning_effort"));
-        assertFalse(bodyFor(CUSTOM_URL, "gemini-2.5-flash", null).contains("reasoning_effort"));
+        // OpenAI and custom endpoints use medium as well.
+        assertTrue(bodyFor(OPENAI_URL, "gpt-4o-mini", null).contains("\"reasoning_effort\":\"medium\""));
+        assertTrue(bodyFor(CUSTOM_URL, "gemini-2.5-flash", null).contains("\"reasoning_effort\":\"medium\""));
         // the five-argument constructor of the glue in other source trees behaves the same way
         Recorder recorder = new Recorder(body -> false);
         new OpenAiTranslator(recorder, () -> new AiSettings(GEMINI_URL, "gemini-3.5-flash-lite", List.of("k"),
                 List.of(), false)).translate("Hi", "zh-TW");
-        assertTrue(recorder.bodies.get(0).contains("\"reasoning_effort\":\"none\""));
+        assertTrue(recorder.bodies.get(0).contains("\"reasoning_effort\":\"medium\""));
     }
 
     @Test
@@ -361,7 +361,7 @@ class OpenAiTranslatorTest {
         t.translate("Hi", "zh-TW");
         assertTrue(recorder.bodies.get(0).contains("\"reasoning_effort\":\"low\""));
         assertTrue(recorder.bodies.get(1).contains("\"reasoning_effort\":\"high\""));
-        assertFalse(recorder.bodies.get(2).contains("reasoning_effort"));
+        assertTrue(recorder.bodies.get(2).contains("\"reasoning_effort\":\"medium\""));
     }
 
     @Test

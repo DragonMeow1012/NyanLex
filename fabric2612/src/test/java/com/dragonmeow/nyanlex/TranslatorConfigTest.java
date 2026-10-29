@@ -72,22 +72,22 @@ class TranslatorConfigTest {
         assertTrue(fresh.aiEffortByEndpoint.isEmpty(), "nothing is stored until the user chooses");
         // the defaults that keep each service behaving as it did before the setting existed
         assertEquals("medium", fresh.apiEffortFor("https://api.anthropic.com"));
-        assertEquals("off", fresh.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"));
-        assertEquals("off", fresh.apiEffortFor("https://api.deepseek.com"));
-        assertEquals("default", fresh.apiEffortFor("https://api.openai.com/v1"));
-        assertEquals("default", fresh.apiEffortFor("http://127.0.0.1:11434/v1"));
-        assertEquals("default", fresh.apiEffortFor(null));
+        assertEquals("medium", fresh.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"));
+        assertEquals("medium", fresh.apiEffortFor("https://api.deepseek.com"));
+        assertEquals("medium", fresh.apiEffortFor("https://api.openai.com/v1"));
+        assertEquals("medium", fresh.apiEffortFor("http://127.0.0.1:11434/v1"));
+        assertEquals("medium", fresh.apiEffortFor(null));
 
         fresh.rememberApiEffort("https://api.openai.com/v1/", "HIGH");
         fresh.rememberApiEffort("https://api.anthropic.com", "off");
         assertEquals("high", fresh.apiEffortFor("https://api.openai.com/v1"), "trailing slashes do not make another endpoint");
         assertEquals("off", fresh.apiEffortFor("https://api.anthropic.com"));
-        assertEquals("off", fresh.apiEffortFor("https://api.deepseek.com"), "other services are untouched");
+        assertEquals("medium", fresh.apiEffortFor("https://api.deepseek.com"), "other services are untouched");
         fresh.rememberApiEffort("https://api.openai.com/v1", "ultra");
         fresh.rememberApiEffort("https://api.openai.com/v1", null);
         assertEquals("high", fresh.apiEffortFor("https://api.openai.com/v1"), "an invalid choice changes nothing");
         fresh.rememberApiEffort("https://api.openai.com/v1", "default");
-        assertEquals("default", fresh.apiEffortFor("https://api.openai.com/v1"));
+        assertEquals("medium", fresh.apiEffortFor("https://api.openai.com/v1"));
     }
 
     @Test
@@ -97,9 +97,9 @@ class TranslatorConfigTest {
             TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader(json));
             assertNotNull(cfg.aiEffortByEndpoint, json);
             assertEquals("medium", cfg.apiEffortFor("https://api.anthropic.com"), json);
-            assertEquals("off", cfg.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"), json);
-            assertEquals("off", cfg.apiEffortFor("https://api.deepseek.com"), json);
-            assertEquals("default", cfg.apiEffortFor("https://api.openai.com/v1"), json);
+            assertEquals("medium", cfg.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"), json);
+            assertEquals("medium", cfg.apiEffortFor("https://api.deepseek.com"), json);
+            assertEquals("medium", cfg.apiEffortFor("https://api.openai.com/v1"), json);
         }
         TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader("{\"aiEffortByEndpoint\":{"
                 + "\"https://api.anthropic.com\":\" MAX \","
@@ -109,9 +109,9 @@ class TranslatorConfigTest {
                 + "\"  \":\"high\","
                 + "\"http://127.0.0.1:11434/v1\":null}}"));
         assertEquals("max", cfg.apiEffortFor("https://api.anthropic.com"));
-        assertEquals("default", cfg.apiEffortFor("https://api.openai.com/v1"), "an unusable value falls back to the default");
-        assertEquals("off", cfg.apiEffortFor("https://api.deepseek.com"));
-        assertEquals("minimal", cfg.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"));
+        assertEquals("medium", cfg.apiEffortFor("https://api.openai.com/v1"), "an unusable value falls back to the default");
+        assertEquals("medium", cfg.apiEffortFor("https://api.deepseek.com"));
+        assertEquals("low", cfg.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"));
         assertEquals(2, cfg.aiEffortByEndpoint.size(), cfg.aiEffortByEndpoint.toString());
 
         TranslatorConfig saved = new TranslatorConfig();
@@ -160,7 +160,7 @@ class TranslatorConfigTest {
         assertFalse(cfg.aiFastMode);
         assertFalse(cfg.hideAiFastModeNotice);
         assertEquals("gpt-6-luna", TranslatorConfig.DEFAULT_CODEX_MODEL);
-        assertEquals("low", TranslatorConfig.DEFAULT_CODEX_REASONING_EFFORT);
+        assertEquals("medium", TranslatorConfig.DEFAULT_CODEX_REASONING_EFFORT);
         assertEquals(TranslatorConfig.DEFAULT_CODEX_MODEL, cfg.codexModel);
         assertEquals(TranslatorConfig.DEFAULT_CODEX_REASONING_EFFORT, cfg.codexReasoningEffort);
         assertEquals(DisplayMode.BOTH, cfg.chatMode, "聊天預設 原文+翻譯");

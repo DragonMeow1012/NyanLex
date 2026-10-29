@@ -488,7 +488,6 @@
   "nyanlex.narrate.choice": "%s、選択肢",
   "nyanlex.narrate.chosen": "%s、選択済み",
   "nyanlex.narrate.disabled": "%s、利用不可",
-  "screen.nyanlex.ai.key_notice": "API キーはこのコンピューター（%s）に保存され、認証のために設定したサービスにのみ送信されます。",
   "screen.nyanlex.ai.codex.quota_notice": "翻訳と接続テストは Codex の利用枠を消費します。残量を取得できない場合は公式の使用量を確認してください。制限の報告時は送信を停止し、クレジットを自動購入しません。",
   "nyanlex.manual.setup_btn": "読む量が多いと感じたら、設定ガイドを使ってみましょう",
   "nyanlex.manual.chapters": "目次",

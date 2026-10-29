@@ -488,7 +488,6 @@
   "nyanlex.narrate.choice": "%s，選項",
   "nyanlex.narrate.chosen": "%s，已選取",
   "nyanlex.narrate.disabled": "%s，無法使用",
-  "screen.nyanlex.ai.key_notice": "API 金鑰會儲存在本機（%s），並僅傳送給你設定的服務商進行驗證。",
   "screen.nyanlex.ai.codex.quota_notice": "翻譯與連線測試會使用你的 Codex 額度。剩餘額度不一定能查到，請自行留意官方用量；遇到限流或額度耗盡會暫停，不會自動購買額度。",
   "nyanlex.manual.setup_btn": "想跟著步驟設定？開啟設定小精靈",
   "nyanlex.manual.chapters": "章節",

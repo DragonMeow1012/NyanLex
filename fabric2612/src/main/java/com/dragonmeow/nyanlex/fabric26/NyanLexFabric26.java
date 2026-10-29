@@ -2798,7 +2798,7 @@ public final class NyanLexFabric26 implements ClientModInitializer {
             }
             if (claude && config != null && config.claudeFastMode
                     && AiFeatureMemory.shared().isUnsupported(model, AnthropicWire.Feature.FAST)) {
-                msg = msg + " " + Component.translatable("screen.nyanlex.ai.claude.fast.unsupported_note").getString();
+                msg = msg + "\n" + Component.translatable("screen.nyanlex.ai.claude.fast.unsupported_note").getString();
             }
             final String result = msg;
             Minecraft mc = Minecraft.getInstance();

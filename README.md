@@ -222,7 +222,7 @@
 | OpenRouter | 自備 API Key | 在 AI 設定填入其 OpenAI 相容服務網址與模型。 |
 | Ollama／LM Studio | 依本機服務設定，無驗證時可留空 | 連線到自己啟動的 OpenAI 相容伺服器；模型需自行準備。 |
 | 其他 OpenAI 相容服務 | 依服務設定 | 可自訂 Base URL、模型、多把輪替金鑰與詞彙表。金鑰留空時不送出 `Authorization` 標頭。 |
-| ChatGPT／Codex | ChatGPT 登入 | 所有表列版本均支援；需先安裝 Codex CLI。可選模型、推理強度並查看 token，使用帳號的 Codex 額度；預設為 `gpt-6-luna`／`low`。 |
+| ChatGPT／Codex | ChatGPT 登入 | 所有表列版本均支援；需先安裝 Codex CLI。可選模型、推理強度並查看 token，使用帳號的 Codex 額度；預設為 `gpt-6-luna`／`medium`。 |
 
 API 初次選用的預設模型為 OpenAI `gpt-5.6-luna`、Gemini `gemini-3.5-flash-lite`。可按「讀取模型」取得目前服務的模型清單並選取填入，也可直接手動輸入；切換服務商會保留各服務已設定的模型。
 
@@ -230,7 +230,7 @@ OpenAI API 與 ChatGPT／Codex 都提供快速模式開關，預設關閉、使�
 
 Claude 使用你自己的 Anthropic API Key，依 Anthropic 官方計價收費；金鑰只會送到 `api.anthropic.com`。按「讀取模型」可從清單選擇模型；預設為 Claude Haiku 5.5（`claude-haiku-5-5`），思考強度預設為 `medium`，都能在設定畫面調整。Claude 的快速模式是獨立開關（預設關閉），費用約為一般的 2 倍，且僅部分模型支援，不支援時會自動改用一般速度。Claude Max／Team 方案每月附有 API 額度，連結 Claude Console 後即可使用該組織的 API Key。
 
-所有 API 服務商（Gemini、OpenAI、DeepSeek、Claude 與自訂端點）都能在設定畫面調整「思考強度」：可選「預設（由模型決定）」、「關閉（最快）」，或服務商提供的各個等級。Claude 預設為 `medium`，Gemini 與 DeepSeek 預設為關閉，OpenAI 與自訂端點預設不送出任何思考參數。部分模型無法完全關閉思考，此時會使用該模型允許的最低設定；模型不接受所選設定時，會改用不含該設定的請求重送，並在本次遊戲期間記住。
+所有 API 服務商（Gemini、OpenAI、DeepSeek、Claude 與自訂端點）的「思考強度」統一為六檔：關閉（最快）、`low`、`medium`、`high`、`xhigh`、`max`，初始值都是 `medium`。已選擇的強度會保留；各模型只支援部分檔位時，請求會採用可用的相近設定。部分模型無法完全關閉思考，會使用允許的最低設定；不接受思考參數的模型會自動重試並在本次遊戲期間記住。
 
 NyanLex 不會自動安裝上述 CLI。登入流程由本機 CLI 開啟瀏覽器或終端機完成；帳號憑證由官方工具保存，NyanLex 只呼叫已登入的本機程序。
 
@@ -309,7 +309,7 @@ Fabric 1.17 以上與 NeoForge：
 
 **聊天輸入翻譯**：在「一般」開啟後，按聊天快捷鍵即可輸入草稿。浮窗預設位於右下角，已有儲存位置則予以保留；拖曳標題列可移動並記住位置。「翻譯成：目標語言」選單支援搜尋語言名稱或代碼，預設目標語言為英文。按 Esc 關閉聊天後，同一次遊戲執行期間會保留草稿，下次開啟即可繼續輸入。點「翻譯並填入」後，確認聊天欄中的譯文，再按 Enter 送出。
 
-所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設使用 `gpt-6-luna`／`low`。
+所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設使用 `gpt-6-luna`／`medium`。
 
 非同步批次、優先佇列、磁碟快取與失敗退避，減少主執行緒負擔與重複請求。送出間隔和批次收集預設皆為 5 秒，可選「關」或 1～10 秒，共 11 檔。
 

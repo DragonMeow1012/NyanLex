@@ -2,7 +2,6 @@ package com.dragonmeow.nyanlex.translate;
 
 import com.google.gson.JsonObject;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -11,26 +10,24 @@ import java.util.Locale;
 /**
  * The thinking-strength setting every API provider shares, and how each one spells it on the wire.
  *
- * <p>A setting is one of {@link #VALUES}: {@code default} sends nothing and lets the model decide,
- * {@code off} asks for the least thinking the provider allows, the rest are the provider's own
- * effort levels. Nothing here names a model: the lists below are API enumerations, and what a
+ * <p>A setting is one of the six {@link #VALUES}: {@code off} asks for the least thinking the
+ * provider allows, followed by five effort levels. Nothing here names a model: the lists below
+ * are API enumerations, and what a
  * particular model really accepts is learned from its catalog entry or from a rejected request
  * (see {@link AiFeatureMemory}).</p>
  */
 public final class ReasoningEffort {
     private ReasoningEffort() { }
 
-    public static final String DEFAULT = "default";
+    public static final String DEFAULT_EFFORT = AnthropicWire.DEFAULT_EFFORT;
     public static final String OFF = AnthropicWire.EFFORT_OFF;
 
     /** Every value a stored setting may hold. */
     public static final List<String> VALUES = Collections.unmodifiableList(Arrays.asList(
-            DEFAULT, OFF, "minimal", "low", "medium", "high", "xhigh", "max"));
+            OFF, "low", "medium", "high", "xhigh", "max"));
 
-    private static final List<String> OPENAI_MENU = Collections.unmodifiableList(Arrays.asList(
-            DEFAULT, OFF, "low", "medium", "high", "xhigh", "max"));
-    private static final List<String> GEMINI_MENU = Collections.unmodifiableList(Arrays.asList(
-            DEFAULT, OFF, "minimal", "low", "medium", "high"));
+    private static final List<String> GEMINI_LEVELS = Collections.unmodifiableList(Arrays.asList(
+            "low", "medium", "high"));
     /** DeepSeek's documented levels, offered until its model list says which ones a model takes. */
     private static final List<String> DEEPSEEK_LEVELS = Collections.unmodifiableList(Arrays.asList(
             "low", "high", "max"));
@@ -52,24 +49,17 @@ public final class ReasoningEffort {
     public static String normalize(String value) {
         if (value == null) return null;
         String lower = value.trim().toLowerCase(Locale.ROOT);
+        // Migrate retired menu choices at the existing settings boundary.
+        if ("default".equals(lower)) return DEFAULT_EFFORT;
+        if ("minimal".equals(lower)) return "low";
         return VALUES.contains(lower) ? lower : null;
     }
 
     /**
-     * What a service uses until the user picks something: Claude {@code medium} (the level its
-     * requests were tuned with), Gemini and DeepSeek {@code off} (fast, cheap translation lines
-     * gain nothing from thinking), everything else {@code default}.
+     * Every service starts at medium. An explicit saved choice is retained by resolve.
      */
     public static String defaultFor(String baseUrl) {
-        switch (providerOf(baseUrl)) {
-            case CLAUDE:
-                return AnthropicWire.DEFAULT_EFFORT;
-            case GEMINI:
-            case DEEPSEEK:
-                return OFF;
-            default:
-                return DEFAULT;
-        }
+        return DEFAULT_EFFORT;
     }
 
     /** {@code chosen} when it is a valid setting, otherwise the service default. */
@@ -79,37 +69,10 @@ public final class ReasoningEffort {
     }
 
     /**
-     * The settings to offer for a service, lowest thinking first. {@code memory} may know the
-     * levels a model's catalog entry lists (DeepSeek, Claude); without that the documented
-     * levels are offered and the request layer falls back if the model refuses one.
-     */
-    public static List<String> menu(String baseUrl, String model, AiFeatureMemory memory) {
-        List<String> known = memory == null ? null : memory.effortLevels(model);
-        switch (providerOf(baseUrl)) {
-            case GEMINI:
-                return GEMINI_MENU;
-            case DEEPSEEK:
-                return withLevels(Arrays.asList(DEFAULT, OFF), known, DEEPSEEK_LEVELS);
-            case CLAUDE:
-                return withLevels(Collections.singletonList(OFF), known, AnthropicWire.EFFORT_LEVELS);
-            default:
-                return OPENAI_MENU;
-        }
-    }
-
-    private static List<String> withLevels(List<String> head, List<String> known, List<String> documented) {
-        List<String> out = new ArrayList<String>(head);
-        for (String level : known == null ? documented : known) {
-            if (!out.contains(level) && !DEFAULT.equals(level) && VALUES.contains(level)) out.add(level);
-        }
-        return Collections.unmodifiableList(out);
-    }
-
-    /**
      * Add the field(s) that carry {@code chosen} to an OpenAI-style chat request body and report
      * whether anything was added. Claude is not handled here (its transport builds the whole
-     * request) and neither are the CLI routes. Nothing is added for {@code default}, or when the
-     * model has already refused the field this session.
+     * request) and neither are the CLI routes. A service/model with fewer levels uses the existing
+     * effort clamp at this boundary. Nothing is added when the model has refused the field.
      *
      * <ul>
      *   <li>OpenAI, Gemini, custom: {@code "reasoning_effort": level}; off is {@code "none"}.</li>
@@ -122,7 +85,6 @@ public final class ReasoningEffort {
         Provider provider = providerOf(baseUrl);
         if (provider == Provider.CLAUDE || provider == Provider.NONE) return false;
         String effort = resolve(baseUrl, chosen);
-        if (DEFAULT.equals(effort)) return false;
         if (memory != null && memory.isUnsupported(model, AnthropicWire.Feature.REASONING_EFFORT)) return false;
         if (OFF.equals(effort)) {
             if (provider == Provider.DEEPSEEK) {
@@ -133,6 +95,11 @@ public final class ReasoningEffort {
                 body.addProperty("reasoning_effort", "none");
             }
         } else {
+            List<String> supported = memory == null ? null : memory.effortLevels(model);
+            if (supported == null && provider == Provider.GEMINI) supported = GEMINI_LEVELS;
+            if (supported == null && provider == Provider.DEEPSEEK) supported = DEEPSEEK_LEVELS;
+            effort = AnthropicWire.clampEffort(effort, supported);
+            if (effort == null) return false;
             body.addProperty("reasoning_effort", effort);
         }
         return true;

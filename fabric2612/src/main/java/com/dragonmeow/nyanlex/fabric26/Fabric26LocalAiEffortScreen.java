@@ -36,14 +36,11 @@ public final class Fabric26LocalAiEffortScreen extends OptionsSubScreen {
     }
 
     /**
-     * Display name of an API thinking-strength setting: {@code default} and {@code off} are
-     * translated (the short form fits on a button), the provider's own levels show as they are.
+     * Display name of a thinking-strength setting: off is translated, and the five levels
+     * keep their API names. The short form fits on a button.
      */
     static Component label(String effort, boolean shortForm) {
-        if (ReasoningEffort.DEFAULT.equals(effort)) {
-            return Component.translatable(shortForm
-                    ? "screen.nyanlex.ai.effort.default.short" : "screen.nyanlex.ai.effort.default");
-        }
+
         if (ReasoningEffort.OFF.equals(effort)) {
             return Component.translatable(shortForm
                     ? "screen.nyanlex.ai.effort.off.short" : "screen.nyanlex.ai.effort.off");

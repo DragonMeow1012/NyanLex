@@ -492,7 +492,6 @@
   "nyanlex.narrate.choice": "%s, option",
   "nyanlex.narrate.chosen": "%s, selected",
   "nyanlex.narrate.disabled": "%s, unavailable",
-  "screen.nyanlex.ai.key_notice": "API keys are stored locally (%s) and sent only to your configured provider for authentication.",
   "screen.nyanlex.ai.codex.quota_notice": "Translations and connection tests consume your Codex allowance. Remaining allowance may be unavailable; check official usage. Reported limits pause requests; credits are never bought automatically.",
   "nyanlex.manual.setup_btn": "Prefer guided setup? Open the setup helper",
   "nyanlex.manual.chapters": "Chapters",

@@ -29,7 +29,7 @@ public final class TranslatorConfig {
     public static final String AI_PROVIDER_CODEX = "codex";
     public static final String AI_PROVIDER_ANTIGRAVITY = "antigravity";
     public static final String DEFAULT_CODEX_MODEL = "gpt-6-luna";
-    public static final String DEFAULT_CODEX_REASONING_EFFORT = "low";
+    public static final String DEFAULT_CODEX_REASONING_EFFORT = "medium";
     public static final String DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.7-flash-low";
     public static final String ANTHROPIC_API_URL = "https://api.anthropic.com";
     public static final String DEFAULT_CLAUDE_MODEL = AnthropicWire.DEFAULT_MODEL;
@@ -147,7 +147,6 @@ public final class TranslatorConfig {
     /** Advanced opt-in after reading the Antigravity service and account risks. */
     public boolean antigravityEnabled = false;
     public boolean hideAntigravityNotice = false;
-    public boolean hideGeminiApiNotice = false;
     /** Legacy persisted switch, retained only so pre-Antigravity configs migrate losslessly. */
     @Deprecated
     public boolean aiUseCodex = false;

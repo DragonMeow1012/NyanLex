@@ -491,7 +491,6 @@
   "nyanlex.narrate.choice": "%s，选项",
   "nyanlex.narrate.chosen": "%s，已选中",
   "nyanlex.narrate.disabled": "%s，不可用",
-  "screen.nyanlex.ai.key_notice": "API 密钥会保存在本机（%s），并仅发送给你配置的服务商进行身份验证。",
   "screen.nyanlex.ai.codex.quota_notice": "翻译与连接测试消耗你的 Codex 额度。剩余额度可能无法查询，请自行留意官方用量；遇到限流或额度耗尽会暂停，不会自动购买额度。",
   "nyanlex.manual.setup_btn": "想跟着步骤设置？打开设置向导",
   "nyanlex.manual.chapters": "章节",

@@ -16,23 +16,19 @@ class AiProviderConfigTest {
     void noticePreferencesPersistIndependentlyWithoutEnablingTranslation() {
         TranslatorConfig config = TranslatorConfig.fromReader(new StringReader("{}"));
         assertFalse(config.hideAntigravityNotice);
-        assertFalse(config.hideGeminiApiNotice);
         config.translationRequestsEnabled = false;
         config.hideAntigravityNotice = true;
         StringWriter output = new StringWriter();
         config.writeTo(output);
         TranslatorConfig loaded = TranslatorConfig.fromReader(new StringReader(output.toString()));
         assertTrue(loaded.hideAntigravityNotice);
-        assertFalse(loaded.hideGeminiApiNotice);
         assertFalse(loaded.antigravityEnabled);
         assertFalse(loaded.translationRequestsEnabled);
-        loaded.hideGeminiApiNotice = true;
         loaded.hideAntigravityNotice = false;
         output = new StringWriter();
         loaded.writeTo(output);
         loaded = TranslatorConfig.fromReader(new StringReader(output.toString()));
         assertFalse(loaded.hideAntigravityNotice);
-        assertTrue(loaded.hideGeminiApiNotice);
     }
 
     @Test
