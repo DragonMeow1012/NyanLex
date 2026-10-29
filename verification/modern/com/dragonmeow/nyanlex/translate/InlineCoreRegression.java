@@ -159,7 +159,6 @@ public final class InlineCoreRegression {
                 "Reward X100 Diamonds",
                 "Reward x1,000 Diamonds",
                 "Reward x1.5 Diamonds",
-                "Reward x5% Diamonds",
                 "Reward x2k Diamonds",
                 "Reward X3M Diamonds",
                 "Reward x86 Diamonds")) {
@@ -170,6 +169,18 @@ public final class InlineCoreRegression {
             check(("T:" + source).equals(cache.getCached(source)),
                     source + " did not restore its exact quantity");
         }
+
+        // A percent sign stays visible to the model because "x5%" and "x5"
+        // do not have the same meaning. It therefore has its own shared template
+        // key instead of reusing the plain-quantity request above.
+        String percentSource = "Reward x5% Diamonds";
+        cache.requestBatched(percentSource);
+        cache.flushBatch();
+        cache.flushBatch();
+        check(translator.requests == 2,
+                "percentage quantity did not keep a distinct template request");
+        check(("T:" + percentSource).equals(cache.getCached(percentSource)),
+                "percentage quantity was not restored exactly");
 
         for (String boundary : List.of(
                 "0x1F", "2x2", "1920x1080", "x100kg", "x100xp", "x100foo",

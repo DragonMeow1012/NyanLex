@@ -62,7 +62,7 @@ Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if
 | Google / Antigravity sign-in | Hidden by default; reveal it in Advanced settings after reading the account and service risks. On modern Fabric/NeoForge builds, install Antigravity CLI from the official Google download page and sign in. NyanLex uses that Google account's Antigravity allowance and the model variants reported by the CLI. |
 | OpenRouter or another OpenAI-compatible service | Its service URL, model and any required API key. |
 | Ollama or LM Studio | Your own running OpenAI-compatible local server and model. |
-| ChatGPT / Codex | Available on every listed target. Requires a separately installed Codex CLI and ChatGPT sign-in; includes model, reasoning-effort and session-token controls, uses your account's Codex allowance, and defaults to `gpt-6-luna` / `low`. |
+| ChatGPT / Codex | Available on every listed target. Requires a separately installed Codex CLI and ChatGPT sign-in; includes model, reasoning-effort and session-token controls, uses your account's Codex allowance, and defaults to `gpt-6-luna` / `medium`. |
 
 AI providers may charge for usage. The optional Codex and Antigravity integrations start separately installed local tools; NyanLex does not install either CLI. Antigravity installation instructions are available at [antigravity.google/download](https://antigravity.google/download). You can choose whether Google machine translation is used as a fallback after an AI failure. If enabled, that text may also be sent to Google.
 

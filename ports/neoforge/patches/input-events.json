@@ -302,9 +302,14 @@
       "count": 1
     },
     {
-      "from": "\n                graphics.centeredText(this.font, Component.literal(this.status),\n",
-      "to": "\n                graphics.drawCenteredString(this.font, Component.literal(this.status),\n",
-      "count": 2
+      "from": "\n    private void drawStatus(GuiGraphicsExtractor graphics) {\n",
+      "to": "\n    private void drawStatus(GuiGraphics graphics) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n            graphics.centeredText(this.font, line, this.width / 2, layStatus + i * 10, 0xFFFFD080);\n",
+      "to": "\n            graphics.drawCenteredString(this.font, line, this.width / 2, layStatus + i * 10, 0xFFFFD080);\n",
+      "count": 1
     },
     {
       "from": "\n            graphics.text(this.font, Component.translatable(\"screen.nyanlex.ai.endpoint\"), x, layBaseLabel, 0xFFA0A0A0, false);\n",
@@ -319,16 +324,6 @@
     {
       "from": "\n            graphics.text(this.font, Component.translatable(\"screen.nyanlex.ai.keys\"), x, layKeysLabel, 0xFFA0A0A0, false);\n",
       "to": "\n            graphics.drawString(this.font, Component.translatable(\"screen.nyanlex.ai.keys\"), x, layKeysLabel, 0xFFA0A0A0, false);\n",
-      "count": 1
-    },
-    {
-      "from": "\n    private void drawKeyNotice(GuiGraphicsExtractor graphics) {\n",
-      "to": "\n    private void drawKeyNotice(GuiGraphics graphics) {\n",
-      "count": 1
-    },
-    {
-      "from": "\n            graphics.text(this.font, line, 6, y, 0xFFA4A9B8, false);\n",
-      "to": "\n            graphics.drawString(this.font, line, 6, y, 0xFFA4A9B8, false);\n",
       "count": 1
     },
     {

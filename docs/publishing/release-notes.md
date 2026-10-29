@@ -6,7 +6,9 @@ The first release under the NyanLex Translator name brings together bilingual ch
 
 - All **62 JARs** now use the full `NyanLex-Translator` artifact name, while the in-game mod list consistently shows **NyanLex Translator**. The `/nyanlex` command is unchanged.
 - API-key fields are masked by default and include a compact show/hide control. A key can be checked when needed without leaving it exposed on the settings screen.
-- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session-token usage display. The default is **`gpt-6-luna` with low reasoning effort**; existing saved provider and model choices are preserved.
+- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session-token usage display. The default is **`gpt-6-luna` with medium reasoning effort**; existing saved provider and model choices are preserved. API services expose the same six choices: off, low, medium, high, xhigh and max.
+- OpenAI API, ChatGPT/Codex and Claude each have a separate **Fast mode** switch, disabled by default. Enabling it first warns that billing or account allowance may increase; unsupported Claude models automatically use standard speed and show that note on a separate result line.
+- Claude API settings can read the available model list, default to Claude Haiku 5.5 with medium reasoning, and keep connection-test results inline below the button instead of opening a modal. API settings no longer show the long local key-file path paragraph.
 - Translation-pack discovery runs on the last Quick setup page, after the target language has been confirmed. Players can still check packs later from Pack settings.
 - On supported modern builds, pressing `G` switches translated books back to the original immediately. Those builds also translate the four visible rows of world signs on the client, preserve the sign's colour and glow, fit long translated rows, and return to the untouched original with `G`.
 - Removed the experimental global text-width projection that could make custom server or mod tooltips overlap. Supported renderers keep ownership of their native measurement and layout.
@@ -18,7 +20,7 @@ The first release under the NyanLex Translator name brings together bilingual ch
 
 - Antigravity is hidden by default and can be enabled in Advanced settings after reading the account, service and privacy risks. Official CLI sign-in does not establish authorization for this third-party integration.
 - CLI translation uses dedicated profiles, untrusted-text boundaries, tool restrictions and bounded process lifetimes. Antigravity rejects tool requests through a pre-execution hook. Selected scenarios were tested with CLI 1.2.16; this is not an operating-system sandbox or a guarantee for every CLI version.
-- Antigravity and Gemini API notices have separate **Don't show again** checkboxes and clear confirmation labels. Selecting API-key mode no longer opens a notice or resets an existing Gemini model.
+- The Antigravity notice retains its **Don't show again** checkbox. The redundant Gemini API terms popup was removed; selecting API-key mode now opens the settings directly and does not reset the current model.
 - Do-not-translate terms appear first in their settings section. Remote API endpoints require HTTPS; local loopback HTTP remains available. Automatic redirects are disabled.
 - Reported CLI rate limits pause requests; unavailable remaining-allowance information does not block translation. Google machine translation retains its alternate-endpoint attempt, and API keys retain individual cooldowns and rotation.
 
@@ -73,7 +75,9 @@ Validation covers automated tests, per-target builds, packaged classes and metad
 
 - 全部 **62 個 JAR** 統一使用完整的 `NyanLex-Translator` 成品名稱；遊戲模組列表也一致顯示 **NyanLex Translator**。`/nyanlex` 指令維持不變。
 - API 金鑰欄位預設遮罩，右側提供小型顯示／隱藏控制；需要核對時才顯示，不會長時間暴露在設定畫面。
-- 所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設為 **`gpt-6-luna`、低推理強度**，既有玩家已儲存的服務與模型選擇不會被覆蓋。
+- 所有支援版本都有 ChatGPT／Codex 登入、模型與推理強度選擇、工作階段 token 顯示；預設為 **`gpt-6-luna`、中推理強度**，既有玩家已儲存的服務與模型選擇不會被覆蓋。API 服務統一提供關閉、low、medium、high、xhigh、max 六檔。
+- OpenAI API、ChatGPT／Codex 與 Claude 各有獨立的「快速模式」開關，預設關閉。開啟前會提醒帳單費用或帳號額度可能增加；Claude 模型不支援時會自動改用一般速度，並將提示獨立顯示在測試結果第二行。
+- Claude API 設定可讀取可用模型清單，預設使用 Claude Haiku 5.5 與中推理強度；測試連線結果改在按鈕下方顯示，不再彈出視窗。API 設定頁也移除了冗長的本機金鑰檔案路徑說明。
 - 翻譯包改在快速設定最後一頁、目標語言確認後才偵測；之後仍可從翻譯包設定重新檢查。
 - 在支援的現代版本中，翻譯書本後按 `G` 可立即切回原文；這些版本也會在客戶端翻譯世界中告示牌的四行可見文字，保留染色與發光效果、縮放過長譯文，按 `G` 時回到完全未修改的原文。
 - 移除曾造成部分伺服器／模組自訂 tooltip 文字重疊的全域文字量寬投影；各支援渲染器重新掌管自己的原生量測與排版。
@@ -85,7 +89,7 @@ Validation covers automated tests, per-target builds, packaged classes and metad
 
 - Antigravity 預設隱藏，可在進階設定閱讀帳號、服務與隱私風險後開啟。官方 CLI 登入不代表本第三方整合已取得授權。
 - CLI 翻譯使用專用設定目錄、不可信文字邊界、工具限制與程序逾時。Antigravity 透過執行前掛鉤拒絕工具請求；已以 CLI 1.2.16 驗證特定情境，不代表作業系統沙箱或所有 CLI 版本的保證。
-- Antigravity 與 Gemini API 說明各有獨立的「不再顯示」勾選框，確認按鈕文字已修正。切換 API 金鑰模式不再彈出通知，也不會重設既有 Gemini 模型。
+- Antigravity 說明保留獨立的「不再顯示」勾選框。重複的 Gemini API 使用條件彈窗已移除；切換 API 金鑰模式會直接開啟設定，且不會重設既有 Gemini 模型。
 - 不翻譯詞彙移至該設定區最上方。遠端 API 限用 HTTPS，本機回送位址仍可使用 HTTP，並停用自動重新導向。
 - CLI 明確回報限流時暫停請求；無法查到剩餘額度不會阻止翻譯。保留 Google 備用入口嘗試，以及 API 金鑰各自冷卻與輪流使用的行為。
 

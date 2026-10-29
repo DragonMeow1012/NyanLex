@@ -125,7 +125,9 @@ def changelog(target) -> str:
 
 - October 29 refresh: all 62 release JARs use the full `NyanLex-Translator` artifact name, and the in-game mod-list name remains **NyanLex Translator**. The `/nyanlex` command is unchanged.
 - API-key fields are masked by default and include a small show/hide control, so a key can be checked without leaving it permanently exposed on the settings screen.
-- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session-token usage display. The default is `gpt-6-luna` at low reasoning effort; existing saved provider and model choices are preserved.
+- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session-token usage display. The default is `gpt-6-luna` at medium reasoning effort; existing saved provider and model choices are preserved. API services share six effort choices: off, low, medium, high, xhigh and max.
+- OpenAI API, ChatGPT/Codex and Claude each have a separate Fast mode switch, disabled by default. Enabling it first warns that billing or account allowance may increase; unsupported Claude models automatically use standard speed and show that note on a separate result line.
+- Claude API settings can read the available model list, default to Claude Haiku 5.5 with medium reasoning, and keep connection-test results inline below the button instead of opening a modal. API settings no longer show the long local key-file path paragraph.
 - Translation-pack discovery runs on the final Quick setup page, after the player has confirmed the target language. Packs can still be checked later from Pack settings.
 - On supported modern builds, pressing `G` now switches translated books back to the original immediately. Those builds also translate the four visible rows of world signs on the client, preserve sign colour/glow, fit long translated rows, and return to the untouched original with `G`.
 - Removed the experimental global text-width projection that could make custom server or mod tooltips overlap. Each supported renderer keeps ownership of its native measurement and layout.
@@ -134,7 +136,7 @@ def changelog(target) -> str:
 - Modern builds hide Antigravity by default. Enable it in Advanced settings after reviewing account, privacy and service risks; official sign-in does not establish third-party integration authorization.
 - CLI translations use dedicated profiles, untrusted-text boundaries, tool restrictions and bounded process handling. Unknown remaining allowance does not block translation; service-reported CLI limits pause requests.
 - Antigravity uses an official pre-tool denial hook. Live testing covered CLI 1.2.16 and selected scenarios; this is not an operating-system sandbox or an all-version guarantee.
-- Antigravity and Gemini notices have independent "Don't show again" checkboxes. API-key mode switches without a popup and preserves the current model; notice buttons use the correct confirmation labels.
+- The Antigravity notice retains its independent "Don't show again" checkbox. The redundant Gemini API terms popup was removed; API-key mode opens settings directly and preserves the current model.
 - Do-not-translate terms appear first in their settings section. Remote API connections require HTTPS, local loopback HTTP remains supported, and automatic redirects are disabled.
 - Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
 - Optional Google sign-in uses a separately installed Antigravity CLI. Install it from [Google's official download page](https://antigravity.google/download).

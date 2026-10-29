@@ -1449,7 +1449,7 @@ public final class InlineLegacyCoreSimulation {
         Gson gson = new Gson();
         LegacyConfig defaults = new LegacyConfig();
         check("gpt-6-luna".equals(defaults.codexModel), "Codex model default is not gpt-6-luna");
-        check("low".equals(defaults.codexReasoningEffort), "Codex effort default is not low");
+        check("medium".equals(defaults.codexReasoningEffort), "Codex effort default is not medium");
         LegacyConfig missing = LegacyConfig.normalizeLoaded(LegacyConfig.applyUpgradeDefaults(
                 gson.fromJson("{}", LegacyConfig.class), false, false));
 
