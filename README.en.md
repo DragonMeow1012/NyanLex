@@ -218,6 +218,7 @@ Expand a Minecraft series to download an individual build:
 | Google / Antigravity sign-in | Google sign-in | Supported on modern Fabric/NeoForge builds. Install Antigravity CLI from the [official download page](https://antigravity.google/download), then switch the Gemini tab to Google sign-in. Translation uses that account's Antigravity allowance; the CLI supplies model choices, including reasoning variants. |
 | OpenAI | Your API key | Includes a preset button, configurable model and service URL. |
 | DeepSeek | Your API key | Includes a preset button, configurable model and service URL. |
+| Claude (Anthropic API) | Your API key | Includes a preset button; connects only to `api.anthropic.com`. Claude account sign-in is not used. |
 | OpenRouter | Your API key | Enter its OpenAI-compatible service URL and model in the AI settings. |
 | Ollama / LM Studio | Depends on your local server; may be empty | Connects to an OpenAI-compatible server you run. You provide the model. |
 | Other OpenAI-compatible services | Depends on the service | Custom Base URL, model, rotating API keys and glossary. An empty key sends no `Authorization` header. |
@@ -226,6 +227,10 @@ Expand a Minecraft series to download an individual build:
 The initial API model is `gpt-5.6-luna` for OpenAI and `gemini-3.5-flash-lite` for Gemini. Use **Read models** to fetch the service’s model list and fill the model field, or type a model manually. Switching providers preserves the model saved for each service.
 
 OpenAI API and ChatGPT/Codex offer a **Fast mode** toggle, off by default for standard service. Enabling it shows a warning about increased API charges or Codex allowance usage, with a “do not show again” option. Availability depends on the model and account.
+
+Claude uses your own Anthropic API key and is billed at Anthropic’s published rates; the key is sent only to `api.anthropic.com`. Use **Read models** to pick a model from the list. The default is Claude Haiku 5.5 (`claude-haiku-5-5`) with the effort level set to `medium`, and both can be changed in the settings screen. Claude has its own **Fast mode** switch (off by default); it costs about twice the standard rate and only some models support it, otherwise standard speed is used automatically. Claude Max and Team plans include a monthly API credit; once your Claude Console organization is linked to the plan, you can use that organization’s API key.
+
+Every API service (Gemini, OpenAI, DeepSeek, Claude and custom endpoints) has a **Reasoning effort** button in the settings screen: choose Default (the model decides), Off (fastest), or one of the levels the service offers. Claude defaults to `medium`, Gemini and DeepSeek default to Off, and OpenAI and custom endpoints send no reasoning setting by default. Some models cannot turn thinking off completely and use the lowest setting they allow. If a model rejects the chosen setting, the request is resent without it and the model is remembered for the rest of the game session.
 
 NyanLex does not install either CLI automatically. Sign-in is completed through the local official tool in a browser or terminal; credentials stay with that tool, while NyanLex calls the already signed-in local process.
 
@@ -332,7 +337,7 @@ Enable it in **General**, then open chat. The composer starts at the bottom righ
 - Once it is on, the text of the surfaces you set to translate (item descriptions, screens, and so on) is sent. If chat translation is enabled, chat messages are sent as well, **including private messages**.
 - The text goes to the translation service you choose:
   - **Machine translation (Google, no key)** uses an **unofficial** web endpoint that may be rate-limited or stop working at any time.
-  - **AI engines** (an OpenAI-compatible service such as Gemini, OpenAI or DeepSeek, or ChatGPT/Codex sign-in) also need your own key or sign-in, and go only to the service you configure. Signing in with ChatGPT uses your account's Codex quota.
+  - **AI engines** (an OpenAI-compatible service such as Gemini, OpenAI or DeepSeek, the Anthropic API for Claude, or ChatGPT/Codex sign-in) also need your own key or sign-in, and go only to the service you configure. Signing in with ChatGPT uses your account's Codex quota.
 - **API keys are stored only in the config file on your machine**, are sent only to the provider you chose, are masked in the settings screen, and are never written to logs or debug dumps.
 - Users upgrading from an earlier version keep their existing settings: if you were already translating, online translation stays on.
 - **Translation packs are download-only.** Finding and downloading them only reads public files from GitHub (`index.json` plus the files you confirm); no local text or installed-mod list is uploaded, and translation files are downloaded only after confirmation (discovery first reads the public index).

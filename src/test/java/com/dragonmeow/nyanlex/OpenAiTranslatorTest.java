@@ -1,6 +1,8 @@
 package com.dragonmeow.nyanlex;
 
+import com.dragonmeow.nyanlex.translate.AiFeatureMemory;
 import com.dragonmeow.nyanlex.translate.AiSettings;
+import com.dragonmeow.nyanlex.translate.AnthropicWire;
 import com.dragonmeow.nyanlex.translate.HttpTransport;
 import com.dragonmeow.nyanlex.translate.OpenAiTranslator;
 import com.dragonmeow.nyanlex.translate.TranslationException;
@@ -257,55 +259,164 @@ class OpenAiTranslatorTest {
                 OpenAiTranslator.chatCompletionsUrl("https://x/v1/chat/completions"));
     }
 
-    @Test
-    void geminiFlashDisablesReasoningTokens() throws Exception {
-        List<String> sentBodies = new ArrayList<>();
-        HttpTransport fake = new HttpTransport() {
-            @Override public String get(String url) { throw new UnsupportedOperationException(); }
-            @Override public String post(String url, String body, Map<String, String> headers) {
-                sentBodies.add(body);
-                return chatJson("1. 嗨");
-            }
-        };
-        OpenAiTranslator t = new OpenAiTranslator(fake,
-                () -> new AiSettings("https://g/v1beta/openai", "gemini-2.5-flash-lite", List.of("k")));
-        t.translate("Hi", "zh-TW");
-        assertTrue(sentBodies.get(0).contains("\"reasoning_effort\":\"none\""), sentBodies.get(0));
+    private static final String GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
+    private static final String DEEPSEEK_URL = "https://api.deepseek.com";
+    private static final String OPENAI_URL = "https://api.openai.com/v1";
+    private static final String CUSTOM_URL = "https://proxy.example/v1";
+
+    /** Records every body it is sent; {@code rejects} decides which ones answer HTTP 400. */
+    private static final class Recorder implements HttpTransport {
+        final List<String> bodies = new ArrayList<>();
+        final java.util.function.Predicate<String> rejects;
+
+        Recorder(java.util.function.Predicate<String> rejects) {
+            this.rejects = rejects;
+        }
+
+        @Override public String get(String url) { throw new UnsupportedOperationException(); }
+
+        @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+            bodies.add(body);
+            if (rejects.test(body)) throw new IOException("HTTP 400 unknown field");
+            return chatJson("1. 嗨");
+        }
+    }
+
+    private static AiSettings settings(String url, String model, String effort) {
+        return new AiSettings(url, model, List.of("k"), List.of(), false, effort);
+    }
+
+    /** The one body a translation of "Hi" sends for these settings. */
+    private static String bodyFor(String url, String model, String effort) throws Exception {
+        Recorder recorder = new Recorder(body -> false);
+        new OpenAiTranslator(recorder, () -> settings(url, model, effort)).translate("Hi", "zh-TW");
+        assertEquals(1, recorder.bodies.size());
+        return recorder.bodies.get(0);
     }
 
     @Test
-    void nonGeminiModelsDoNotSendReasoningEffort() throws Exception {
-        List<String> sentBodies = new ArrayList<>();
-        HttpTransport fake = new HttpTransport() {
-            @Override public String get(String url) { throw new UnsupportedOperationException(); }
-            @Override public String post(String url, String body, Map<String, String> headers) {
-                sentBodies.add(body);
-                return chatJson("1. 嗨");
-            }
-        };
-        OpenAiTranslator t = new OpenAiTranslator(fake,
-                () -> new AiSettings("https://api.openai.com/v1", "gpt-4o-mini", List.of("k")));
-        t.translate("Hi", "zh-TW");
-        assertTrue(!sentBodies.get(0).contains("reasoning_effort"), sentBodies.get(0));
+    void thinkingStrengthIsSentAsEachProviderSpellsIt() throws Exception {
+        // OpenAI, Gemini and custom endpoints: reasoning_effort, with off spelled none
+        assertTrue(bodyFor(OPENAI_URL, "gpt-5.6-luna", "high").contains("\"reasoning_effort\":\"high\""));
+        assertTrue(bodyFor(OPENAI_URL, "gpt-5.6-luna", "off").contains("\"reasoning_effort\":\"none\""));
+        assertTrue(bodyFor(OPENAI_URL, "gpt-5.6-luna", "max").contains("\"reasoning_effort\":\"max\""));
+        assertTrue(bodyFor(GEMINI_URL, "gemini-3.5-flash-lite", "minimal").contains("\"reasoning_effort\":\"minimal\""));
+        assertTrue(bodyFor(GEMINI_URL, "gemini-3.5-flash-lite", "off").contains("\"reasoning_effort\":\"none\""));
+        assertTrue(bodyFor(CUSTOM_URL, "some-model", "medium").contains("\"reasoning_effort\":\"medium\""));
+        assertTrue(bodyFor(CUSTOM_URL, "some-model", "off").contains("\"reasoning_effort\":\"none\""));
+
+        // DeepSeek: levels as reasoning_effort, off is the thinking switch (it has no none level)
+        String deepseekOff = bodyFor(DEEPSEEK_URL, "deepseek-flash", "off");
+        assertTrue(deepseekOff.contains("\"thinking\":{\"type\":\"disabled\"}"), deepseekOff);
+        assertFalse(deepseekOff.contains("reasoning_effort"), deepseekOff);
+        String deepseekMax = bodyFor(DEEPSEEK_URL, "deepseek-flash", "max");
+        assertTrue(deepseekMax.contains("\"reasoning_effort\":\"max\""), deepseekMax);
+        assertFalse(deepseekMax.contains("\"thinking\""), deepseekMax);
+
+        // default sends nothing, whatever the service
+        for (String url : List.of(OPENAI_URL, GEMINI_URL, DEEPSEEK_URL, CUSTOM_URL)) {
+            String body = bodyFor(url, "any-model", "default");
+            assertFalse(body.contains("reasoning_effort") || body.contains("\"thinking\""), url + " " + body);
+        }
     }
 
     @Test
-    void reasoningEffortRejectionFallsBackToPlainBody() throws Exception {
-        List<String> sentBodies = new ArrayList<>();
-        HttpTransport fake = new HttpTransport() {
-            @Override public String get(String url) { throw new UnsupportedOperationException(); }
-            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
-                sentBodies.add(body);
-                if (body.contains("reasoning_effort")) throw new IOException("HTTP 400 unknown field");
-                return chatJson("1. 嗨");
+    void anUnsetStrengthMeansTheServiceDefaultNotAModelNameGuess() throws Exception {
+        // Gemini and DeepSeek default to off; the model's name no longer matters
+        for (String model : List.of("gemini-2.5-flash-lite", "gemini-3.5-pro", "anything-else")) {
+            assertTrue(bodyFor(GEMINI_URL, model, null).contains("\"reasoning_effort\":\"none\""), model);
+        }
+        assertTrue(bodyFor(DEEPSEEK_URL, "deepseek-flash", null).contains("\"thinking\":{\"type\":\"disabled\"}"));
+        assertTrue(bodyFor(GEMINI_URL, "gemini-3.5-flash-lite", "not-a-level").contains("\"reasoning_effort\":\"none\""),
+                "an unusable value is the same as no value");
+        // OpenAI and custom endpoints send nothing, even for a name that used to be special-cased
+        assertFalse(bodyFor(OPENAI_URL, "gpt-4o-mini", null).contains("reasoning_effort"));
+        assertFalse(bodyFor(CUSTOM_URL, "gemini-2.5-flash", null).contains("reasoning_effort"));
+        // the five-argument constructor of the glue in other source trees behaves the same way
+        Recorder recorder = new Recorder(body -> false);
+        new OpenAiTranslator(recorder, () -> new AiSettings(GEMINI_URL, "gemini-3.5-flash-lite", List.of("k"),
+                List.of(), false)).translate("Hi", "zh-TW");
+        assertTrue(recorder.bodies.get(0).contains("\"reasoning_effort\":\"none\""));
+    }
+
+    @Test
+    void claudeAndTheLocalClientsNeverGetAReasoningFieldInTheOpenAiShapedBody() throws Exception {
+        for (String url : List.of("https://api.anthropic.com", "codex://app-server", "antigravity://cli")) {
+            for (String effort : List.of("off", "high", "default")) {
+                String body = bodyFor(url, "some-model", effort);
+                assertFalse(body.contains("reasoning_effort") || body.contains("\"thinking\""), url + " " + effort);
             }
-        };
-        OpenAiTranslator t = new OpenAiTranslator(fake,
-                () -> new AiSettings("https://proxy/v1", "gemini-2.5-flash", List.of("k")));
+        }
+    }
+
+    @Test
+    void thinkingStrengthFollowsTheLiveSettingsOnTheNextRequest() throws Exception {
+        String[] effort = {"low"};
+        Recorder recorder = new Recorder(body -> false);
+        OpenAiTranslator t = new OpenAiTranslator(recorder, () -> settings(OPENAI_URL, "gpt-x", effort[0]));
+        t.translate("Hi", "zh-TW");
+        effort[0] = "high";
+        t.translate("Hi", "zh-TW");
+        effort[0] = "default";
+        t.translate("Hi", "zh-TW");
+        assertTrue(recorder.bodies.get(0).contains("\"reasoning_effort\":\"low\""));
+        assertTrue(recorder.bodies.get(1).contains("\"reasoning_effort\":\"high\""));
+        assertFalse(recorder.bodies.get(2).contains("reasoning_effort"));
+    }
+
+    @Test
+    void aRejectedThinkingFieldIsRetriedPlainAndRememberedForThatModelOnly() throws Exception {
+        AiFeatureMemory memory = new AiFeatureMemory();
+        Recorder recorder = new Recorder(body -> body.contains("reasoning_effort") && body.contains("gpt-old"));
+        OpenAiTranslator t = new OpenAiTranslator(recorder, () -> settings(OPENAI_URL, "gpt-old", "low"),
+                System::currentTimeMillis, null, memory);
+
         TranslationResult r = t.translate("Hi", "zh-TW");
+
         assertEquals("嗨", r.translatedText());
-        assertEquals(2, sentBodies.size(), "must retry once without the reasoning override");
-        assertTrue(!sentBodies.get(1).contains("reasoning_effort"));
+        assertEquals(2, recorder.bodies.size(), "must retry once without the thinking field");
+        assertTrue(recorder.bodies.get(0).contains("reasoning_effort"));
+        assertFalse(recorder.bodies.get(1).contains("reasoning_effort"));
+        assertTrue(memory.isUnsupported("gpt-old", AnthropicWire.Feature.REASONING_EFFORT));
+        assertFalse(memory.isUnsupported("gpt-new", AnthropicWire.Feature.REASONING_EFFORT));
+
+        t.translate("Hi", "zh-TW");
+        assertEquals(3, recorder.bodies.size(), "remembered: the next request goes out plain, with no failed attempt");
+        assertFalse(recorder.bodies.get(2).contains("reasoning_effort"));
+
+        // the same service with another model is still tried with the field
+        OpenAiTranslator other = new OpenAiTranslator(recorder, () -> settings(OPENAI_URL, "gpt-new", "low"),
+                System::currentTimeMillis, null, memory);
+        other.translate("Hi", "zh-TW");
+        assertTrue(recorder.bodies.get(3).contains("reasoning_effort"));
+        assertEquals(4, recorder.bodies.size());
+    }
+
+    @Test
+    void deepSeekThinkingSwitchFallsBackTheSameWay() throws Exception {
+        AiFeatureMemory memory = new AiFeatureMemory();
+        Recorder recorder = new Recorder(body -> body.contains("\"thinking\""));
+        OpenAiTranslator t = new OpenAiTranslator(recorder, () -> settings(DEEPSEEK_URL, "deepseek-flash", "off"),
+                System::currentTimeMillis, null, memory);
+
+        assertEquals("嗨", t.translate("Hi", "zh-TW").translatedText());
+
+        assertEquals(2, recorder.bodies.size());
+        assertFalse(recorder.bodies.get(1).contains("thinking"));
+        assertTrue(memory.isUnsupported("deepseek-flash", AnthropicWire.Feature.REASONING_EFFORT));
+    }
+
+    @Test
+    void aFailureThatIsNotAboutThinkingIsNeverRemembered() throws Exception {
+        AiFeatureMemory memory = new AiFeatureMemory();
+        Recorder recorder = new Recorder(body -> true);
+        OpenAiTranslator t = new OpenAiTranslator(recorder, () -> settings(OPENAI_URL, "gpt-x", "high"),
+                System::currentTimeMillis, null, memory);
+
+        assertThrows(TranslationException.class, () -> t.translate("Hi", "zh-TW"));
+
+        assertFalse(memory.isUnsupported("gpt-x", AnthropicWire.Feature.REASONING_EFFORT),
+                "the plain retry failed too, so the thinking field was not the cause");
     }
 
     @Test
@@ -680,6 +791,114 @@ class OpenAiTranslatorTest {
             translator = new OpenAiTranslator(fake,
                     () -> new AiSettings("https://x/v1", "m", keys), () -> now[0]);
         }
+    }
+
+    @Test
+    void aPaymentProblemParksTheKeyForTenMinutesAndThenTriesItAgain() throws Exception {
+        long[] now = {0L};
+        boolean[] toppedUp = {false};
+        AtomicInteger brokeKeyCalls = new AtomicInteger();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                if ("Bearer broke".equals(headers.get("Authorization"))) {
+                    brokeKeyCalls.incrementAndGet();
+                    if (!toppedUp[0]) throw new IOException("HTTP 402: {\"error\":{\"type\":\"billing_error\"}}");
+                }
+                return chatJson("1. 嗨");
+            }
+        };
+        OpenAiTranslator translator = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://x/v1", "m", List.of("broke", "good")), () -> now[0]);
+        for (int i = 0; i < 6; i++) assertEquals("嗨", translator.translate("Hi", "zh-TW").translatedText());
+        assertEquals(1, brokeKeyCalls.get(), "a 402 is not retried on every rotation");
+
+        now[0] = 599_999L; // still inside the ten minutes
+        for (int i = 0; i < 6; i++) assertEquals("嗨", translator.translate("Hi", "zh-TW").translatedText());
+        assertEquals(1, brokeKeyCalls.get(), "the key stays parked for the whole cooldown");
+
+        toppedUp[0] = true; // the account was topped up; nothing in the settings changed
+        now[0] = 600_000L;
+        for (int i = 0; i < 6; i++) assertEquals("嗨", translator.translate("Hi", "zh-TW").translatedText());
+        assertTrue(brokeKeyCalls.get() > 1, "after ten minutes the key is back in rotation");
+    }
+
+    @Test
+    void aSingleKeyThatNeedsPaymentIsRetriedAfterTheCooldownWithoutRestartingTheGame() throws Exception {
+        long[] now = {0L};
+        boolean[] toppedUp = {false};
+        AtomicInteger calls = new AtomicInteger();
+        HttpTransport fake = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                calls.incrementAndGet();
+                if (!toppedUp[0]) throw new com.dragonmeow.nyanlex.translate.UrlHttpTransport.HttpStatusException(402, "no credit", 0L);
+                return chatJson("1. 嗨");
+            }
+        };
+        OpenAiTranslator translator = new OpenAiTranslator(fake,
+                () -> new AiSettings("https://api.deepseek.com", "m", List.of("only")), () -> now[0]);
+        assertThrows(TranslationException.class, () -> translator.translate("Hi", "zh-TW"));
+        assertEquals(1, calls.get());
+        now[0] = 599_999L;
+        TranslationException deferred = assertThrows(TranslationException.class, () -> translator.translate("Hi", "zh-TW"));
+        assertEquals(1, calls.get(), "no request while the key is parked");
+        assertTrue(deferred.getMessage().contains("cooling down"), deferred.getMessage());
+        toppedUp[0] = true;
+        now[0] = 600_000L;
+        assertEquals("嗨", translator.translate("Hi", "zh-TW").translatedText());
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void aRetryAfterLongerThanTheDefaultLengthensTheKeyCooldownAndTheGate() throws Exception {
+        // one key: the gate itself must wait for what the server asked
+        long[] now = {0L};
+        AtomicInteger calls = new AtomicInteger();
+        boolean[] limited = {true};
+        HttpTransport single = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                calls.incrementAndGet();
+                if (limited[0]) throw new com.dragonmeow.nyanlex.translate.UrlHttpTransport.HttpStatusException(429, "slow down", 300_000L);
+                return chatJson("1. 嗨");
+            }
+        };
+        OpenAiTranslator translator = new OpenAiTranslator(single,
+                () -> new AiSettings("https://x/v1", "m", List.of("a")), () -> now[0]);
+        assertThrows(TranslationException.class, () -> translator.translate("Hi", "zh-TW"));
+        assertEquals(1, calls.get());
+        now[0] = 299_999L; // past the 60 s default, inside what the server asked
+        assertThrows(TranslationException.class, () -> translator.translate("Hi", "zh-TW"));
+        assertEquals(1, calls.get(), "still gated");
+        now[0] = 300_000L;
+        limited[0] = false;
+        assertEquals("嗨", translator.translate("Hi", "zh-TW").translatedText());
+        assertEquals(2, calls.get());
+
+        // two keys: only the limited key waits longer, the healthy one keeps serving
+        long[] clock = {0L};
+        int[] limitedCalls = {0};
+        HttpTransport pair = new HttpTransport() {
+            @Override public String get(String url) { throw new UnsupportedOperationException(); }
+            @Override public String post(String url, String body, Map<String, String> headers) throws IOException {
+                if ("Bearer limited".equals(headers.get("Authorization"))) {
+                    limitedCalls[0]++;
+                    throw new com.dragonmeow.nyanlex.translate.UrlHttpTransport.HttpStatusException(429, "slow down", 200_000L);
+                }
+                return chatJson("1. 嗨");
+            }
+        };
+        OpenAiTranslator rotating = new OpenAiTranslator(pair,
+                () -> new AiSettings("https://x/v1", "m", List.of("limited", "ok")), () -> clock[0]);
+        for (int i = 0; i < 4; i++) rotating.translate("Hi", "zh-TW");
+        assertEquals(1, limitedCalls[0]);
+        clock[0] = 100_000L; // the 60 s default would be over; the server asked for 200 s
+        for (int i = 0; i < 4; i++) rotating.translate("Hi", "zh-TW");
+        assertEquals(1, limitedCalls[0]);
+        clock[0] = 200_000L;
+        for (int i = 0; i < 4; i++) rotating.translate("Hi", "zh-TW");
+        assertEquals(2, limitedCalls[0]);
     }
 
     @Test

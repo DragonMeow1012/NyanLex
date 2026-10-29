@@ -47,6 +47,7 @@ public final class OpenAiTranslator implements Translator {
     // Each request retains its settings' health state. An older in-flight response
     // cannot change the active model's key health or rate-limit gate after a switch.
     private SettingsState settingsState;
+    private final AiFeatureMemory memory;
 
     private static final class SettingsState {
         final String signature;
@@ -62,6 +63,8 @@ public final class OpenAiTranslator implements Translator {
 
     private static final long KEY_RATE_LIMIT_COOLDOWN_MS = 60_000L;
     private static final long KEY_TRANSIENT_COOLDOWN_MS = 10_000L;
+    /** A 402 means the account is out of credit; a top-up needs no settings change, so the key is tried again later. */
+    private static final long KEY_PAYMENT_COOLDOWN_MS = 600_000L;
 
     private static final class KeyState {
         final long unavailableUntil;
@@ -98,10 +101,17 @@ public final class OpenAiTranslator implements Translator {
 
     public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings,
                             LongSupplier clock, RequestPacer pacer) {
+        this(transport, settings, clock, pacer, AiFeatureMemory.shared());
+    }
+
+    /** Memory-injecting constructor: what a model refused is remembered there, not process-wide. */
+    public OpenAiTranslator(HttpTransport transport, Supplier<AiSettings> settings,
+                            LongSupplier clock, RequestPacer pacer, AiFeatureMemory memory) {
         this.transport = transport;
         this.settings = settings;
         this.clock = clock;
         this.pacer = pacer == null ? RequestPacer.disabled() : pacer;
+        this.memory = memory == null ? AiFeatureMemory.shared() : memory;
     }
 
     public void setTokenUsage(SessionTokenUsage tokenUsage) {
@@ -262,9 +272,30 @@ public final class OpenAiTranslator implements Translator {
         // to request count or validation semantics.
         AiWireCodec.Encoded wireCodec = AiWireCodec.encode(anchored);
         String requestBody = buildRequestBody(settings, targetLang, wireCodec.wire(), promptTokens, true);
-        String plainBody = wantsNoReasoning(settings.model())
+        // A thinking-strength field is optional: if the endpoint refuses it, the same request goes
+        // out again without it, and the model is remembered as not taking it.
+        String plainBody = addsReasoningField(settings)
                 ? buildRequestBody(settings, targetLang, wireCodec.wire(), promptTokens, false) : null;
-        String content = postWithKeyRotation(settings, health, requestBody, plainBody);
+        String content;
+        try {
+            content = postWithKeyRotation(settings, health, requestBody, plainBody);
+        } catch (TranslationException failure) {
+            AnthropicWire.RejectedException rejected = rejectionOf(failure);
+            if (rejected == null) throw failure;
+            // The model declined this text, or ran out of room for its answer. A batch is split
+            // exactly like one whose boundaries came back damaged, so one bad sentence cannot
+            // keep the others from being translated.
+            if (texts.size() > 1) {
+                bisectChunk(texts, targetLang, contexts, settings, health, out);
+                return;
+            }
+            if (rejected.reason() != AnthropicWire.RejectedException.Reason.REFUSAL) throw failure;
+            // A single refused sentence is reported as the model leaving it as it is: the cache
+            // already counts such identity answers and stops asking after the third. Nothing is
+            // stored as a translation, and a manual retranslation can still try again.
+            out.add(new TranslationResult(texts.get(0), null));
+            return;
+        }
         String rawResponseBody = content; // exactly what the model sent, for the debug dump below
         // Back to internal ⟦...⟧ format before anything below (anchor extraction,
         // restoreHardLines, tokensMatch) touches it — all of that keeps working exactly
@@ -288,11 +319,7 @@ public final class OpenAiTranslator implements Translator {
                 return;
             }
             dumpExchange(requestBody, rawResponseBody, texts, null);
-            int mid = texts.size() / 2;
-            translateChunk(texts.subList(0, mid), targetLang,
-                    contexts == null ? null : contexts.subList(0, mid), settings, health, out);
-            translateChunk(texts.subList(mid, texts.size()), targetLang,
-                    contexts == null ? null : contexts.subList(mid, texts.size()), settings, health, out);
+            bisectChunk(texts, targetLang, contexts, settings, health, out);
             return;
         }
         List<TranslationResult> chunkResults = new ArrayList<>(parts.size());
@@ -322,6 +349,23 @@ public final class OpenAiTranslator implements Translator {
         dumpExchange(requestBody, rawResponseBody, texts, chunkResults);
         retryIsolatedFailures(texts, targetLang, contexts, settings, health, chunkResults);
         out.addAll(chunkResults);
+    }
+
+    /** Send the two halves of a multi-unit chunk as fresh requests, in order. */
+    private void bisectChunk(List<String> texts, String targetLang,
+                             List<List<String>> contexts, AiSettings settings, SettingsState health,
+                             List<TranslationResult> out) throws TranslationException {
+        int mid = texts.size() / 2;
+        translateChunk(texts.subList(0, mid), targetLang,
+                contexts == null ? null : contexts.subList(0, mid), settings, health, out);
+        translateChunk(texts.subList(mid, texts.size()), targetLang,
+                contexts == null ? null : contexts.subList(mid, texts.size()), settings, health, out);
+    }
+
+    /** The refusal or truncation behind {@code failure}, or {@code null} for any other failure. */
+    private static AnthropicWire.RejectedException rejectionOf(TranslationException failure) {
+        Throwable cause = failure.getCause();
+        return cause instanceof AnthropicWire.RejectedException ? (AnthropicWire.RejectedException) cause : null;
     }
 
     /**
@@ -648,8 +692,13 @@ public final class OpenAiTranslator implements Translator {
         return sb.toString();
     }
 
+    /** Whether a request for {@code s} carries a thinking-strength field (see {@link ReasoningEffort}). */
+    private boolean addsReasoningField(AiSettings s) {
+        return ReasoningEffort.addToChatBody(new JsonObject(), s.baseUrl(), s.model(), s.effort(), memory);
+    }
+
     private String buildRequestBody(AiSettings s, String targetLang, String numberedLines,
-                                    int promptTokens, boolean noReasoning) {
+                                    int promptTokens, boolean withReasoning) {
         String model = s.model();
         JsonObject root = new JsonObject();
         root.addProperty("model", model);
@@ -658,10 +707,8 @@ public final class OpenAiTranslator implements Translator {
             root.addProperty("service_tier", s.fastMode() ? "priority" : "default");
         }
         if (!HttpEndpointPolicy.isOpenAi(s.baseUrl())) root.addProperty("temperature", 0.3);
-        if (noReasoning && wantsNoReasoning(model)) {
-            // Gemini Flash models may enable dynamic thinking on the OpenAI-compatible
-            // layer; short translation lines do not benefit from those extra tokens.
-            root.addProperty("reasoning_effort", "none");
+        if (withReasoning) {
+            ReasoningEffort.addToChatBody(root, s.baseUrl(), model, s.effort(), memory);
         }
 
         JsonArray messages = new JsonArray();
@@ -857,12 +904,6 @@ public final class OpenAiTranslator implements Translator {
         return langName(targetLang).contains("Traditional Chinese");
     }
 
-    /** Whether to disable model "thinking" for a Gemini Flash-family model id. */
-    static boolean wantsNoReasoning(String model) {
-        String m = model == null ? "" : model.toLowerCase();
-        return m.contains("gemini") && m.contains("flash") && !m.contains("2.0");
-    }
-
     /** Map a target language code (zh-TW / zh-CN / …) to the human name used in the AI prompt,
      *  so switching 繁體 ↔ 簡體 actually changes the AI output (not just the Google backend). */
     public static String langName(String targetLang) {
@@ -892,6 +933,8 @@ public final class OpenAiTranslator implements Translator {
         int usableKeys = 0;
         int attemptedKeys = 0;
         int rateLimitedKeys = 0;
+        long longestRetryAfterMs = 0L;
+        boolean droppedReasoning = false;
         boolean hasUsableKey = keys.stream().anyMatch(key -> key != null && !key.isBlank());
         if (!hasUsableKey) {
             try {
@@ -901,7 +944,9 @@ public final class OpenAiTranslator implements Translator {
                 return content;
             } catch (IOException e) {
                 // CLI account gates live in the client, so account refresh/reconnect can reopen them.
-                if (!(e instanceof CliRequestLimits.LimitedException) && isRateLimited(e)) tripRateLimitGate(health);
+                if (!(e instanceof CliRequestLimits.LimitedException) && isRateLimited(e)) {
+                    tripRateLimitGate(health, retryAfterMs(e));
+                }
                 throw new TranslationException("AI request failed (no API key): " + e.getMessage(), e);
             }
         }
@@ -922,14 +967,31 @@ public final class OpenAiTranslator implements Translator {
                     String content = parseContent(transport.post(url, body, headers));
                     clearKeyState(health, key);
                     resetRateLimitGate(health); // any success proves the quota is back
+                    // Refused with the thinking-strength field, answered without it: remember, so
+                    // this model is not sent the field again during this game session.
+                    if (droppedReasoning) memory.markUnsupported(s.model(), AnthropicWire.Feature.REASONING_EFFORT);
                     return content;
                 } catch (IOException e) {
                     last = e;
+                    // A refusal or cut-off answer is the model's verdict on this text; another
+                    // key would only ask the same question again.
+                    if (e instanceof AnthropicWire.RejectedException) {
+                        throw new TranslationException("AI response rejected: " + e.getMessage(), e);
+                    }
                     // 429: this key's quota is gone RIGHT NOW — retrying it only digs the
                     // hole deeper. Move straight to the next key.
                     if (isRateLimited(e)) {
                         rateLimitedKeys++;
-                        markKeyUnavailable(health, key, clock.getAsLong() + KEY_RATE_LIMIT_COOLDOWN_MS, true);
+                        long retryAfterMs = retryAfterMs(e);
+                        longestRetryAfterMs = Math.max(longestRetryAfterMs, retryAfterMs);
+                        markKeyUnavailable(health, key,
+                                clock.getAsLong() + Math.max(KEY_RATE_LIMIT_COOLDOWN_MS, retryAfterMs), true);
+                        break;
+                    }
+                    // 402: out of credit. Park the key for a while rather than for good, so a
+                    // top-up works without restarting the game or editing the settings.
+                    if (isPaymentRequired(e)) {
+                        markKeyUnavailable(health, key, clock.getAsLong() + KEY_PAYMENT_COOLDOWN_MS, false);
                         break;
                     }
                     // Invalid credentials should stay quarantined until the user edits
@@ -943,6 +1005,7 @@ public final class OpenAiTranslator implements Translator {
                     if (fallbackBody != null && isBadRequest(e)) {
                         body = fallbackBody;
                         fallbackBody = null;
+                        droppedReasoning = true;
                         continue;
                     }
                     // Retry the SAME key on a transient 5xx (overloaded); else move to the next key.
@@ -959,7 +1022,7 @@ public final class OpenAiTranslator implements Translator {
         }
         // A FULL rotation of 429s means the whole quota is exhausted: trip the gate.
         if (attemptedKeys > 0 && rateLimitedKeys == attemptedKeys && allKeysUnavailable(health, keys)) {
-            tripRateLimitGate(health);
+            tripRateLimitGate(health, longestRetryAfterMs);
         }
         if (usableKeys > 0 && attemptedKeys == 0) {
             throw new TranslationException("AI request deferred: all API keys are cooling down");
@@ -968,12 +1031,13 @@ public final class OpenAiTranslator implements Translator {
                 + (last == null ? "no usable key" : last.getMessage()), last);
     }
 
-    private void tripRateLimitGate(SettingsState health) {
+    /** {@code retryAfterMs} is the longest wait a server asked for; the gate never closes for less. */
+    private void tripRateLimitGate(SettingsState health, long retryAfterMs) {
         synchronized (health) {
             health.penaltyMs = (health.penaltyMs == 0)
                     ? RATE_LIMIT_BASE_PENALTY_MS
                     : Math.min(health.penaltyMs * 2, RATE_LIMIT_MAX_PENALTY_MS);
-            health.rateLimitedUntil = clock.getAsLong() + health.penaltyMs;
+            health.rateLimitedUntil = clock.getAsLong() + Math.max(health.penaltyMs, retryAfterMs);
         }
     }
 
@@ -998,6 +1062,17 @@ public final class OpenAiTranslator implements Translator {
     private static boolean isAuthenticationFailure(IOException e) {
         String m = e.getMessage();
         return m != null && (m.contains("HTTP 401") || m.contains("HTTP 403"));
+    }
+
+    private static boolean isPaymentRequired(IOException e) {
+        String m = e.getMessage();
+        return m != null && m.contains("HTTP 402");
+    }
+
+    /** The server's {@code retry-after} wait carried by the failed response, 0 when there is none. */
+    private static long retryAfterMs(IOException e) {
+        return e instanceof UrlHttpTransport.HttpStatusException
+                ? ((UrlHttpTransport.HttpStatusException) e).retryAfterMs() : 0L;
     }
 
     private synchronized SettingsState refreshSettingsState(AiSettings s) {

@@ -117,6 +117,73 @@ class UrlHttpTransportTest {
         assertEquals(0, redirected.get());
     }
 
+    @Test
+    void statusErrorsCarryTheCodeTheBodyAndRetryAfterWhileTheMessageKeepsItsShape() throws Exception {
+        String body = "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"" + "x".repeat(300) + "\"}}";
+        String url = serve("/limited", exchange -> {
+            exchange.getResponseHeaders().add("retry-after", "42");
+            sendFixed(exchange, 429, body.getBytes(StandardCharsets.UTF_8));
+        });
+        UrlHttpTransport transport = new UrlHttpTransport(Duration.ofSeconds(3));
+
+        UrlHttpTransport.HttpStatusException post = assertThrows(UrlHttpTransport.HttpStatusException.class,
+                () -> transport.post(url, "{}", Map.of()));
+        assertEquals(429, post.statusCode());
+        assertEquals(42_000L, post.retryAfterMs());
+        assertEquals("HTTP 429: " + body.substring(0, 200), post.getMessage(), "the historic message shape is unchanged");
+        assertEquals(body, post.bodySnippet(), "the longer body prefix is kept for classification");
+
+        UrlHttpTransport.HttpStatusException get = assertThrows(UrlHttpTransport.HttpStatusException.class,
+                () -> transport.get(url));
+        assertEquals("HTTP 429", get.getMessage());
+        assertEquals("", get.bodySnippet());
+        assertEquals(42_000L, get.retryAfterMs());
+    }
+
+    @Test
+    void aMissingOrUnusableRetryAfterIsZero() throws Exception {
+        String missing = serve("/none", exchange -> sendFixed(exchange, 500, "boom".getBytes(StandardCharsets.UTF_8)));
+        UrlHttpTransport transport = new UrlHttpTransport(Duration.ofSeconds(3));
+        UrlHttpTransport.HttpStatusException error = assertThrows(UrlHttpTransport.HttpStatusException.class,
+                () -> transport.post(missing, "{}", Map.of()));
+        assertEquals(0L, error.retryAfterMs());
+        assertEquals("HTTP 500: boom", error.getMessage());
+        server.stop(0);
+        String date = serve("/date", exchange -> {
+            exchange.getResponseHeaders().add("retry-after", "Wed, 21 Oct 2026 07:28:00 GMT");
+            sendFixed(exchange, 503, new byte[0]);
+        });
+        assertEquals(0L, assertThrows(UrlHttpTransport.HttpStatusException.class,
+                () -> transport.post(date, "{}", Map.of())).retryAfterMs());
+    }
+
+    @Test
+    void aPostWaitsExactlyAsLongAsItIsToldAndDefaultsToThirtySeconds() throws Exception {
+        // Every provider gets the historic 30 s unless its transport asks for more.
+        assertEquals(Duration.ofSeconds(30), UrlHttpTransport.POST_TIMEOUT);
+        String endpoint = "https://api.example.test/v1/chat/completions";
+        assertEquals(java.util.Optional.of(Duration.ofSeconds(30)),
+                UrlHttpTransport.buildPostRequest(endpoint, "{}", Map.of(), UrlHttpTransport.POST_TIMEOUT).timeout());
+        assertEquals(java.util.Optional.of(Duration.ofSeconds(120)),
+                UrlHttpTransport.buildPostRequest(endpoint, "{}", Map.of(), Duration.ofSeconds(120)).timeout());
+        assertEquals("application/json", UrlHttpTransport.buildPostRequest(endpoint, "{}", null, Duration.ofSeconds(5))
+                .headers().firstValue("Content-Type").orElse(""));
+
+        // The same slow answer fails a short wait and succeeds with enough room, through the real client.
+        String url = serve("/slow", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            try {
+                Thread.sleep(1_500L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            sendFixed(exchange, 200, "late".getBytes(StandardCharsets.UTF_8));
+        });
+        UrlHttpTransport transport = new UrlHttpTransport(Duration.ofSeconds(3));
+        assertThrows(IOException.class, () -> transport.post(url, "{}", Map.of(), Duration.ofMillis(300)));
+        assertEquals("late", transport.post(url, "{}", Map.of(), Duration.ofSeconds(10)));
+    }
+
     private String serve(String path, ThrowingHandler handler) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext(path, exchange -> {

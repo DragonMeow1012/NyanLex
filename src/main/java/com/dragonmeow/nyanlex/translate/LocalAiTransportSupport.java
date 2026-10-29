@@ -46,6 +46,11 @@ final class LocalAiTransportSupport {
     }
 
     static String response(String content) {
+        return response(content, null);
+    }
+
+    /** Same envelope, carrying the provider's token {@code usage} object through unchanged. */
+    static String response(String content, JsonObject usage) {
         JsonObject message = new JsonObject();
         message.addProperty("content", content);
         JsonObject choice = new JsonObject();
@@ -54,6 +59,7 @@ final class LocalAiTransportSupport {
         choices.add(choice);
         JsonObject response = new JsonObject();
         response.add("choices", choices);
+        if (usage != null) response.add("usage", usage);
         return response.toString();
     }
 

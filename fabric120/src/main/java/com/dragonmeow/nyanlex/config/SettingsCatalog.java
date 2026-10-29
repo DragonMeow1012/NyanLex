@@ -184,7 +184,7 @@ public final class SettingsCatalog {
 
         map.put(SettingsPage.SERVICE, pairs(List.of(
                 sub(SettingsPage.SERVICE, "ai", SettingAction.OPEN_AI, null)
-                        .withKeywords("api", "key", "gemini", "openai", "deepseek", "chatgpt", "codex", "金鑰", "金钥"),
+                        .withKeywords("api", "key", "gemini", "openai", "deepseek", "claude", "anthropic", "chatgpt", "codex", "金鑰", "金钥"),
                 // Stored inverted (disableGoogleFallbackForAi); shown as "on = fallback allowed".
                 toggle(SettingsPage.SERVICE, "ai_fallback", c -> !c.disableGoogleFallbackForAi,
                         c -> onOff(!c.disableGoogleFallbackForAi),

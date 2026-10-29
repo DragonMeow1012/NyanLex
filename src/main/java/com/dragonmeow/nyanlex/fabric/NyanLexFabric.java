@@ -43,6 +43,10 @@ import com.dragonmeow.nyanlex.translate.SwitchingMachineTranslator;
 import com.dragonmeow.nyanlex.translate.TextFilter;
 import com.dragonmeow.nyanlex.translate.TranslationDebugLog;
 import com.dragonmeow.nyanlex.translate.UrlHttpTransport;
+import com.dragonmeow.nyanlex.translate.AiFeatureMemory;
+import com.dragonmeow.nyanlex.translate.AnthropicTransport;
+import com.dragonmeow.nyanlex.translate.AnthropicWire;
+import com.dragonmeow.nyanlex.translate.HttpEndpointPolicy;
 
 import com.dragonmeow.nyanlex.fabric.mixin.AbstractContainerScreenAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -103,6 +107,8 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static TranslationDebugLog debugLog;
     private static Path configPath;
     private static UrlHttpTransport transport;
+    /** The AI route's transport: speaks Anthropic's API for api.anthropic.com, passes everything else through. */
+    private static AnthropicTransport aiTransport;
     private static CodexAppServerClient codexClient;
     private static CodexAppServerTransport codexTransport;
     private static AntigravityCliClient antigravityClient;
@@ -1378,6 +1384,9 @@ public final class NyanLexFabric implements ClientModInitializer {
                 workers, threadFactory);
 
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
+        aiTransport = new AnthropicTransport(transport,
+                () -> new AnthropicWire.Options(config.apiEffortFor(config.aiBaseUrl), config.claudeFastMode),
+                AiFeatureMemory.shared(), System::currentTimeMillis);
         // 事前冷卻節流：one pacer PER ENGINE so Google and AI space their own requests
         // without blocking each other. The cooldown is read live from config.
         RequestPacer machinePacer = new RequestPacer(() -> config.requestCooldownMs);
@@ -1386,8 +1395,9 @@ public final class NyanLexFabric implements ClientModInitializer {
                 () -> config.sourceLang,
                 () -> config.machineTranslationProvider,
                 machinePacer);
-        OpenAiTranslator apiAi = new OpenAiTranslator(transport,
-                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary, config.aiFastMode),
+        OpenAiTranslator apiAi = new OpenAiTranslator(aiTransport,
+                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary,
+                        config.fastModeFor(config.aiBaseUrl), config.apiEffortFor(config.aiBaseUrl)),
                 new RequestPacer(() -> config.requestCooldownMs));
         apiAi.setTokenUsage(tokenUsage);
         Path codexRoot = configPath.getParent();
@@ -2844,20 +2854,27 @@ public final class NyanLexFabric implements ClientModInitializer {
     }
 
     public static void testAi(String baseUrl, String model, List<String> keys, java.util.function.Consumer<String> onResult) {
-        if (transport == null) {
+        if (aiTransport == null) {
             onResult.accept(Component.translatable("message.nyanlex.not_initialized").getString());
             return;
         }
         Thread t = new Thread(() -> {
             String msg;
+            boolean claude = HttpEndpointPolicy.isAnthropic(baseUrl);
             try {
-                OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys, java.util.Collections.emptyList(), config.aiFastMode),
+                OpenAiTranslator ai = new OpenAiTranslator(aiTransport, () -> new AiSettings(baseUrl, model, keys, java.util.Collections.emptyList(), config.fastModeFor(baseUrl), config.apiEffortFor(baseUrl)),
                         new RequestPacer(() -> config == null ? 0L : config.requestCooldownMs));
                 ai.setTokenUsage(tokenUsage);
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
                 msg = Component.translatable("message.nyanlex.success", "Hello, world -> " + out).getString();
             } catch (Exception e) {
                 msg = Component.translatable("message.nyanlex.failed", e.getMessage()).getString();
+                String hint = claude ? AnthropicWire.hintKey(e.getMessage()) : null;
+                if (hint != null) msg = msg + " " + Component.translatable(hint).getString();
+            }
+            if (claude && config != null && config.claudeFastMode
+                    && AiFeatureMemory.shared().isUnsupported(model, AnthropicWire.Feature.FAST)) {
+                msg = msg + " " + Component.translatable("screen.nyanlex.ai.claude.fast.unsupported_note").getString();
             }
             final String result = msg;
             Minecraft mc = Minecraft.getInstance();

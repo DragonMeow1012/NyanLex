@@ -16,6 +16,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TranslatorConfigTest {
@@ -33,6 +34,120 @@ class TranslatorConfigTest {
             assertEquals(mode, TranslatorConfig.fromReader(new StringReader(out.toString())).chatDeliveryMode);
             assertFalse(out.toString().contains("deliverChatTranslationsInOrder"));
         }
+    }
+
+    @Test
+    void claudeSettingsHaveDefaultsAndOldFilesLoad() {
+        TranslatorConfig fresh = new TranslatorConfig();
+        assertFalse(fresh.claudeFastMode);
+        assertFalse(fresh.hideClaudeFastModeNotice);
+        assertEquals("https://api.anthropic.com", TranslatorConfig.ANTHROPIC_API_URL);
+        assertEquals("claude-haiku-5-5", TranslatorConfig.DEFAULT_CLAUDE_MODEL);
+        assertEquals("medium", TranslatorConfig.DEFAULT_CLAUDE_EFFORT);
+        assertEquals("medium", fresh.apiEffortFor(TranslatorConfig.ANTHROPIC_API_URL));
+
+        // a file written before Claude existed has none of the keys and keeps everything else
+        TranslatorConfig old = TranslatorConfig.fromReader(new StringReader(
+                "{\"aiProvider\":\"api\",\"aiFastMode\":true,\"aiBaseUrl\":\"https://api.openai.com/v1\"}"));
+        assertEquals("medium", old.apiEffortFor(TranslatorConfig.ANTHROPIC_API_URL));
+        assertFalse(old.claudeFastMode);
+        assertFalse(old.hideClaudeFastModeNotice);
+        assertTrue(old.aiFastMode);
+        assertEquals("api", old.aiProvider);
+
+        TranslatorConfig saved = new TranslatorConfig();
+        saved.claudeFastMode = true;
+        saved.hideClaudeFastModeNotice = true;
+        StringWriter out = new StringWriter();
+        saved.writeTo(out);
+        TranslatorConfig back = TranslatorConfig.fromReader(new StringReader(out.toString()));
+        assertTrue(back.claudeFastMode);
+        assertTrue(back.hideClaudeFastModeNotice);
+    }
+
+    @Test
+    void everyServiceKeepsItsOwnThinkingStrengthWithItsOwnDefault() {
+        TranslatorConfig fresh = new TranslatorConfig();
+        assertNotNull(fresh.aiEffortByEndpoint);
+        assertTrue(fresh.aiEffortByEndpoint.isEmpty(), "nothing is stored until the user chooses");
+        // the defaults that keep each service behaving as it did before the setting existed
+        assertEquals("medium", fresh.apiEffortFor("https://api.anthropic.com"));
+        assertEquals("off", fresh.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"));
+        assertEquals("off", fresh.apiEffortFor("https://api.deepseek.com"));
+        assertEquals("default", fresh.apiEffortFor("https://api.openai.com/v1"));
+        assertEquals("default", fresh.apiEffortFor("http://127.0.0.1:11434/v1"));
+        assertEquals("default", fresh.apiEffortFor(null));
+
+        fresh.rememberApiEffort("https://api.openai.com/v1/", "HIGH");
+        fresh.rememberApiEffort("https://api.anthropic.com", "off");
+        assertEquals("high", fresh.apiEffortFor("https://api.openai.com/v1"), "trailing slashes do not make another endpoint");
+        assertEquals("off", fresh.apiEffortFor("https://api.anthropic.com"));
+        assertEquals("off", fresh.apiEffortFor("https://api.deepseek.com"), "other services are untouched");
+        fresh.rememberApiEffort("https://api.openai.com/v1", "ultra");
+        fresh.rememberApiEffort("https://api.openai.com/v1", null);
+        assertEquals("high", fresh.apiEffortFor("https://api.openai.com/v1"), "an invalid choice changes nothing");
+        fresh.rememberApiEffort("https://api.openai.com/v1", "default");
+        assertEquals("default", fresh.apiEffortFor("https://api.openai.com/v1"));
+    }
+
+    @Test
+    void oldFilesGetTheServiceDefaultsAndBadThinkingValuesAreDropped() {
+        // no aiEffortByEndpoint at all (every file written so far), or the unreleased claudeEffort key
+        for (String json : new String[] {"{}", "{\"claudeEffort\":\"high\"}", "{\"aiEffortByEndpoint\":null}"}) {
+            TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader(json));
+            assertNotNull(cfg.aiEffortByEndpoint, json);
+            assertEquals("medium", cfg.apiEffortFor("https://api.anthropic.com"), json);
+            assertEquals("off", cfg.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"), json);
+            assertEquals("off", cfg.apiEffortFor("https://api.deepseek.com"), json);
+            assertEquals("default", cfg.apiEffortFor("https://api.openai.com/v1"), json);
+        }
+        TranslatorConfig cfg = TranslatorConfig.fromReader(new StringReader("{\"aiEffortByEndpoint\":{"
+                + "\"https://api.anthropic.com\":\" MAX \","
+                + "\"https://api.openai.com/v1/\":\"ultra\","
+                + "\"https://api.deepseek.com\":\"\","
+                + "\"https://generativelanguage.googleapis.com/v1beta/openai\":\"Minimal\","
+                + "\"  \":\"high\","
+                + "\"http://127.0.0.1:11434/v1\":null}}"));
+        assertEquals("max", cfg.apiEffortFor("https://api.anthropic.com"));
+        assertEquals("default", cfg.apiEffortFor("https://api.openai.com/v1"), "an unusable value falls back to the default");
+        assertEquals("off", cfg.apiEffortFor("https://api.deepseek.com"));
+        assertEquals("minimal", cfg.apiEffortFor("https://generativelanguage.googleapis.com/v1beta/openai"));
+        assertEquals(2, cfg.aiEffortByEndpoint.size(), cfg.aiEffortByEndpoint.toString());
+
+        TranslatorConfig saved = new TranslatorConfig();
+        saved.rememberApiEffort("https://api.deepseek.com", "high");
+        saved.rememberApiEffort("https://api.anthropic.com", "off");
+        StringWriter out = new StringWriter();
+        saved.writeTo(out);
+        assertFalse(out.toString().contains("claudeEffort"));
+        TranslatorConfig back = TranslatorConfig.fromReader(new StringReader(out.toString()));
+        assertEquals("high", back.apiEffortFor("https://api.deepseek.com"));
+        assertEquals("off", back.apiEffortFor("https://api.anthropic.com"));
+    }
+
+    @Test
+    void eachServiceHasItsOwnFastSwitchAndClaudeKeysAreRedacted() {
+        TranslatorConfig cfg = new TranslatorConfig();
+        cfg.aiFastMode = true;
+        cfg.claudeFastMode = false;
+        assertTrue(cfg.fastModeFor("https://api.openai.com/v1"));
+        assertFalse(cfg.fastModeFor("https://api.anthropic.com"));
+        cfg.aiFastMode = false;
+        cfg.claudeFastMode = true;
+        assertFalse(cfg.fastModeFor("https://api.openai.com/v1"));
+        assertTrue(cfg.fastModeFor("https://api.anthropic.com/v1"));
+        assertFalse(cfg.fastModeFor("https://api.anthropic.com.evil.test"), "a look-alike host is not Claude");
+
+        cfg.aiBaseUrl = "https://api.anthropic.com";
+        assertTrue(cfg.usesClaude());
+        cfg.aiUseCodex = true;
+        assertFalse(cfg.usesClaude(), "the Codex route is not the Claude API");
+        cfg.aiUseCodex = false;
+        cfg.aiBaseUrl = "https://api.openai.com/v1";
+        assertFalse(cfg.usesClaude());
+
+        cfg.aiKeysByEndpoint.put("https://api.anthropic.com", "sk-ant-one, sk-ant-two");
+        assertTrue(cfg.secretValues().containsAll(java.util.List.of("sk-ant-one", "sk-ant-two")));
     }
 
     @Test

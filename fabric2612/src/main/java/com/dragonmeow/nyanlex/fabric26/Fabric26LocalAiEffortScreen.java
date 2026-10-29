@@ -3,6 +3,7 @@ package com.dragonmeow.nyanlex.fabric26;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient.ModelOption;
+import com.dragonmeow.nyanlex.translate.ReasoningEffort;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -21,6 +22,34 @@ import java.util.List;
 /** Direct reasoning-effort picker; clicking the current value no longer cycles it. */
 public final class Fabric26LocalAiEffortScreen extends OptionsSubScreen {
     private EffortSelectionList effortList;
+    private List<String> customLevels;
+    private String customActive;
+    private java.util.function.Consumer<String> onCustomSelection;
+
+    /** Pick from {@code levels} and report the choice to {@code selected} instead of the Codex setting. */
+    public Fabric26LocalAiEffortScreen withLevels(List<String> levels, String active,
+                                                  java.util.function.Consumer<String> selected) {
+        this.customLevels = List.copyOf(levels);
+        this.customActive = active;
+        this.onCustomSelection = selected;
+        return this;
+    }
+
+    /**
+     * Display name of an API thinking-strength setting: {@code default} and {@code off} are
+     * translated (the short form fits on a button), the provider's own levels show as they are.
+     */
+    static Component label(String effort, boolean shortForm) {
+        if (ReasoningEffort.DEFAULT.equals(effort)) {
+            return Component.translatable(shortForm
+                    ? "screen.nyanlex.ai.effort.default.short" : "screen.nyanlex.ai.effort.default");
+        }
+        if (ReasoningEffort.OFF.equals(effort)) {
+            return Component.translatable(shortForm
+                    ? "screen.nyanlex.ai.effort.off.short" : "screen.nyanlex.ai.effort.off");
+        }
+        return Component.literal(effort);
+    }
 
     public Fabric26LocalAiEffortScreen(Screen parent) {
         super(parent, Minecraft.getInstance().options,
@@ -66,14 +95,19 @@ public final class Fabric26LocalAiEffortScreen extends OptionsSubScreen {
     }
 
     private void choose(String effort) {
-        TranslatorConfig cfg = NyanLexFabric26.config();
-        cfg.codexReasoningEffort = effort;
+        if (this.onCustomSelection != null) {
+            this.onCustomSelection.accept(effort);
+        } else {
+            TranslatorConfig cfg = NyanLexFabric26.config();
+            cfg.codexReasoningEffort = effort;
+        }
         NyanLexFabric26.saveConfig();
         Fabric26TextStyle.clearRenderMemo();
         this.minecraft.setScreenAndShow(this.lastScreen);
     }
 
     private List<String> supportedEfforts() {
+        if (this.customLevels != null) return this.customLevels;
         CodexAppServerClient client = NyanLexFabric26.codexClient();
         if (client == null) return List.of();
         String selectedModel = NyanLexFabric26.config().codexModel;
@@ -94,7 +128,9 @@ public final class Fabric26LocalAiEffortScreen extends OptionsSubScreen {
         }
 
         private void selectCurrent() {
-            String active = NyanLexFabric26.config().codexReasoningEffort;
+            String active = Fabric26LocalAiEffortScreen.this.customLevels != null
+                    ? Fabric26LocalAiEffortScreen.this.customActive
+                    : NyanLexFabric26.config().codexReasoningEffort;
             for (Entry entry : this.children()) {
                 if (entry.effort.equals(active)) {
                     this.setSelected(entry);
@@ -121,7 +157,8 @@ public final class Fabric26LocalAiEffortScreen extends OptionsSubScreen {
 
             private Entry(String effort) {
                 this.effort = effort;
-                this.label = Component.literal(effort);
+                this.label = Fabric26LocalAiEffortScreen.this.customLevels != null
+                        ? Fabric26LocalAiEffortScreen.label(effort, false) : Component.literal(effort);
             }
 
             @Override

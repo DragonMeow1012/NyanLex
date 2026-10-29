@@ -171,6 +171,47 @@ class ChatDeliverySessionTest {
     }
 
     @Test
+    void thinkingStrengthRetiresTheBacklogOnlyForTheActiveService() {
+        TranslatorConfig claude = new TranslatorConfig();
+        claude.aiChat = true;
+        claude.aiBaseUrl = "https://api.anthropic.com";
+        claude.aiModel = "claude-haiku-5-5";
+        ChatRequestProfile before = profile(claude);
+        claude.rememberApiEffort(claude.aiBaseUrl, "high");
+        assertFalse(before.equals(profile(claude)), "a different effort is a different request");
+        claude.rememberApiEffort(claude.aiBaseUrl, "off");
+        assertFalse(before.equals(profile(claude)), "so is switching thinking off");
+        claude.claudeFastMode = true;
+        ChatRequestProfile withFast = profile(claude);
+        claude.claudeFastMode = false;
+        assertEquals(withFast, profile(claude), "fast mode only changes speed, not the result");
+
+        // every other API service is covered the same way: Gemini (the default endpoint), OpenAI
+        TranslatorConfig gemini = new TranslatorConfig();
+        gemini.aiChat = true;
+        ChatRequestProfile geminiBefore = profile(gemini);
+        gemini.rememberApiEffort(gemini.aiBaseUrl, "low");
+        assertFalse(geminiBefore.equals(profile(gemini)));
+        gemini.rememberApiEffort(gemini.aiBaseUrl, "off");
+        assertEquals(geminiBefore, profile(gemini), "off is Gemini's default, so nothing changed");
+        gemini.aiBaseUrl = "https://api.openai.com/v1";
+        ChatRequestProfile openAiBefore = profile(gemini);
+        gemini.rememberApiEffort("https://api.openai.com/v1", "high");
+        assertFalse(openAiBefore.equals(profile(gemini)));
+
+        // an inactive service's effort, or any effort while AI chat is off, changes nothing
+        TranslatorConfig other = new TranslatorConfig();
+        other.aiChat = true;
+        ChatRequestProfile otherBefore = profile(other);
+        other.rememberApiEffort("https://api.anthropic.com", "max");
+        assertEquals(otherBefore, profile(other), "an inactive service's effort changes nothing");
+        TranslatorConfig machine = new TranslatorConfig();
+        ChatRequestProfile machineBefore = profile(machine);
+        machine.rememberApiEffort(machine.aiBaseUrl, "high");
+        assertEquals(machineBefore, profile(machine), "AI chat is off");
+    }
+
+    @Test
     void captureUsesTheServicesActiveTargetInsteadOfPossiblyStaleConfig() {
         TranslatorConfig config = new TranslatorConfig();
         config.targetLang = "stale-config";

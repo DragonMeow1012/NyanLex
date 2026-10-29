@@ -186,6 +186,8 @@ class DialogPanelTest {
         assertEquals("AI 服務（OpenAI）", DialogContent.engineName(cfg, true, tw));
         cfg.aiBaseUrl = "https://api.deepseek.com";
         assertEquals("AI 服務（DeepSeek）", DialogContent.engineName(cfg, true, tw));
+        cfg.aiBaseUrl = "https://api.anthropic.com";
+        assertEquals("AI 服務（Claude）", DialogContent.engineName(cfg, true, tw));
         cfg.aiBaseUrl = "http://127.0.0.1:11434/v1";
         assertEquals("AI 服務（127.0.0.1:11434）", DialogContent.engineName(cfg, true, tw));
         cfg.aiUseCodex = true;

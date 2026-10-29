@@ -50,12 +50,13 @@ public final class DialogContent {
         return lang.get("screen.nyanlex.provider." + provider.id());
     }
 
-    /** The AI service by its endpoint: Gemini, OpenAI, DeepSeek, or the host of a custom endpoint. */
+    /** The AI service by its endpoint: Gemini, OpenAI, DeepSeek, Claude, or the host of a custom endpoint. */
     public static String aiProviderName(TranslatorConfig cfg, Lang lang) {
         String url = cfg.aiBaseUrl == null ? "" : cfg.aiBaseUrl.toLowerCase(Locale.ROOT);
         if (url.contains("generativelanguage.googleapis.com")) return "Gemini";
         if (url.contains("api.openai.com")) return "OpenAI";
         if (url.contains("api.deepseek.com")) return "DeepSeek";
+        if (url.contains("api.anthropic.com")) return "Claude";
         String host = url.replaceFirst("^[a-z]+://", "");
         int cut = host.indexOf('/');
         if (cut >= 0) host = host.substring(0, cut);

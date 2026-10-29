@@ -12,14 +12,22 @@ import java.util.List;
  * @param apiKeys  zero or more API keys, rotated round-robin / on failure when present
  * @param glossary request-local user-pinned term overrides ("訂翻譯"), each a
  *                 {@code "English=中文"} line. Never {@code null} (defaults to empty).
+ * @param effort   thinking-strength setting for this service (see {@link ReasoningEffort});
+ *                 {@code null} or invalid means "the service default".
  */
 public record AiSettings(String baseUrl, String model, List<String> apiKeys, List<String> glossary,
-                         boolean fastMode) {
+                         boolean fastMode, String effort) {
 
     /** Canonical constructor: null-guard optional lists so callers may pass {@code null}. */
     public AiSettings {
         if (apiKeys == null) apiKeys = List.of();
         if (glossary == null) glossary = List.of();
+    }
+
+    /** For call sites that predate the thinking-strength setting: the service default applies. */
+    public AiSettings(String baseUrl, String model, List<String> apiKeys, List<String> glossary,
+                      boolean fastMode) {
+        this(baseUrl, model, apiKeys, glossary, fastMode, null);
     }
 
     /** Backward-compatible constructor for call sites that carry no user glossary. */

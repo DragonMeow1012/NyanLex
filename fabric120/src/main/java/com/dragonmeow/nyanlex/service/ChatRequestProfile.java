@@ -24,6 +24,7 @@ public final class ChatRequestProfile {
     private final String aiProvider;
     private final String codexModel;
     private final String codexReasoningEffort;
+    private final String apiEffort;
     private final String antigravityModel;
     private final List<String> glossary;
     private final boolean protectPlayerNames;
@@ -46,6 +47,7 @@ public final class ChatRequestProfile {
         codexModel = aiChat && config.usesCodex() ? text(config.codexModel) : "";
         codexReasoningEffort = aiChat && config.usesCodex()
                 ? text(config.codexReasoningEffort) : "";
+        apiEffort = api ? text(config.apiEffortFor(config.aiBaseUrl)) : "";
         antigravityModel = aiChat && config.usesAntigravity()
                 ? text(config.antigravityModel) : "";
         glossary = aiChat
@@ -84,6 +86,7 @@ public final class ChatRequestProfile {
                 && aiProvider.equals(that.aiProvider)
                 && codexModel.equals(that.codexModel)
                 && codexReasoningEffort.equals(that.codexReasoningEffort)
+                && apiEffort.equals(that.apiEffort)
                 && antigravityModel.equals(that.antigravityModel)
                 && glossary.equals(that.glossary)
                 && doNotTranslateTerms.equals(that.doNotTranslateTerms);
@@ -93,7 +96,7 @@ public final class ChatRequestProfile {
     public int hashCode() {
         return Objects.hash(targetLang, sourceLang, aiChat, machineProvider,
                 machineFallbackEnabled, aiBaseUrl, aiModel, aiProvider, codexModel,
-                codexReasoningEffort, antigravityModel, glossary, protectPlayerNames,
+                codexReasoningEffort, apiEffort, antigravityModel, glossary, protectPlayerNames,
                 translationRequestsEnabled, doNotTranslateTerms);
     }
 }

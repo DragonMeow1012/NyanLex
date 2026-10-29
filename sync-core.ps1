@@ -221,7 +221,7 @@ foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122
             'HookHealth.java', 'HookGuard.java', 'ChatComposerPanel.java',
             'MachineTranslationGate.java', 'RequestsPausedException.java', 'RequestGate.java',
             'RequestPacer.java', 'CliProcessSupport.java', 'CliRequestLimits.java', 'HttpEndpointPolicy.java',
-            'ApiModelCatalog.java')) {
+            'ApiModelCatalog.java', 'AnthropicWire.java', 'AiFeatureMemory.java')) {
         $sharedSource = Join-Path $root "src\main\java\com\dragonmeow\nyanlex\translate\$sharedName"
         $sharedFile = Join-Path $sharedDestination $sharedName
         if (-not (Test-Path $sharedFile) -or (Get-FileHash $sharedSource).Hash -ne (Get-FileHash $sharedFile).Hash) {

@@ -218,6 +218,7 @@
 | Google／Antigravity 登入 | Google 登入 | 現代 Fabric／NeoForge 版本支援。請先從[官方下載頁](https://antigravity.google/download)安裝 Antigravity CLI，再由 Gemini 分頁切換到「Google 登入」；翻譯使用該帳號的 Antigravity 額度，模型（含思考強度版本）由 CLI 取得。 |
 | OpenAI | 自備 API Key | 設定畫面有預設按鈕，可設定模型與服務網址。 |
 | DeepSeek | 自備 API Key | 設定畫面有預設按鈕，可設定模型與服務網址。 |
+| Claude（Anthropic API） | 自備 API Key | 設定畫面有預設按鈕，固定連到 `api.anthropic.com`，不使用 Claude 帳號登入。 |
 | OpenRouter | 自備 API Key | 在 AI 設定填入其 OpenAI 相容服務網址與模型。 |
 | Ollama／LM Studio | 依本機服務設定，無驗證時可留空 | 連線到自己啟動的 OpenAI 相容伺服器；模型需自行準備。 |
 | 其他 OpenAI 相容服務 | 依服務設定 | 可自訂 Base URL、模型、多把輪替金鑰與詞彙表。金鑰留空時不送出 `Authorization` 標頭。 |
@@ -226,6 +227,10 @@
 API 初次選用的預設模型為 OpenAI `gpt-5.6-luna`、Gemini `gemini-3.5-flash-lite`。可按「讀取模型」取得目前服務的模型清單並選取填入，也可直接手動輸入；切換服務商會保留各服務已設定的模型。
 
 OpenAI API 與 ChatGPT／Codex 都提供快速模式開關，預設關閉、使用標準模式。啟用前會提醒 API 費用或 Codex 額度消耗可能增加，並可勾選不再顯示；實際可用性依模型與帳號而定。
+
+Claude 使用你自己的 Anthropic API Key，依 Anthropic 官方計價收費；金鑰只會送到 `api.anthropic.com`。按「讀取模型」可從清單選擇模型；預設為 Claude Haiku 5.5（`claude-haiku-5-5`），思考強度預設為 `medium`，都能在設定畫面調整。Claude 的快速模式是獨立開關（預設關閉），費用約為一般的 2 倍，且僅部分模型支援，不支援時會自動改用一般速度。Claude Max／Team 方案每月附有 API 額度，連結 Claude Console 後即可使用該組織的 API Key。
+
+所有 API 服務商（Gemini、OpenAI、DeepSeek、Claude 與自訂端點）都能在設定畫面調整「思考強度」：可選「預設（由模型決定）」、「關閉（最快）」，或服務商提供的各個等級。Claude 預設為 `medium`，Gemini 與 DeepSeek 預設為關閉，OpenAI 與自訂端點預設不送出任何思考參數。部分模型無法完全關閉思考，此時會使用該模型允許的最低設定；模型不接受所選設定時，會改用不含該設定的請求重送，並在本次遊戲期間記住。
 
 NyanLex 不會自動安裝上述 CLI。登入流程由本機 CLI 開啟瀏覽器或終端機完成；帳號憑證由官方工具保存，NyanLex 只呼叫已登入的本機程序。
 
@@ -327,7 +332,7 @@ Fabric 1.17 以上與 NeoForge：
 - 聊天輸入翻譯只在你按下「翻譯並填入」（或在浮窗按 Enter）時送出草稿；關閉聊天後，草稿僅保留在記憶體，結束遊戲後不保留。草稿不寫入翻譯快取，也不包含在翻譯匯出檔內。填入後仍由你確認發送。
 - 文字會送到你所選的翻譯服務：
   - **機器翻譯（Google，免金鑰）**使用**非官方**網頁端點，可能隨時被限流或失效。
-  - **AI 引擎**（OpenAI 相容服務，例如 Gemini、OpenAI、DeepSeek，或 ChatGPT／Codex 登入）同樣需自備金鑰或登入，只會送到你自己設定的服務。用 ChatGPT 登入時，會使用你帳號的 Codex 額度。
+  - **AI 引擎**（Gemini、OpenAI、DeepSeek 等 OpenAI 相容服務、Claude 的 Anthropic API，或 ChatGPT／Codex 登入）同樣需自備金鑰或登入，只會送到你自己設定的服務。用 ChatGPT 登入時，會使用你帳號的 Codex 額度。
 - **API 金鑰只存在本機的設定檔裡**，只會送給你選擇的服務商；設定畫面會遮罩，且不會寫入日誌或偵錯檔。
 - 從舊版升級的使用者沿用原本的設定：原本就在翻譯的，線上翻譯維持開啟。
 - **翻譯包只會下載，不會上傳。** 偵測與下載翻譯包只會向 GitHub 讀取公開檔案（`index.json` 與你確認的檔案），不會送出任何文字或你的模組清單；按下確認之前不會下載任何東西。

@@ -8,10 +8,29 @@ public final class HttpEndpointPolicy {
 
     /** Only the official OpenAI endpoint has the documented OpenAI billing tiers. */
     public static boolean isOpenAi(String url) {
+        return isHttpsHost(url, "api.openai.com");
+    }
+
+    /** Only the official Anthropic endpoint receives an Anthropic API key. */
+    public static boolean isAnthropic(String url) {
+        return isHttpsHost(url, "api.anthropic.com");
+    }
+
+    /** The official Gemini API (its OpenAI-compatible layer included). */
+    public static boolean isGemini(String url) {
+        return isHttpsHost(url, "generativelanguage.googleapis.com");
+    }
+
+    /** The official DeepSeek API, which spells its thinking switch differently from OpenAI. */
+    public static boolean isDeepSeek(String url) {
+        return isHttpsHost(url, "api.deepseek.com");
+    }
+
+    private static boolean isHttpsHost(String url, String host) {
         try {
             URI uri = validate(url);
             return "https".equalsIgnoreCase(uri.getScheme())
-                    && "api.openai.com".equalsIgnoreCase(uri.getHost())
+                    && host.equalsIgnoreCase(uri.getHost())
                     && (uri.getPort() == -1 || uri.getPort() == 443);
         } catch (RuntimeException invalid) {
             return false;

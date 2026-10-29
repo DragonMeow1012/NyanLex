@@ -1,6 +1,7 @@
 package com.dragonmeow.nyanlex.translate;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -28,5 +29,15 @@ public interface HttpTransport {
      */
     default String post(String url, String body, Map<String, String> headers) throws IOException {
         throw new IOException("POST not supported by this transport");
+    }
+
+    /**
+     * Like {@link #post(String, String, Map)} with an explicit request timeout, for the few
+     * routes whose replies are legitimately slow. A transport that cannot honour a timeout
+     * keeps its own and ignores this one.
+     */
+    default String post(String url, String body, Map<String, String> headers, Duration timeout)
+            throws IOException {
+        return post(url, body, headers);
     }
 }

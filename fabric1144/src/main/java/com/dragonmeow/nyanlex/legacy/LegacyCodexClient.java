@@ -1455,8 +1455,9 @@ final class LegacyCodexClient implements AutoCloseable {
         return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
+    /** The tier to request, or {@code null} to omit the field so the CLI keeps its own standard speed. */
     private String requestedServiceTier(String model, boolean fastMode) throws IOException {
-        if (!fastMode) return "default";
+        if (!fastMode) return null;
         for (ModelOption option : cachedModels) {
             if (option.model().equals(model)) {
                 if (option.serviceTiers().contains("fast")) return "fast";

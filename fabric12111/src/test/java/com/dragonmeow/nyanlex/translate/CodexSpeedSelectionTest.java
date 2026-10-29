@@ -18,14 +18,14 @@ class CodexSpeedSelectionTest {
             method.setAccessible(true);
             field.set(client, List.of(new CodexAppServerClient.ModelOption("model", "Model", List.of("low"),
                     List.of("default", "priority"), "low", true)));
-            assertEquals("default", method.invoke(client, "model", false));
+            assertNull(method.invoke(client, "model", false));
             assertEquals("priority", method.invoke(client, "model", true));
             field.set(client, List.of(new CodexAppServerClient.ModelOption("model", "Model", List.of("low"),
                     List.of("default", "fast"), "low", true)));
             assertEquals("fast", method.invoke(client, "model", true));
             field.set(client, List.of(new CodexAppServerClient.ModelOption("model", "Model", List.of("low"),
                     List.of("default"), "low", true)));
-            assertEquals("default", method.invoke(client, "model", false));
+            assertNull(method.invoke(client, "model", false));
             assertInstanceOf(java.io.IOException.class, assertThrows(InvocationTargetException.class,
                     () -> method.invoke(client, "model", true)).getCause());
         }

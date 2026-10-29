@@ -81,19 +81,32 @@ public final class UrlHttpTransport implements HttpTransport {
         return builder.build();
     }
 
+    /** Request timeout of a POST unless the caller asks for another: AI completions are slower than the free GET endpoint. */
+    static final Duration POST_TIMEOUT = Duration.ofSeconds(30);
+
     @Override
     public String post(String url, String body, Map<String, String> headers) throws IOException {
+        return post(url, body, headers, POST_TIMEOUT);
+    }
+
+    @Override
+    public String post(String url, String body, Map<String, String> headers, Duration requestTimeout)
+            throws IOException {
+        return send(buildPostRequest(url, body, headers, requestTimeout), true);
+    }
+
+    static HttpRequest buildPostRequest(String url, String body, Map<String, String> headers,
+                                        Duration requestTimeout) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(HttpEndpointPolicy.validate(url))
-                // AI completions are slower than the free GET endpoint; allow more time.
-                .timeout(Duration.ofSeconds(30))
+                .timeout(requestTimeout)
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
         if (headers == null || headers.keySet().stream().noneMatch(
                 name -> "content-type".equalsIgnoreCase(name))) {
             builder.setHeader("Content-Type", "application/json");
         }
         if (headers != null) headers.forEach(builder::setHeader);
-        return send(builder.build(), true);
+        return builder.build();
     }
 
     private String send(HttpRequest request, boolean includeErrorSnippet) throws IOException {
@@ -117,15 +130,54 @@ public final class UrlHttpTransport implements HttpTransport {
             });
             int code = response.statusCode();
             if (code / 100 != 2) {
-                if (!includeErrorSnippet) throw new IOException("HTTP " + code);
-                String snippet = response.body();
-                if (snippet.length() > 200) snippet = snippet.substring(0, 200);
-                throw new IOException("HTTP " + code + ": " + snippet);
+                long retryAfterMs = AnthropicWire.retryAfterMs(
+                        response.headers().firstValue("retry-after").orElse(null));
+                if (!includeErrorSnippet) throw new HttpStatusException(code, null, retryAfterMs);
+                throw new HttpStatusException(code, response.body(), retryAfterMs);
             }
             return response.body();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("request interrupted", e);
+        }
+    }
+
+    /**
+     * A non-2xx response. {@link #getMessage()} keeps the historic {@code HTTP <code>: <first 200
+     * chars>} shape that the retry logic matches on; the longer body prefix and the
+     * {@code retry-after} delay are available separately.
+     */
+    public static final class HttpStatusException extends IOException {
+        private static final long serialVersionUID = 1L;
+        private final int statusCode;
+        private final String bodySnippet;
+        private final long retryAfterMs;
+
+        public HttpStatusException(int statusCode, String bodySnippet, long retryAfterMs) {
+            super(message(statusCode, bodySnippet));
+            this.statusCode = statusCode;
+            this.bodySnippet = bodySnippet == null ? "" : bodySnippet;
+            this.retryAfterMs = retryAfterMs;
+        }
+
+        private static String message(int statusCode, String bodySnippet) {
+            if (bodySnippet == null) return "HTTP " + statusCode;
+            String snippet = bodySnippet.length() > 200 ? bodySnippet.substring(0, 200) : bodySnippet;
+            return "HTTP " + statusCode + ": " + snippet;
+        }
+
+        public int statusCode() {
+            return statusCode;
+        }
+
+        /** Up to 800 bytes of the error response body, empty for a GET. */
+        public String bodySnippet() {
+            return bodySnippet;
+        }
+
+        /** Server-requested wait from {@code retry-after} (1 s .. 10 min), 0 when absent. */
+        public long retryAfterMs() {
+            return retryAfterMs;
         }
     }
 

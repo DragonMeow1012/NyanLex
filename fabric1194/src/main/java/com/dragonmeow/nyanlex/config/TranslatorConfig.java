@@ -1,6 +1,9 @@
 package com.dragonmeow.nyanlex.config;
 
+import com.dragonmeow.nyanlex.translate.AnthropicWire;
 import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
+import com.dragonmeow.nyanlex.translate.HttpEndpointPolicy;
+import com.dragonmeow.nyanlex.translate.ReasoningEffort;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -28,6 +31,9 @@ public final class TranslatorConfig {
     public static final String DEFAULT_CODEX_MODEL = "gpt-6-luna";
     public static final String DEFAULT_CODEX_REASONING_EFFORT = "low";
     public static final String DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.7-flash-low";
+    public static final String ANTHROPIC_API_URL = "https://api.anthropic.com";
+    public static final String DEFAULT_CLAUDE_MODEL = AnthropicWire.DEFAULT_MODEL;
+    public static final String DEFAULT_CLAUDE_EFFORT = AnthropicWire.DEFAULT_EFFORT;
     public static final int MAX_WORKER_THREADS = 8;
     public static final int MAX_MEMORY_CACHE_ENTRIES = 50_000;
     public static final int DEFAULT_PERSISTENT_CACHE_ENTRIES = 100_000;
@@ -73,11 +79,20 @@ public final class TranslatorConfig {
 
     /** OpenAI-compatible base URL (chat/completions is appended). Default: Gemini (high free quota). */
     public String aiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
-    /** Model id, e.g. {@code gemini-3.5-flash-lite}, {@code gpt-5.6-luna}, {@code deepseek-chat}. */
+    /** Model id, e.g. {@code gemini-3.5-flash-lite}, {@code gpt-5.6-luna}, {@code deepseek-flash}. */
     public String aiModel = "gemini-3.5-flash-lite";
     /** Premium speed is opt-in, independently of model and reasoning effort. */
     public boolean aiFastMode = false;
     public boolean hideAiFastModeNotice = false;
+    /**
+     * Thinking strength per API endpoint, keyed like {@link #aiModelsByEndpoint}. A value is one of
+     * {@link ReasoningEffort#VALUES}; an endpoint with no entry (or an unusable one) uses its service
+     * default, see {@link ReasoningEffort#defaultFor}. Codex keeps its own {@link #codexReasoningEffort}.
+     */
+    public java.util.Map<String, String> aiEffortByEndpoint = new java.util.HashMap<>();
+    /** Claude fast mode is opt-in and independent of {@link #aiFastMode}, which only OpenAI uses. */
+    public boolean claudeFastMode = false;
+    public boolean hideClaudeFastModeNotice = false;
     public java.util.Map<String, String> aiModelsByEndpoint = new java.util.HashMap<>();
 
     /** Remember the current manual or catalog selection before changing providers. */
@@ -86,6 +101,34 @@ public final class TranslatorConfig {
         if (aiBaseUrl != null && aiModel != null) {
             aiModelsByEndpoint.put(aiBaseUrl.trim().replaceAll("/+$", ""), aiModel);
         }
+    }
+
+    /** The thinking-strength setting for {@code url}'s service: the saved choice, else that service's default. */
+    public String apiEffortFor(String url) {
+        String saved = aiEffortByEndpoint == null ? null : aiEffortByEndpoint.get(endpointKey(url));
+        return ReasoningEffort.resolve(url, saved);
+    }
+
+    /** Remember a thinking-strength choice for {@code url}'s service; an invalid value changes nothing. */
+    public void rememberApiEffort(String url, String effort) {
+        String value = ReasoningEffort.normalize(effort);
+        if (value == null) return;
+        if (aiEffortByEndpoint == null) aiEffortByEndpoint = new java.util.HashMap<>();
+        aiEffortByEndpoint.put(endpointKey(url), value);
+    }
+
+    private static String endpointKey(String url) {
+        return url == null ? "" : url.trim().replaceAll("/+$", "");
+    }
+
+    /** Whether the fast switch that applies to {@code baseUrl}'s service is on. */
+    public boolean fastModeFor(String baseUrl) {
+        return HttpEndpointPolicy.isAnthropic(baseUrl) ? claudeFastMode : aiFastMode;
+    }
+
+    /** The API route currently points at the official Anthropic endpoint. */
+    public boolean usesClaude() {
+        return !usesLocalAiCli() && HttpEndpointPolicy.isAnthropic(aiBaseUrl);
     }
 
     public String apiModelFor(String url, String initialModel) {
@@ -428,6 +471,7 @@ public final class TranslatorConfig {
         }
         if (aiKeysByEndpoint == null) aiKeysByEndpoint = new java.util.HashMap<>();
         if (aiModelsByEndpoint == null) aiModelsByEndpoint = new java.util.HashMap<>();
+        aiEffortByEndpoint = normalizedEfforts(aiEffortByEndpoint);
         if (aiGlossary == null) aiGlossary = new java.util.ArrayList<>();
         doNotTranslateTerms = normalizedTerms(doNotTranslateTerms);
         termOverrides = normalizedTermOverrides(termOverrides);
@@ -509,6 +553,23 @@ public final class TranslatorConfig {
             String trimmedValue = value.strip();
             if (trimmedValue.isEmpty()) continue;
             out.put(key, trimmedValue);
+        }
+        return out;
+    }
+
+    /**
+     * Thinking-strength hygiene: null becomes empty, keys are trimmed without trailing slashes,
+     * values are lower-cased, and a blank key or a value that is not a {@link ReasoningEffort}
+     * setting is dropped (that endpoint then uses its service default). Always returns a new map.
+     */
+    public static java.util.Map<String, String> normalizedEfforts(java.util.Map<String, String> raw) {
+        java.util.Map<String, String> out = new java.util.HashMap<>();
+        if (raw == null) return out;
+        for (java.util.Map.Entry<String, String> entry : raw.entrySet()) {
+            if (entry.getKey() == null) continue;
+            String key = endpointKey(entry.getKey());
+            String value = ReasoningEffort.normalize(entry.getValue());
+            if (!key.isEmpty() && value != null) out.put(key, value);
         }
         return out;
     }
