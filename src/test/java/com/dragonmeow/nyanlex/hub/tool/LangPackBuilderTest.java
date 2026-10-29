@@ -157,7 +157,8 @@ class LangPackBuilderTest {
     @Test
     void percentAndDecimalArguments() {
         LangPackBuilder.Row percent = single("Brightness: %d%%", "亮度：%d%%");
-        assertEquals("Brightness: ⟦MT0⟧", percent.key());
+        assertEquals("Brightness: ⟦MT0⟧%", percent.key());
+        assertEquals("亮度：⟦MT0⟧%", percent.value());
         LangPackBuilder.Row decimal = single("Scale: %.1f times", "縮放：%.1f 倍");
         assertEquals("Scale: ⟦MT0⟧ times", decimal.key());
     }

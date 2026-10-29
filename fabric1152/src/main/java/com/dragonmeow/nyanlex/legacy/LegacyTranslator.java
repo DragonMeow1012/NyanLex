@@ -548,6 +548,9 @@ final class LegacyTranslator {
                         callback.accept(translated == null || translated.trim().isEmpty()
                                 ? "empty response" : "OK: " + translated.trim());
                     } catch (Exception e) {
+                        com.dragonmeow.nyanlex.translate.DebugErrorLog.report(
+                                com.dragonmeow.nyanlex.translate.DebugErrorLog.typeForReason(e.toString()),
+                                e.toString(), "operation", "test_api");
                         callback.accept("Failed: " + failureReason(e));
                     }
                 }
@@ -1795,7 +1798,7 @@ final class LegacyTranslator {
         JsonObject outputDetails = objectMember(usage, "completion_tokens_details");
         if (outputDetails == null) outputDetails = objectMember(usage, "output_tokens_details");
         if (outputDetails != null)
-            reasoning = Math.max(reasoning, firstLong(outputDetails, "reasoning_tokens", "reasoning_output_tokens"));
+            reasoning = Math.max(reasoning, firstLong(outputDetails, "reasoning_tokens", "reasoning_output_tokens", "thinking_tokens"));
         tokenUsage.recordRequest(input, cached, output, reasoning, total);
     }
 

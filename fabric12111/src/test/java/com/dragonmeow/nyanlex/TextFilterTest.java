@@ -10,6 +10,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TextFilterTest {
 
     @Test
+    void loadingAnimationFramesAreNotLanguageButWordsAroundThemRemainTranslatable() {
+        for (String frame : new String[]{"O o o", "o O o", "o o O", "o o o", " O  o  o ",
+                "§7o §fO §7o", "⟦CS0⟧o ⟦/CS0⟧⟦CS1⟧O⟦/CS1⟧ o"}) {
+            assertFalse(TextFilter.shouldTranslate(frame, "zh-TW"), frame);
+            assertFalse(TextFilter.shouldTranslate(frame, "ja-JP"), frame);
+        }
+        assertTrue(TextFilter.shouldTranslate("Loading o O o", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("O mighty warrior", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("O O Sword", "zh-TW"));
+    }
+
+    @Test
     void detectsIndentedParagraphStartsWithoutMistakingOneSpace() {
         assertFalse(TextFilter.startsIndentedParagraph(" continuation"));
         assertTrue(TextFilter.startsIndentedParagraph("  New paragraph"));

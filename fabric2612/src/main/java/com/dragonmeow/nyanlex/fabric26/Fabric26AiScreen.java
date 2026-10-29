@@ -296,8 +296,7 @@ public final class Fabric26AiScreen extends Screen {
         }).bounds(x + KEY_FIELD_W + KEY_BUTTON_GAP, keysY, KEY_BUTTON_W, 20).build());
         addApiOptionButtons(cfg, x, layApiOptions);
 
-        Button[] button = new Button[1];
-        button[0] = Button.builder(Component.translatable("screen.nyanlex.ai.test"), b -> {
+        this.testButton = Button.builder(Component.translatable("screen.nyanlex.ai.test"), b -> {
             saveApiFields();
             b.active = false;
             b.setMessage(Component.translatable("screen.nyanlex.ai.testing"));
@@ -305,15 +304,20 @@ public final class Fabric26AiScreen extends Screen {
                     this.baseUrlBox.getValue().trim(),
                     this.modelBox.getValue().trim(),
                     parseKeys(this.keysBox.getValue()),
-                    result -> {
-                        if (button[0] != null) {
-                            button[0].active = true;
-                            button[0].setMessage(Component.literal(result));
-                        }
-                    });
+                    this::showConnectionTestResult);
         }).bounds(x, testY, tight ? FIELD_W / 2 - 3 : FIELD_W, 20).build();
-        this.testButton = button[0];
-        this.addRenderableWidget(button[0]);
+        this.addRenderableWidget(this.testButton);
+    }
+
+    private void showConnectionTestResult(String result) {
+        if (this.testButton != null) {
+            this.testButton.active = true;
+            this.testButton.setMessage(Component.translatable("screen.nyanlex.ai.test"));
+        }
+        if (isCurrentScreen()) {
+            this.minecraft.setScreen(ConfirmDialogScreen.information(this,
+                    Component.translatable("screen.nyanlex.ai.test"), Component.literal(result)));
+        }
     }
 
 

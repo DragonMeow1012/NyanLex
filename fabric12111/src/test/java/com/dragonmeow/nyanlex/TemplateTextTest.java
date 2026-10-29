@@ -117,11 +117,42 @@ class TemplateTextTest {
 
     @Test
     void multiSegmentDurationsCollapseToOneToken() {
-        for (String src : new String[]{"2h 30m", "1m30s", "1d 2h 3m 4s", "5 seconds", "10min"}) {
+        for (String src : new String[]{"2h 30m", "1m30s", "1d 2h 3m 4s", "10min"}) {
             TemplateText.Prepared p = TemplateText.prepare("Reset in " + src);
             assertTrue(p.changed(), src);
             assertEquals("Reset in ⟦MT0⟧", p.text(), "whole duration run must be ONE token: " + src);
             assertEquals("Reset in " + src, p.restore(p.text()), src);
+        }
+    }
+
+    @Test
+    void spelledDurationUnitsRemainTranslatableWhileTicksReuseTheTemplate() {
+        TemplateText.Prepared first = TemplateText.prepare("Gain 15 Defense for 8 seconds after blocking.");
+        TemplateText.Prepared tick = TemplateText.prepare("Gain 20 Defense for 7 seconds after blocking.");
+        assertEquals("Gain ⟦MT0⟧ Defense for ⟦MT1⟧ seconds after blocking.", first.text());
+        assertEquals(first.text(), tick.text());
+        assertEquals("格擋後獲得15點防禦，持續8秒。", first.restore("格擋後獲得⟦MT0⟧點防禦，持續⟦MT1⟧秒。"));
+        assertEquals("格擋後獲得20點防禦，持續7秒。", tick.restore("格擋後獲得⟦MT0⟧點防禦，持續⟦MT1⟧秒。"));
+        for (String value : List.of("2hours30minutes", "2 hours 30 minutes", "2h 30 minutes")) {
+            TemplateText.Prepared duration = TemplateText.prepare(value);
+            assertEquals(List.of("2", "30"), duration.values(), value);
+            assertEquals(value, duration.restore(duration.text()));
+            assertTrue(duration.text().contains("minutes"));
+        }
+    }
+
+    @Test
+    void percentIsVisibleToTranslationAndCannotReuseAFlatDamageTemplate() {
+        TemplateText.Prepared percent = TemplateText.prepare("Deal 250% damage.");
+        assertEquals("Deal ⟦MT0⟧% damage.", percent.text());
+        assertEquals(List.of("250"), percent.values());
+        assertEquals(percent.text(), TemplateText.prepare("Deal 150% damage.").text());
+        assertFalse(percent.text().equals(TemplateText.prepare("Deal 250 damage.").text()));
+        assertEquals("造成250%傷害。", percent.restore("造成⟦MT0⟧%傷害。"));
+        for (String value : List.of("+25％", "x50%", "-0.5%")) {
+            TemplateText.Prepared p = TemplateText.prepare(value);
+            assertTrue(p.text().endsWith("%") || p.text().endsWith("％"), p.text());
+            assertEquals(value, p.restore(p.text()));
         }
     }
 
@@ -540,9 +571,9 @@ class TemplateTextTest {
         assertFalse(TemplateText.prepare("x100xp").changed(), TemplateText.prepare("x100xp").text());
         assertFalse(TemplateText.prepare("_x100").changed(), TemplateText.prepare("_x100").text());
         assertFalse(TemplateText.prepare("box100").changed(), TemplateText.prepare("box100").text());
-        // Existing key shapes must not move.
+        // Opaque values keep their key shapes; percentage meaning stays visible.
         assertEquals("Balance ⟦MT0⟧", TemplateText.prepare("Balance 10k").text());
-        assertEquals("Progress ⟦MT0⟧", TemplateText.prepare("Progress 5%").text());
+        assertEquals("Progress ⟦MT0⟧%", TemplateText.prepare("Progress 5%").text());
         assertEquals("Purse: ⟦MT0⟧", TemplateText.prepare("Purse: 1,605").text());
         assertEquals("⟦MT0⟧ place", TemplateText.prepare("23rd place").text());
         assertEquals("Vote before ⟦MT0⟧", TemplateText.prepare("Vote before 2:30").text());
@@ -573,8 +604,7 @@ class TemplateTextTest {
     @Test
     void restoreIsStableAcrossRepeatedCallsAndSharedSlotPatterns() {
         // restore()/restoreLayout() run every render frame, so their per-slot and per-gap
-        // regexes are compiled once and shared. The expected strings below were captured
-        // from the pre-cache implementation: repeated restores, different translations and
+        // regexes are compiled once and shared. Repeated restores, different translations and
         // different snapshots reusing the same slot indices must stay byte-identical.
         TranslationTemplate template = new TranslationTemplate();
 
@@ -597,11 +627,11 @@ class TemplateTextTest {
         }
 
         TranslationTemplate.Snapshot hud = template.prepare("HP: 20/20\t\tLv 5   XP 75%");
-        assertEquals("HP: ⟦MT0⟧/⟦MT1⟧ ⟦WS0⟧ Lv ⟦MT2⟧ ⟦WS1⟧ XP ⟦MT3⟧", hud.key());
-        assertEquals(List.of("20", "20", "5", "75%"), hud.base().values());
+        assertEquals("HP: ⟦MT0⟧/⟦MT1⟧ ⟦WS0⟧ Lv ⟦MT2⟧ ⟦WS1⟧ XP ⟦MT3⟧%", hud.key());
+        assertEquals(List.of("20", "20", "5", "75"), hud.base().values());
         assertEquals(2, hud.layoutGaps().size());
-        String hudTidy = "生命: ⟦MT0⟧/⟦MT1⟧ ⟦WS0⟧ 等級 ⟦MT2⟧ ⟦WS1⟧ 經驗 ⟦MT3⟧";
-        String hudMessy = "生命值：⟦MT0⟧ / ⟦MT1⟧⟦ WS 0 ⟧等級⟦ MT2 ⟧ ⟦WS1⟧經驗值 ⟦MT3⟧";
+        String hudTidy = "生命: ⟦MT0⟧/⟦MT1⟧ ⟦WS0⟧ 等級 ⟦MT2⟧ ⟦WS1⟧ 經驗 ⟦MT3⟧%";
+        String hudMessy = "生命值：⟦MT0⟧ / ⟦MT1⟧⟦ WS 0 ⟧等級⟦ MT2 ⟧ ⟦WS1⟧經驗值 ⟦MT3⟧%";
         for (int pass = 0; pass < 2; pass++) {
             assertEquals("生命: 20/20\t\t等級5   經驗75%", hud.restore(hudTidy), "pass " + pass);
             assertEquals("生命: 20/20 ⟦WS0⟧ 等級5 ⟦WS1⟧ 經驗75%",

@@ -108,13 +108,13 @@ class StructuredTooltipSegmentKeyNormalizeTest {
         TranslatorConfig cfg = aiTooltipConfig();
         // The dictionary is keyed on the LOCALIZED, THEN MT-templated form every request/
         // lookup now actually computes (CS indices renumbered 0,1,... from first
-        // appearance, and TranslationTemplate folds the literal "50%" into its own ⟦MT0⟧
-        // value slot before the cache/backend ever sees it, same as any other stat value)
+        // appearance, and TranslationTemplate protects "50" while leaving "%" visible
+        // before the cache/backend sees the text)
         // -- NOT on either item's own raw, globally-numbered span. A real OpenAI-style
         // backend would of course echo back whatever indices/slots it was actually sent;
         // this fake just mirrors that.
         CountingTranslator translator = new CountingTranslator(Map.of(
-                "⟦CS0⟧Crit Chance:⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧⟦/CS1⟧", "⟦CS0⟧暴擊率：⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧⟦/CS1⟧",
+                "⟦CS0⟧Crit Chance:⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧%⟦/CS1⟧", "⟦CS0⟧暴擊率：⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧%⟦/CS1⟧",
                 "Implosion", "內爆",
                 "Wither Shield", "凋零盾"));
         TranslationCache ai = new TranslationCache(translator, cfg.targetLang, DIRECT, 100);
@@ -165,7 +165,7 @@ class StructuredTooltipSegmentKeyNormalizeTest {
         // own first-touch query would have to re-request under ITS OWN (different) key.
         TranslatorConfig cfg = aiTooltipConfig();
         CountingTranslator translator = new CountingTranslator(Map.of(
-                "⟦CS0⟧Crit Chance:⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧⟦/CS1⟧", "⟦CS0⟧暴擊率：⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧⟦/CS1⟧",
+                "⟦CS0⟧Crit Chance:⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧%⟦/CS1⟧", "⟦CS0⟧暴擊率：⟦/CS0⟧ ⟦CS1⟧⟦MT0⟧%⟦/CS1⟧",
                 "Implosion", "內爆",
                 "Wither Shield", "凋零盾"));
         TranslationCache ai = new TranslationCache(translator, cfg.targetLang, DIRECT, 100);

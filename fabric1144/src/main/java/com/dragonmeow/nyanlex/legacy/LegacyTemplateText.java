@@ -44,6 +44,9 @@ final class LegacyTemplateText {
     private static final Pattern DURATION_EN = Pattern.compile(
             "(?i)" + DYNAMIC_START + "\\d+(?:[.,]\\d+)?\\s*" + DURATION_UNIT_EN + "(?![A-Za-z])"
                     + "(?:\\s*\\d+(?:[.,]\\d+)?\\s*" + DURATION_UNIT_EN + "(?![A-Za-z]))*");
+    private static final Pattern SPELLED_DURATION_UNIT = Pattern.compile("(?i)(?:days?|hours?|minutes?|seconds?)");
+    private static final Pattern DURATION_QUANTITY = Pattern.compile("\\d+(?:[.,]\\d+)?");
+    private static final Pattern LOADING_DOTS = Pattern.compile("[oO](?:\\h+[oO]){2}");
     private static final Pattern DURATION_CJK = Pattern.compile(
             DYNAMIC_START + "(?:\\d+(?:[.,]\\d+)?\\s*(?:天|日|小時|時|分鐘|分|秒))+");
     private static final Pattern ORDINAL = Pattern.compile(
@@ -52,9 +55,10 @@ final class LegacyTemplateText {
     // Prefix quantities are a complete slot. The boundaries deliberately keep
     // dimensions, hex and glued identifiers (2x2, 0x1F, x100kg) untouched.
     private static final Pattern PREFIX_QUANTITY = Pattern.compile(DYNAMIC_START
-            + "(?>[xX]\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB])?)(?![A-Za-z_⟧])");
+            + "(?>[xX]\\d+(?:[.,]\\d+)*[kKmMbB]?)(?![A-Za-z_⟧])");
+    // The percent sign carries meaning; it is not part of the opaque value.
     private static final Pattern NUMBER = Pattern.compile(DYNAMIC_START
-            + "(?>[-+]?\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB]|[xX](?![0-9A-Za-z_⟧]))?)(?![A-Za-z_⟧])");
+            + "(?>[-+]?\\d+(?:[.,]\\d+)*(?:[kKmMbB]|[xX](?![0-9A-Za-z_⟧]))?)(?![A-Za-z_⟧])");
     private static final Pattern SYMBOL_RUN = Pattern.compile("[\\p{So}\\p{Co}\\p{Cs}&&[^§⟦⟧]]+");
     private static final Pattern RANK_TAG = Pattern.compile("\\[[A-Z]{2,10}\\+{0,2}\\]");
     private static final Pattern CS_TOKEN = Pattern.compile("\\u27E6\\s*(/?)\\s*CS\\s*\\d+\\s*\\u27E7");
@@ -140,6 +144,7 @@ final class LegacyTemplateText {
             if (text == null || text.isEmpty()) return false;
             String skeleton = FORMAT_CODE.matcher(
                     RESERVED_MT_TOKEN.matcher(text).replaceAll("")).replaceAll("");
+            if (LOADING_DOTS.matcher(CS_TOKEN.matcher(skeleton).replaceAll("").trim()).matches()) return false;
             for (int i = 0; i < skeleton.length(); i++) {
                 if (Character.isLetter(skeleton.charAt(i))) return true;
             }
@@ -235,7 +240,7 @@ final class LegacyTemplateText {
         int termsAt = spans.size();
         addPattern(source, spans, SCOREBOARD_DATE_SHARD, 0);
         addPattern(source, spans, TIME, 0);
-        addPattern(source, spans, DURATION_EN, 0);
+        addEnglishDurations(source, spans);
         addPattern(source, spans, DURATION_CJK, 0);
         addPattern(source, spans, ORDINAL, 0);
         addPattern(source, spans, SERVER_INSTANCE, 1);
@@ -323,6 +328,21 @@ final class LegacyTemplateText {
             if (span.start < other.end && other.start < span.end) return true;
         }
         return false;
+    }
+
+    private static void addEnglishDurations(String source, List<Span> spans) {
+        Matcher duration = DURATION_EN.matcher(source);
+        while (duration.find()) {
+            String run = duration.group();
+            if (!SPELLED_DURATION_UNIT.matcher(run).find()) {
+                spans.add(new Span(duration.start(), duration.end()));
+                continue;
+            }
+            Matcher quantity = DURATION_QUANTITY.matcher(run);
+            while (quantity.find()) {
+                spans.add(new Span(duration.start() + quantity.start(), duration.start() + quantity.end()));
+            }
+        }
     }
 
     private static void addPattern(String source, List<Span> spans, Pattern pattern, int group) {

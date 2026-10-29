@@ -258,8 +258,7 @@ public final class Neo26AiScreen extends Screen {
                     : "screen.nyanlex.ai.keys.show"));
         }).bounds(x + KEY_FIELD_W + KEY_BUTTON_GAP, keysY, KEY_BUTTON_W, 20).build());
 
-        Button[] button = new Button[1];
-        button[0] = Button.builder(Component.translatable("screen.nyanlex.ai.test"), b -> {
+        this.testButton = Button.builder(Component.translatable("screen.nyanlex.ai.test"), b -> {
             saveApiFields();
             b.active = false;
             b.setMessage(Component.translatable("screen.nyanlex.ai.testing"));
@@ -267,16 +266,21 @@ public final class Neo26AiScreen extends Screen {
                     this.baseUrlBox.getValue().trim(),
                     this.modelBox.getValue().trim(),
                     parseKeys(this.keysBox.getValue()),
-                    result -> {
-                        if (button[0] != null) {
-                            button[0].active = true;
-                            button[0].setMessage(Component.literal(result));
-                        }
-                    });
+                    this::showConnectionTestResult);
         }).bounds(x, testY, isOpenAiProvider(cfg) ? (tight ? 102 : 157) : (tight ? FIELD_W / 2 - 3 : FIELD_W), 20).build();
-        this.testButton = button[0];
-        this.addRenderableWidget(button[0]);
+        this.addRenderableWidget(this.testButton);
         if (isOpenAiProvider(cfg)) addFastModeButton(x + (tight ? 108 : 163), testY, tight ? 102 : 157);
+    }
+
+    private void showConnectionTestResult(String result) {
+        if (this.testButton != null) {
+            this.testButton.active = true;
+            this.testButton.setMessage(Component.translatable("screen.nyanlex.ai.test"));
+        }
+        if (isCurrentScreen()) {
+            this.minecraft.setScreenAndShow(ConfirmDialogScreen.information(this,
+                    Component.translatable("screen.nyanlex.ai.test"), Component.literal(result)));
+        }
     }
 
 

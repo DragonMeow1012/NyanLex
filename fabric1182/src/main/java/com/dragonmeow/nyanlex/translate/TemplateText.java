@@ -76,7 +76,9 @@ public final class TemplateText {
     // Countdown / duration runs ("59s", "10min", "2h 30m", "1m30s", "1天2小時3分30秒"):
     // scoreboards tick these every second, so an untemplated duration mints a brand-new
     // request key each tick — the single worst request-storm (429) driver. The whole run
-    // collapses into ONE token; the trailing (?![A-Za-z]) keeps ordinary words safe
+    // collapses into ONE token. Spelled-out units remain prose so a translator can
+    // render "8 seconds" as "8秒"; only their quantities are opaque. The trailing
+    // (?![A-Za-z]) keeps ordinary words safe
     // ("5 may" never matches: the unit letter must not be followed by a letter).
     // Calendar ordinals such as "23rd" are handled separately as complete slots below.
     private static final String DURATION_UNIT_EN =
@@ -84,6 +86,8 @@ public final class TemplateText {
     private static final Pattern DURATION_EN = Pattern.compile(
             "(?i)" + DYNAMIC_START + "\\d+(?:[.,]\\d+)?\\s*" + DURATION_UNIT_EN + "(?![A-Za-z])"
                     + "(?:\\s*\\d+(?:[.,]\\d+)?\\s*" + DURATION_UNIT_EN + "(?![A-Za-z]))*");
+    private static final Pattern SPELLED_DURATION_UNIT = Pattern.compile("(?i)(?:days?|hours?|minutes?|seconds?)");
+    private static final Pattern DURATION_QUANTITY = Pattern.compile("\\d+(?:[.,]\\d+)?");
     private static final Pattern DURATION_CJK = Pattern.compile(
             DYNAMIC_START + "(?:\\d+(?:[.,]\\d+)?\\s*(?:天|日|小時|時|分鐘|分|秒))+");
     // Calendar/day counters such as "Late Summer 23rd" change without changing
@@ -96,15 +100,17 @@ public final class TemplateText {
     // dimensions/hex ("2x2", "0x1F"); the atomic group and trailing guard exclude
     // identifiers such as "x100foo" instead of matching only part of them.
     private static final Pattern PREFIX_QUANTITY = Pattern.compile(DYNAMIC_START
-            + "(?>[xX]\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB])?)(?![A-Za-z_⟧])");
+            + "(?>[xX]\\d+(?:[.,]\\d+)*[kKmMbB]?)(?![A-Za-z_⟧])");
     // Digits adjacent to ⟦…⟧ are inside a NameMasker/TemplateText token — never re-template those.
     // Atomic group (?>…): when the trailing guard rejects ("10kg", "31x?"), the whole match
     // fails instead of backtracking into a half number ("1", "3") that shreds the cache key.
     // The quantity suffix x ("Sold 31x String") rides inside the slot — its own lookahead
     // keeps hex/dimensions/words ("0x1F", "2x2", "4xp") untouched — so 31x/1x/31 variants
     // fold into one key.
+    // Percent signs stay visible: "250% damage" and "250 damage" have different
+    // meanings and must not share a template or hide that distinction from the model.
     private static final Pattern NUMBER = Pattern.compile(DYNAMIC_START
-            + "(?>[-+]?\\d+(?:[.,]\\d+)*(?:[%％]|[kKmMbB]|[xX](?![0-9A-Za-z_⟧]))?)(?![A-Za-z_⟧])");
+            + "(?>[-+]?\\d+(?:[.,]\\d+)*(?:[kKmMbB]|[xX](?![0-9A-Za-z_⟧]))?)(?![A-Za-z_⟧])");
     // Decorative icon runs (⚔, ✪✪✪✪✪, ☀, 🔹, modded PUA icon fonts): OTHER_SYMBOL +
     // private-use + surrogates, MINUS the ⟦⟧ token brackets and '§' (style, not icon).
     // One slot per RUN, so star-upgrade variants ("✪✪✪" vs "✪✪✪✪✪") share a key and each
@@ -389,7 +395,7 @@ public final class TemplateText {
         addPattern(source, spans, UUID, 0);
         addPattern(source, spans, SCOREBOARD_DATE_SHARD, 0);
         addPattern(source, spans, TIME, 0);
-        addPattern(source, spans, DURATION_EN, 0);
+        addEnglishDurations(source, spans);
         addPattern(source, spans, DURATION_CJK, 0);
         addPattern(source, spans, CALENDAR_DATE, 0);
         addPattern(source, spans, ORDINAL, 0);
@@ -437,6 +443,21 @@ public final class TemplateText {
         out.append(source, pos, source.length());
         return values.isEmpty() ? new Prepared(source, List.of())
                 : new Prepared(out.toString(), values, slotIndices);
+    }
+
+    private static void addEnglishDurations(String source, List<Span> spans) {
+        Matcher duration = DURATION_EN.matcher(source);
+        while (duration.find()) {
+            String run = duration.group();
+            if (!SPELLED_DURATION_UNIT.matcher(run).find()) {
+                spans.add(new Span(duration.start(), duration.end()));
+                continue;
+            }
+            Matcher quantity = DURATION_QUANTITY.matcher(run);
+            while (quantity.find()) {
+                spans.add(new Span(duration.start() + quantity.start(), duration.start() + quantity.end()));
+            }
+        }
     }
 
     private static void addPattern(String source, List<Span> spans, Pattern pattern, int group) {

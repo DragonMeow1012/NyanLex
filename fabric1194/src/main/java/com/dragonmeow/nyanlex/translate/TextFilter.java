@@ -76,6 +76,10 @@ public final class TextFilter {
             java.util.regex.Pattern.compile("\"[A-Za-z0-9_.:-]+\"\\s*:");
     private static final java.util.regex.Pattern WHITESPACE =
             java.util.regex.Pattern.compile("\\s+");
+    // Minecraft's three-ball loading animation uses letters as glyphs, not words.
+    // Match the entire row so dialogue containing an O or ordinary words still translates.
+    private static final java.util.regex.Pattern LOADING_DOTS =
+            java.util.regex.Pattern.compile("[oO](?:\\h+[oO]){2}");
     private static final java.util.regex.Pattern ANCHORED_TEXT_FIELD =
             java.util.regex.Pattern.compile(
                     "(?:" + MT_TOKEN_SOURCE
@@ -138,6 +142,7 @@ public final class TextFilter {
         // A line that is ONLY icons still comes out empty → untranslatable, as before.
         String t = stripSectionCodes(stripDecorativeSymbols(text)).strip();
         if (t.isEmpty()) return false;
+        if (LOADING_DOTS.matcher(CS_MARKER.matcher(t).replaceAll("").strip()).matches()) return false;
         if (!hasLettersOutsideVolatileTokens(t)) return false;
         if (looksStructuredData(t)) return false;
         // CS/MT are internal protocol labels, not user-visible English. URLs and live

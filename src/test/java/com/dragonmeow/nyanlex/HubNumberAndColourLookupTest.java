@@ -75,7 +75,7 @@ class HubNumberAndColourLookupTest {
     void serverStyleRowKeepsItsOwnNumbersAndPercent() {
         TranslationService service = service(Map.of(
                 "Starting bid: ⟦MT0⟧ coins", "起標價：⟦MT0⟧ 金幣",
-                "Brightness: ⟦MT0⟧", "亮度：⟦MT0⟧"));
+                "Brightness: ⟦MT0⟧%", "亮度：⟦MT0⟧%"));
         assertEquals("起標價：2,450金幣", service.translateItemLine("Starting bid: 2,450 coins").translated());
         assertEquals("亮度：80%", service.translateScreenText("Brightness: 80%").translated());
     }

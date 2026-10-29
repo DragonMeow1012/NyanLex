@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
  *
  * <p>The value may ALSO be an already-templated {@code ⟦MTn⟧} slot instead of a literal
  * digit — real Hypixel data confirms {@link com.dragonmeow.nyanlex.translate.TemplateText}
- * folds the sign/percent suffix INTO the same slot ({@code "Strength: +10"} templates to
+ * folds the sign INTO the same slot ({@code "Strength: +10"} templates to
  * {@code "Strength: ⟦MT0⟧"}, never {@code "Strength: +⟦MT0⟧"}), but a stored on-disk AI-cache
  * KEY (the export-tool path, see {@code HubExportTool#splitLegacyWholeRows}) has already been
  * through that templating pass, while the live render path ({@link TooltipSegmentPlanner})

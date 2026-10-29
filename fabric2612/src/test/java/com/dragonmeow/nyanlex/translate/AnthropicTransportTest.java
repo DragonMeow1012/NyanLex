@@ -787,6 +787,29 @@ class AnthropicTransportTest {
         assertEquals(7L, usage.snapshot().outputTokens());
     }
 
+    @Test void nativeThinkingUsageIsCountedOnceAsPartOfOutputNotAddedToTotal() throws Exception {
+        String reply = message("86001 你好 86002");
+        JsonObject json = JsonParser.parseString(reply).getAsJsonObject();
+        JsonObject nativeUsage = json.getAsJsonObject("usage");
+        nativeUsage.addProperty("input_tokens", 825);
+        nativeUsage.addProperty("output_tokens", 445);
+        JsonObject details = new JsonObject();
+        details.addProperty("thinking_tokens", 324);
+        nativeUsage.add("output_tokens_details", details);
+        Rig rig = new Rig().script(json.toString());
+        OpenAiTranslator translator = new OpenAiTranslator(rig.transport(),
+                () -> new AiSettings("https://api.anthropic.com", MODEL, List.of(KEY)));
+        SessionTokenUsage usage = new SessionTokenUsage();
+        translator.setTokenUsage(usage);
+
+        assertEquals("你好", translator.translate("Hello", "zh-TW").translatedText());
+        assertEquals(825, usage.snapshot().inputTokens());
+        assertEquals(445, usage.snapshot().outputTokens());
+        assertEquals(324, usage.snapshot().reasoningOutputTokens());
+        assertEquals(1270, usage.snapshot().totalTokens());
+        assertEquals(1, usage.snapshot().requests());
+    }
+
     @Test void configuredEffortChangesApplyToTheNextRequest() throws Exception {
         String[] effort = {"low"};
         Rig rig = new Rig().script(message("a"), message("b"));

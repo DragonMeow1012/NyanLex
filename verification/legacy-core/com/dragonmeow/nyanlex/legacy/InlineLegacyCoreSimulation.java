@@ -182,13 +182,22 @@ public final class InlineLegacyCoreSimulation {
         check("Reward ⟦MT0⟧!".equals(LegacyTemplateText.prepare("Reward x100!").text()),
                 "punctuated x quantity was not templated");
         for (String variant : Arrays.asList(
-                "x100", "X100", "x1,000", "x1.5", "x5%", "x2k", "X3M")) {
+                "x100", "X100", "x1,000", "x1.5", "x2k", "X3M")) {
             LegacyTemplateText.Prepared prepared = LegacyTemplateText.prepare("Reward " + variant);
             check("Reward ⟦MT0⟧".equals(prepared.text()),
                     "quantity variant did not share canonical form: " + variant);
             check(("獎勵 " + variant).equals(prepared.restore("獎勵 ⟦MT0⟧")),
                     "quantity variant did not restore exactly: " + variant);
         }
+        LegacyTemplateText.Prepared percent = LegacyTemplateText.prepare("Deal 250% damage");
+        check("Deal ⟦MT0⟧% damage".equals(percent.text()), "percentage meaning was hidden");
+        check("造成250%傷害".equals(percent.restore("造成⟦MT0⟧%傷害")), "percentage restore changed");
+        LegacyTemplateText.Prepared seconds = LegacyTemplateText.prepare("Gain 15 Defense for 8 seconds");
+        check("Gain ⟦MT0⟧ Defense for ⟦MT1⟧ seconds".equals(seconds.text()), "duration unit was hidden");
+        check(seconds.text().equals(LegacyTemplateText.prepare("Gain 20 Defense for 7 seconds").text()),
+                "duration ticks no longer reuse the key");
+        check(!LegacyTemplateText.prepare("o O o").hasTranslatableContent(), "loading frame is not prose");
+        check(LegacyTemplateText.prepare("Loading o O o").hasTranslatableContent(), "loading wording was skipped");
         for (String boundary : Arrays.asList(
                 "1920x1080", "x100foo", "x100xp", "_x100", "box100")) {
             check(!LegacyTemplateText.prepare(boundary).changed(),
@@ -282,12 +291,14 @@ public final class InlineLegacyCoreSimulation {
             check(backendCalls.get() == 1, "cache restore caused another backend request");
             for (String variant : Arrays.asList(
                     "Reward X100", "Reward x1,000", "Reward x1.5",
-                    "Reward x5%", "Reward x2k", "Reward X3M")) {
+                    "Reward x2k", "Reward X3M")) {
                 check(("獎勵 " + variant.substring("Reward ".length())).equals(
                                 translator.cached(variant, "zh-TW", false, config)),
                         variant + " did not restore from the same canonical cache entry");
                 check(backendCalls.get() == 1, variant + " caused a duplicate request");
             }
+            check(translator.cached("Reward x5%", "zh-TW", false, config) == null,
+                    "percent must not reuse the meaning of a flat quantity");
         } finally {
             translator.shutdownForTests();
         }

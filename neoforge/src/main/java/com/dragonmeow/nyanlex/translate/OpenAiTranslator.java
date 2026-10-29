@@ -1187,7 +1187,7 @@ public final class OpenAiTranslator implements Translator {
         if (outputDetails == null) outputDetails = objectMember(usage, "output_tokens_details");
         if (outputDetails != null) {
             reasoning = Math.max(reasoning,
-                    firstLong(outputDetails, "reasoning_tokens", "reasoning_output_tokens"));
+                    firstLong(outputDetails, "reasoning_tokens", "reasoning_output_tokens", "thinking_tokens"));
         }
         counter.recordRequest(input, cached, output, reasoning, total);
     }

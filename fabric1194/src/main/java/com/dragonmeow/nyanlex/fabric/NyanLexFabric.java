@@ -2683,6 +2683,9 @@ public final class NyanLexFabric implements ClientModInitializer {
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
                 msg = Component.translatable("message.nyanlex.success", "Hello, world → " + out).getString();
             } catch (Exception e) {
+                com.dragonmeow.nyanlex.translate.DebugErrorLog.report(
+                        com.dragonmeow.nyanlex.translate.DebugErrorLog.typeForReason(e.toString()),
+                        e.toString(), "operation", "test_api");
                 msg = Component.translatable("message.nyanlex.failed", e.getMessage()).getString();
             }
             final String result = msg;
@@ -2709,6 +2712,9 @@ public final class NyanLexFabric implements ClientModInitializer {
                 String translated = ai.translate("Hello, world", "zh-TW").translatedText();
                 result = "Hello, world -> " + translated;
             } catch (Exception error) {
+                com.dragonmeow.nyanlex.translate.DebugErrorLog.report(
+                        com.dragonmeow.nyanlex.translate.DebugErrorLog.typeForReason(error.toString()),
+                        error.toString(), "operation", "test_codex");
                 result = Component.translatable("message.nyanlex.failed",
                         error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage()).getString();
             }
@@ -2738,6 +2744,9 @@ public final class NyanLexFabric implements ClientModInitializer {
                         config.antigravityModel == null ? "" : config.antigravityModel);
                 result = "Hello, world -> " + translated;
             } catch (Exception error) {
+                com.dragonmeow.nyanlex.translate.DebugErrorLog.report(
+                        com.dragonmeow.nyanlex.translate.DebugErrorLog.typeForReason(error.toString()),
+                        error.toString(), "operation", "test_google_login");
                 result = Component.translatable("message.nyanlex.failed",
                         error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage()).getString();
             }

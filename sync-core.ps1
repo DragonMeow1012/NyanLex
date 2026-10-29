@@ -213,6 +213,19 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
         $copied++
     }
 }
+# Minecraft-independent regressions also run against the 26.1.2 core used for
+# live provider and UI checks. Loader-specific tests stay in their own tree.
+foreach ($relative in @('TemplateTextTest.java', 'TextFilterTest.java', 'translate\AnthropicTransportTest.java')) {
+    $source = Join-Path $testSrcDir $relative
+    $destination = Join-Path $root "fabric2612\src\test\java\com\dragonmeow\nyanlex\$relative"
+    if (-not (Test-Path $destination) -or
+            (Get-FileHash $source -Algorithm MD5).Hash -ne (Get-FileHash $destination -Algorithm MD5).Hash) {
+        Put-File $source $destination
+        Write-Output "sync: fabric2612\test\$relative"
+        $copied++
+    }
+}
+
 # Java 8 compatible boundaries shared unchanged by every loader.
 # (DebugErrorLog is intentionally not in this list; see the Java 8 block below.)
 foreach ($legacyTarget in @('fabric1144', 'fabric1152', 'fabric1165', 'forge1122', 'forge1132')) {

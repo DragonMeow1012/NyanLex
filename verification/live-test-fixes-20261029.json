@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-29",
+  "checkpoint": "842886c8b9bd591c7663ddd215f859eaf1f77ef6",
+  "scope": "Fixes from the Claude live test; no release publication or modification of the user's main Minecraft instance.",
+  "fixes": [
+    "Keep spelled-out duration units and percent signs visible to translation; mask changing numbers and preserve compact countdown caching.",
+    "Read Claude thinking_tokens as a subtotal of output tokens without adding it to the total twice.",
+    "Skip the exact three-ball loading animation, including styled variants, without excluding surrounding prose.",
+    "Record connection-test errors through the existing debug log.",
+    "Display API connection-test results in the existing scrollable dialog on modern clients."
+  ],
+  "automated": {
+    "root": {"tests": 1914, "failures": 0, "errors": 0, "skipped": 2},
+    "fabric2612": {"tests": 303, "failures": 0, "errors": 0, "skipped": 0, "build": "passed"},
+    "compileJavaPassed": ["fabric1171", "fabric1182", "fabric1194", "fabric120", "fabric12111", "fabric26", "neoforge", "neoforge120", "neoforge26"],
+    "legacy": {
+      "fabric1144": {"echoTests": 41, "coreSimulation": "passed, including 1000 waiters"},
+      "forge1122": {"echoTests": 41, "coreSimulation": "passed, including 1000 waiters"}
+    },
+    "modernCoreSyncDrift": 0,
+    "legacyForgeCoreSyncDrift": 0
+  },
+  "live": {
+    "minecraft": "26.1.2",
+    "loader": "Fabric",
+    "model": "claude-haiku-5-5",
+    "effort": "medium",
+    "speed": "standard",
+    "successfulRequests": 1,
+    "providerElapsedMs": 2897,
+    "triggerToObservedUsageMs": 8112,
+    "timingNote": "End-to-end time includes the configured chat batch delay; measured from the recorded submit action to the session usage update, not the exact render frame.",
+    "usage": {"input": 833, "output": 552, "thinkingWithinOutput": 436, "total": 1385},
+    "observed": [
+      "No translation requests or tokens during world loading before the test text.",
+      "Three test paragraphs retained their color and displayed the translated seconds and percentage damage correctly.",
+      "Changing only quantities and color reused the cached translation with current values and no additional request.",
+      "One deliberate nonexistent-model test returned HTTP 404 in a readable dialog and an http_error debug entry with operation=test_api."
+    ],
+    "finalState": "Claude model restored; online translation disabled in the isolated test instance."
+  },
+  "artifact": {
+    "path": "fabric2612/build/libs/NyanLex-Translator-1.0.0-Fabric-26.1.2.jar",
+    "sha256": "3ce434b76f26b6c7e0a89eb9ae8f624b5eda69b2b6e8ced8631127f6d308b6f4"
+  },
+  "limitations": [
+    "Only Fabric 26.1.2 was launched for live verification of these fixes; no additional live tests of other providers were performed.",
+    "The other modern source trees were compiled; a complete release matrix was not packaged.",
+    "Legacy core changes were synchronized and simulated; legacy game UIs were not modernized or launched.",
+    "Existing cache entries for percentages and spelled-out durations may require one fresh translation because their semantic keys have changed."
+  ]
+}
