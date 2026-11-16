@@ -506,8 +506,10 @@ def publish(args) -> None:
     final = client.request("GET", f"/project/{PROJECT_ID}/version")
     final_by_number = {row["version_number"]: row for row in final}
     expected_numbers = {version_number(target) for target, _ in files}
-    if set(final_by_number) != expected_numbers:
-        raise RuntimeError("Final Modrinth version set does not match the 62-target matrix")
+    # Versions of earlier releases stay published; this release must be complete.
+    missing = expected_numbers - set(final_by_number)
+    if missing:
+        raise RuntimeError("Final Modrinth version set is missing: " + ", ".join(sorted(missing)))
     for target, path in files:
         remote = final_by_number[version_number(target)]
         if len(remote["files"]) != 1 or not published_file_matches(remote_file(remote), path):
