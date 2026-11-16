@@ -130,7 +130,7 @@ Forge 1.13.2: fixed a failure to start."""
 - **Translation manager**: search, edit, restore or delete saved translations on the Advanced settings page. Hand-edited translations are never overwritten by automatic translation and survive clearing the cache.
 - **Keep titles and dialogue in chat**: a new switch that keeps fleeting title and dialogue translations in your chat, visible only to you.
 - Fixed translated player chat showing the sender's name twice on Fabric 1.19.3 and newer.
-- Switching to the original with `G` now shows the English text, even in interfaces where another mod ships its own Chinese. No new translation requests are sent while it is on.
+- While the original is shown with `G`, no new translation requests are sent.
 - Custom fonts that lack Chinese characters now fall back to the game's built-in glyphs instead of showing boxes.
 - Text that appears letter by letter is translated once, after it finishes, which greatly reduces requests and token use.
 - Icons in item names and descriptions no longer turn into boxes after translation.

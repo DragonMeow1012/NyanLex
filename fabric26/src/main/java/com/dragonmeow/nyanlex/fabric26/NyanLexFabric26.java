@@ -1579,9 +1579,8 @@ public final class NyanLexFabric26 implements ClientModInitializer {
     private void flipShowOriginal() {
         if (service == null) return;
         boolean originalsNow = service.toggleShowOriginal();
-        // The game's own language files follow the key too: with it on, translation keys resolve
-        // to their English text. Text a screen resolved when it was built is only refreshed by
-        // rebuilding that screen (done on the next tick, see rebuildScreenAfterLanguageFlip).
+        // The key leaves the game's own language alone: OriginalLanguage.apply always answers
+        // false, so no screen is rebuilt for it.
         if (OriginalLanguage.apply(originalsNow)) languageRebuildRequested = true;
         Fabric26TextStyle.clearRenderMemo();
         if (originalsNow) flushPendingChatOriginals();

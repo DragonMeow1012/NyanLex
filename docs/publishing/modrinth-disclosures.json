@@ -2,11 +2,11 @@
   "set": [
     {
       "type": "ai_functionality",
-      "note": "NyanLex can translate with an AI service you choose: Claude (your own Anthropic API key), an OpenAI-compatible cloud or local endpoint, or the separately installed Codex or Antigravity CLI, which use your own signed-in account at your own risk."
+      "note": "Optional AI translation through a service you choose: Claude, an OpenAI-compatible endpoint, or the Codex or Antigravity CLI."
     },
     {
       "type": "system_interactions",
-      "note": "In CLI modes NyanLex runs the separately installed Codex or Antigravity CLI with a dedicated profile and tool restrictions (not an OS sandbox); settings, API keys and caches stay in the Minecraft instance, and import/export touches only the files you pick.",
+      "note": "CLI modes run the Codex or Antigravity CLI you installed; import and export touch only the files you pick.",
       "interactions": []
     },
     {
@@ -22,13 +22,10 @@
       "type": "telemetry",
       "consent": "opt_in",
       "data_collected": [
-        "Online translation is off by default; after you turn it on, text from the surfaces you enable (chat and private messages, items, tooltips, screens, scoreboards, name tags, boss bars, titles, books and quests) is sent to the translation service you selected.",
-        "The text is not anonymized and may contain player names, private messages or other personal information.",
-        "Recipients are the services you configure: Google's unofficial machine-translation endpoint, Anthropic (Claude), an OpenAI-compatible cloud or local service, ChatGPT/Codex through the Codex CLI, or Google/Antigravity through the Antigravity CLI.",
-        "If you enable the optional Google fallback, text may also go to Google when an AI request fails.",
-        "Chat drafts are sent only when you use Translate & fill or submit through the composer, and NyanLex never sends the final message for you.",
-        "Translation packs come from a public GitHub index and download only after you confirm; nothing local is uploaded.",
-        "Nothing is sent to the mod author: there is no author-run server, analytics or tracking, and API keys are used only on your device."
+        "Off by default; once enabled, the game text you choose to translate is sent to the service you selected.",
+        "Services: Google Translate (unofficial endpoint, also the optional fallback), Anthropic (Claude), an OpenAI-compatible service, or the Codex or Antigravity CLI.",
+        "The text is not anonymized and may include player names or private messages.",
+        "Nothing is sent to the mod author."
       ]
     }
   ],

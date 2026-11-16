@@ -8,7 +8,7 @@
 - **Translation manager**: search, edit, restore or delete saved translations on the Advanced settings page. Hand-edited translations are never overwritten by automatic translation and survive clearing the cache.
 - **Keep titles and dialogue in chat**: a new switch that keeps fleeting title and dialogue translations in your chat, visible only to you.
 - Fixed translated player chat showing the sender's name twice on Fabric 1.19.3 and newer.
-- Switching to the original with `G` now shows the English text, even in interfaces where another mod ships its own Chinese. No new translation requests are sent while it is on.
+- While the original is shown with `G`, no new translation requests are sent.
 - Custom fonts that lack Chinese characters now fall back to the game's built-in glyphs instead of showing boxes.
 - Text that appears letter by letter is translated once, after it finishes, which greatly reduces requests and token use.
 - Icons in item names and descriptions no longer turn into boxes after translation.
@@ -43,7 +43,7 @@ Hands-on play testing was done on Minecraft 26.1.2 / Fabric, and automated in-wo
 - **譯文管理**：在設定的「進階」頁搜尋、修改、還原或刪除已存的譯文；手動修改的譯文不會被自動翻譯覆蓋，清除快取時也會保留。
 - 新開關 **標題與對話留在聊天欄**：把一閃而過的標題與對話譯文留在聊天欄，只有自己看得到。
 - 修正 Fabric 1.19.3 以上，玩家聊天的譯文把發言者名稱顯示兩次。
-- 按 `G` 切到原文時，會顯示英文原文，連其他模組自帶中文的介面也會切回英文；顯示原文期間不送出新的翻譯請求。
+- 按 `G` 顯示原文期間，不送出新的翻譯請求。
 - 自訂字型缺少中文字時，改用遊戲內建字形顯示，不再出現方框。
 - 逐字出現的文字只在打完後翻譯一次，大幅減少請求與 token 用量。
 - 物品名稱與說明裡的圖示，翻譯後不再變成方框。

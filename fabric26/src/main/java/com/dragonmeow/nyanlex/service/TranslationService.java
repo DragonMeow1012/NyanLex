@@ -63,9 +63,8 @@ public final class TranslationService {
     /** Loader-side visible-surface invalidation after an actual target-language change. */
     private volatile Runnable targetLangChangeListener = () -> { };
     /**
-     * The show-original key. While it is on, the game's own language files resolve to English
-     * (see OriginalLanguageSwitch), which makes text the target-language filter normally skips
-     * look untranslated. So the rule is: no NEW translation work is opened while it is on (every
+     * The show-original key. While it is on the player is reading the text as the game showed it
+     * before this mod, so the rule is: no NEW translation work is opened while it is on (every
      * request, warm-up and retranslate entry checks this flag, as does the all-item warm-up
      * driver through its backend); requests queued or in flight before it was switched on are
      * left alone and finish normally.
