@@ -1,0 +1,9 @@
+{
+  "com/dragonmeow/nyanlex/neoforge/mixin/GuiScoreboardMixin.java": [
+    {
+      "from": "\n            method = \"/^lambda\\\\$displayScoreboardSidebar\\\\$\\\\d+$/\",\n",
+      "to": "\n            method = \"lambda$displayScoreboardSidebar$14\",\n",
+      "count": 1
+    }
+  ]
+}

@@ -125,6 +125,12 @@ final class NeoItemWarmupSource implements ItemWarmupSource {
         }
 
         @Override
+        public boolean showingOriginal() {
+            TranslationService s = NyanLexNeoForge.service();
+            return s != null && s.isShowOriginalOnly();
+        }
+
+        @Override
         public boolean usesCodex() {
             TranslationService s = NyanLexNeoForge.service();
             return s != null && s.isCodexEngine();

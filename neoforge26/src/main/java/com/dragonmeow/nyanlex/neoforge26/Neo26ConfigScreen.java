@@ -238,6 +238,7 @@ public final class Neo26ConfigScreen extends Screen {
             case OPEN_LANGUAGE -> open(new Neo26LanguageScreen(this));
             case OPEN_KEYBINDS -> open(new Neo26KeybindScreen(this));
             case OPEN_MANUAL -> open(new Neo26ManualScreen(this));
+            case OPEN_TRANSLATION_MANAGER -> openManager();
             case OPEN_GITHUB -> openGithub();
             case OPEN_PRIVACY -> open(new Neo26ManualScreen(this, SettingsModel.MANUAL_PRIVACY_SECTION - 1));
             case OPEN_AI -> open(new Neo26AiScreen(this));
@@ -249,6 +250,13 @@ public final class Neo26ConfigScreen extends Screen {
             case IMPORT_TRANSLATIONS -> NyanLexNeoForge26.translationFile(true);
             case CLEAR_CACHE -> confirmClearCache();
         }
+    }
+
+    /** 譯文管理; it returns here, to the same category and scroll position. Nothing opens before the service exists. */
+    private void openManager() {
+        var service = NyanLexNeoForge26.service();
+        if (service == null || service.manager() == null) return;
+        open(new Neo26ManagerScreen(this, service.manager()));
     }
 
     /** The game's own "open this link?" question first, then the system browser. */

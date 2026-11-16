@@ -38,7 +38,7 @@ public abstract class BossBarMixin {
             TranslationService service = NyanLexFabric26.service();
             if (service != null && text != null) {
                 Component translated = Fabric26TextStyle.renderTranslated("bossBar", text, service::translateBossBar);
-                if (translated != null) {
+                if (translated != null && !NyanLexFabric26.projectionSuppressed()) {
                     int center = x + font.width(text) / 2; // original name's centre
                     List<Component> lines = Fabric26TextStyle.splitLines(translated);
                     if (lines.size() <= 1) {

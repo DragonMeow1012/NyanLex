@@ -9,12 +9,38 @@ import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.state.CameraRenderState;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /** 1.21.11 name tags use render-state submission rather than Font.drawInBatch. */
 @Mixin(EntityRenderer.class)
 public abstract class EntityNameTagMixin {
+
+    /** Captured at the enclosing render method boundary. Keeping it on the renderer
+     *  instance lets the ModifyArg handler retain the one-argument signature required
+     *  by Mixin 0.8.7 while still identifying AvatarRenderState player name tags. */
+    @Unique
+    private EntityRenderState nyanlex$currentState;
+
+    @Inject(
+            method = "submitNameTag(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;"
+                    + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;"
+                    + "Lnet/minecraft/client/renderer/state/CameraRenderState;)V",
+            at = @At("HEAD"), require = 0)
+    private void nyanlex$captureState(EntityRenderState state, PoseStack poseStack,
+                                      SubmitNodeCollector collector, CameraRenderState camera,
+                                      CallbackInfo ci) {
+        if (!HookGuard.enter("EntityNameTag.captureState")) return;
+        try {
+            nyanlex$currentState = state;
+        } catch (Throwable guardError) {
+            HookGuard.fail("EntityNameTag.captureState", guardError);
+        }
+    }
+
     @ModifyArg(
             method = "submitNameTag(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;"
                     + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;"
@@ -28,7 +54,7 @@ public abstract class EntityNameTagMixin {
     private Component nyanlex$name(Component component) {
         if (!HookGuard.enter("EntityNameTag.name")) return component;
         try {
-            return NyanLexFabric.nameTag(component);
+            return NyanLexFabric.nameTag(nyanlex$currentState, component);
         } catch (Throwable guardError) {
             HookGuard.fail("EntityNameTag.name", guardError);
             return component;

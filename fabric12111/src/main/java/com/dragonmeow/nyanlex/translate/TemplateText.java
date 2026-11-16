@@ -123,7 +123,7 @@ public final class TemplateText {
     // or slot counter drawn with these glyphs was judged ordinary text and sent for
     // translation, or split the icon away from its neighbour inconsistently.
     private static final Pattern SYMBOL_RUN = Pattern.compile(
-            "[\\p{So}\\p{Co}\\p{Cs}\\u2460-\\u24FF\\u2776-\\u2793&&[^§⟦⟧]]+");
+            "[\\p{So}\\p{Co}\\p{Cs}\\x{C0000}-\\x{DFFFF}\\u2460-\\u24FF\\u2776-\\u2793&&[^§⟦⟧]]+");
     // Bracketed ALL-CAPS rank/title tags ([VIP] [MVP+] [MVP++] [ADMIN] [MOD] [YOUTUBE]):
     // pure badges, never prose — a translator renders them as nonsense ("[最有價值球員+]"),
     // so they ride as slots and come back verbatim. Deliberately strict: lowercase/mixed

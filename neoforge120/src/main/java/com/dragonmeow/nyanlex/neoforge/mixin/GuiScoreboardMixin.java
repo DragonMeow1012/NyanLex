@@ -3,6 +3,8 @@ package com.dragonmeow.nyanlex.neoforge.mixin;
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.neoforge.NeoTextStyle;
 import com.dragonmeow.nyanlex.neoforge.NyanLexNeoForge;
+import com.dragonmeow.nyanlex.neoforge.OverlayDialogueView;
+import com.dragonmeow.nyanlex.neoforge.TransientChatLogger;
 import com.dragonmeow.nyanlex.service.TranslationDecision;
 import com.dragonmeow.nyanlex.service.TranslationService;
 
@@ -44,6 +46,9 @@ public abstract class GuiScoreboardMixin {
     @Shadow private Component overlayMessageString;
     @Shadow private Component title;
     @Shadow private Component subtitle;
+
+    /** Set by the inline HUD redirect for the one draw call that follows: subtitle or title. */
+    private static boolean nyanlex$subtitleDraw;
 
     private final ArrayDeque<Component> nyanlex$scoreboardSources = new ArrayDeque<>();
     private final ArrayDeque<Component> nyanlex$scoreboardRendered = new ArrayDeque<>();
@@ -142,7 +147,8 @@ public abstract class GuiScoreboardMixin {
         if (!HookGuard.enter("GuiScoreboard.scoreboard")) return g.drawString(font, text, x, y, color, shadow);
         try {
             Component translated = text == null ? null : nyanlex$takeScoreboardRow(text);
-            Component rendered = translated == null ? text : translated;
+            Component rendered = translated == null || NyanLexNeoForge.projectionSuppressed()
+                    ? text : translated;
             return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(
                     () -> g.drawString(font, rendered, x, y, color, shadow));
         } catch (Throwable guardError) {
@@ -152,7 +158,7 @@ public abstract class GuiScoreboardMixin {
     }
 
     @Redirect(
-            method = "renderSelectedItemName",
+            method = "renderSelectedItemName(Lnet/minecraft/client/gui/GuiGraphics;I)V",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/gui/GuiGraphics;drawString"
                             + "(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I"),
@@ -183,10 +189,22 @@ public abstract class GuiScoreboardMixin {
                 return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(
                         () -> g.drawString(font, text, x, y, color));
             }
+            if (text == overlayMessageString) {
+                // An overlay dialogue box is translated block by block and drawn in place; it never
+                // goes down the one-line path below (its HUD numbers and typed text change every frame).
+                // The rebuilt component has the original's total advance, so the backdrop and the
+                // centring that vanilla already computed from the original stay right.
+                Component dialogue = OverlayDialogueView.view(text, font);
+                if (dialogue != null) {
+                    return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(
+                            () -> g.drawString(font, dialogue, x, y, color));
+                }
+            }
             if (service != null && text == overlayMessageString) {
                 return nyanlex$drawTranslated("actionBar", service::translateActionBar, g, font, text, x, y, color);
             }
             if (service != null && (text == title || text == subtitle)) {
+                nyanlex$subtitleDraw = text == this.subtitle;
                 return nyanlex$drawTranslated("title", service::translateTitle, g, font, text, x, y, color);
             }
             return com.dragonmeow.nyanlex.translate.InternalRenderGuard.call(
@@ -201,7 +219,10 @@ public abstract class GuiScoreboardMixin {
                                                     GuiGraphics g, Font font, Component text,
                                                     int x, int y, int color) {
         Component shown = fn == null || text == null ? null : NeoTextStyle.renderTranslated(id, text, fn);
-        if (shown == null) shown = text;
+        if ("title".equals(id) && fn != null && text != null && TransientChatLogger.on()) {
+            TransientChatLogger.title(nyanlex$subtitleDraw, text, shown != null);
+        }
+        if (shown == null || NyanLexNeoForge.projectionSuppressed()) shown = text;
         int center = x + font.width(text) / 2;
         List<Component> lines = NeoTextStyle.splitLines(shown);
         int ret = 0;

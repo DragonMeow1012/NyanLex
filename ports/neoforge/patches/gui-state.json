@@ -101,5 +101,12 @@
       "to": "\n            method = \"drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/util/FormattedCharSequence;IIIZ)V\",\n",
       "count": 1
     }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/BorrowedGlyphs.java": [
+    {
+      "from": "\n                glyph.nyanlex$renderTypes(),\n",
+      "to": "\n                glyph.nyanlex$renderTypes(), base.textureView(),\n",
+      "count": 1
+    }
   ]
 }

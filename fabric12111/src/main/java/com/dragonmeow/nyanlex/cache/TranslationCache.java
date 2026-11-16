@@ -134,6 +134,10 @@ public final class TranslationCache {
     /** Durable failure ledger (third file): permanent echo marks and temporary retry
      *  marks carrying their attempt count and backoff expiry across restarts. */
     private volatile PersistentStore failureStore;
+    /** Translations the player wrote by hand, shared by both engine caches and consulted before
+     *  every automatic source. Null until the loader attaches one. A cache never writes it;
+     *  {@link #reset} (clear) and every invalidation leave it alone. */
+    private volatile ManualTranslations manual;
     private final TranslationTemplate templates = new TranslationTemplate();
     private final Map<String, String> memory;
     /** Serializes terminal decisions with durable writes; never held across a backend call. */
@@ -222,6 +226,10 @@ public final class TranslationCache {
      *  a response started before the key was deleted can never refill the old value. */
     private final AtomicLong revisionSequence = new AtomicLong();
     private final Map<String, Long> keyRevisions = new ConcurrentHashMap<>();
+    /** Keys whose unsent request was withdrawn by {@link #cancelUnsent}; a batch that is still
+     *  waiting for its send slot gives up on them. Cleared when the key is requested again
+     *  and when the batch that held it ends. */
+    private final Set<String> cancelledKeys = ConcurrentHashMap.newKeySet();
     private volatile TranslationDebugLog debugLog;
     private volatile String debugEngine = "translator";
     /** Plain-text diagnostic sink (wired to the loader's own logger by the glue, e.g.
@@ -396,6 +404,15 @@ public final class TranslationCache {
         store.removeBatch(rows.keySet());
     }
 
+    /**
+     * Attach the player's manual translations. They outrank this cache's own rows, the sibling
+     * cache and the repository, and no request is ever sent for a sentence they cover. Both engine
+     * caches get the same instance (see {@code TranslationService#setManualTranslations}).
+     */
+    public void setManualTranslations(ManualTranslations manual) {
+        this.manual = manual;
+    }
+
     public void setDebugLog(String engine, TranslationDebugLog log) {
         this.debugEngine = engine == null || engine.isBlank() ? "translator" : engine;
         this.debugLog = log;
@@ -439,6 +456,9 @@ public final class TranslationCache {
     public boolean hasFailureState(String source) {
         if (source == null) return false;
         String key = provisionalSemanticKey(source);
+        // A manual translation settles the sentence: a failure left over from before the edit
+        // must not start the lower-priority engine for it.
+        if (manualHasKey(key)) return false;
         if (retrySnapshots.containsKey(key) || failedUntil.containsKey(key)
                 || contentFailures.containsKey(key) || contentRetryAttempts.containsKey(key)
                 || provisional(key)) {
@@ -455,6 +475,7 @@ public final class TranslationCache {
      *  lower-tier wording that is already cached may stand in (unless fallback is off). */
     public boolean mayUseFallback(String source) {
         if (!isFallbackEnabled()) return false;
+        if (hasManualTranslation(source)) return false; // settled by hand: no stand-in, no request
         if (requestsAllowed() && !hasFailureState(source)) return false;
         TranslationTemplate.Snapshot plain = templates.prepare(stripStyle(source));
         String ownSemantic = lookupSnapshot(plain, this);
@@ -484,6 +505,10 @@ public final class TranslationCache {
         // source here makes both lookup and callback paths settle immediately without
         // allowing the literal x to create a backend request.
         if (!snapshot.hasTranslatableContent() && !hasCsMarkers(snapshot.key())) return source;
+        // The player's own wording outranks every automatic row, the sibling cache, a learned
+        // keep-original verdict and a failure mark. One volatile read while none exists.
+        String manualWording = manualHit(snapshot);
+        if (manualWording != null) return manualWording;
         TranslationCache sibling = isFallbackEnabled() ? fallback : null;
 
         // Style is not meaning, but CS markers carry the alignment needed to apply
@@ -615,6 +640,10 @@ public final class TranslationCache {
     }
 
     private String getCachedFinal(String source, boolean exactStyle) {
+        // A manual row is final by definition: answered before the provisional / keep-original
+        // checks below, which would otherwise read a stale automatic stand-in as "not final".
+        String manualWording = manualHit(source);
+        if (manualWording != null) return manualWording;
         // Final means this engine's own value, never a result merely read through from
         // its lower-priority sibling.
         String hit = getCached(source, !exactStyle, false);
@@ -680,6 +709,10 @@ public final class TranslationCache {
 
     /** Lookup only the immutable forms captured by this request snapshot. */
     private String lookupSnapshot(TranslationTemplate.Snapshot snapshot, TranslationCache owner) {
+        // Every "is it already translated?" check of the request side reads through here, so a
+        // manual row also counts as the answer there: nothing is requested, rebuilt or retried.
+        String manualWording = manualHit(snapshot);
+        if (manualWording != null) return manualWording;
         // Once a stable template exists, it is the canonical identity. Legacy builds
         // wrote one exact raw row per number/server/gap variant; consulting those first
         // would prevent the shared template from ever being learned.
@@ -997,7 +1030,17 @@ public final class TranslationCache {
     }
 
     public void requestCoalesced(String source, Consumer<String> callback, boolean always) {
-        requestCoalesced(source, callback, always, false);
+        requestCoalesced(source, callback, always, false, false);
+    }
+
+    /**
+     * Like {@link #requestCoalesced(String, Consumer, boolean)} for text somebody is looking at
+     * right now: the entry is high priority, so the collector does not wait out the batch window
+     * for it (the same bypass a hovered tooltip uses) and it leads the next request. Callers
+     * that only want to ask when it goes out at once check {@link #maySendNow()} first.
+     */
+    public void requestCoalescedHigh(String source, Consumer<String> callback, boolean always) {
+        requestCoalesced(source, callback, always, false, true);
     }
 
     /**
@@ -1008,11 +1051,11 @@ public final class TranslationCache {
      */
     public void requestCoalescedExactStyle(String source, Consumer<String> callback,
                                            boolean always) {
-        requestCoalesced(source, callback, always, true);
+        requestCoalesced(source, callback, always, true, false);
     }
 
     private void requestCoalesced(String source, Consumer<String> callback, boolean always,
-                                  boolean exactStyle) {
+                                  boolean exactStyle, boolean highPriority) {
         String cached = exactStyle ? getCachedExactStyle(source) : getCached(source);
         if (cached != null) {
             deliver(new Callback(null, callback, always, exactStyle), cached);
@@ -1064,7 +1107,7 @@ public final class TranslationCache {
                 return;
             }
         }
-        enqueue(snapshot, cb);
+        enqueue(snapshot, cb, null, highPriority);
     }
 
     /**
@@ -1246,6 +1289,7 @@ public final class TranslationCache {
         }
         boolean rejected = false;
         boolean callbackRejected = false;
+        cancelledKeys.remove(snapshot.key());
         synchronized (queueLock) {
             Queued item = queue.get(snapshot.key());
             if (item == null) {
@@ -1472,8 +1516,7 @@ public final class TranslationCache {
      */
     private boolean windowedBatchDue(int windowMs) {
         long now = clock.getAsLong();
-        if (windowedBatchTicket.get() != 0L
-                && now - windowedBatchStartedAtMs < WINDOWED_BATCH_STALE_MS) {
+        if (windowedBatchInFlight(now)) {
             // The previous batch has not finished (it may still be waiting for its pacer
             // slot). Composing now would only park a second request behind it while later
             // text keeps arriving outside both, so keep collecting.
@@ -1504,6 +1547,26 @@ public final class TranslationCache {
             if (item.highPriority) return true;
         }
         return false;
+    }
+
+    /** A windowed batch was composed and has not finished yet (it may still wait for its pacer slot). */
+    private boolean windowedBatchInFlight(long now) {
+        return windowedBatchTicket.get() != 0L
+                && now - windowedBatchStartedAtMs < WINDOWED_BATCH_STALE_MS;
+    }
+
+    /**
+     * Read-only: whether a request enqueued now would be composed and sent by the very next
+     * {@link #flushBatch()} — new requests are allowed, no rate-limit gate is closed, the
+     * engine's own pacer is open, and (with windowed batching) no earlier batch is still
+     * running. Callers that want "this text, right now, or not at all" ask this first and
+     * enqueue nothing while it is false, so no slot is ever reserved for text that may be
+     * gone by the time the engine is free.
+     */
+    public boolean maySendNow() {
+        if (!requestsAllowed() || engineSendBlocked() || !engineMaySendNow()) return false;
+        return !(windowedBatching && configuredBatchWindowMs() >= 0
+                && windowedBatchInFlight(clock.getAsLong()));
     }
 
     private boolean engineSendBlocked() {
@@ -1663,6 +1726,9 @@ public final class TranslationCache {
      * it is sent exactly as without the copy, and its answer replaces the copy.
      */
     private boolean cachedForRequest(TranslationTemplate.Snapshot snapshot) {
+        // Also covers a manual row saved after this line was queued or while its batch waited
+        // for a send slot: the entry is dropped right before the request would have gone out.
+        if (manualHit(snapshot) != null) return true;
         if (keepsOriginalFamily(snapshot)) return true;
         if (lookupSnapshot(snapshot, this) != null && !derivedRow(snapshot)) return true;
         if (!hasCsMarkers(snapshot.key())) return false;
@@ -2181,6 +2247,7 @@ public final class TranslationCache {
                 }
                 continue;
             }
+            if (cancelledKeys.remove(snapshot.key())) continue; // withdrawn before it was sent
             if (!snapshot.hasTranslatableContent() || backingOff(snapshot.key())) continue;
             // Both gates run here too (not just at eligible()/requestImmediate's own
             // entry points) because this is the SINGLE chokepoint every path -- the
@@ -2198,7 +2265,9 @@ public final class TranslationCache {
         boolean allSucceeded = true;
         try {
             List<TranslationResult> results;
-            BooleanSupplier previousGate = RequestGate.bind(requestGateFor(todo));
+            BooleanSupplier batchGate = requestGateFor(todo);
+            BooleanSupplier previousGate = RequestGate.bind(() ->
+                    batchGate.getAsBoolean() && !allCancelled(keys));
             try {
                 if (itemContexts != null) {
                     List<List<String>> contexts = new ArrayList<>(todo.size());
@@ -2295,7 +2364,18 @@ public final class TranslationCache {
             }
             debugCompleted(debugId, TranslationDebugLog.failureFor(e));
             return false;
+        } finally {
+            cancelledKeys.removeAll(keys);
         }
+    }
+
+    /** True when every key of a batch was withdrawn by {@link #cancelUnsent}. */
+    private boolean allCancelled(List<String> keys) {
+        if (cancelledKeys.isEmpty()) return false;
+        for (String key : keys) {
+            if (!cancelledKeys.contains(key)) return false;
+        }
+        return true;
     }
 
     private List<String> context(List<String> lines) {
@@ -2493,13 +2573,14 @@ public final class TranslationCache {
         if (keepsOriginalFamily(snapshot) || first.fromFallback() || !usable(key, first.translatedText())
                 || !ParagraphModel.canReflowBreakLoss(key, first.translatedText())
                 || !current(key, expectedGeneration, expectedRevision)
+                || manualHit(snapshot) != null // a late answer for a manual sentence is not reviewed
                 || !paragraphReviews.add(key)) return;
         String language = targetLang;
         Runnable task = () -> {
             long debugId = 0L;
             try {
                 if (!current(key, expectedGeneration, expectedRevision) || !requestsAllowed()
-                        || keepsOriginalFamily(snapshot)) return;
+                        || keepsOriginalFamily(snapshot) || manualHit(snapshot) != null) return;
                 debugId = debugSubmitted(List.of(key));
                 TranslationResult reviewed;
                 BooleanSupplier previousGate = RequestGate.bind(requestGateFor(List.of(snapshot)));
@@ -2707,6 +2788,7 @@ public final class TranslationCache {
         if (PEEKING.get() != null) return false; // peekFinal: read-only, never wakes the engine
         String semanticKey = provisionalSemanticKey(candidate);
         if (keepsOriginal(semanticKey)) return false;
+        if (manualHasKey(semanticKey)) return false; // the player's wording is final: nothing to upgrade
         // Migrate any session/disk provisional bit written by an older pre-release raw
         // alias, then use only the canonical key for single-flight, attempts and backoff.
         boolean pending = provisional(semanticKey);
@@ -2788,6 +2870,9 @@ public final class TranslationCache {
         if (key == null) return;
         TranslationTemplate.Snapshot snapshot = templates.prepare(key);
         if (keepsOriginalFamily(snapshot)) return;
+        // A request that was already on its way when the player edited the sentence failed:
+        // nothing to retry, no ledger row, no lower-priority engine.
+        if (manualHit(snapshot) != null) return;
         if (hasFinalSemantic(snapshot)) {
             if (hasCsMarkers(snapshot.key())) failStyleProjection(snapshot);
             return;
@@ -3202,6 +3287,7 @@ public final class TranslationCache {
         if (!isFallbackEnabled()) return;
         TranslationCache lower = fallback;
         if (!fallbackHitsProvisional || lower == null || snapshot == null) return;
+        if (manualHit(snapshot) != null) return; // never buy a stand-in for a manual sentence
         // A CS projection is presentation only. If the AI semantic wording already
         // succeeded, a marker-topology failure must retry AI but must not buy GT.
         if (hasFinalSemantic(snapshot)) return;
@@ -3254,7 +3340,8 @@ public final class TranslationCache {
                 retrySnapshots.remove(stateKey, snapshot);
                 continue;
             }
-            if (snapshot == null || keepsOriginal(stateKey)) {
+            // A sentence the player has written by hand is settled: its old retry debt goes.
+            if (snapshot == null || keepsOriginal(stateKey) || manualHasKey(stateKey)) {
                 discardRetryState(stateKey, snapshot);
                 continue;
             }
@@ -3409,6 +3496,10 @@ public final class TranslationCache {
                 callbacks.add(callback);
             }
             return AddResult.ADDED;
+        }
+
+        synchronized int size() {
+            return callbacks.size();
         }
 
         synchronized List<Callback> close() {
@@ -3756,6 +3847,9 @@ public final class TranslationCache {
         if (store != null) store.setLanguage(next);
         if (provisionalStore != null) provisionalStore.setLanguage(next);
         if (failureStore != null) failureStore.setLanguage(next);
+        // The manual file follows the language too (both engine caches share it; switching twice is a no-op).
+        ManualTranslations manualRows = manual;
+        if (manualRows != null) manualRows.setLanguage(next);
         this.targetLang = next;
         reset(false);
         // The newly opened language file may still mix in legacy provisional rows.
@@ -3814,6 +3908,8 @@ public final class TranslationCache {
         }
         cancelled.forEach(callback -> deliver(callback, null));
         if (clearStore) {
+            // The manual translations are deliberately NOT cleared here: they are the player's own
+            // work, not a cache (the clear confirmation says so).
             if (store != null) store.clear();
             // A full clear is an explicit retranslate-everything request, so learned
             // failure decisions go too. The GT file belongs to the sibling cache and
@@ -3896,6 +3992,9 @@ public final class TranslationCache {
      */
     public boolean replaceFinal(String source, String translated) {
         if (source == null || translated == null) return false;
+        // The title of the tooltip must not overwrite a name the player wrote by hand, and
+        // nothing is invalidated on the way out.
+        if (hasManualTranslation(source)) return false;
         TranslationTemplate.Snapshot before = templates.prepare(source);
         if (before.changed() || !usable(before.key(), translated)) return false;
 
@@ -3905,6 +4004,56 @@ public final class TranslationCache {
         store(fresh, translated, false);
         failedUntil.remove(fresh.key());
         return translated.equals(getCached(source));
+    }
+
+    /**
+     * Withdraws a request that has not been sent yet: the surface that asked for it moved on
+     * (an action bar replaced by the next one) and nobody wants the answer any more.
+     * <ul>
+     *   <li>Still collected in the queue: removed, its permit returned, callbacks completed
+     *       with {@code null}. Nothing is recorded as a failure and no stored result,
+     *       failure state or revision is touched.</li>
+     *   <li>Already handed to a worker that is still waiting for its send slot: the worker
+     *       gives up when it is released (its debug entry is discarded, not failed).</li>
+     *   <li>Already on the wire: left alone, the answer is cached as usual.</li>
+     * </ul>
+     * Asking for the same text again simply requests it again.
+     *
+     * @return whether anything was withdrawn or marked for withdrawal
+     */
+    public boolean cancelUnsent(String source) {
+        if (source == null) return false;
+        String key = templates.prepare(source).key();
+        List<Callback> cancelled = new ArrayList<>();
+        boolean withdrawn = false;
+        synchronized (queueLock) {
+            Queued waiting = queue.get(key);
+            // A text somebody else also waits for (a second callback joined the same key) stays.
+            Queued removed = waiting != null && waiting.callbacks.size() <= 1 ? queue.remove(key) : null;
+            if (removed != null) {
+                releasePendingEntry();
+                cancelled.addAll(removed.callbacks);
+                withdrawn = true;
+                queuedChars = 0;
+                for (Queued queued : queue.values()) queuedChars += batchChars(queued.snapshot.key());
+                if (queue.isEmpty()) {
+                    queueGrew = false;
+                    settleTicks = 0;
+                    queueStartedAtMs = -1L;
+                }
+            }
+        }
+        Flight flight = withdrawn ? null : flights.get(key);
+        if (flight != null && flight.size() <= 1) {
+            if (cancelledKeys.size() > MAX_TRACKED_KEY_REVISIONS) cancelledKeys.clear();
+            cancelledKeys.add(key);
+            withdrawn = true;
+        }
+        synchronized (retryDemandLock) {
+            sessionRetryDemand.remove(key);
+        }
+        cancelled.forEach(callback -> deliver(callback, null));
+        return withdrawn;
     }
 
     public boolean isPending(String source) {
@@ -3932,6 +4081,224 @@ public final class TranslationCache {
         TranslationTemplate.Snapshot snapshot = templates.prepare(source);
         return hasCsMarkers(snapshot.key()) && lookupSnapshot(plain, this) == null
                 && ownFinalProjection(snapshot) != null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Manual translations and the translation manager
+    // -------------------------------------------------------------------------
+    // A manual row is keyed by the sentence's semantic key. For a coloured source the manual
+    // store may also hold the colour-marked translation under the colour key (the key of the
+    // colour projection row): the lookup returns it when it still says the same as the plain
+    // row, otherwise the plain row as a style fallback. The two are always written and removed
+    // together by the manager, so a coloured line keeps its per-word colours.
+
+    /** The player's manual wording for this snapshot's sentence exactly as a lookup shows it, or null. */
+    private String manualHit(TranslationTemplate.Snapshot snapshot) {
+        ManualTranslations rows = manual;
+        if (rows == null || rows.isEmpty() || snapshot == null) return null;
+        return manualHit(rows, snapshot);
+    }
+
+    private String manualHit(String source) {
+        ManualTranslations rows = manual;
+        if (rows == null || rows.isEmpty() || source == null) return null;
+        return manualHit(rows, templates.prepare(source));
+    }
+
+    private String manualHit(ManualTranslations rows, TranslationTemplate.Snapshot snapshot) {
+        String stripped = stripStyle(snapshot.source());
+        TranslationTemplate.Snapshot plain = stripped.equals(snapshot.normalized())
+                ? snapshot : templates.prepare(stripped);
+        String stored = rows.get(plain.key());
+        if (stored == null) return null;
+        String semantic = plain.restore(stored);
+        if (semantic == null || semantic.isEmpty()) return null;
+        if (!hasCsMarkers(snapshot.key())) return semantic;
+        // A colour-marked source. The colour row is used only while it still says what the
+        // plain row says (exact colours, no fallback mark); a missing or disagreeing one never
+        // shows: the plain row goes out as a style fallback, whichever lookup asked.
+        String coloured = rows.get(styleProjectionKey(snapshot));
+        if (coloured != null) {
+            String exact = snapshot.restore(coloured);
+            if (exact != null && matchingCsShape(snapshot.source(), exact)
+                    && sameSemanticText(exact, semantic)) {
+                return exact;
+            }
+        }
+        return TextFilter.markStyleFallback(semantic);
+    }
+
+    /** Whether the manual store has a row under this semantic key (one volatile read while it is empty). */
+    private boolean manualHasKey(String semanticKey) {
+        ManualTranslations rows = manual;
+        return rows != null && !rows.isEmpty() && semanticKey != null && rows.contains(semanticKey);
+    }
+
+    /** Whether the player has written a translation for the sentence {@code source} stands for. */
+    public boolean hasManualTranslation(String source) {
+        ManualTranslations rows = manual;
+        if (rows == null || rows.isEmpty() || source == null) return false;
+        return rows.contains(provisionalSemanticKey(source));
+    }
+
+    /**
+     * A final-only waiter of this sentence may be waiting for an automatic answer that no longer
+     * matters: call after a manual row was written so it receives the manual wording at once.
+     */
+    public void notifyManualChanged(String source) {
+        if (source != null) notifyFinalWaiters(source);
+    }
+
+    /**
+     * The key manual rows (and the manager list) use for the sentence {@code source} stands for:
+     * the text without style codes, with its values templated.
+     */
+    public String semanticKey(String source) {
+        return provisionalSemanticKey(source);
+    }
+
+    /**
+     * The semantic key a colour row belongs to, by plain string comparison (colour markers
+     * removed, stripped), or {@code null} when {@code key} is not a colour row. Deliberately no
+     * template work: a scan over a large store must not push the render path's memos out.
+     */
+    public static String semanticOfColorKey(String key) {
+        return hasCsMarkers(key) ? stripCsMarkers(key).strip() : null;
+    }
+
+    /** The sentences and colour rows of this cache that the translation manager lists; see {@link #browse}. */
+    public record Browse(Map<String, String> rows, Map<String, List<String>> colorKeys) {
+        public Browse {
+            rows = Collections.unmodifiableMap(rows);
+            colorKeys = Collections.unmodifiableMap(colorKeys);
+        }
+    }
+
+    /**
+     * One pass over the stored rows for the translation manager: {@code rows} are the final sentence
+     * rows in write order (oldest first), {@code colorKeys} the colour rows grouped by the semantic key
+     * they project. Left out: provisional stand-ins, keep-original verdicts and echoes, keys with style
+     * codes. No validation and no template work (unlike {@link #exportTranslations}), so a large cache
+     * costs one copy of the table. Call from a background thread only.
+     */
+    public Browse browse() {
+        Map<String, String> sentences = new LinkedHashMap<>();
+        Map<String, List<String>> colours = new LinkedHashMap<>();
+        for (Map.Entry<String, String> row : storedRows().entrySet()) {
+            String key = row.getKey();
+            if (!browsable(key, row.getValue())) continue;
+            String semantic = semanticOfColorKey(key);
+            if (semantic == null) sentences.put(key, row.getValue());
+            else colours.computeIfAbsent(semantic, ignored -> new ArrayList<>()).add(key);
+        }
+        return new Browse(sentences, colours);
+    }
+
+    /** The sentence rows of {@link #browse()} only. Background thread only. */
+    public Map<String, String> browseRows() {
+        return browse().rows();
+    }
+
+    /**
+     * The stored value of one row exactly as written (no validation, no restore), or {@code null}
+     * when there is none or it is not a final translation (a stand-in or keep-original verdict).
+     * A hash lookup: safe on any thread.
+     */
+    public String rawRow(String key) {
+        if (key == null) return null;
+        String value = store != null ? store.get(key) : memory.get(key);
+        return browsable(key, value) ? value : null;
+    }
+
+    /**
+     * The colour rows of this cache that project the sentence with this semantic key, in write order.
+     * Scans the store (plain string comparison); background threads only.
+     */
+    public List<String> colorProjectionKeys(String semanticKey) {
+        List<String> found = new ArrayList<>();
+        if (semanticKey == null) return found;
+        for (String key : storedKeys()) {
+            if (key.indexOf('⟦') >= 0 && semanticKey.equals(semanticOfColorKey(key))) found.add(key);
+        }
+        return found;
+    }
+
+    private boolean browsable(String key, String value) {
+        if (key == null || value == null || value.isEmpty() || value.equals(key)) return false;
+        if (KEEP_ORIGINAL.equals(value) || LEGACY_KEEP_ORIGINAL.equals(value)) return false;
+        if (key.indexOf('§') >= 0 || key.indexOf('\u0000') >= 0) return false;
+        PersistentStore rows = store;
+        return !(rows != null && rows.isProvisional(key)) && !provisional.contains(key);
+    }
+
+    /** Every stored row; the in-memory table stands in when this cache has no store. */
+    private Map<String, String> storedRows() {
+        PersistentStore rows = store;
+        if (rows != null) return rows.entries();
+        synchronized (memory) {
+            return new LinkedHashMap<>(memory);
+        }
+    }
+
+    private Set<String> storedKeys() {
+        Set<String> keys = new java.util.LinkedHashSet<>();
+        PersistentStore rows = store;
+        if (rows != null) keys.addAll(rows.entries().keySet());
+        synchronized (memory) {
+            keys.addAll(memory.keySet());
+        }
+        return keys;
+    }
+
+    /**
+     * Removes everything this cache stores or remembers about one sentence so that it is translated
+     * again the next time it appears: the semantic row, its colour rows, failure marks, retry state,
+     * waiting and in-flight requests (a response that is already on its way is dropped when it
+     * lands). Unlike {@link #invalidate} alone this finds the colour rows: left behind, they would
+     * rebuild the old semantic row on the next coloured lookup. Does not touch the manual rows.
+     * Scans the store for the colour rows; background threads only.
+     */
+    public void invalidateFamily(String semanticKey) {
+        if (semanticKey == null) return;
+        invalidateFamily(semanticKey, colorProjectionKeys(semanticKey));
+    }
+
+    /**
+     * {@link #invalidateFamily(String)} for colour rows the caller already knows (the manager keeps
+     * an index): no scan. The colour rows go first and together, so no lookup in between can serve
+     * the old wording from a colour row after its semantic row is gone.
+     */
+    public void invalidateFamily(String semanticKey, Collection<String> colorKeys) {
+        if (semanticKey == null) return;
+        List<String> colours = colorKeys == null ? List.of() : new ArrayList<>(colorKeys);
+        if (!colours.isEmpty()) removeStoredBatch(colours);
+        for (String key : colours) invalidate(key);
+        invalidate(semanticKey);
+    }
+
+    /**
+     * Whether a manual translation for the sentence {@code key} (a semantic or colour key) has the
+     * shape every cache wording must have: the same markers (values, names, spacing, paragraph breaks,
+     * colour pairs) in an order the caches accept, no reshaped protocol token, and the same number of
+     * line breaks. The same private rules {@link #usable} applies to an automatic translation, minus
+     * the heuristics aimed at model output (mojibake, untranslated fields).
+     */
+    public static boolean manualShapeMatches(String key, String translated) {
+        return manualTagShapeMatches(key, translated)
+                && newlineCount(key) == newlineCount(translated);
+    }
+
+    /** {@link #manualShapeMatches} without the line-break count. */
+    public static boolean manualTagShapeMatches(String key, String translated) {
+        return key != null && translated != null
+                && !TextFilter.hasReshapedProtocolToken(translated)
+                && matchingMtShape(key, translated)
+                && matchingParagraphBreakShape(key, translated)
+                && matchingParagraphSlotShape(key, translated)
+                && matchingProtectedPlaceholderShape(key, translated)
+                && matchingCsShape(key, translated)
+                && TranslationTemplate.layoutSkeletonMatches(key, translated)
+                && TranslationTemplate.styleSlotShapeMatches(key, translated, true);
     }
 
     public int pendingCount() {

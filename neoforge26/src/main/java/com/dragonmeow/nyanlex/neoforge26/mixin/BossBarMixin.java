@@ -38,7 +38,7 @@ public abstract class BossBarMixin {
             TranslationService service = NyanLexNeoForge26.service();
             if (service != null && text != null) {
                 Component translated = Neo26TextStyle.renderTranslated("bossBar", text, service::translateBossBar);
-                if (translated != null) {
+                if (translated != null && !NyanLexNeoForge26.projectionSuppressed()) {
                     int center = x + font.width(text) / 2; // original name's centre
                     List<Component> lines = Neo26TextStyle.splitLines(translated);
                     if (lines.size() <= 1) {

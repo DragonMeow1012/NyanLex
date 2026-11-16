@@ -312,8 +312,8 @@
       "count": 1
     },
     {
-      "from": "\n            graphics.text(this.font, Component.translatable(\"screen.nyanlex.ai.endpoint\"), x, layBaseLabel, 0xFFA0A0A0, false);\n",
-      "to": "\n            graphics.drawString(this.font, Component.translatable(\"screen.nyanlex.ai.endpoint\"), x, layBaseLabel, 0xFFA0A0A0, false);\n",
+      "from": "\n            if (!hideEndpoint) graphics.text(this.font, Component.translatable(\"screen.nyanlex.ai.endpoint\"), x, layBaseLabel, 0xFFA0A0A0, false);\n",
+      "to": "\n            if (!hideEndpoint) graphics.drawString(this.font, Component.translatable(\"screen.nyanlex.ai.endpoint\"), x, layBaseLabel, 0xFFA0A0A0, false);\n",
       "count": 1
     },
     {
@@ -364,6 +364,11 @@
     {
       "from": "\n        graphics.text(this.font, text, this.width - this.font.width(text) - 6, y, color, false);\n",
       "to": "\n        graphics.drawString(this.font, text, this.width - this.font.width(text) - 6, y, color, false);\n",
+      "count": 1
+    },
+    {
+      "from": "\n                    graphics.text(this.font, line, x, noteY, 0xFFA4A9B8, false);\n",
+      "to": "\n                    graphics.drawString(this.font, line, x, noteY, 0xFFA4A9B8, false);\n",
       "count": 1
     }
   ],
@@ -702,7 +707,7 @@
     {
       "from": "\n        if (mc == null || mc.gui.screen() == null) return;\n",
       "to": "\n        if (mc == null || mc.screen == null) return;\n",
-      "count": 1
+      "count": 2
     },
     {
       "from": "\n            Object gui = mc.gui.screen().getClass().getMethod(\"getGui\").invoke(mc.gui.screen());\n",
@@ -827,6 +832,16 @@
     {
       "from": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),\n",
       "to": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),\n",
+      "count": 1
+    },
+    {
+      "from": "\n            mc.gui.screen().resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());\n",
+      "to": "\n            mc.screen.resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc != null && SCREEN_CAPTURE.active(mc.gui.screen())) return true;\n",
+      "to": "\n        if (mc != null && SCREEN_CAPTURE.active(mc.screen)) return true;\n",
       "count": 1
     }
   ],
@@ -1217,6 +1232,42 @@
     {
       "from": "\n                () -> g.textWithBackdrop(font, text, x, y, width, color));\n",
       "to": "\n                () -> g.drawStringWithBackdrop(font, text, x, y, width, color));\n",
+      "count": 1
+    },
+    {
+      "from": "\n                        () -> g.textWithBackdrop(font, dialogue, x, y, width, color));\n",
+      "to": "\n                        () -> g.drawStringWithBackdrop(font, dialogue, x, y, width, color));\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/Neo26ManagerScreen.java": [
+    {
+      "from": "\nimport net.minecraft.client.gui.GuiGraphicsExtractor;\n",
+      "to": "\nimport net.minecraft.client.gui.GuiGraphics;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {\n",
+      "to": "\n    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n        super.extractRenderState(g, mouseX, mouseY, partialTick); // dims the world behind the panel\n",
+      "to": "\n        super.render(g, mouseX, mouseY, partialTick); // dims the world behind the panel\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/TransientChatLogger.java": [
+    {
+      "from": "\n        mc.gui.hud.getChat().addClientSystemMessage(line);\n",
+      "to": "\n        mc.gui.getChat().addMessage(line);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/NyanLexHooks.java": [
+    {
+      "from": "\n            \"LanguageInstance.originalTable\",\n",
+      "to": "\n            \"LanguageInstance.originalTable\",\n            \"LanguageLookup.originalExists\",\n            \"LanguageLookup.originalText\",\n",
       "count": 1
     }
   ]

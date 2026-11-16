@@ -494,6 +494,7 @@ public final class SettingsPanel {
                 case OPEN_DO_NOT_TRANSLATE:
                     return host.text(SettingsModel.KEY_BTN_EDIT);
                 case OPEN_MANUAL:
+                case OPEN_TRANSLATION_MANAGER:
                 case OPEN_GITHUB:
                     return host.text(SettingsModel.KEY_BTN_OPEN);
                 case HUB_DOWNLOAD:

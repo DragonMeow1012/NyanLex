@@ -1,0 +1,8 @@
+{
+  "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {
+      "from": "        ResourceLocation tooltipPhase = ResourceLocation.tryParse(MOD_ID + \":tooltip_translation\");\n        ItemTooltipCallback.EVENT.addPhaseOrdering(Event.DEFAULT_PHASE, tooltipPhase);\n        ItemTooltipCallback.EVENT.register(tooltipPhase,\n",
+      "to": "        // Fabric API for Minecraft 1.17.0 (0.35.x and older) has no event phases, so the callback is registered\n        // in the single default phase instead of after it.\n        ItemTooltipCallback.EVENT.register(\n"
+    }
+  ]
+}

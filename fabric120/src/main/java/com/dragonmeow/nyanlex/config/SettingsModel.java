@@ -224,6 +224,7 @@ public final class SettingsModel {
                 KEY_PROVIDER_FIXED, KEY_PROVIDER_FIXED_DESC));
         keys.addAll(DialogContent.allLangKeys());
         keys.addAll(QuickSetupPanel.allLangKeys());
+        keys.addAll(TranslationManagerPanel.allLangKeys());
         for (int i = 1; i <= MANUAL_SECTIONS; i++) {
             keys.add(manualTitleKey(i));
             keys.add(manualBodyKey(i));

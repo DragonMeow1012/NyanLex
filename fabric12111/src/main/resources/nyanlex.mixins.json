@@ -10,14 +10,21 @@
     "ChatComponentMixin",
     "DebugHudMixin",
     "FontSplitMixin",
+    "FontSetBorrowMixin",
+    "GlyphStitcherAccessor",
+    "BakedSheetGlyphAccessor",
     "GuiGraphicsTextMixin",
     "GuiScoreboardMixin",
+    "LanguageInstanceMixin",
+    "LanguageLookupMixin",
+    "LanguageReloadMixin",
     "EntityNameTagMixin",
     "OptionsScreenMixin",
     "SignRendererLayoutMixin",
     "SignTextMixin",
     "AdvancementToastMixin",
-    "ChatComposerMixin"
+    "ChatComposerMixin",
+    "TextDisplayMixin"
   ],
   "injectors": {
     "defaultRequire": 0

@@ -1,0 +1,26 @@
+{
+  "com/dragonmeow/nyanlex/fabric/BorrowedGlyphs.java": [
+    {
+      "from": "donor.getGlyphInfo(codePoint, false)",
+      "to": "donor.getGlyphInfo(codePoint)"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/OverlayChatListenerMixin.java": [
+    {
+      "from": "import net.minecraft.network.chat.ChatType;\n",
+      "to": "import net.minecraft.network.chat.ChatSender;\nimport net.minecraft.network.chat.ChatType;\n"
+    },
+    {
+      "from": "import java.util.UUID;\n\n",
+      "to": ""
+    },
+    {
+      "from": "nyanlex$translateOverlay(ChatType type, Component message, UUID sender, CallbackInfo ci)",
+      "to": "nyanlex$translateOverlay(ChatType type, Component message, ChatSender sender, CallbackInfo ci)"
+    },
+    {
+      "from": "if (NyanLexFabric.interceptOverlayMessage(message)) ci.cancel();",
+      "to": "if (type.overlay().isPresent() && NyanLexFabric.interceptOverlayMessage(message)) ci.cancel();"
+    }
+  ]
+}

@@ -7,7 +7,7 @@ version = project.mod_version
 group = project.maven_group
 base { archivesName = project.archives_base_name }
 
-// Final jar name: NyanLex-Translator-1.0.0-NeoForge-1.21.1.jar (name-version-loader-mcversion)
+// Final jar name: NyanLex-Translator-1.0.1-NeoForge-1.21.1.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.
     exclude 'assets/nyanslate/**', 'assets/mctranslator/**'

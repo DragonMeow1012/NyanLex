@@ -22,6 +22,7 @@ public final class ChatComposerPanel {
         double positionX();
         double positionY();
         void position(double x, double y);
+        /** Inserts text at the chat box cursor like typing: replaces any selection and leaves the cursor after the inserted text. */
         void fill(String text);
         boolean current();
         void execute(Runnable action);
@@ -38,10 +39,12 @@ public final class ChatComposerPanel {
     private boolean dragging, choosing, closed, busy;
     private long revision;
     private String status = "hint";
-    private String lastDraft, lastChat;
+    private String lastDraft;
     private String search = "";
     private static final int SEARCH_HEIGHT = 36;
     private static final int CLEAR_SIZE = 14;
+    // Vanilla's chat box accepts at most this many characters.
+    public static final int CHAT_MAX_LENGTH = 256;
     public static final int HEIGHT = 90;
 
     public ChatComposerPanel(Host host) { this.host = host; }
@@ -106,13 +109,14 @@ public final class ChatComposerPanel {
 
     /** Called after any native edit, including vanilla history/command completion. */
     public void observe() {
-        String draft = host.draft(), chat = host.chat();
-        if (lastDraft != null && (!lastDraft.equals(draft) || !lastChat.equals(chat))) {
+        // Only the draft decides whether a running translation is still wanted. The chat
+        // box may change freely meanwhile: the result is typed in at its cursor at that time.
+        String draft = host.draft();
+        if (lastDraft != null && !lastDraft.equals(draft)) {
             revision++;
             if (busy) status = "changed";
         }
         lastDraft = draft;
-        lastChat = chat;
     }
 
     public void submit() {
@@ -120,7 +124,7 @@ public final class ChatComposerPanel {
         if (busy || closed || host.draft().trim().isEmpty()) return;
         if (host.draft().trim().startsWith("/")) { status = "command"; return; }
         final long request = ++revision;
-        final String draft = host.draft(), chat = host.chat(), language = host.language();
+        final String draft = host.draft(), language = host.language();
         busy = true;
         status = "working";
         host.translate(draft, language, (translated, error) -> host.execute(() -> {
@@ -128,7 +132,7 @@ public final class ChatComposerPanel {
             busy = false;
             observe();
             if (!host.current() || revision != request || !draft.equals(host.draft())
-                    || !chat.equals(host.chat()) || !language.equals(host.language())) {
+                    || !language.equals(host.language())) {
                 status = "changed";
                 return;
             }
@@ -137,14 +141,18 @@ public final class ChatComposerPanel {
                 return;
             }
             String value = translated.replace('\r', ' ').replace('\n', ' ').trim();
-            if (value.length() > 256) { status = "too_long"; return; }
+            if (value.length() > CHAT_MAX_LENGTH) { status = "too_long"; return; }
             if (value.startsWith("/") || value.indexOf('\u00a7') >= 0
                     || value.chars().anyMatch(c -> c < 32 || c == 127)) {
                 status = "invalid";
                 return;
             }
+            // The translation is typed in at the chat box's cursor, so it lands after a typed
+            // "/cmd " prefix, between existing words, or over a selection. A result that would
+            // not fit is refused rather than cut, so a half sentence is never left in the box.
+            // The selection is ignored here: the check is deliberately on the safe side.
+            if (host.chat().length() + value.length() > CHAT_MAX_LENGTH) { status = "too_long"; return; }
             host.fill(value);
-            lastChat = host.chat();
             status = "ready";
         }));
     }

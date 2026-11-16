@@ -13,13 +13,17 @@ NyanLex helps you read unfamiliar languages in Minecraft and reply in your own. 
 - **Follow conversations:** incoming chat shows its original text immediately by default, then adds the translation in the same position. Modern and legacy builds also offer ordered translation delivery or showing each translation as soon as it is ready. Choose bilingual or translation-only display separately.
 - **Understand items and quests:** translate item names, descriptions, books and modpack quest text while keeping the original available for comparison. Modern builds support both older and current FTB Quests APIs.
 - **Read interfaces and HUD text:** translate supported menus, tooltips, scoreboards, boss bars, titles, action bars, name tags, advancement notices and supported Jade/WAILA-style object-name overlays. The screen-translation shortcut captures visible text, including hovered tooltips.
+- **Follow story dialogue:** server dialogue boxes drawn with a custom font show the translation inside the box, keeping per-word colors.
+- **Read floating nameplates:** floating-text nameplates, such as NPC names, are translated on Minecraft 1.19.4 or newer.
+- **Keep titles and dialogue in chat:** an optional switch under Display settings that keeps fleeting title and dialogue translations in your chat, visible only to you.
 - **Keep useful translations:** reuse saved results and share them through JSON import/export. Supported modern builds also offer translation packs and batch translation before you explore.
+- **Edit saved translations:** search, edit, restore or delete them in the Translation manager under Advanced settings; hand-edited translations are never overwritten by automatic translation.
 
 Translation quality and speed depend on the provider. Custom mod interfaces may render text in ways NyanLex cannot capture. NyanLex does not read text baked into images, and the screen-translation shortcut captures only what is currently visible.
 
 ## Reply in your own language
 
-Enable **Chat input translation** in the General settings, then open chat. Write a draft in the movable composer, select a target language and click **Translate & fill**. The result appears in the normal chat bar for you to review or edit before pressing Enter to send.
+Enable **Chat input translation** in the General settings, then open chat. Write a draft in the movable composer, select a target language and click **Translate & fill**. The result appears in the normal chat bar for you to review or edit before pressing Enter to send. It also works when the chat box starts with `/`, such as a party chat command; the translation is inserted at the cursor and never overwrites what you typed.
 
 The composer starts at the bottom right unless you have saved a different position. Search target languages by name or code; this choice is separate from the language used to read game content. Closing chat keeps the draft for the current game session. The feature is disabled by default and never sends a chat message for you.
 
@@ -45,13 +49,17 @@ On **Fabric 1.17+ and NeoForge**:
 | --- | --- |
 | `G` | Switch between original and translated display |
 | `R` | Translate or retranslate the item under the pointer |
-| `P` | Translate or retranslate visible screen, tooltip or HUD text |
+| `\` (Minecraft 1.17-1.21.8) / `P` (other versions) | Translate or retranslate visible screen, tooltip or HUD text |
 
-With Google, incoming chat translates automatically after opt-in; other content is translated on demand with `R` or `P`. With AI, enabled content translates automatically and those keys request a fresh translation. Saved results display without another request. Shortcuts do not activate while you are typing.
+`\` replaces `P` on Minecraft 1.17-1.21.8 to avoid the vanilla Social Interactions key, which also uses `P`; key bindings you have already saved are not changed.
+
+With Google, incoming chat translates automatically after opt-in; other content is translated on demand with `R` or the translate-screen key. With AI, enabled content translates automatically and those keys request a fresh translation. Saved results display without another request. Shortcuts do not activate while you are typing.
 
 Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
 
-**Legacy builds** (Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2) use a simpler interface and do not include translation packs or full-content warmup. `G` opens settings and `P` retranslates the current screen; Forge also uses `H` to enable or disable translation.
+**Legacy builds** (Fabric 1.14.4–1.16.5 and Forge 1.12.2–1.13.2) use a simpler interface and do not include translation packs, full-content warmup, or the Claude preset and its dedicated settings. Among the 1.0.1 additions they include only the chat input translation improvements, not the Translation manager or the other new features. `G` opens settings and `P` retranslates the current screen; Forge also uses `H` to enable or disable translation.
+
+When translating into Chinese, NyanLex does not send text that is already mostly Chinese, so Chinese from language files or resource packs is kept. If another mod also translates chat or on-screen text on the client, both may translate the same line; keep one translation source for each kind of text.
 
 ## Choose a translation service
 

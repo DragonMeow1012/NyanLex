@@ -196,6 +196,19 @@ class ManualPanelTest {
     }
 
     @Test
+    void aBackslashKeyNameReachesTheKeyCapsAndTheInlineMentionsUnchanged() {
+        // The screen-scan key defaults to backslash where the game itself owns P. The name is substituted as
+        // a plain replacement text, so a backslash must neither disappear nor swallow a neighbouring character.
+        for (String code : List.of("en_us", "zh_tw", "zh_cn", "ja_jp")) {
+            ManualPanel p = panel(code, 640, 360, java.util.Map.of("R", "R", "P", "\\", "G", "G", "S", "O"));
+            assertEquals(List.of("R", "\\", "G", "O"), p.keycapTexts(), code);
+            String body = String.join("", p.bodyTexts());
+            assertFalse(body.contains("{"), code + ": no raw markers are left");
+            assertTrue(body.contains("\\"), code + ": the inline mentions show the backslash");
+        }
+    }
+
+    @Test
     void opensAtAChapterAndTabWalksTheTopButtonTheChaptersAndBack() {
         JsonObject l = lang("zh_tw");
         List<ManualPanel.Section> sections = new ArrayList<>();

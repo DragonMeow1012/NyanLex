@@ -1,0 +1,42 @@
+{
+  "com/dragonmeow/nyanlex/fabric/mixin/GuiScoreboardMixin.java": [
+    {
+      "from": "    /**\n     * The overlay message (action bar) is the one Font.draw(PoseStack, Component, ...) call in Gui.render; the\n     * title and subtitle use drawShadow and are handled by nyanlex$hud. An overlay dialogue box is translated\n     * block by block and drawn in place; it never goes down a one-line path (its HUD numbers and typed text change\n     * every frame). The rebuilt component has the original's total advance, so the backdrop and the centring that\n     * vanilla already computed from the original stay right. Any other overlay text takes the ordinary action bar\n     * path: cached translation if there is one (display mode, bilingual and show-original follow the settings),\n     * the request otherwise. Vanilla draws this text without a shadow, so neither does the translated one.\n     */\n    @Redirect(method = \"render\", at = @At(value = \"INVOKE\",\n            target = \"Lnet/minecraft/client/gui/Font;draw(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/network/chat/Component;FFI)I\"), require = 0)\n    private int nyanlex$overlayDialogue(Font font, PoseStack pose, Component text, float x, float y, int color) {\n        if (NyanLexFabric.isOwnFeedback(text)) return font.draw(pose, text, x, y, color);\n        if (!HookGuard.enter(\"GuiScoreboard.overlayDialogue\")) return font.draw(pose, text, x, y, color);\n        try {\n            if (text == overlayMessageString) {\n                Component dialogue = OverlayDialogueView.view(text, font);\n                if (dialogue != null) {\n                    return InternalRenderGuard.call(() -> font.draw(pose, dialogue, x, y, color));\n                }\n                TranslationService service = NyanLexFabric.service();\n                if (service != null) {\n                    return drawTranslated(\"actionBar\", service::translateActionBar, false, font, pose, text, x, y, color);\n                }\n            }\n            return font.draw(pose, text, x, y, color);\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.overlayDialogue\", guardError);\n            return font.draw(pose, text, x, y, color);\n        }\n    }\n\n",
+      "to": "    /**\n     * From 1.19.1 the overlay message is drawn with Font.drawShadow like the title, so the dialogue box is\n     * rebuilt inside nyanlex$hud instead of a separate Font.draw redirect. This keeps the dialogue under its\n     * own crash guard; a failure leaves the one-line action bar path in place.\n     */\n    private static Component nyanlex$dialogue(Component text, Font font) {\n        if (!HookGuard.enter(\"GuiScoreboard.overlayDialogue\")) return null;\n        try {\n            return OverlayDialogueView.view(text, font);\n        } catch (Throwable guardError) {\n            HookGuard.fail(\"GuiScoreboard.overlayDialogue\", guardError);\n            return null;\n        }\n    }\n\n"
+    },
+    {
+      "from": "            if (service != null && text == overlayMessageString)\n                return drawTranslated(\"actionBar\", service::translateActionBar, font, pose, text, x, y, color);\n",
+      "to": "            if (text == overlayMessageString) {\n                Component dialogue = nyanlex$dialogue(text, font);\n                if (dialogue != null) {\n                    return InternalRenderGuard.call(() -> font.drawShadow(pose, dialogue, x, y, color));\n                }\n            }\n            if (service != null && text == overlayMessageString)\n                return drawTranslated(\"actionBar\", service::translateActionBar, font, pose, text, x, y, color);\n"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/OverlayChatListenerMixin.java": [
+    {
+      "from": "import net.minecraft.client.gui.chat.OverlayChatListener;\n",
+      "to": "import net.minecraft.client.multiplayer.chat.ChatListener;\n"
+    },
+    {
+      "from": "import net.minecraft.network.chat.ChatType;\n",
+      "to": ""
+    },
+    {
+      "from": "import java.util.UUID;\n\n",
+      "to": ""
+    },
+    {
+      "from": "@Mixin(OverlayChatListener.class)",
+      "to": "@Mixin(ChatListener.class)"
+    },
+    {
+      "from": "@Inject(method = \"handle\", at = @At(\"HEAD\"), cancellable = true, require = 0)",
+      "to": "@Inject(method = \"handleSystemMessage\", at = @At(\"HEAD\"), cancellable = true, require = 0)"
+    },
+    {
+      "from": "nyanlex$translateOverlay(ChatType type, Component message, UUID sender, CallbackInfo ci)",
+      "to": "nyanlex$translateOverlay(Component message, boolean overlay, CallbackInfo ci)"
+    },
+    {
+      "from": "if (NyanLexFabric.interceptOverlayMessage(message)) ci.cancel();",
+      "to": "if (overlay && NyanLexFabric.interceptOverlayMessage(message)) ci.cancel();"
+    }
+  ]
+}

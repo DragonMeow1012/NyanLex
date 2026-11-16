@@ -1,13 +1,15 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        maven { url = "https://maven.minecraftforge.net/" }
         maven { url = "https://maven.neoforged.net/releases" }
+        maven { url = "https://repo.spongepowered.org/repository/maven-public/" }
         mavenCentral()
     }
 }
 
-// Auto-provision JDKs by toolchain version (NeoForge 1.20.1's neoFormRecompile requires JDK 17,
-// which isn't installed here — this lets Gradle download it).
+// Auto-provision JDKs by toolchain version: ForgeGradle runs the Minecraft setup tasks and the
+// compile on a JDK 17 toolchain, which this lets Gradle download when none is installed.
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
 }

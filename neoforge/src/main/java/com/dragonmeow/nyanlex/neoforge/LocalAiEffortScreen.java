@@ -3,6 +3,7 @@ package com.dragonmeow.nyanlex.neoforge;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient.ModelOption;
+import com.dragonmeow.nyanlex.translate.ReasoningEffort;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -21,6 +22,31 @@ import java.util.List;
 /** Direct reasoning-effort picker; clicking the current value no longer cycles it. */
 public final class LocalAiEffortScreen extends OptionsSubScreen {
     private EffortSelectionList effortList;
+    private List<String> customLevels;
+    private String customActive;
+    private java.util.function.Consumer<String> onCustomSelection;
+
+    /** Pick from {@code levels} and report the choice to {@code selected} instead of the Codex setting. */
+    public LocalAiEffortScreen withLevels(List<String> levels, String active,
+                                          java.util.function.Consumer<String> selected) {
+        this.customLevels = List.copyOf(levels);
+        this.customActive = active;
+        this.onCustomSelection = selected;
+        return this;
+    }
+
+    /**
+     * Display name of a thinking-strength setting: off is translated, and the five levels
+     * keep their API names. The short form fits on a button.
+     */
+    static Component label(String effort, boolean shortForm) {
+
+        if (ReasoningEffort.OFF.equals(effort)) {
+            return Component.translatable(shortForm
+                    ? "screen.nyanlex.ai.effort.off.short" : "screen.nyanlex.ai.effort.off");
+        }
+        return Component.literal(effort);
+    }
 
     public LocalAiEffortScreen(Screen parent) {
         super(parent, Minecraft.getInstance().options,
@@ -66,14 +92,19 @@ public final class LocalAiEffortScreen extends OptionsSubScreen {
     }
 
     private void choose(String effort) {
-        TranslatorConfig cfg = NyanLexNeoForge.config();
-        cfg.codexReasoningEffort = effort;
+        if (this.onCustomSelection != null) {
+            this.onCustomSelection.accept(effort);
+        } else {
+            TranslatorConfig cfg = NyanLexNeoForge.config();
+            cfg.codexReasoningEffort = effort;
+        }
         NyanLexNeoForge.saveConfig();
         NeoTextStyle.clearRenderMemo();
         this.minecraft.setScreen(this.lastScreen);
     }
 
     private List<String> supportedEfforts() {
+        if (this.customLevels != null) return this.customLevels;
         CodexAppServerClient client = NyanLexNeoForge.codexClient();
         if (client == null) return List.of();
         String selectedModel = NyanLexNeoForge.config().codexModel;
@@ -94,7 +125,8 @@ public final class LocalAiEffortScreen extends OptionsSubScreen {
         }
 
         private void selectCurrent() {
-            String active = NyanLexNeoForge.config().codexReasoningEffort;
+            String active = LocalAiEffortScreen.this.customLevels != null
+                    ? LocalAiEffortScreen.this.customActive : NyanLexNeoForge.config().codexReasoningEffort;
             for (Entry entry : this.children()) {
                 if (entry.effort.equals(active)) {
                     this.setSelected(entry);
@@ -122,7 +154,8 @@ public final class LocalAiEffortScreen extends OptionsSubScreen {
 
             private Entry(String effort) {
                 this.effort = effort;
-                this.label = Component.literal(effort);
+                this.label = LocalAiEffortScreen.this.customLevels != null
+                        ? LocalAiEffortScreen.label(effort, false) : Component.literal(effort);
             }
 
             @Override

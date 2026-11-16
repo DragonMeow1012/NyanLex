@@ -1,4 +1,4 @@
-"""Publish the verified 1.0.0 release matrix to Modrinth.
+"""Publish the verified 1.0.1 release matrix to Modrinth.
 
 The command is deliberately opt-in: without ``--apply`` it performs a read-only
 plan. Existing version IDs and download counts are preserved. A temporary JAR
@@ -112,40 +112,47 @@ def version_number(target) -> str:
 def changelog(target) -> str:
     dependency = (" Requires a matching **Fabric API** installation."
                   if target.loader == "fabric" else "")
-    return f"""NyanLex Translator {VERSION} for **Minecraft {target.minecraft} / {target.label}**. Install on the client only; the server does not need this mod.{dependency}
+    legacy = target.minecraft in {"1.12.2", "1.13.2", "1.14.4", "1.15.2", "1.16.5"}
+    intro = (f"NyanLex Translator {VERSION} for **Minecraft {target.minecraft} / {target.label}**. "
+             f"Install on the client only; the server does not need this mod.{dependency}")
+    if legacy:
+        body = """### Version limits
 
-### Features
+This legacy build includes only the chat input translation improvements. The Translation manager and the other new features of 1.0.1 are not supported here.
 
-- Translate incoming chat, items, tooltips, books, interfaces and supported HUD text.
-- Write in your own language, translate the draft, then review it in the normal chat bar before sending.
-- Reuse saved translations; modern builds also support translation packs and selectable full-content warmup.
-- Modern compatibility includes old/new FTB Quests APIs, advancement notices and supported Jade/WAILA-style object names.
+Forge 1.13.2: fixed a failure to start."""
+    else:
+        body = """### v1.0.1 improvements
 
-### Fixes in this build
+- Chat input translation now also works for commands: start the chat box with `/`, such as a party chat command. The translation is inserted at the cursor and never overwrites what you have already typed.
+- Server story dialogue boxes drawn with a custom font now show the translation inside the box, keeping per-word colors.
+- Floating-text nameplates, such as NPC names, are translated. Requires Minecraft 1.19.4 or newer.
+- **Translation manager**: search, edit, restore or delete saved translations on the Advanced settings page. Hand-edited translations are never overwritten by automatic translation and survive clearing the cache.
+- **Keep titles and dialogue in chat**: a new switch that keeps fleeting title and dialogue translations in your chat, visible only to you.
+- Fixed translated player chat showing the sender's name twice on Fabric 1.19.3 and newer.
+- Switching to the original with `G` now shows the English text, even in interfaces where another mod ships its own Chinese. No new translation requests are sent while it is on.
+- Custom fonts that lack Chinese characters now fall back to the game's built-in glyphs instead of showing boxes.
+- Text that appears letter by letter is translated once, after it finishes, which greatly reduces requests and token use.
+- Icons in item names and descriptions no longer turn into boxes after translation.
+- Retranslating the whole interface now also retranslates nameplates, and text that is already translated is no longer sent again as if it were the original.
+- On Minecraft 1.17 through 1.21.8 the default key for translating the screen is now `\\` instead of `P`, which is also the vanilla Social Interactions key; newer versions keep `P`, and key bindings you have already saved are unchanged.
+- The Claude provider, with its thinking-strength and Fast mode settings, is now available on every build for Minecraft 1.17 and newer.
+- Fixed a crash on startup on Fabric 1.17 through 1.19.4 with Fabric Loader 0.16.0 through 0.16.13.
+- Fixed a crash on startup on Fabric 26.3 with Fabric Loader 0.19.3 and 0.19.4.
+- Fixed NeoForge 1.20.1, which did not work correctly, and Fabric 1.17, which could not start.
+- Fixed Forge 1.13.2, which could not start.
+- Plain action bar text is now translated on Fabric 1.17 through 1.19.
+- Held item names on NeoForge 1.20.1 through 1.21.8, and the scoreboard on some of those versions, are now translated.
+- Tooltips that do not belong to an item are now translated on Fabric 1.17 through 1.19.4.
+- Typing in the settings search box no longer triggers hotkeys on Minecraft 1.20 through 1.20.4.
+- A tooltip containing an empty line can no longer switch tooltip translation off for the rest of the session."""
+    return f"""{intro}
 
-- October 29 refresh: all 62 release JARs use the full `NyanLex-Translator` artifact name, and the in-game mod-list name remains **NyanLex Translator**. The `/nyanlex` command is unchanged.
-- API-key fields are masked by default and include a small show/hide control, so a key can be checked without leaving it permanently exposed on the settings screen.
-- Every supported target includes ChatGPT/Codex sign-in, model and reasoning-effort selection, and session-token usage display. The default is `gpt-6-luna` at medium reasoning effort; existing saved provider and model choices are preserved. API services share six effort choices: off, low, medium, high, xhigh and max.
-- OpenAI API, ChatGPT/Codex and Claude each have a separate Fast mode switch, disabled by default. Enabling it first warns that billing or account allowance may increase; unsupported Claude models automatically use standard speed and show that note on a separate result line.
-- Claude API settings can read the available model list, default to Claude Haiku 5.5 with medium reasoning, and keep connection-test results inline below the button instead of opening a modal. API settings no longer show the long local key-file path paragraph.
-- Translation-pack discovery runs on the final Quick setup page, after the player has confirmed the target language. Packs can still be checked later from Pack settings.
-- On supported modern builds, pressing `G` now switches translated books back to the original immediately. Those builds also translate the four visible rows of world signs on the client, preserve sign colour/glow, fit long translated rows, and return to the untouched original with `G`.
-- Removed the experimental global text-width projection that could make custom server or mod tooltips overlap. Each supported renderer keeps ownership of its native measurement and layout.
-- OCR was evaluated but intentionally not included: this release adds no OCR model, native OCR runtime, screenshot text scan, or OCR data disclosure. Text embedded only in images remains outside translation coverage.
-- The existing three incoming-chat delivery modes remain available: ordered, ready-first, or original-first with the translation added in place (default). Echo suppression, keep-original persistence and Chinese-text bypass remain in place.
-- Modern builds hide Antigravity by default. Enable it in Advanced settings after reviewing account, privacy and service risks; official sign-in does not establish third-party integration authorization.
-- CLI translations use dedicated profiles, untrusted-text boundaries, tool restrictions and bounded process handling. Unknown remaining allowance does not block translation; service-reported CLI limits pause requests.
-- Antigravity uses an official pre-tool denial hook. Live testing covered CLI 1.2.16 and selected scenarios; this is not an operating-system sandbox or an all-version guarantee.
-- The Antigravity notice retains its independent "Don't show again" checkbox. The redundant Gemini API terms popup was removed; API-key mode opens settings directly and preserves the current model.
-- Do-not-translate terms appear first in their settings section. Remote API connections require HTTPS, local loopback HTTP remains supported, and automatic redirects are disabled.
-- Open Translation Settings from the settings menu, or enter `/nyanlex` in chat if another UI mod hides that entry.
-- Optional Google sign-in uses a separately installed Antigravity CLI. Install it from [Google's official download page](https://antigravity.google/download).
-- Google machine translation tries a compatible alternate endpoint once when the primary returns a 429 or block page.
-- Existing API-key rotation and individual key cooldown behavior are retained.
+{body}
 
-Online translation is disabled by default on new installations. Use only the JAR matching this exact Minecraft version and loader. Translation coverage depends on how each mod renders text; text embedded in images is not translated.
+Online translation is disabled by default on new installations. Use only the JAR matching this exact Minecraft version and loader.
 
-All 62 loader/version artifacts are rebuilt and statically verified before this refresh is published. Minecraft 26.1.2 / Fabric was also tested interactively for the book toggle and translated tooltip display. This does not claim an in-game playthrough of every target or compatibility certification for every modpack/server.
+Hands-on play testing was done on Minecraft 26.1.2 / Fabric, and automated in-world tests also ran on Fabric 1.17.1, 1.18.2, 1.19.4, 1.20.1, 1.21.1, 1.21.11, 26.2 and 26.3 and on NeoForge 1.21.1, 26.2 and 26.3. The other builds passed build, static and startup checks, but were not tested in a world.
 
 [Full documentation](https://github.com/DragonMeow1012/NyanLex/blob/main/README.en.md)"""
 
@@ -516,9 +523,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--token-file", type=Path, required=True)
     parser.add_argument("--package-root", type=Path,
-                        default=ROOT / "mods-jar" / "1.0.0-expanded")
+                        default=ROOT / "mods-jar" / "1.0.1-expanded")
     parser.add_argument("--backup-root", type=Path,
-                        default=ROOT / "mods-jar" / "modrinth-backup-1.0.0")
+                        default=ROOT / "mods-jar" / "modrinth-backup-1.0.1")
     parser.add_argument("--apply", action="store_true",
                         help="Perform uploads, replacements and the project-body update")
     publish(parser.parse_args())

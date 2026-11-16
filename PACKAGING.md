@@ -1,4 +1,4 @@
-# NyanLex Translator 1.0.0 packaging
+# NyanLex Translator 1.0.1 packaging
 
 Each JAR is tied to one Minecraft version and loader. The expanded release contains **62 JARs**: 37 Fabric, 23 NeoForge and 2 Forge. This covers every stable Minecraft release from 1.16.5 through 26.3 for Fabric, and from 1.20.1 through 26.3 for NeoForge, while retaining the four older targets.
 
@@ -117,17 +117,17 @@ Package only after all checks pass:
 ./verification/package-release.ps1
 ```
 
-The default output is `mods-jar/1.0.0-expanded`, preserving the previous `mods-jar/1.0.0` package. The output folder label does not change mod version 1.0.0 or public asset names. `-OutputName` can select another immediate child of `mods-jar`.
+The default output is `mods-jar/1.0.1-expanded`, preserving earlier packages such as `mods-jar/1.0.0-expanded`. The output folder label does not change mod version 1.0.1 or public asset names. `-OutputName` can select another immediate child of `mods-jar`.
 
 ```text
-mods-jar/1.0.0-expanded/
-  fabric/<MC>/NyanLex-Translator-1.0.0-Fabric-<MC>.jar
-  neoforge/<MC>/NyanLex-Translator-1.0.0-NeoForge-<MC>.jar
-  forge/<MC>/NyanLex-Translator-1.0.0-Forge-<MC>.jar
-  NyanLex-Translator-1.0.0-Fabric.zip
-  NyanLex-Translator-1.0.0-NeoForge.zip
-  NyanLex-Translator-1.0.0-Forge.zip
-  NyanLex-Translator-1.0.0-all-versions.zip
+mods-jar/1.0.1-expanded/
+  fabric/<MC>/NyanLex-Translator-1.0.1-Fabric-<MC>.jar
+  neoforge/<MC>/NyanLex-Translator-1.0.1-NeoForge-<MC>.jar
+  forge/<MC>/NyanLex-Translator-1.0.1-Forge-<MC>.jar
+  NyanLex-Translator-1.0.1-Fabric.zip
+  NyanLex-Translator-1.0.1-NeoForge.zip
+  NyanLex-Translator-1.0.1-Forge.zip
+  NyanLex-Translator-1.0.1-all-versions.zip
   SHA256SUMS.txt
 ```
 
@@ -140,14 +140,16 @@ The packager revalidates all 44 ports before creating a staging directory, binds
 - Check Fabric API's actual mod ID for each pinned API artifact. Older targets may use `fabric`; newer ones use `fabric-api`. Do not infer the ID solely from the Minecraft major version.
 - Confirm no earlier project-name directories, screenshot drivers, translation-hub content or authoring/test tools are packaged.
 - Run core unit tests and `git diff --check`.
-- Back up existing published assets and notes before replacement. Upload the individual JARs plus four loader ZIPs and checksums to GitHub Release `v1.0.0`.
+- Back up existing published assets and notes before replacement. Upload the individual JARs plus four loader ZIPs and checksums to GitHub Release `v1.0.1`.
 - On Modrinth, use one exact Minecraft version and one loader per version; Fabric API is required for Fabric. Compare uploaded file hashes against the verified package.
-- `publish-modrinth.py` preserves existing version IDs and download counts, and keeps the canonical filename `NyanLex-Translator-1.0.0-<Loader>-<Minecraft>.jar`. During replacement, a temporary JAR with identical entries and a different ZIP comment keeps the version downloadable; the distinct hash makes file deletion unambiguous. It is removed after the canonical file is uploaded and downloaded again with its exact expected hash. Each deletion is followed by an empty version edit to refresh the server's version cache after the deletion transaction; lost deletion responses are reconciled against that refreshed state. Final validation requires one file with the canonical name and bytes, with no temporary suffix. The current API ignores the former `primary_file` edit field. Use a fresh backup root for each release refresh; an interrupted run can resume with that same root. Run `python verification/test-modrinth-publication.py` before changing this upload sequence.
+- `publish-modrinth.py` preserves existing version IDs and download counts, and keeps the canonical filename `NyanLex-Translator-1.0.1-<Loader>-<Minecraft>.jar`. During replacement, a temporary JAR with identical entries and a different ZIP comment keeps the version downloadable; the distinct hash makes file deletion unambiguous. It is removed after the canonical file is uploaded and downloaded again with its exact expected hash. Each deletion is followed by an empty version edit to refresh the server's version cache after the deletion transaction; lost deletion responses are reconciled against that refreshed state. Final validation requires one file with the canonical name and bytes, with no temporary suffix. The current API ignores the former `primary_file` edit field. Use a fresh backup root for each release refresh; an interrupted run can resume with that same root. Run `python verification/test-modrinth-publication.py` before changing this upload sequence.
 - Update all four README download tables and release/store support descriptions together. Keep the GitHub default README in Traditional Chinese and Modrinth descriptions in English.
 - Describe the difference between build/static validation and actual game testing, including any unresolved startup failures. Never publish a known-broken artifact.
 
 ## Minecraft 26.3 source sharing
 
-`fabric263` and `neoforge263` use Java 25 and Gradle 9.5. They share the 26.2 platform sources and resources, with version-specific browser-link helpers in `platform26` / `platform263`. Input mappings use Minecraft input constants and NeoForge's original events so SDL and GLFW key codes are not mixed.
+`fabric263` and `neoforge263` use Java 25 and Gradle 9.5. They share the 26.2 platform sources and resources, with version-specific browser-link helpers in `platform26` / `platform263`. `fabric263` also keeps its own copy of one Mixin accessor under `fabric263/src/main/java`, because 26.3 moved the accessed field's type to another package; `verify-release-matrix.ps1` lists such files in `$versionSpecificSources` and rejects any other source there. Input mappings use Minecraft input constants and NeoForge's original events so SDL and GLFW key codes are not mixed.
 
-The verified dependency pins are Fabric Loader 0.19.5 / Fabric API 0.161.0+26.3 and NeoForge 26.3.0.6-beta. All public asset names retain the exact Minecraft version.
+The verified dependency pins are Fabric Loader 0.19.3 / Fabric API 0.161.0+26.3 and NeoForge 26.3.0.6-beta. All public asset names retain the exact Minecraft version.
+
+Compile each Fabric target against the oldest Loader it supports, not the newest. A newer Loader brings a newer Mixin annotation library whose compiled form older Loaders cannot read: a 26.3 JAR built against Loader 0.19.5 crashed on startup under 0.19.3 and 0.19.4, while the same sources built against 0.19.3 run on every later Loader.

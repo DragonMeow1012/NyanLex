@@ -22,6 +22,7 @@ class FileLocationsTest {
         assertEquals("nyanlex.json", name(e, "config"));
         assertEquals("nyanlex-ai-cache-zh-tw.json", name(e, "ai_cache"));
         assertEquals("nyanlex-cache-zh-tw.json", name(e, "gt_google"));
+        assertEquals("nyanlex-manual-zh-tw.json", name(e, "manual"));
         assertEquals("nyanlex-failures-zh-tw.json", name(e, "failures"));
         assertEquals("nyanlex-hub-cache-zh-tw.json", name(e, "hub_cache"));
         assertEquals("nyanlex-hub-state.json", name(e, "hub_state"));

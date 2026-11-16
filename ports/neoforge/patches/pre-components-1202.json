@@ -250,5 +250,63 @@
       "to": "\n    private void nyanlex$scrollComposer(double mx, double my, double horizontal, double amount, CallbackInfoReturnable<Boolean> ci) {\n",
       "count": 1
     }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TransientChatLogger.java": [
+    {
+      "from": "\nimport net.minecraftforge.common.MinecraftForge;\n",
+      "to": "\nimport net.neoforged.neoforge.common.NeoForge;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.event.TickEvent;\n",
+      "to": "\nimport net.neoforged.neoforge.event.TickEvent;\n",
+      "count": 1
+    },
+    {
+      "from": "\nimport net.minecraftforge.eventbus.api.EventPriority;\n",
+      "to": "\nimport net.neoforged.bus.api.EventPriority;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            MinecraftForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, TickEvent.ClientTickEvent.class,\n",
+      "to": "\n            NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, TickEvent.ClientTickEvent.class,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/TranslationManagerScreen.java": [
+    {
+      "from": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {\n        panel.mouseScrolled(delta);\n",
+      "to": "\n    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double delta) {\n        panel.mouseScrolled(delta);\n",
+      "count": 1
+    },
+    {
+      "from": "\n        this.renderBackground(g); // 1.20.1: Screen.render does not draw the background\n",
+      "to": "\n        this.renderBackground(g, mouseX, mouseY, partialTick);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/ForgeGuiHudMixin.java": [
+    {
+      "from": "\nimport net.minecraftforge.client.gui.overlay.ForgeGui;\n",
+      "to": "\nimport net.neoforged.neoforge.client.gui.overlay.ExtendedGui;\n",
+      "count": 1
+    },
+    {
+      "from": "\n@Mixin(ForgeGui.class)\n",
+      "to": "\n@Mixin(ExtendedGui.class)\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge/mixin/DebugHudMixin.java": [
+    {
+      "from": "\nimport net.minecraftforge.client.gui.overlay.ForgeGui;\n",
+      "to": "\nimport net.neoforged.neoforge.client.gui.overlay.ExtendedGui;\n",
+      "count": 1
+    },
+    {
+      "from": "\n@Mixin(ForgeGui.class)\n",
+      "to": "\n@Mixin(ExtendedGui.class)\n",
+      "count": 1
+    }
   ]
 }

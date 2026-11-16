@@ -137,6 +137,8 @@ public final class ItemWarmupDriver {
     private int submittedThisSession;
     private boolean limitReached;
     private long yieldSince = -1L;
+    /** The hold-back flag was raised because the show-original key is on, not for interactive work. */
+    private boolean heldForOriginal;
     private boolean yielding;
 
     // Batch under construction (survives across ticks until it is full or the run ends).
@@ -310,6 +312,19 @@ public final class ItemWarmupDriver {
             yielding = false;
             notifyChanged();
             return;
+        }
+        // The show-original key is on: the scan holds still (no item is probed, none is counted
+        // done, nothing is sent) and carries on by itself when the key goes off. Requests already
+        // in flight were settled above and are not touched. Shown as the same hold-back as
+        // yielding; the starvation guard of yieldToInteractive does not apply.
+        if (backend.showingOriginal()) {
+            heldForOriginal = true;
+            setYielding(true);
+            return;
+        }
+        if (heldForOriginal) {
+            heldForOriginal = false;
+            setYielding(false);
         }
         if (inflight.size() >= effectiveConcurrency()) return;
         if (now < nextDispatchAt) return;

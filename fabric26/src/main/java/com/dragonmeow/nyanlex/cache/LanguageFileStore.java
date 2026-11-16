@@ -112,6 +112,7 @@ public final class LanguageFileStore implements PersistentStore {
     }
     @Override public Map<String, String> entries() { return current().entries(); }
     @Override public int size() { return current().size(); }
+    @Override public boolean isWritable() { return current().isWritable(); }
 
     /** Clear only the currently selected language. Other language files are permanent. */
     @Override public void clear() { current().clear(); }

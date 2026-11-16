@@ -3,6 +3,8 @@ package com.dragonmeow.nyanlex.fabric.mixin;
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.fabric.FabricTextStyle;
 import com.dragonmeow.nyanlex.fabric.NyanLexFabric;
+import com.dragonmeow.nyanlex.fabric.OverlayDialogueView;
+import com.dragonmeow.nyanlex.fabric.TransientChatLogger;
 import com.dragonmeow.nyanlex.service.TranslationDecision;
 import com.dragonmeow.nyanlex.service.TranslationService;
 import com.dragonmeow.nyanlex.translate.InternalRenderGuard;
@@ -33,6 +35,9 @@ public abstract class GuiScoreboardMixin {
     @Shadow private Component overlayMessageString;
     @Shadow private Component title;
     @Shadow private Component subtitle;
+
+    /** Set by the HUD redirect for the one draw call that follows: subtitle or title. */
+    private static boolean nyanlex$subtitleDraw;
 
     private final ArrayDeque<Component> nyanlex$sources = new ArrayDeque<>();
     private final ArrayDeque<Component> nyanlex$rendered = new ArrayDeque<>();
@@ -91,7 +96,8 @@ public abstract class GuiScoreboardMixin {
     private int nyanlex$score(Font font, PoseStack pose, Component text, float x, float y, int color) {
         if (!HookGuard.enter("GuiScoreboard.score")) return font.draw(pose, text, x, y, color);
         try {
-            Component value = take(text);
+            Component taken = take(text);
+            Component value = NyanLexFabric.projectionSuppressed() ? text : taken;
             return InternalRenderGuard.call(() -> font.draw(pose, value, x, y, color));
         } catch (Throwable guardError) {
             HookGuard.fail("GuiScoreboard.score", guardError);
@@ -123,10 +129,22 @@ public abstract class GuiScoreboardMixin {
         if (!HookGuard.enter("GuiScoreboard.hud")) return font.drawShadow(pose, text, x, y, color);
         try {
             TranslationService service = NyanLexFabric.service();
+            if (text == overlayMessageString) {
+                // An overlay dialogue box is translated block by block and drawn in place; it never
+                // goes down the one-line path below (its HUD numbers and typed text change every frame).
+                // The rebuilt component has the original's total advance, so the backdrop and the
+                // centring that vanilla already computed from the original stay right.
+                Component dialogue = OverlayDialogueView.view(text, font);
+                if (dialogue != null) {
+                    return InternalRenderGuard.call(() -> font.drawShadow(pose, dialogue, x, y, color));
+                }
+            }
             if (service != null && text == overlayMessageString)
                 return drawTranslated("actionBar", service::translateActionBar, font, pose, text, x, y, color);
-            if (service != null && (text == title || text == subtitle))
+            if (service != null && (text == title || text == subtitle)) {
+                nyanlex$subtitleDraw = text == this.subtitle;
                 return drawTranslated("title", service::translateTitle, font, pose, text, x, y, color);
+            }
             return InternalRenderGuard.call(() -> font.drawShadow(pose, text, x, y, color));
         } catch (Throwable guardError) {
             HookGuard.fail("GuiScoreboard.hud", guardError);
@@ -137,6 +155,12 @@ public abstract class GuiScoreboardMixin {
     private static int drawTranslated(String id, Function<String, TranslationDecision> fn, Font font,
                                       PoseStack pose, Component text, float x, float y, int color) {
         Component value = fn == null || text == null ? null : FabricTextStyle.renderTranslated(id, text, fn);
+        if ("title".equals(id) && fn != null && text != null && TransientChatLogger.on()) {
+            TransientChatLogger.title(nyanlex$subtitleDraw, text, value != null);
+        }
+        // While an original frame is being captured (or the mod draws its own surface) the
+        // translation is not projected: the row is drawn exactly as the game would draw it.
+        if (value != null && NyanLexFabric.projectionSuppressed()) value = null;
         if (value == null) value = text;
         final Component shown = value;
         float center = x + font.width(text) / 2f;

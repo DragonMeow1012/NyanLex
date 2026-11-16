@@ -38,7 +38,7 @@ public final class ParagraphModel {
         List<Range> ranges = new ArrayList<>();
         for (int start = 0; start < lines.size(); ) {
             String first = lines.get(start);
-            if (isBlank(first)) {
+            if (isBlank(first) || isGraphicOnly(first)) {
                 ranges.add(new Range(start, start));
                 start++;
                 continue;
@@ -46,7 +46,7 @@ public final class ParagraphModel {
             int end = start;
             while (end + 1 < lines.size()) {
                 String next = lines.get(end + 1);
-                if (isBlank(next) || startsIndentedParagraph(next)) break;
+                if (isBlank(next) || isGraphicOnly(next) || startsIndentedParagraph(next)) break;
                 end++;
             }
             ranges.add(new Range(start, end));
@@ -278,6 +278,22 @@ public final class ParagraphModel {
 
     public static boolean isBlank(String text) {
         return text == null || text.isBlank();
+    }
+
+    /**
+     * A row made only of icons, badges, rules or layout moves (no letters or digits at all):
+     * a divider line, a badge row. It is never part of a sentence, so it is a boundary of its
+     * own like a blank row, and is shown exactly as it is instead of being joined into a request.
+     */
+    public static boolean isGraphicOnly(String text) {
+        if (text == null || text.isBlank()) return false;
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if (Character.isWhitespace(cp)) continue;
+            if (!DecorStyleMatcher.isDecor(cp)) return false;
+        }
+        return true;
     }
 
     /**

@@ -125,6 +125,12 @@ final class FabricItemWarmupSource implements ItemWarmupSource {
         }
 
         @Override
+        public boolean showingOriginal() {
+            TranslationService s = NyanLexFabric.service();
+            return s != null && s.isShowOriginalOnly();
+        }
+
+        @Override
         public boolean usesSerialLocalAi() {
             TranslationService s = NyanLexFabric.service();
             return s != null && s.isSerialLocalAiEngine();

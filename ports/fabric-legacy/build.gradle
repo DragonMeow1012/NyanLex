@@ -10,6 +10,14 @@ def targets = new JsonSlurper().parse(file('targets.json'))
 def target = providers.gradleProperty('target').getOrElse('1.17')
 if (!targets.containsKey(target)) throw new GradleException("Unsupported Fabric legacy target: ${target}")
 def config = targets[target]
+// Mixins whose target class does not exist in this Minecraft version (for example the Text Display
+// entity before 1.19.4). They are dropped from the compile set and from the packaged mixin config
+// instead of staying registered against a missing class.
+def droppedMixins = (config.dropMixins ?: []) as Set
+def droppedSources = droppedMixins.collect { "com/dragonmeow/nyanlex/fabric/mixin/${it}.java".toString() } as Set
+// Mixins that come from another source tree through sourceOverrides and must be registered in the
+// packaged mixin config because the source tree's own config does not list them.
+def addedMixins = (config.addMixins ?: []) as List
 def repositoryRoot = file('../..')
 def sourceRoot = new File(repositoryRoot, config.sourceProject)
 def commonProperties = new Properties()
@@ -39,6 +47,9 @@ def patches = [:]
 ([config.profile ?: target] + (config.patchProfiles ?: []) + [target]).unique().collect { file("patches/${it}.json") }.findAll { it.exists() }.each {
     new JsonSlurper().parse(it).each { path, edits -> patches.computeIfAbsent(path) { [] }.addAll(edits) }
 }
+// An override without edits still replaces (or adds) the file, so a target can take a platform class
+// unchanged from another source tree.
+(config.sourceOverrides ?: [:]).keySet().each { path -> patches.computeIfAbsent(path) { [] } }
 def generatedAdapters = layout.buildDirectory.dir('generated/api-adapters')
 def adapterSource = { path ->
     def sourceProject = (config.sourceOverrides ?: [:])[path]
@@ -68,7 +79,8 @@ def replacements = adapterRoots.collectMany { root -> fileTree(root).matching { 
 replacements.addAll(patches.keySet())
 sourceSets.main.java.setSrcDirs([new File(sourceRoot, 'src/main/java')] + adapterRoots + [generatedAdapters])
 sourceSets.main.java.exclude { details ->
-    replacements.contains(details.path) && details.file.toPath().startsWith(new File(sourceRoot, 'src/main/java').toPath())
+    droppedSources.contains(details.path) ||
+            (replacements.contains(details.path) && details.file.toPath().startsWith(new File(sourceRoot, 'src/main/java').toPath()))
 }
 sourceSets.main.resources.setSrcDirs([new File(sourceRoot, 'src/main/resources')])
 
@@ -83,6 +95,8 @@ processResources {
     inputs.property('minecraftTarget', target)
     inputs.property('javaTarget', config.java)
     inputs.property('fabricApiId', config.fabricApiId)
+    inputs.property('droppedMixins', droppedMixins.sort().toString())
+    inputs.property('addedMixins', addedMixins.toString())
     doFirst { delete destinationDir }
     filesMatching('fabric.mod.json') { expand(version: project.version) }
     doLast {
@@ -94,6 +108,21 @@ processResources {
         metadata.depends.remove('fabric-api')
         metadata.depends[config.fabricApiId] = '*'
         metadataFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n'
+        if (!droppedMixins.isEmpty() || !addedMixins.isEmpty()) {
+            fileTree(destinationDir).matching { include '*.mixins.json' }.files.each { mixinFile ->
+                def mixinConfig = new JsonSlurper().parse(mixinFile)
+                ['client', 'common', 'server', 'mixins'].each { section ->
+                    if (mixinConfig.containsKey(section)) {
+                        mixinConfig[section] = mixinConfig[section].findAll { !droppedMixins.contains(it) }
+                    }
+                }
+                // Only the main config lists the translation mixins; nyanlex.compat.mixins.json is for optional mods.
+                if (mixinFile.name == 'nyanlex.mixins.json' && mixinConfig.containsKey('client')) {
+                    addedMixins.each { name -> if (!mixinConfig.client.contains(name)) mixinConfig.client << name }
+                }
+                mixinFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(mixinConfig)) + '\n'
+            }
+        }
     }
 }
 

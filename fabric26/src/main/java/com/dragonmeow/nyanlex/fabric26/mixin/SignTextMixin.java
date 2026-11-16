@@ -45,7 +45,7 @@ public abstract class SignTextMixin {
                 for (int i = 0; i < projected.length; i++) {
                     prepared[i] = projected[i].getVisualOrderText();
                 }
-                this.nyanlex$projectedLines[slot] = projected.clone();
+                this.nyanlex$projectedLines[slot] = Arrays.copyOf(projected, projected.length);
                 this.nyanlex$preparedLines[slot] = prepared;
             }
             cir.setReturnValue(this.nyanlex$preparedLines[slot]);

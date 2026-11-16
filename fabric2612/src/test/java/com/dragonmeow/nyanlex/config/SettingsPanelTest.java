@@ -744,6 +744,7 @@ class SettingsPanelTest {
         p.setCategory(SettingsCategory.ADVANCED);
         int collapsed = p.rowCount();
         assertFalse(p.isExpanded(SettingsModel.FILES_GROUP_ID));
+        p.keyPressed(SettingsPanel.KEY_END, false, false); // the group sits below the cards of this page
         click(p, p.headerBounds(SettingsModel.FILES_GROUP_ID));
         assertTrue(p.isExpanded(SettingsModel.FILES_GROUP_ID));
         assertEquals(collapsed + FileLocations.IDS.size(), p.rowCount());
@@ -1239,9 +1240,7 @@ class SettingsPanelTest {
             Rec c = new Rec();
             p.render(c, -1, -1);
             int switches = 0;
-            for (SettingCard card : SettingsModel.cards(cat)) {
-                if (card.kind() == SettingCard.Kind.TOGGLE) switches++;
-            }
+            for (SettingCard card : SettingsModel.cards(cat)) if (card.kind() == SettingCard.Kind.TOGGLE) switches++;
             long states = c.texts.stream().map(Text::s)
                     .filter(t -> t.equals("開") || t.equals("關") || t.equals("依序") || t.equals("先到先顯示")).count();
             assertTrue(switches > 0 && states >= switches, cat + ": " + switches + " switches, " + states + " states");

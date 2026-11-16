@@ -29,5 +29,51 @@
       "to": "\nimport net.minecraft.Util;\n",
       "count": 1
     }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/BorrowedGlyphs.java": [
+    {
+      "from": "\nimport net.minecraft.resources.Identifier;\n",
+      "to": "\nimport net.minecraft.resources.ResourceLocation;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public static Identifier fontId(GlyphStitcher stitcher) {\n",
+      "to": "\n    public static ResourceLocation fontId(GlyphStitcher stitcher) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public static void fontReloaded(FontSet set, Identifier id) {\n",
+      "to": "\n    public static void fontReloaded(FontSet set, ResourceLocation id) {\n",
+      "count": 1
+    },
+    {
+      "from": "\n    public static List<GlyphProvider> withBorrowing(FontSet owner, Identifier id, List<GlyphProvider> own) {\n",
+      "to": "\n    public static List<GlyphProvider> withBorrowing(FontSet owner, ResourceLocation id, List<GlyphProvider> own) {\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/GlyphStitcherAccessor.java": [
+    {
+      "from": "\nimport net.minecraft.resources.Identifier;\n",
+      "to": "\nimport net.minecraft.resources.ResourceLocation;\n",
+      "count": 1
+    },
+    {
+      "from": "\n    Identifier nyanlex$texturePrefix();\n",
+      "to": "\n    ResourceLocation nyanlex$texturePrefix();\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/OverlayDialogueView.java": [
+    {
+      "from": "\nimport net.minecraft.resources.Identifier;\n",
+      "to": "\nimport net.minecraft.resources.ResourceLocation;\n",
+      "count": 1
+    },
+    {
+      "from": "\n            Identifier id = Identifier.tryParse(fontId);\n",
+      "to": "\n            ResourceLocation id = ResourceLocation.tryParse(fontId);\n",
+      "count": 1
+    }
   ]
 }

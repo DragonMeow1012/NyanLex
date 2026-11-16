@@ -9,6 +9,9 @@
     "AbstractContainerScreenAccessor",
     "ChatComponentAccessor",
     "FontSplitMixin",
+    "FontSetBorrowMixin",
+    "GlyphStitcherAccessor",
+    "BakedSheetGlyphAccessor",
     "GuiGraphicsTextMixin",
     "HudMixin",
     "BossBarMixin",
@@ -16,7 +19,10 @@
     "BookPageMixin",
     "SignRendererLayoutMixin",
     "SignTextMixin",
-    "ChatComposerMixin"
+    "ChatComposerMixin",
+    "TextDisplayMixin",
+    "LanguageInstanceMixin",
+    "LanguageReloadMixin"
   ],
   "injectors": {
     "defaultRequire": 0

@@ -107,21 +107,38 @@ class SettingsModelTest {
     }
 
     @Test
+    void theTranslationManagerCardOpensTheManagerAndIsFoundBySearch() throws Exception {
+        SettingCard card = SettingsModel.byId("manager");
+        assertEquals(SettingsCategory.ADVANCED, card.category());
+        assertEquals(SettingCard.Kind.BUTTON, card.kind());
+        assertEquals(SettingAction.OPEN_TRANSLATION_MANAGER, card.entry().action());
+        assertEquals("manager", ids(SettingsModel.cards(SettingsCategory.ADVANCED)).get(0), "the first card of 進階");
+        Function<String, String> lang = zhTw();
+        assertEquals("譯文管理", SettingsModel.title(card, lang));
+        assertFalse(SettingsModel.description(card, lang).isBlank());
+        for (String word : List.of("譯文", "手動", "修改", "manager", "译文", "訳文")) {
+            assertTrue(ids(SettingsModel.search(word, lang)).contains("manager"), word);
+        }
+    }
+
+    @Test
     void displayCategoryIsOneAllItemsRowThenOneSurfaceRowEach() {
         List<SettingsModel.Node> nodes = SettingsModel.nodes(SettingsCategory.DISPLAY);
-        assertEquals(1 + 9 + 1, nodes.size());
+        assertEquals(2 + 1 + 9, nodes.size());
         for (SettingsModel.Node node : nodes) assertFalse(node.isGroup(), "no folding groups on the display page");
-        assertEquals("all_items", nodes.get(1).card().id());
-        assertEquals(SettingCard.Kind.ALL, nodes.get(1).card().kind());
+        assertEquals("all_items", nodes.get(2).card().id());
+        assertEquals(SettingCard.Kind.ALL, nodes.get(2).card().kind());
         assertEquals("dnt", nodes.get(0).card().id(), "不翻譯詞彙 sits above all display controls");
-        for (int i = 2; i < 11; i++) {
+        assertEquals("chat_log", nodes.get(1).card().id(), "標題與對話留在聊天欄 follows it");
+        assertEquals(SettingEntry.Type.TOGGLE, nodes.get(1).card().entry().type());
+        for (int i = 3; i < 12; i++) {
             SettingCard card = nodes.get(i).card();
             assertEquals(SettingCard.Kind.SURFACE, card.kind());
             assertEquals(SettingEntry.Type.CYCLE, card.entry().type());
             assertEquals(SettingEntry.Type.TOGGLE, card.engineEntry().type());
         }
-        assertEquals("chat", nodes.get(2).card().id());
-        assertEquals("screen", nodes.get(10).card().id());
+        assertEquals("chat", nodes.get(3).card().id());
+        assertEquals("screen", nodes.get(11).card().id());
     }
 
     @Test

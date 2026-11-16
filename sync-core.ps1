@@ -199,6 +199,13 @@ foreach ($f in Get-ChildItem $testSrcDir -Filter *.java -Recurse) {
     # check belong to the new screens and sources of the root and fabric2612 trees.
     if ($f.Name -in 'DialogPanelTest.java', 'QuickSetupPanelTest.java', 'ManualPanelTest.java',
             'LangFilesTest.java', 'NoChatMessagesTest.java', 'WarmupConfirmDialogTest.java') { continue }
+    # Cross-tree source contract: it reads every tree's sources from the repository root, so
+    # one copy in the root tree is enough and it is not mirrored into fabric12111.
+    if ($f.Name -eq 'ScreenScanDefaultKeyContractTest.java') { continue }
+    # These three exercise the platform text layer, whose font type differs on 1.21.11
+    # (a font description instead of a resource id); fabric12111 keeps hand-ported copies.
+    if ($f.Name -in 'IconTextStyleTest.java', 'OverlayDialogueIconStylerTest.java',
+            'OverlayDialogueStylerTest.java') { continue }
     $relative = $f.FullName.Substring($testSrcDir.Length + 1)
     # hub.tool is an author-only sub-package (HubExportTool/ChatLineClassifier/
     # UnmaskedNameConverter) this script deliberately never mirrors into any tree's

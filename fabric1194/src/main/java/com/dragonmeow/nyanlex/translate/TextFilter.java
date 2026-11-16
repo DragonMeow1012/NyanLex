@@ -222,6 +222,7 @@ public final class TextFilter {
     public static boolean isDecorativeSymbol(int cp) {
         if (cp == 0xA7 || cp == 0x27E6 || cp == 0x27E7) return false; // § ⟦ ⟧
         if (cp == 0xFFFD) return false; // REPLACEMENT CHAR is corruption evidence, not an icon
+        if (cp >= 0xC0000 && cp <= 0xDFFFF) return true; // horizontal-move characters of a pack's layout font
         int type = Character.getType(cp);
         return type == Character.OTHER_SYMBOL
                 || type == Character.PRIVATE_USE

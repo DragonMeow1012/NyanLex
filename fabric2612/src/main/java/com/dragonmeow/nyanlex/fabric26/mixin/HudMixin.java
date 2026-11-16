@@ -1,8 +1,11 @@
 package com.dragonmeow.nyanlex.fabric26.mixin;
 
 import com.dragonmeow.nyanlex.translate.HookGuard;
+import com.dragonmeow.nyanlex.fabric26.ComponentCapture;
 import com.dragonmeow.nyanlex.fabric26.Fabric26TextStyle;
 import com.dragonmeow.nyanlex.fabric26.NyanLexFabric26;
+import com.dragonmeow.nyanlex.fabric26.OverlayDialogueView;
+import com.dragonmeow.nyanlex.fabric26.TransientChatLogger;
 import com.dragonmeow.nyanlex.service.TranslationDecision;
 import com.dragonmeow.nyanlex.service.TranslationService;
 
@@ -49,6 +52,15 @@ public abstract class HudMixin {
 
     @Shadow
     public abstract Font getFont();
+
+    @Shadow
+    private Component title;
+
+    @Shadow
+    private Component subtitle;
+
+    /** Set by the title redirect for the one draw call that follows: subtitle or title. */
+    private static boolean nyanlex$subtitleDraw;
 
     private final ArrayDeque<Component> nyanlex$scoreboardSources = new ArrayDeque<>();
     private final ArrayDeque<Component> nyanlex$scoreboardRendered = new ArrayDeque<>();
@@ -273,6 +285,7 @@ public abstract class HudMixin {
             if (mc != null && mc.player != null) {
                 NyanLexFabric26.registerItemEntity(mc.player.getMainHandItem());
             }
+            ComponentCapture.captureHeldName(text); // 偵錯模式 only; one cheap check otherwise
             nyanlex$backdrop("held", g, font, text, x, y, width, color, s == null ? null : s::translateHeld);
         } catch (Throwable guardError) {
             HookGuard.fail("Hud.heldName", guardError);
@@ -293,6 +306,8 @@ public abstract class HudMixin {
         }
         try {
             TranslationService s = NyanLexFabric26.service();
+            nyanlex$subtitleDraw = text == this.subtitle;
+            ComponentCapture.captureTitle(text, nyanlex$subtitleDraw); // 偵錯模式 only
             nyanlex$backdrop("title", g, font, text, x, y, width, color, s == null ? null : s::translateTitle);
         } catch (Throwable guardError) {
             HookGuard.fail("Hud.title", guardError);
@@ -316,6 +331,14 @@ public abstract class HudMixin {
             return;
         }
         try {
+            // An overlay dialogue box is translated block by block and drawn in place; it never
+            // goes down the one-line path below (its HUD numbers and typed text change every frame).
+            Component dialogue = OverlayDialogueView.view(text, font);
+            if (dialogue != null) {
+                com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(
+                        () -> g.textWithBackdrop(font, dialogue, x, y, width, color));
+                return;
+            }
             TranslationService s = NyanLexFabric26.service();
             nyanlex$backdrop("actionBar", g, font, text, x, y, width, color, s == null ? null : s::translateActionBar);
         } catch (Throwable guardError) {
@@ -331,6 +354,9 @@ public abstract class HudMixin {
                                               Function<String, TranslationDecision> fn) {
         if (fn != null && text != null) {
             Component translated = Fabric26TextStyle.renderTranslated(surfaceId, text, fn);
+            if ("title".equals(surfaceId) && TransientChatLogger.on()) {
+                TransientChatLogger.title(nyanlex$subtitleDraw, text, translated != null);
+            }
             if (translated != null && !NyanLexFabric26.projectionSuppressed()) {
                 int center = x + font.width(text) / 2; // keep the original's centre
                 List<Component> lines = Fabric26TextStyle.splitLines(translated);

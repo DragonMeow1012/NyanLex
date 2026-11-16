@@ -68,6 +68,10 @@ class ChatComposerPanelTest {
         boolean current = true;
         double x, y = 1;
         int requests, fills;
+        // Chat box cursor; negative means "at the end", like a freshly typed box.
+        int cursor = -1;
+        // End of a highlighted selection that starts at the cursor; negative means none.
+        int selectionEnd = -1;
         BiConsumer<String, String> result;
         String clientLanguage = "en_us";
         boolean formatTokensConsumed;
@@ -89,7 +93,16 @@ class ChatComposerPanelTest {
         public double positionX() { return x; }
         public double positionY() { return y; }
         public void position(double x, double y) { this.x = x; this.y = y; }
-        public void fill(String text) { chat = text; fills++; }
+        int cursorAt() { return cursor < 0 ? chat.length() : Math.min(cursor, chat.length()); }
+        public void fill(String text) {
+            int at = cursorAt();
+            int from = selectionEnd < 0 ? at : Math.min(at, Math.min(selectionEnd, chat.length()));
+            int to = selectionEnd < 0 ? at : Math.max(at, Math.min(selectionEnd, chat.length()));
+            chat = chat.substring(0, from) + text + chat.substring(to);
+            cursor = from + text.length();
+            selectionEnd = -1;
+            fills++;
+        }
         public boolean current() { return current; }
         public void execute(Runnable task) { task.run(); }
         public void translate(String source, String target, BiConsumer<String, String> callback) {
@@ -105,6 +118,86 @@ class ChatComposerPanelTest {
         assertEquals("等我一下", h.draft);
         assertEquals(1, h.fills);
         assertFalse(panel.busy());
+    }
+    @Test void translationIsTypedInAtTheCursorWithoutAddedSpaces() {
+        Host h = new Host(); h.chat = "hi ";
+        ChatComposerPanel panel = new ChatComposerPanel(h);
+        panel.submit();
+        h.result.accept("Hello", null);
+        assertEquals("hi Hello", h.chat);
+        assertEquals("等我一下", h.draft);
+        assertEquals(1, h.fills);
+        assertEquals(8, h.cursor, "the cursor follows the inserted text");
+        h.chat = "/pc "; h.cursor = -1;
+        panel.observe();
+        panel.submit();
+        h.result.accept("Hello team.", null);
+        assertEquals("/pc Hello team.", h.chat);
+        h.chat = ""; h.cursor = -1;
+        panel.observe();
+        panel.submit();
+        h.result.accept("Hello team.", null);
+        assertEquals("Hello team.", h.chat);
+        // Typing semantics: no space is invented, however the existing text ends.
+        h.chat = "/pc"; h.cursor = -1;
+        panel.observe();
+        panel.submit();
+        h.result.accept("Hello", null);
+        assertEquals("/pcHello", h.chat);
+    }
+    @Test void translationGoesInTheMiddleOfTheChatTextOrOverASelection() {
+        Host h = new Host(); h.chat = "ab  cd"; h.cursor = 3;
+        ChatComposerPanel panel = new ChatComposerPanel(h);
+        panel.submit();
+        h.result.accept("Hello", null);
+        assertEquals("ab Hello cd", h.chat);
+        assertEquals(8, h.cursor);
+        h.chat = "tail"; h.cursor = 0;
+        panel.observe();
+        panel.submit();
+        h.result.accept("Head:", null);
+        assertEquals("Head:tail", h.chat);
+        h.chat = "hello world"; h.cursor = 6; h.selectionEnd = 11;
+        panel.observe();
+        panel.submit();
+        h.result.accept("there", null);
+        assertEquals("hello there", h.chat);
+        assertEquals(11, h.cursor);
+    }
+    @Test void commandPrefixDoesNotMakeATranslatedCommandAcceptable() {
+        Host h = new Host(); h.chat = "/pc ";
+        ChatComposerPanel panel = new ChatComposerPanel(h);
+        panel.submit();
+        h.result.accept("/op someone", null);
+        assertEquals("/pc ", h.chat);
+        assertEquals(0, h.fills);
+    }
+    @Test void overlongInsertionIsRefusedWholeAndReported() {
+        Host h = new Host(); h.chat = "x".repeat(250);
+        ChatComposerPanel panel = new ChatComposerPanel(h);
+        panel.resize(800, 600);
+        panel.submit();
+        // 250 + 6 = 256 fits exactly.
+        h.result.accept("abcdef", null);
+        assertEquals("x".repeat(250) + "abcdef", h.chat);
+        assertEquals(1, h.fills);
+        h.chat = "x".repeat(250); h.cursor = -1;
+        panel.submit();
+        // 250 + 7 = 257 would have to be cut: the box is left untouched instead.
+        h.result.accept("abcdefg", null);
+        assertEquals("x".repeat(250), h.chat);
+        assertEquals(1, h.fills);
+        h.chat = "y".repeat(256); h.cursor = -1;
+        panel.submit();
+        h.result.accept("Hi", null);
+        assertEquals("y".repeat(256), h.chat);
+        assertEquals(1, h.fills);
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        panel.render(new ChatComposerPanel.Canvas() {
+            public void fill(int x, int y, int w, int hh, int color) {}
+            public void text(String value, int x, int y, int color) { labels.add(value); }
+        });
+        assertTrue(labels.contains("nyanlex.composer.too_long"));
     }
     @Test void languageLabelTracksClientLanguageWithoutChangingTranslationTarget() {
         Host host = new Host();
@@ -189,13 +282,29 @@ class ChatComposerPanelTest {
         panel.submit();
         assertEquals(1, host.requests, "closing the picker must not close the composer");
     }
-    @Test void editsEvenWhenRevertedInvalidateOldResult() {
+    @Test void draftEditsEvenWhenRevertedInvalidateOldResult() {
         Host h = new Host(); ChatComposerPanel panel = new ChatComposerPanel(h);
-        panel.submit(); h.chat = "new text"; panel.observe(); h.chat = ""; panel.observe();
+        panel.submit(); h.draft = "改一下"; panel.observe(); h.draft = "等我一下"; panel.observe();
         h.result.accept("old result", null);
         assertEquals(0, h.fills);
         panel.submit(); h.result.accept("fresh result", null);
         assertEquals("fresh result", h.chat);
+    }
+    @Test void chatEditsDuringTranslationKeepResultAndInsertAtTheCursorThen() {
+        Host h = new Host(); ChatComposerPanel panel = new ChatComposerPanel(h);
+        panel.submit();
+        // The command prefix is typed while the translation is still running.
+        h.chat = "/p"; panel.observe(); h.chat = "/pc "; panel.observe();
+        h.result.accept("Wait for me.", null);
+        assertEquals("/pc Wait for me.", h.chat);
+        assertEquals(1, h.fills);
+        // The cursor moved to the front meanwhile: the result goes where it is when it arrives.
+        h.chat = "tail"; h.cursor = -1; panel.observe();
+        panel.submit();
+        h.cursor = 0; panel.observe();
+        h.result.accept("Head ", null);
+        assertEquals("Headtail", h.chat);
+        assertEquals(2, h.fills);
     }
     @Test void closedScreenAndChangedLanguageRejectLateResults() {
         Host h = new Host(); ChatComposerPanel panel = new ChatComposerPanel(h);

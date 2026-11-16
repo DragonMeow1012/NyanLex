@@ -24,6 +24,7 @@
     {"from":"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIII)I", "to":"(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)I"},
     {"from":"Component text, int x, int y, int width, int color)", "to":"Component text, int x, int y, int color)"},
     {"from":"drawStringWithBackdrop(font, text, x, y, width, color)", "to":"drawString(font, text, x, y, color)"},
+    {"from":"drawStringWithBackdrop(font, dialogue, x, y, width, color)", "to":"drawString(font, dialogue, x, y, color)"},
     {"from":"drawStringWithBackdrop(font, translated, center - w / 2, y, w, color)", "to":"drawString(font, translated, center - w / 2, y, color)"},
     {"from":"drawStringWithBackdrop(font, line, center - w / 2, ly, w, color)", "to":"drawString(font, line, center - w / 2, ly, color)"},
     {"from":"x, y, width, color, s == null", "to":"x, y, font.width(text), color, s == null"}

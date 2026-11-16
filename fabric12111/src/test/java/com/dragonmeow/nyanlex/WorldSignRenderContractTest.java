@@ -71,7 +71,12 @@ class WorldSignRenderContractTest {
             assertTrue(compact.contains("int slot = filtered ? 1 : 0"), target.mixin());
             assertTrue(compact.contains("Arrays.equals(this.nyanlex$projectedLines[slot], projected)"),
                     target.mixin() + ": async wording/style changes must invalidate the prepared rows");
-            assertTrue(compact.contains("this.nyanlex$projectedLines[slot] = projected.clone()"), target.mixin());
+            assertTrue(compact.contains(
+                            "this.nyanlex$projectedLines[slot] = Arrays.copyOf(projected, projected.length)"),
+                    target.mixin() + ": the cached projection must be copied with Arrays.copyOf");
+            assertFalse(compact.contains(".clone()"),
+                    target.mixin() + ": an array clone() inside a mixin class makes Mixin application"
+                            + " fail on some versions; copy with Arrays.copyOf instead");
             assertTrue(compact.contains("prepared[i] = projected[i].getVisualOrderText()"), target.mixin());
             assertFalse(compact.contains("layout.apply(projected[i])"),
                     target.mixin() + ": vanilla would discard every wrapped fragment after the first");

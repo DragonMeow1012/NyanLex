@@ -57,6 +57,7 @@ class ItemWarmupDriverTest {
         boolean requests = true;
         boolean limited;
         boolean interactive;
+        boolean original;
         boolean codex;
         final Set<String> ready = new HashSet<>();
         final Set<String> pending = new HashSet<>();
@@ -73,6 +74,7 @@ class ItemWarmupDriverTest {
         public boolean isReady(com.dragonmeow.nyanlex.warmup.WarmupCategory category, String s) { return ready.contains(s) || nativeUnits.contains(s); }
         public boolean isPending(com.dragonmeow.nyanlex.warmup.WarmupCategory category, String s) { return pending.contains(s); }
         public boolean interactiveBusy() { return interactive; }
+        public boolean showingOriginal() { return original; }
         public boolean usesCodex() { return codex; }
         public boolean needsNoTranslation(com.dragonmeow.nyanlex.warmup.WarmupCategory category, String s) { return nativeUnits.contains(s); }
         public void warm(com.dragonmeow.nyanlex.warmup.WarmupCategory category, List<String> sources) {
@@ -460,6 +462,54 @@ class ItemWarmupDriverTest {
         d.tick();
         assertEquals(1, backend.warmed.size());
         assertFalse(d.progress().yielding());
+    }
+
+    @Test
+    void theShowOriginalKeyHoldsTheWholeScanStillAndItCarriesOnAfterwards() {
+        FakeSource source = new FakeSource(fatItems(20));
+        FakeBackend backend = new FakeBackend();
+        backend.original = true;
+        AtomicLong clock = new AtomicLong(1000);
+        ItemWarmupDriver d = driver(source, backend, cfg(), clock);
+        d.start();
+
+        // Far past the starvation guard of interactive yielding: it must not let one request out.
+        for (int i = 0; i < 10; i++) {
+            d.tick();
+            clock.addAndGet(ItemWarmupDriver.YIELD_CAP_MS);
+        }
+        assertEquals(0, backend.warmed.size(), "nothing is sent while the original is shown");
+        assertEquals(0, source.probeCalls, "no item is looked at, so none can be counted done");
+        assertEquals(0, d.progress().scanned());
+        assertEquals(ItemWarmupDriver.State.RUNNING, d.state(), "holding still is not a pause");
+        assertTrue(d.progress().yielding());
+
+        backend.original = false;
+        d.tick();
+        assertEquals(1, backend.warmed.size(), "the run carries on by itself");
+        assertTrue(d.progress().scanned() > 0);
+        assertFalse(d.progress().yielding());
+    }
+
+    @Test
+    void requestsAlreadyInFlightWhenTheKeyGoesOnStillSettleNormally() {
+        FakeSource source = new FakeSource(fatItems(20));
+        FakeBackend backend = new FakeBackend();
+        backend.readyAfterWarm = false;
+        AtomicLong clock = new AtomicLong(1000);
+        ItemWarmupDriver d = driver(source, backend, cfg(), clock);
+        d.start();
+        d.tick();
+        assertEquals(1, backend.warmed.size());
+        assertEquals(1, d.progress().inflightRequests());
+
+        backend.original = true;
+        backend.answer(0);
+        clock.addAndGet(1500);
+        d.tick();
+        assertEquals(1, backend.warmed.size(), "no new request while the original is shown");
+        assertEquals(0, d.progress().inflightRequests(), "the request sent earlier was settled");
+        assertTrue(d.progress().translatedItems() > 0);
     }
 
     @Test

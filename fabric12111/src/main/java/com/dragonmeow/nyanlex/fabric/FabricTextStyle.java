@@ -196,9 +196,20 @@ public final class FabricTextStyle {
         return new Rendered(rebuilt, decision.mode());
     }
 
+    /** Bumped by every {@link #clearRenderMemo()}; see {@link #renderEpoch()}. */
+    private static volatile int renderEpoch;
+
     public static void clearRenderMemo() {
-        // Kept as a compatibility hook for loader screens; render decisions are no
-        // longer duplicated outside TranslationCache.
+        // Render decisions are no longer duplicated outside TranslationCache; this is the one
+        // "something that decides what is shown changed" signal (show-original key, retranslate,
+        // cleared cache, language or settings change). Renderers that remember a settled decision
+        // per object compare their stored epoch with renderEpoch() and decide again when it moved.
+        renderEpoch = renderEpoch + 1;
+    }
+
+    /** Changes whenever {@link #clearRenderMemo()} is called; a remembered render decision older than this is stale. */
+    public static int renderEpoch() {
+        return renderEpoch;
     }
 
     // ---- wrapped-sentence tooltips: join → translate whole → re-wrap ----
@@ -750,7 +761,8 @@ public final class FabricTextStyle {
             List<Seg> raw = mergeSegments(segmentsFrom(original, contentStart));
             if (raw.size() > 1) return copyFrom(original, contentStart);
             Style style = raw.isEmpty() ? Style.EMPTY : raw.get(0).style();
-            return Component.literal(stripMarkers(translated)).setStyle(style);
+            return withDecor(segmentsFrom(original, contentStart),
+                    Component.literal(stripMarkers(translated)).setStyle(style));
         }
         if (!validMarkedResponse(marked, translated)) {
             if (TextFilter.isStyleFallback(translated)) {
@@ -790,7 +802,7 @@ public final class FabricTextStyle {
         }
         String plain = out.getString();
         if (!saw || plain.isBlank()) return copyFrom(original, contentStart);
-        return out;
+        return withDecor(segmentsFrom(original, contentStart), out);
     }
 
     /** Appends one marker region's translated content: a detected gradient run
@@ -886,6 +898,60 @@ public final class FabricTextStyle {
         return out;
     }
 
+    /**
+     * The rebuilt translation with the icons and decoration of the original put back in the
+     * style they had (their own font above all). A rebuild that paints the whole translation in
+     * one dominant style, or whose colour markers were lost, leaves such a character in the
+     * wrong font, and the game draws a missing-glyph box. Runs of icon/decoration characters
+     * are paired with the same characters of the original by content, in order of appearance
+     * (see {@link com.dragonmeow.nyanlex.translate.DecorStyleMatcher}); an unpaired run keeps
+     * the style the rebuild gave it. Returns {@code rebuilt} itself when nothing changes.
+     */
+    private static MutableComponent withDecor(List<Seg> original, MutableComponent rebuilt) {
+        if (original == null || original.isEmpty() || rebuilt == null) return rebuilt;
+        boolean any = false;
+        for (Seg seg : original) {
+            if (com.dragonmeow.nyanlex.translate.DecorStyleMatcher.hasDecor(seg.text())) {
+                any = true;
+                break;
+            }
+        }
+        if (!any) return rebuilt;
+        List<Style> table = new ArrayList<>();
+        List<com.dragonmeow.nyanlex.translate.DecorStyleMatcher.Piece> pieces = new ArrayList<>(original.size());
+        for (Seg seg : original) {
+            int index = table.indexOf(seg.style());
+            if (index < 0) {
+                table.add(seg.style());
+                index = table.size() - 1;
+            }
+            pieces.add(new com.dragonmeow.nyanlex.translate.DecorStyleMatcher.Piece(seg.text(), index));
+        }
+        List<Seg> now = segmentsFrom(rebuilt, 0);
+        StringBuilder plain = new StringBuilder();
+        for (Seg seg : now) plain.append(seg.text());
+        int[] map = com.dragonmeow.nyanlex.translate.DecorStyleMatcher.match(pieces, plain.toString());
+        if (map == null) return rebuilt;
+        MutableComponent out = Component.empty();
+        boolean changed = false;
+        int offset = 0;
+        for (Seg seg : now) {
+            String text = seg.text();
+            int start = 0;
+            while (start < text.length()) {
+                int style = map[offset + start];
+                int end = start + 1;
+                while (end < text.length() && map[offset + end] == style) end++;
+                Style use = style >= 0 ? table.get(style) : seg.style();
+                if (style >= 0 && !use.equals(seg.style())) changed = true;
+                out.append(Component.literal(text.substring(start, end)).setStyle(use));
+                start = end;
+            }
+            offset += text.length();
+        }
+        return changed ? out : rebuilt;
+    }
+
     private static MutableComponent copyFrom(Component original, int fromChar) {
         MutableComponent out = Component.empty();
         for (Seg seg : segmentsFrom(original, fromChar)) {
@@ -930,7 +996,8 @@ public final class FabricTextStyle {
         }
         List<Seg> segs = mergeSegments(segmentsFrom(original, 0));
         if (segs.size() == 1) {
-            return Component.literal(translated).setStyle(segs.get(0).style());
+            return withDecor(segmentsFrom(original, 0),
+                    Component.literal(translated).setStyle(segs.get(0).style()));
         }
         return copyFrom(original, 0);
     }
@@ -1009,6 +1076,11 @@ public final class FabricTextStyle {
         return Component.empty().append(takePrefix(source, plan.contentStart())).append(core);
     }
 
+    public static MutableComponent styledChatContent(Component original, int contentStart, String translated) {
+        return withDecor(segmentsFrom(original, contentStart),
+                styledChatContentRaw(original, contentStart, translated));
+    }
+
     /**
      * Colour a whole-content translation when markers are unavailable (Google ate them /
      * gradient lines). Colour positions are NEVER guessed from character counts or
@@ -1017,7 +1089,7 @@ public final class FabricTextStyle {
      * trailing whitespace decoration keeps the first / last run's style, as before. A flat
      * single colour is preferred over a positionally mis-aligned multi-colour split.
      */
-    public static MutableComponent styledChatContent(Component original, int contentStart, String translated) {
+    private static MutableComponent styledChatContentRaw(Component original, int contentStart, String translated) {
         ColorProfile profile = extractFrom(original, contentStart);
         if (translated == null || translated.isEmpty()) return Component.empty();
         MutableComponent gradientLine = gradientWholeLine(original, contentStart, translated);
@@ -1109,6 +1181,11 @@ public final class FabricTextStyle {
         return best;
     }
 
+    public static MutableComponent styledAnchored(Component original, int fromChar, String translated) {
+        return withDecor(segmentsFrom(original, fromChar),
+                styledAnchoredRaw(original, fromChar, translated));
+    }
+
     /**
      * Anchor-aligned colouring for translated single lines (tooltip titles, HUD rows).
      * Fragments the translator keeps verbatim — proper nouns, numbers ("SkyBlock", "500",
@@ -1117,7 +1194,7 @@ public final class FabricTextStyle {
      * the dominant style of the ORIGINAL fragment between those same anchor runs — so a gap
      * never switches colour mid-way on a guessed boundary.
      */
-    public static MutableComponent styledAnchored(Component original, int fromChar, String translated) {
+    private static MutableComponent styledAnchoredRaw(Component original, int fromChar, String translated) {
         ColorProfile profile = extractFrom(original, fromChar);
         if (translated == null || translated.isEmpty()) return Component.empty();
         MutableComponent gradientLine = gradientWholeLine(original, fromChar, translated);

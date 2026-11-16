@@ -4,6 +4,7 @@ import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.cache.DynamicNamespacedStore;
 import com.dragonmeow.nyanlex.cache.LanguageFileStore;
+import com.dragonmeow.nyanlex.cache.ManualTranslations;
 import com.dragonmeow.nyanlex.cache.NamespacedStore;
 import com.dragonmeow.nyanlex.cache.PersistentStore;
 import com.dragonmeow.nyanlex.cache.ProviderLanguageFileStore;
@@ -29,11 +30,15 @@ import com.dragonmeow.nyanlex.service.ChatRequestProfile;
 import com.dragonmeow.nyanlex.service.RecoveryAssembly;
 import com.dragonmeow.nyanlex.service.TranslationDecision;
 import com.dragonmeow.nyanlex.service.TranslationService;
+import com.dragonmeow.nyanlex.translate.AiFeatureMemory;
 import com.dragonmeow.nyanlex.translate.AiSettings;
+import com.dragonmeow.nyanlex.translate.AnthropicTransport;
+import com.dragonmeow.nyanlex.translate.AnthropicWire;
 import com.dragonmeow.nyanlex.translate.AntigravityCliClient;
 import com.dragonmeow.nyanlex.translate.AntigravityCliTransport;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerTransport;
+import com.dragonmeow.nyanlex.translate.HttpEndpointPolicy;
 import com.dragonmeow.nyanlex.translate.OpenAiTranslator;
 import com.dragonmeow.nyanlex.translate.ParagraphModel;
 import com.dragonmeow.nyanlex.translate.RequestPacer;
@@ -108,6 +113,8 @@ public final class NyanLexNeoForge26 {
     private static TranslationDebugLog debugLog;
     private static Path configPath;
     private static UrlHttpTransport transport;
+    /** The AI route's transport: speaks Anthropic's API for api.anthropic.com, passes everything else through. */
+    private static AnthropicTransport aiTransport;
     private static HubLocalCache hubLocalCache;
     private static HubDownloadState hubDownloadState;
     private static HubDownloader hubDownloader;
@@ -131,9 +138,13 @@ public final class NyanLexNeoForge26 {
     private static final com.dragonmeow.nyanlex.translate.ScreenTranslationCapture TOOLTIP_CAPTURE =
             new com.dragonmeow.nyanlex.translate.ScreenTranslationCapture();
     private static net.minecraft.client.gui.screens.Screen screenRefreshRequested;
+    /** Set when the show-original key switched the game's language table; consumed on the next tick. */
+    private static volatile boolean languageRebuildRequested;
 
     private static KeyMapping toggleKey;
     private long actionBarSequence;
+    /** The overlay text whose translation request may still be waiting in the queue. */
+    private String pendingActionBarRequest;
 
     private static final java.util.Map<Object, String> QUEST_WIDGET_PENDING =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
@@ -474,7 +485,7 @@ public final class NyanLexNeoForge26 {
                 || current.tooltipMode() == DisplayMode.ORIGINAL_ONLY) return source;
         Component translated = Neo26TextStyle.renderTranslated(
                 "jadeObjectName", source, current::translateItemLine);
-        return translated == null ? source : translated;
+        return translated == null || projectionSuppressed() ? source : translated;
     }
 
     /** Advancement toast title, governed by the normal title surface settings. */
@@ -484,7 +495,7 @@ public final class NyanLexNeoForge26 {
                 || current.titleMode() == DisplayMode.ORIGINAL_ONLY) return source;
         Component translated = Neo26TextStyle.renderTranslated(
                 "advancementToast", source, current::translateTitle);
-        return translated == null ? source : translated;
+        return translated == null || projectionSuppressed() ? source : translated;
     }
 
     
@@ -924,6 +935,7 @@ public final class NyanLexNeoForge26 {
     public static Component screenText(Component c) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return c;
         if (c != null && captureScreenText(c)) return c;
+        if (projectionSuppressed()) return c;
         TranslationService s = service;
         if (s == null || c == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return c;
         Minecraft mc = Minecraft.getInstance();
@@ -942,6 +954,7 @@ public final class NyanLexNeoForge26 {
         Minecraft mc = Minecraft.getInstance();
         if (!renderingCurrentScreen(mc) && !questWidgetOnCurrentScreen(widget, mc)) return source;
         if (captureScreenText(source, true)) return source;
+        if (projectionSuppressed()) return source;
         if (s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return source;
         Component resolved = Neo26TextStyle.resolveLegacyCodes(source);
         Component rendered = Neo26TextStyle.renderTranslated("questText", resolved, s::translateScreenText);
@@ -1002,6 +1015,7 @@ public final class NyanLexNeoForge26 {
     public static String screenText(String str) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return str;
         if (str != null && captureScreenText(Component.literal(str))) return str;
+        if (projectionSuppressed()) return str;
         TranslationService s = service;
         if (s == null || str == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return str;
         Minecraft mc = Minecraft.getInstance();
@@ -1050,6 +1064,7 @@ public final class NyanLexNeoForge26 {
                 && (mc.gui.screen().getClass().getName().startsWith(QUEST_UI_PACKAGE)
                 || mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.BookViewScreen)) return fcs;
         if (fcs != null && captureScreenText(Neo26TextStyle.toComponent(fcs))) return fcs;
+        if (projectionSuppressed()) return fcs;
         TranslationService s = service;
         if (s == null || fcs == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return fcs;
         if (!renderingCurrentScreen(mc)
@@ -1075,6 +1090,7 @@ public final class NyanLexNeoForge26 {
     public static net.minecraft.network.chat.FormattedText screenText(net.minecraft.network.chat.FormattedText text) {
         if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return text;
         if (text != null && captureScreenText(Neo26TextStyle.toComponent(text))) return text;
+        if (projectionSuppressed()) return text;
         TranslationService s = service;
         if (s == null || text == null || s.screenTextMode() == DisplayMode.ORIGINAL_ONLY) return text;
         Minecraft mc = Minecraft.getInstance();
@@ -1118,6 +1134,19 @@ public final class NyanLexNeoForge26 {
         synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
     }
 
+    /**
+     * One policy for translated projections while an original frame is captured: true while an
+     * internal overlay is being drawn (the HUD debug panel enters {@code InternalRenderGuard}) and
+     * while the open screen is being scanned, so the scan reads the original text instead of
+     * translations it has already produced.
+     */
+    public static boolean projectionSuppressed() {
+        if (com.dragonmeow.nyanlex.translate.InternalRenderGuard.active()) return true;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null && SCREEN_CAPTURE.active(mc.gui.screen())) return true;
+        return false;
+    }
+
     public NyanLexNeoForge26(IEventBus modBus, ModContainer container) {
         NyanLexHooks.register(LOGGER::info, LOGGER::warn);
         configPath = FMLPaths.CONFIGDIR.get().resolve(MOD_ID + ".json");
@@ -1134,12 +1163,16 @@ public final class NyanLexNeoForge26 {
                 workers, threadFactory);
 
         transport = new UrlHttpTransport(Duration.ofMillis(config.httpTimeoutMs));
+        aiTransport = new AnthropicTransport(transport,
+                () -> new AnthropicWire.Options(config.apiEffortFor(config.aiBaseUrl), config.claudeFastMode),
+                AiFeatureMemory.shared(), System::currentTimeMillis);
         RequestPacer machinePacer = new RequestPacer(() -> config.requestCooldownMs);
         SwitchingMachineTranslator google = new SwitchingMachineTranslator(
                 transport, () -> config.sourceLang, () -> config.machineTranslationProvider,
                 machinePacer);
-        OpenAiTranslator apiAi = new OpenAiTranslator(transport,
-                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary, config.aiFastMode),
+        OpenAiTranslator apiAi = new OpenAiTranslator(aiTransport,
+                () -> new AiSettings(config.aiBaseUrl, config.aiModel, config.aiApiKeys, config.aiGlossary,
+                        config.fastModeFor(config.aiBaseUrl), config.apiEffortFor(config.aiBaseUrl)),
                 new RequestPacer(() -> config.requestCooldownMs));
         apiAi.setTokenUsage(tokenUsage);
         Path codexRoot = configPath.getParent();
@@ -1228,6 +1261,11 @@ public final class NyanLexNeoForge26 {
                         : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
                         && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
+        // 譯文管理: the player's own translations (one file per language, switched with it by the
+        // service); a save, revert or delete makes everything already on screen decide again.
+        service.setManualTranslations(ManualTranslations.open(
+                FMLPaths.CONFIGDIR.get(), MOD_ID, config.targetLang));
+        service.setManualChangeListener(Neo26TextStyle::clearRenderMemo);
         outgoingChat = new com.dragonmeow.nyanlex.service.OutgoingChatTranslator(config,
                 new com.dragonmeow.nyanlex.translate.GoogleFreeTranslator(transport, "auto",
                         machinePacer, com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared()),
@@ -1301,6 +1339,10 @@ public final class NyanLexNeoForge26 {
     private void flipShowOriginal() {
         if (service == null) return;
         boolean originalsNow = service.toggleShowOriginal();
+        // The game's own language files follow the key too: with it on, translation keys resolve
+        // to their English text. Text a screen resolved when it was built is only refreshed by
+        // rebuilding that screen (done on the next tick, see rebuildScreenAfterLanguageFlip).
+        if (OriginalLanguage.apply(originalsNow)) languageRebuildRequested = true;
         Neo26TextStyle.clearRenderMemo();
         if (originalsNow) flushPendingChatOriginals();
         synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
@@ -1380,11 +1422,74 @@ public final class NyanLexNeoForge26 {
         if (state instanceof net.minecraft.client.renderer.entity.state.AvatarRenderState) return c;
         // Real-player guard runs BEFORE any memo/cache (translateNameTag holds the memo).
         if (nameTagMatchesListedPlayer(c.getString())) return c;
-        return translateNameTag(c);
+        Component translated = translateNameTag(c);
+        return projectionSuppressed() ? c : translated;
     }
 
     public static Component nameTag(Component c) {
         return nameTag(null, c);
+    }
+
+    /**
+     * Name plates that a server draws as Text Display entities (NPC names, mount labels): the
+     * entity renderer does not go through {@code submitNameDisplay}, so the name tag hook never
+     * sees them. Only runs in the ordinary font are translated; text in any other font (icon
+     * badges, level pills, markers) is kept exactly as it is, and so is every style.
+     *
+     * @return {@code null} when nothing in the component can be translated (decided once);
+     *         {@code source} itself while a translation is still pending; otherwise the
+     *         translated component
+     */
+    public static Component displayText(Component source) {
+        TranslationService s = service;
+        if (s == null || source == null || s.nameMode() == DisplayMode.ORIGINAL_ONLY
+                || projectionSuppressed()) return null;
+        if (nameTagMatchesListedPlayer(source.getString())) return null;
+        java.util.List<net.minecraft.network.chat.Style> styles = new java.util.ArrayList<>();
+        java.util.List<String> texts = new java.util.ArrayList<>();
+        source.visit((style, content) -> {
+            styles.add(style);
+            texts.add(content);
+            return java.util.Optional.empty();
+        }, net.minecraft.network.chat.Style.EMPTY);
+        net.minecraft.network.chat.MutableComponent out = Component.empty();
+        boolean candidate = false;
+        boolean translatedAny = false;
+        int i = 0;
+        while (i < texts.size()) {
+            if (!isOrdinaryFont(styles.get(i))) {
+                out.append(Component.literal(texts.get(i)).withStyle(styles.get(i)));
+                i++;
+                continue;
+            }
+            net.minecraft.network.chat.MutableComponent segment = Component.empty();
+            boolean letters = false;
+            int j = i;
+            while (j < texts.size() && isOrdinaryFont(styles.get(j))) {
+                segment.append(Component.literal(texts.get(j)).withStyle(styles.get(j)));
+                letters |= texts.get(j).chars().anyMatch(Character::isLetter);
+                j++;
+            }
+            Component translated = null;
+            if (letters) {
+                candidate = true;
+                translated = Neo26TextStyle.renderTranslated("nameTag", segment, s::translateUi);
+            }
+            if (translated != null) {
+                out.append(translated);
+                translatedAny = true;
+            } else {
+                out.append(segment);
+            }
+            i = j;
+        }
+        if (!candidate) return null;
+        return translatedAny ? out : source;
+    }
+
+    private static boolean isOrdinaryFont(net.minecraft.network.chat.Style style) {
+        net.minecraft.network.chat.FontDescription font = style.getFont();
+        return font == null || font.equals(net.minecraft.network.chat.FontDescription.DEFAULT);
     }
 
     /** Projects the four visible rows of a world sign without changing its client data.
@@ -1402,11 +1507,12 @@ public final class NyanLexNeoForge26 {
         if (!requests.isEmpty()) s.warmWorldTextBatch(requests);
 
         Component[] projected = source.clone();
+        boolean suppress = projectionSuppressed();
         boolean changed = false;
         for (int i = 0; i < source.length; i++) {
             Component translated = Neo26TextStyle.renderTranslated(
                     "worldSign", source[i], s::translateUi);
-            if (translated != null && !translated.equals(source[i])) {
+            if (!suppress && translated != null && !translated.equals(source[i])) {
                 projected[i] = translated;
                 changed = true;
             }
@@ -1485,17 +1591,32 @@ public final class NyanLexNeoForge26 {
     private boolean handleOverlayMessage(Component message) {
         if (service == null || message == null) return false;
         long sequence = ++actionBarSequence;
+        // The action bar has one cell: the request of the overlay this one replaces is only
+        // worth keeping if this one asks for the very same text.
+        String replaced = pendingActionBarRequest;
+        pendingActionBarRequest = null;
+        // A dialogue box is translated block by block when it is drawn (OverlayDialogueView),
+        // never as one line made of HUD numbers and half-typed text.
+        if (OverlayDialogueView.isDialogue(message)) {
+            if (replaced != null) service.cancelActionBarRequest(replaced);
+            return false;
+        }
         Component source = Neo26TextStyle.resolveLegacyCodes(message);
         DisplayMode mode = service.actionBarMode();
-        if (mode == DisplayMode.ORIGINAL_ONLY) return false;
+        if (mode == DisplayMode.ORIGINAL_ONLY) {
+            if (replaced != null) service.cancelActionBarRequest(replaced);
+            return false;
+        }
         Neo26TextStyle.MarkedChat marked = Neo26TextStyle.markChatContent(source, 0);
         String request = marked.marked() ? marked.text() : source.getString();
+        if (replaced != null && !replaced.equals(request)) service.cancelActionBarRequest(replaced);
         if (!service.wantsActionBarTranslation(request)) return false;
         TranslationDecision cached = service.translateActionBar(request);
         if (cached.changed()) {
             showActionBar(source, cached.translated(), marked, cached.mode());
             return true;
         }
+        pendingActionBarRequest = request;
         service.requestActionBarAsync(request, translated -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc == null) return;
@@ -2305,6 +2426,7 @@ public final class NyanLexNeoForge26 {
             // Recover if a cancelled/failed render did not deliver the matching Post event.
             SCREEN_RENDER_STACK.remove();
             refreshScannedScreen();
+            rebuildScreenAfterLanguageFlip(Minecraft.getInstance());
             if (settingsScreenRequested) {
                 settingsScreenRequested = false;
                 openSettings(Minecraft.getInstance());
@@ -2352,6 +2474,7 @@ public final class NyanLexNeoForge26 {
             // 不要丟棄，有看到的都加入排隊，沒看到的先不管"). Only never-seen text stays unbought.
             warmOpenContainerItems(Minecraft.getInstance());
             warmLoadoutItems(Minecraft.getInstance());
+            TransientChatLogger.poll();
         } catch (Throwable guardError) {
             HookGuard.fail("event.onClientTick", guardError);
         }
@@ -2510,15 +2633,23 @@ public final class NyanLexNeoForge26 {
     private void startHudScan() {
         com.dragonmeow.nyanlex.service.TranslationService current = service;
         if (current == null) return;
-        current.beginHudCapture(count -> onHudScanDone(count));
+        // The scan only sees text that is looked up while its window is open. Renderers that
+        // already settled on a wording (name-plate displays) do not look anything up, so make
+        // them decide again now; otherwise their text is never scanned and never asked again.
+        if (current.beginHudCapture(count -> onHudScanDone(count))) Neo26TextStyle.clearRenderMemo();
     }
 
     private static void onHudScanDone(int count) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
-        mc.execute(() -> feedback(count > 0
-                ? Component.translatable("message.nyanlex.hud_scan", count)
-                : Component.translatable("message.nyanlex.hud_scan_none")));
+        mc.execute(() -> {
+            // The scan discarded the scanned rows to ask again: renderers that settled on the old
+            // wording (name-plate displays) must decide again.
+            if (count > 0) Neo26TextStyle.clearRenderMemo();
+            feedback(count > 0
+                    ? Component.translatable("message.nyanlex.hud_scan", count)
+                    : Component.translatable("message.nyanlex.hud_scan_none"));
+        });
     }
 
     /** Rescan one render frame without replacing the widgets' original labels. */
@@ -2586,6 +2717,23 @@ public final class NyanLexNeoForge26 {
         boolean current = screenRefreshRequested == mc.gui.screen();
         screenRefreshRequested = null;
         if (current) refreshCurrentQuestScreen();
+    }
+
+    /**
+     * After the show-original key switched the game's language table, rebuilds the open screen the
+     * way a window resize does, so labels and lines it resolved while being built are resolved again
+     * in the new language. Screens that look keys up while drawing do not need this; it only runs when
+     * the key actually changed the language layer (never for a game already in English).
+     */
+    private static void rebuildScreenAfterLanguageFlip(Minecraft mc) {
+        if (!languageRebuildRequested) return;
+        languageRebuildRequested = false;
+        if (mc == null || mc.gui.screen() == null) return;
+        try {
+            mc.gui.screen().resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());
+        } catch (RuntimeException e) {
+            LOGGER.warn("[{}] could not rebuild the open screen after the language switch: {}", MOD_ID, e.toString());
+        }
     }
 
     private void warmOpenContainerItems(Minecraft mc) {
@@ -2840,14 +2988,16 @@ public final class NyanLexNeoForge26 {
 
     
     public static void testAi(String baseUrl, String model, List<String> keys, java.util.function.Consumer<String> onResult) {
-        if (transport == null) {
+        if (aiTransport == null) {
             onResult.accept(Component.translatable("message.nyanlex.not_initialized").getString());
             return;
         }
         Thread t = new Thread(() -> {
             String msg;
+            boolean claude = HttpEndpointPolicy.isAnthropic(baseUrl);
             try {
-                OpenAiTranslator ai = new OpenAiTranslator(transport, () -> new AiSettings(baseUrl, model, keys, java.util.Collections.emptyList(), config.aiFastMode));
+                OpenAiTranslator ai = new OpenAiTranslator(aiTransport, () -> new AiSettings(baseUrl, model, keys, java.util.Collections.emptyList(), config.fastModeFor(baseUrl), config.apiEffortFor(baseUrl)),
+                        new RequestPacer(() -> config == null ? 0L : config.requestCooldownMs));
                 ai.setTokenUsage(tokenUsage);
                 String out = ai.translate("Hello, world", "zh-TW").translatedText();
                 msg = Component.translatable("message.nyanlex.success", "Hello, world → " + out).getString();
@@ -2856,6 +3006,12 @@ public final class NyanLexNeoForge26 {
                         com.dragonmeow.nyanlex.translate.DebugErrorLog.typeForReason(e.toString()),
                         e.toString(), "operation", "test_api");
                 msg = Component.translatable("message.nyanlex.failed", e.getMessage()).getString();
+                String hint = claude ? AnthropicWire.hintKey(e.getMessage()) : null;
+                if (hint != null) msg = msg + " " + Component.translatable(hint).getString();
+            }
+            if (claude && config != null && config.claudeFastMode
+                    && AiFeatureMemory.shared().isUnsupported(model, AnthropicWire.Feature.FAST)) {
+                msg = msg + "\n" + Component.translatable("screen.nyanlex.ai.claude.fast.unsupported_note").getString();
             }
             final String result = msg;
             Minecraft mc = Minecraft.getInstance();
@@ -2868,7 +3024,7 @@ public final class NyanLexNeoForge26 {
 
     public static void testCodex(java.util.function.Consumer<String> onResult) {
         if (codexTransport == null || config == null) {
-            onResult.accept("Codex is not initialized");
+            onResult.accept(Component.translatable("message.nyanlex.not_initialized").getString());
             return;
         }
         Thread thread = new Thread(() -> {

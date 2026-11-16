@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]+$')]
-    [string]$OutputName = '1.0.0-expanded'
+    [string]$OutputName = '1.0.1-expanded'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,7 +11,7 @@ Set-StrictMode -Version 2.0
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$releaseVersion = '1.0.0'
+$releaseVersion = '1.0.1'
 $artifactBaseName = 'NyanLex-Translator'
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $modsJarRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'mods-jar'))

@@ -6,17 +6,21 @@ import com.dragonmeow.nyanlex.translate.InternalRenderGuard;
 import com.dragonmeow.nyanlex.translate.TranslationDebugLog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.client.gui.overlay.ForgeGui;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(Gui.class)
+/**
+ * The debug overlay is drawn after the whole HUD. Forge replaces {@code Gui.render} with
+ * {@code ForgeGui.render} (it never calls the original), so this hooks the Forge override.
+ */
+@Mixin(ForgeGui.class)
 public abstract class DebugHudMixin {
-    @Inject(method = "render", at = @At("TAIL"), require = 0)
+    @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;F)V", at = @At("TAIL"), require = 0)
     private void nyanlex$debug(GuiGraphics graphics, float partialTick, CallbackInfo ci) {
         if (!HookGuard.enter("DebugHud.debug")) return;
         try {

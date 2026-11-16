@@ -223,7 +223,9 @@ public final class FabricTextStyle {
         MutableComponent out = new net.minecraft.network.chat.TextComponent("");
         for (int i = 0; i < group.size(); i++) {
             if (i > 0) out.append(new net.minecraft.network.chat.TextComponent(" "));
-            for (Seg seg : segments(group.get(i))) {
+            Component line = group.get(i);
+            if (line == null) continue;
+            for (Seg seg : segments(line)) {
                 out.append(new net.minecraft.network.chat.TextComponent(seg.text()).setStyle(seg.style()));
             }
         }
@@ -234,6 +236,7 @@ public final class FabricTextStyle {
     public static String joinPlain(List<Component> group) {
         StringBuilder sb = new StringBuilder();
         for (Component c : group) {
+            if (c == null) continue;
             if (sb.length() > 0) sb.append(' ');
             sb.append(c.getString().strip());
         }
@@ -294,7 +297,7 @@ public final class FabricTextStyle {
         if (decision == null || !decision.changed()) return null;
         MutableComponent styledAll = rebuildRich(joinedComp, decision.translated(), marked);
         int width = 0;
-        for (Component c : group) width = Math.max(width, font.width(c));
+        for (Component c : group) if (c != null) width = Math.max(width, font.width(c));
         return splitToWidth(styledAll, width, font);
     }
 
@@ -757,7 +760,8 @@ public final class FabricTextStyle {
             List<Seg> raw = mergeSegments(segmentsFrom(original, contentStart));
             if (raw.size() > 1) return copyFrom(original, contentStart);
             Style style = raw.isEmpty() ? Style.EMPTY : raw.get(0).style();
-            return new net.minecraft.network.chat.TextComponent(stripMarkers(translated)).setStyle(style);
+            return withDecor(segmentsFrom(original, contentStart),
+                    new net.minecraft.network.chat.TextComponent(stripMarkers(translated)).setStyle(style));
         }
         if (!validMarkedResponse(marked, translated)) {
             if (TextFilter.isStyleFallback(translated)) {
@@ -797,7 +801,7 @@ public final class FabricTextStyle {
         }
         String plain = out.getString();
         if (!saw || plain.isBlank()) return copyFrom(original, contentStart);
-        return out;
+        return withDecor(segmentsFrom(original, contentStart), out);
     }
 
     /** Appends one marker region's translated content: a detected gradient run
@@ -892,6 +896,60 @@ public final class FabricTextStyle {
         return out;
     }
 
+    /**
+     * The rebuilt translation with the icons and decoration of the original put back in the
+     * style they had (their own font above all). A rebuild that paints the whole translation in
+     * one dominant style, or whose colour markers were lost, leaves such a character in the
+     * wrong font, and the game draws a missing-glyph box. Runs of icon/decoration characters
+     * are paired with the same characters of the original by content, in order of appearance
+     * (see {@link com.dragonmeow.nyanlex.translate.DecorStyleMatcher}); an unpaired run keeps
+     * the style the rebuild gave it. Returns {@code rebuilt} itself when nothing changes.
+     */
+    private static MutableComponent withDecor(List<Seg> original, MutableComponent rebuilt) {
+        if (original == null || original.isEmpty() || rebuilt == null) return rebuilt;
+        boolean any = false;
+        for (Seg seg : original) {
+            if (com.dragonmeow.nyanlex.translate.DecorStyleMatcher.hasDecor(seg.text())) {
+                any = true;
+                break;
+            }
+        }
+        if (!any) return rebuilt;
+        List<Style> table = new ArrayList<>();
+        List<com.dragonmeow.nyanlex.translate.DecorStyleMatcher.Piece> pieces = new ArrayList<>(original.size());
+        for (Seg seg : original) {
+            int index = table.indexOf(seg.style());
+            if (index < 0) {
+                table.add(seg.style());
+                index = table.size() - 1;
+            }
+            pieces.add(new com.dragonmeow.nyanlex.translate.DecorStyleMatcher.Piece(seg.text(), index));
+        }
+        List<Seg> now = segmentsFrom(rebuilt, 0);
+        StringBuilder plain = new StringBuilder();
+        for (Seg seg : now) plain.append(seg.text());
+        int[] map = com.dragonmeow.nyanlex.translate.DecorStyleMatcher.match(pieces, plain.toString());
+        if (map == null) return rebuilt;
+        MutableComponent out = new net.minecraft.network.chat.TextComponent("");
+        boolean changed = false;
+        int offset = 0;
+        for (Seg seg : now) {
+            String text = seg.text();
+            int start = 0;
+            while (start < text.length()) {
+                int style = map[offset + start];
+                int end = start + 1;
+                while (end < text.length() && map[offset + end] == style) end++;
+                Style use = style >= 0 ? table.get(style) : seg.style();
+                if (style >= 0 && !use.equals(seg.style())) changed = true;
+                out.append(new net.minecraft.network.chat.TextComponent(text.substring(start, end)).setStyle(use));
+                start = end;
+            }
+            offset += text.length();
+        }
+        return changed ? out : rebuilt;
+    }
+
     private static MutableComponent copyFrom(Component original, int fromChar) {
         MutableComponent out = new net.minecraft.network.chat.TextComponent("");
         for (Seg seg : segmentsFrom(original, fromChar)) {
@@ -932,7 +990,8 @@ public final class FabricTextStyle {
         }
         List<Seg> segs = mergeSegments(segmentsFrom(original, 0));
         if (segs.size() == 1) {
-            return new net.minecraft.network.chat.TextComponent(translated).setStyle(segs.get(0).style());
+            return withDecor(segmentsFrom(original, 0),
+                    new net.minecraft.network.chat.TextComponent(translated).setStyle(segs.get(0).style()));
         }
         return copyFrom(original, 0);
     }
@@ -1045,9 +1104,14 @@ public final class FabricTextStyle {
         return out;
     }
 
+    public static MutableComponent styledChatContent(Component original, int contentStart, String translated) {
+        return withDecor(segmentsFrom(original, contentStart),
+                styledChatContentRaw(original, contentStart, translated));
+    }
+
     /** Markerless fallback: one dominant semantic style for the whole translated core.
      * Never split target text by source/target character proportions. */
-    public static MutableComponent styledChatContent(Component original, int contentStart, String translated) {
+    private static MutableComponent styledChatContentRaw(Component original, int contentStart, String translated) {
         ColorProfile profile = extractFrom(original, contentStart);
         if (translated == null || translated.isEmpty()) return new net.minecraft.network.chat.TextComponent("");
         MutableComponent gradientLine = gradientWholeLine(original, contentStart, translated);
@@ -1090,6 +1154,11 @@ public final class FabricTextStyle {
         return best;
     }
 
+    public static MutableComponent styledAnchored(Component original, int fromChar, String translated) {
+        return withDecor(segmentsFrom(original, fromChar),
+                styledAnchoredRaw(original, fromChar, translated));
+    }
+
     /**
      * Anchor-aligned colouring for translated single lines (tooltip titles, HUD rows).
      * Fragments the translator keeps verbatim — proper nouns, numbers ("SkyBlock", "500",
@@ -1098,7 +1167,7 @@ public final class FabricTextStyle {
      * semantic weight. Far more accurate than the proportional stretch for the common
      * "coloured name + coloured tag" tooltip titles.
      */
-    public static MutableComponent styledAnchored(Component original, int fromChar, String translated) {
+    private static MutableComponent styledAnchoredRaw(Component original, int fromChar, String translated) {
         ColorProfile profile = extractFrom(original, fromChar);
         if (translated == null || translated.isEmpty()) return new net.minecraft.network.chat.TextComponent("");
         MutableComponent gradientLine = gradientWholeLine(original, fromChar, translated);

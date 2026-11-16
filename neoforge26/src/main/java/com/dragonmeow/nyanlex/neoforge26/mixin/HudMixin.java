@@ -3,6 +3,8 @@ package com.dragonmeow.nyanlex.neoforge26.mixin;
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.neoforge26.Neo26TextStyle;
 import com.dragonmeow.nyanlex.neoforge26.NyanLexNeoForge26;
+import com.dragonmeow.nyanlex.neoforge26.OverlayDialogueView;
+import com.dragonmeow.nyanlex.neoforge26.TransientChatLogger;
 import com.dragonmeow.nyanlex.service.TranslationDecision;
 import com.dragonmeow.nyanlex.service.TranslationService;
 
@@ -49,6 +51,15 @@ public abstract class HudMixin {
 
     @Shadow
     public abstract Font getFont();
+
+    @Shadow
+    private Component title;
+
+    @Shadow
+    private Component subtitle;
+
+    /** Set by the title redirect for the one draw call that follows: subtitle or title. */
+    private static boolean nyanlex$subtitleDraw;
 
     private final ArrayDeque<Component> nyanlex$scoreboardSources = new ArrayDeque<>();
     private final ArrayDeque<Component> nyanlex$scoreboardRendered = new ArrayDeque<>();
@@ -246,6 +257,7 @@ public abstract class HudMixin {
                 nyanlex$scoreboardSources.removeFirst();
                 toDraw = nyanlex$scoreboardRendered.removeFirst();
             }
+            if (NyanLexNeoForge26.projectionSuppressed()) toDraw = text;
             Component rendered = toDraw;
             com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(
                     () -> g.text(font, rendered, x, y, color, shadow));
@@ -292,6 +304,7 @@ public abstract class HudMixin {
         }
         try {
             TranslationService s = NyanLexNeoForge26.service();
+            nyanlex$subtitleDraw = text == this.subtitle;
             nyanlex$backdrop("title", g, font, text, x, y, width, color, s == null ? null : s::translateTitle);
         } catch (Throwable guardError) {
             HookGuard.fail("Hud.title", guardError);
@@ -315,6 +328,14 @@ public abstract class HudMixin {
             return;
         }
         try {
+            // An overlay dialogue box is translated block by block and drawn in place; it never
+            // goes down the one-line path below (its HUD numbers and typed text change every frame).
+            Component dialogue = OverlayDialogueView.view(text, font);
+            if (dialogue != null) {
+                com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(
+                        () -> g.textWithBackdrop(font, dialogue, x, y, width, color));
+                return;
+            }
             TranslationService s = NyanLexNeoForge26.service();
             nyanlex$backdrop("actionBar", g, font, text, x, y, width, color, s == null ? null : s::translateActionBar);
         } catch (Throwable guardError) {
@@ -330,7 +351,10 @@ public abstract class HudMixin {
                                               Function<String, TranslationDecision> fn) {
         if (fn != null && text != null) {
             Component translated = Neo26TextStyle.renderTranslated(surfaceId, text, fn);
-            if (translated != null) {
+            if ("title".equals(surfaceId) && TransientChatLogger.on()) {
+                TransientChatLogger.title(nyanlex$subtitleDraw, text, translated != null);
+            }
+            if (translated != null && !NyanLexNeoForge26.projectionSuppressed()) {
                 int center = x + font.width(text) / 2; // keep the original's centre
                 List<Component> lines = Neo26TextStyle.splitLines(translated);
                 if (lines.size() <= 1) {

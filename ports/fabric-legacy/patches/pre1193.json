@@ -236,5 +236,51 @@
       "from": "new net.minecraft.network.chat.TranslatableComponent(",
       "to": "net.minecraft.network.chat.Component.translatable("
     }
+  ],
+  "com/dragonmeow/nyanlex/fabric/OverlayDialogueView.java": [
+    {
+      "from": "import net.minecraft.network.chat.TextComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "new TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TransientChatLogger.java": [
+    {
+      "from": "import net.minecraft.network.chat.TextComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "import net.minecraft.network.chat.TranslatableComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "new TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    },
+    {
+      "from": "new TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationManagerScreen.java": [
+    {
+      "from": "import net.minecraft.network.chat.TextComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "import net.minecraft.network.chat.TranslatableComponent;\n",
+      "to": ""
+    },
+    {
+      "from": "new TranslatableComponent(",
+      "to": "net.minecraft.network.chat.Component.translatable("
+    },
+    {
+      "from": "new TextComponent(",
+      "to": "net.minecraft.network.chat.Component.literal("
+    }
   ]
 }

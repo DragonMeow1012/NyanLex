@@ -1,4 +1,11 @@
 {
+  "com/dragonmeow/nyanlex/fabric/BorrowedGlyphs.java": [
+    {"from":"glyph.nyanlex$renderTypes(),\n", "to":"glyph.nyanlex$renderTypes(), glyph.nyanlex$textureView(),\n"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/BakedGlyphAccessor.java": [
+    {"from":"import net.minecraft.client.gui.font.GlyphRenderTypes;", "to":"import com.mojang.blaze3d.textures.GpuTextureView;\nimport net.minecraft.client.gui.font.GlyphRenderTypes;"},
+    {"from":"    @Accessor(\"u0\")", "to":"    @Accessor(\"textureView\")\n    GpuTextureView nyanlex$textureView();\n\n    @Accessor(\"u0\")"}
+  ],
   "com/dragonmeow/nyanlex/fabric/mixin/EntityNameTagMixin.java": [
     {"from":"Lnet/minecraft/client/gui/Font$DisplayMode;II)I", "to":"Lnet/minecraft/client/gui/Font$DisplayMode;II)V"},
     {"from":"private int nyanlex$stackedNameTag", "to":"private void nyanlex$stackedNameTag"},

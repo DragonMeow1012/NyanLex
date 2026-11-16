@@ -23,7 +23,9 @@ public abstract class BossBarMixin {
             TranslationService service = NyanLexFabric.service();
             Component translated = service == null || text == null ? null
                     : FabricTextStyle.renderTranslated("bossBar", text, service::translateBossBar);
-            if (translated == null) return InternalRenderGuard.call(() -> font.drawShadow(pose, text, x, y, color));
+            if (translated == null || NyanLexFabric.projectionSuppressed()) {
+                return InternalRenderGuard.call(() -> font.drawShadow(pose, text, x, y, color));
+            }
             float center = x + font.width(text) / 2f;
             java.util.List<Component> lines = FabricTextStyle.splitLines(translated);
             int ret = 0;

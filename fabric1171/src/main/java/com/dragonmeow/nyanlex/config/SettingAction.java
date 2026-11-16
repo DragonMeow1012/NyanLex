@@ -11,6 +11,8 @@ public enum SettingAction {
     OPEN_KEYBINDS,
     /** Opens the stand-alone manual screen (說明書). */
     OPEN_MANUAL,
+    /** Opens the translation manager (譯文管理): search, edit and delete saved translations. */
+    OPEN_TRANSLATION_MANAGER,
     /** Opens the manual on its privacy chapter. */
     OPEN_PRIVACY,
     /** Opens the project page on GitHub (after the game's own link confirmation). */

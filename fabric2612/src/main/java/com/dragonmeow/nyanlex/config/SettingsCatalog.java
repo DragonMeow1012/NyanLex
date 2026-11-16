@@ -54,7 +54,13 @@ public final class SettingsCatalog {
     /** Display-page entries that are not a per-surface row (the do-not-translate list). */
     private static final List<SettingEntry> DISPLAY_EXTRAS = List.of(
             sub(SettingsPage.DISPLAY, "dnt", SettingAction.OPEN_DO_NOT_TRANSLATE, null)
-                    .withKeywords("dnt", "do not translate", "glossary", "詞彙", "词汇"));
+                    .withKeywords("dnt", "do not translate", "glossary", "詞彙", "词汇"),
+            toggle(SettingsPage.DISPLAY, "chat_log", c -> c.logTransientToChat,
+                    c -> onOff(c.logTransientToChat),
+                    c -> c.logTransientToChat = !c.logTransientToChat,
+                    SettingEntry.SideEffect.NONE)
+                    .withKeywords("title", "subtitle", "dialogue", "chat", "log", "history",
+                            "標題", "标题", "對話", "对话", "聊天", "回看"));
 
     private SettingsCatalog() {}
 
@@ -215,6 +221,10 @@ public final class SettingsCatalog {
                         .withKeywords("cache", "快取", "缓存", "clear"))));
 
         map.put(SettingsPage.ADVANCED, pairs(List.of(
+                action(SettingsPage.ADVANCED, "manager", SettingAction.OPEN_TRANSLATION_MANAGER)
+                        .withKeywords("manager", "translation manager", "edit", "search", "saved", "manual",
+                                "譯文", "译文", "訳文", "管理", "修改", "編輯", "编辑", "搜尋", "搜索", "手動", "手动",
+                                "刪除", "删除", "重新翻譯", "重新翻译"),
                 cycle(SettingsPage.ADVANCED, "chat_delivery",
                         c -> chatDeliveryState(c.chatDeliveryMode),
                         c -> c.chatDeliveryMode = ChatDeliveryMode.orDefault(c.chatDeliveryMode).next())

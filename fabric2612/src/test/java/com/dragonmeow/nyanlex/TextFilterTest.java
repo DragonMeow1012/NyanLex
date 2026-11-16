@@ -562,4 +562,72 @@ class TextFilterTest {
         assertTrue(TextFilter.shouldTranslate("Mipmap レベル", "zh-TW"));
         assertTrue(TextFilter.shouldTranslate("최대 FPS", "zh-TW"));
     }
+
+    // Coexistence with other Chinese sources (server text, resource packs, other mods):
+    // text that is already Chinese must never be sent to a translator. These tests pin the
+    // current verdicts for target zh-TW so a threshold or tokenizer change cannot silently
+    // start re-translating (or stop translating) such rows.
+
+    @Test
+    void coexistenceWholeChineseSentenceIsNotSent() {
+        for (String text : new String[]{"歡迎來到伺服器，請閱讀規則", "傳送門已開啟"}) {
+            assertTrue(TextFilter.isAlreadyChinese(text), text);
+            assertFalse(TextFilter.shouldTranslate(text, "zh-TW"), text);
+        }
+    }
+
+    @Test
+    void coexistenceChineseWithAFewEnglishWordsIsNotSent() {
+        for (String text : new String[]{"請在 chest 裡找到鑰匙並打開傳送門", "鑽石 Sword"}) {
+            assertTrue(TextFilter.isAlreadyChinese(text), text);
+            assertFalse(TextFilter.shouldTranslate(text, "zh-TW"), text);
+        }
+    }
+
+    @Test
+    void coexistenceSimplifiedChineseIsNotSent() {
+        for (String text : new String[]{"欢迎来到服务器，请阅读规则", "钻石剑"}) {
+            assertTrue(TextFilter.isAlreadyChinese(text), text);
+            assertFalse(TextFilter.shouldTranslate(text, "zh-TW"), text);
+        }
+    }
+
+    @Test
+    void coexistenceEnglishWithAFewChineseWordsIsStillSent() {
+        for (String text : new String[]{"Right click to open 設定",
+                "Press the button to enter 傳送門 now"}) {
+            assertFalse(TextFilter.isAlreadyChinese(text), text);
+            assertTrue(TextFilter.shouldTranslate(text, "zh-TW"), text);
+        }
+    }
+
+    @Test
+    void coexistencePureEnglishIsSent() {
+        for (String text : new String[]{"Right click to open the chest", "Click to open the menu"}) {
+            assertFalse(TextFilter.isAlreadyChinese(text), text);
+            assertTrue(TextFilter.shouldTranslate(text, "zh-TW"), text);
+        }
+    }
+
+    @Test
+    void coexistenceJapaneseWithKanaIsSentButKanjiOnlyShortWordIsNot() {
+        // Kana makes Japanese unambiguous even when most letters are Han.
+        assertTrue(TextFilter.shouldTranslate("魔法の剣", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("ダイヤモンドの剣", "zh-TW"));
+        // A short Han-only word cannot be told apart from Chinese, so it is left alone.
+        assertTrue(TextFilter.isAlreadyChinese("魔法剣"));
+        assertFalse(TextFilter.shouldTranslate("魔法剣", "zh-TW"));
+    }
+
+    @Test
+    void coexistenceChineseWithLowercaseEnglishUnitIsSentAsKnownBoundary() {
+        // Known boundary behaviour, pinned as-is: a lower-case English unit counts as prose,
+        // so a very short Chinese label ending in one drops below the 50% CJK-letter line
+        // (3 CJK vs 4 prose letters) and is sent. A longer Chinese row keeps the same unit
+        // without being sent.
+        assertFalse(TextFilter.isAlreadyChinese("能量每tick"));
+        assertTrue(TextFilter.shouldTranslate("能量每tick", "zh-TW"));
+        assertTrue(TextFilter.shouldTranslate("每tick", "zh-TW"));
+        assertFalse(TextFilter.shouldTranslate("伤害 每tick 增加", "zh-TW"));
+    }
 }

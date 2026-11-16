@@ -4,21 +4,24 @@
     "profile": "pre-components-1202",
     "neoforge": "20.2.93",
     "java": 17,
-    "toolchain": 21
+    "toolchain": 21,
+    "packFormat": 18
   },
   "1.20.3": {
     "sourceProject": "neoforge120",
     "profile": "pre-components",
     "neoforge": "20.3.8-beta",
     "java": 17,
-    "toolchain": 21
+    "toolchain": 21,
+    "packFormat": 22
   },
   "1.20.4": {
     "sourceProject": "neoforge120",
     "profile": "pre-components",
     "neoforge": "20.4.251",
     "java": 17,
-    "toolchain": 21
+    "toolchain": 21,
+    "packFormat": 22
   },
   "1.20.5": {
     "sourceProject": "neoforge",
@@ -113,7 +116,11 @@
     "toolchain": 21,
     "patchProfiles": [
       "input-events",
-      "resource-identifiers"
+      "resource-identifiers",
+      "pre-1211-api"
+    ],
+    "extraClientMixins": [
+      "LanguageLookupMixin"
     ]
   },
   "1.21.10": {
@@ -124,7 +131,11 @@
     "toolchain": 21,
     "patchProfiles": [
       "input-events",
-      "resource-identifiers"
+      "resource-identifiers",
+      "pre-1211-api"
+    ],
+    "extraClientMixins": [
+      "LanguageLookupMixin"
     ]
   },
   "1.21.11": {
@@ -132,27 +143,39 @@
     "profile": "input-events",
     "neoforge": "21.11.45",
     "java": 21,
-    "toolchain": 21
+    "toolchain": 21,
+    "extraClientMixins": [
+      "LanguageLookupMixin"
+    ]
   },
   "26.1": {
     "sourceProject": "neoforge26",
     "profile": "unobfuscated",
     "neoforge": "26.1.0.19-beta",
     "java": 25,
-    "toolchain": 25
+    "toolchain": 25,
+    "extraClientMixins": [
+      "LanguageLookupMixin"
+    ]
   },
   "26.1.1": {
     "sourceProject": "neoforge26",
     "profile": "unobfuscated",
     "neoforge": "26.1.1.15-beta",
     "java": 25,
-    "toolchain": 25
+    "toolchain": 25,
+    "extraClientMixins": [
+      "LanguageLookupMixin"
+    ]
   },
   "26.1.2": {
     "sourceProject": "neoforge26",
     "profile": "unobfuscated",
     "neoforge": "26.1.2.109",
     "java": 25,
-    "toolchain": 25
+    "toolchain": 25,
+    "extraClientMixins": [
+      "LanguageLookupMixin"
+    ]
   }
 }

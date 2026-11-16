@@ -4,6 +4,7 @@ import com.dragonmeow.nyanlex.translate.ChatDeliveryMode;
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.cache.DynamicNamespacedStore;
 import com.dragonmeow.nyanlex.cache.LanguageFileStore;
+import com.dragonmeow.nyanlex.cache.ManualTranslations;
 import com.dragonmeow.nyanlex.cache.NamespacedStore;
 import com.dragonmeow.nyanlex.cache.PersistentStore;
 import com.dragonmeow.nyanlex.cache.ProviderLanguageFileStore;
@@ -132,10 +133,15 @@ public final class NyanLexFabric implements ClientModInitializer {
     private static final com.dragonmeow.nyanlex.translate.ScreenTranslationCapture TOOLTIP_CAPTURE =
             new com.dragonmeow.nyanlex.translate.ScreenTranslationCapture();
     private static net.minecraft.client.gui.screens.Screen screenRefreshRequested;
+    /** Set when the show-original key switched the game's language table; consumed on the next tick. */
+    private static volatile boolean languageRebuildRequested;
 
     private static KeyMapping toggleKey;
     /** Invalidates late action-bar callbacks when the server has already sent a newer row. */
     private long actionBarSequence;
+
+    /** The overlay text whose translation request may still be waiting in the queue. */
+    private String pendingActionBarRequest;
 
     /** One pending rich-text request per live quest-book text widget. Weak keys ensure
      *  closing a quest screen can never retain its widget tree. */
@@ -1270,6 +1276,68 @@ public final class NyanLexFabric implements ClientModInitializer {
         return nameTag(null, c);
     }
 
+    /**
+     * Name plates that a server draws as Text Display entities (NPC names, mount labels): the
+     * entity renderer does not go through the name tag path, so the name tag hook never sees
+     * them. Only runs in the ordinary font are translated; text in any other font (icon badges,
+     * level pills, markers) is kept exactly as it is, and so is every style.
+     *
+     * @return {@code null} when nothing in the component can be translated (decided once);
+     *         {@code source} itself while a translation is still pending; otherwise the
+     *         translated component
+     */
+    public static Component displayText(Component source) {
+        TranslationService s = service;
+        if (s == null || source == null || s.nameMode() == DisplayMode.ORIGINAL_ONLY
+                || projectionSuppressed()) return null;
+        if (nameTagMatchesListedPlayer(source.getString())) return null;
+        java.util.List<net.minecraft.network.chat.Style> styles = new java.util.ArrayList<>();
+        java.util.List<String> texts = new java.util.ArrayList<>();
+        source.visit((style, content) -> {
+            styles.add(style);
+            texts.add(content);
+            return java.util.Optional.empty();
+        }, net.minecraft.network.chat.Style.EMPTY);
+        net.minecraft.network.chat.MutableComponent out = Component.empty();
+        boolean candidate = false;
+        boolean translatedAny = false;
+        int i = 0;
+        while (i < texts.size()) {
+            if (!isOrdinaryFont(styles.get(i))) {
+                out.append(Component.literal(texts.get(i)).withStyle(styles.get(i)));
+                i++;
+                continue;
+            }
+            net.minecraft.network.chat.MutableComponent segment = Component.empty();
+            boolean letters = false;
+            int j = i;
+            while (j < texts.size() && isOrdinaryFont(styles.get(j))) {
+                segment.append(Component.literal(texts.get(j)).withStyle(styles.get(j)));
+                letters |= texts.get(j).chars().anyMatch(Character::isLetter);
+                j++;
+            }
+            Component translated = null;
+            if (letters) {
+                candidate = true;
+                translated = FabricTextStyle.renderTranslated("nameTag", segment, s::translateUi);
+            }
+            if (translated != null) {
+                out.append(translated);
+                translatedAny = true;
+            } else {
+                out.append(segment);
+            }
+            i = j;
+        }
+        if (!candidate) return null;
+        return translatedAny ? out : source;
+    }
+
+    private static boolean isOrdinaryFont(net.minecraft.network.chat.Style style) {
+        net.minecraft.resources.ResourceLocation font = style.getFont();
+        return font == null || font.equals(net.minecraft.network.chat.Style.DEFAULT_FONT);
+    }
+
     /** Projects the four visible rows of a world sign without changing its client data.
      * The renderer keeps ownership of dye colour, glow, outline and row geometry. */
     public static Component[] worldSignLines(Component[] source) {
@@ -1492,7 +1560,12 @@ public final class NyanLexFabric implements ClientModInitializer {
                         : config.aiApiKeys != null && !config.aiApiKeys.isEmpty())
                         && !ai.isRateLimited());
         service = new TranslationService(config, cache, aiCache);
-        outgoingChat = new com.dragonmeow.nyanlex.service.OutgoingChatTranslator(config,
+        // 譯文管理: the player's own translations (one file per language, switched with it by the
+        // service); a save, revert or delete makes everything already on screen decide again.
+        service.setManualTranslations(ManualTranslations.open(
+                FabricLoader.getInstance().getConfigDir(), MOD_ID, config.targetLang));
+        service.setManualChangeListener(FabricTextStyle::clearRenderMemo);
+        outgoingChat =new com.dragonmeow.nyanlex.service.OutgoingChatTranslator(config,
                 new com.dragonmeow.nyanlex.translate.GoogleFreeTranslator(transport, "auto",
                         machinePacer, com.dragonmeow.nyanlex.translate.MachineTranslationGate.shared()),
                 ai, executor, () -> onlineNames);
@@ -1535,8 +1608,12 @@ public final class NyanLexFabric implements ClientModInitializer {
                 "key.nyanlex.mode", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "category.nyanlex"));
         retranslateKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.nyanlex.retranslate", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.nyanlex"));
+        // Default is backslash, not P: the game's key table of this version hands a pressed key to ONE
+        // mapping only, and the vanilla social-interactions screen already owns P, so a P default never
+        // reached the mod while no screen was open. Only the default changes; a binding saved in
+        // options.txt still wins.
         screenScanKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.nyanlex.screenscan", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_P, "category.nyanlex"));
+                "key.nyanlex.screenscan", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_BACKSLASH, "category.nyanlex"));
         toggleKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.nyanlex.toggle", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.nyanlex"));
     }
@@ -1545,6 +1622,10 @@ public final class NyanLexFabric implements ClientModInitializer {
     private void flipShowOriginal() {
         if (service == null) return;
         boolean originalsNow = service.toggleShowOriginal();
+        // The game's own language files follow the key too: with it on, translation keys resolve
+        // to their English text. Text a screen resolved when it was built is only refreshed by
+        // rebuilding that screen (done on the next tick, see rebuildScreenAfterLanguageFlip).
+        if (OriginalLanguage.apply(originalsNow)) languageRebuildRequested = true;
         FabricTextStyle.clearRenderMemo();
         if (originalsNow) flushPendingChatOriginals();
         synchronized (QUEST_WIDGET_PENDING) { QUEST_WIDGET_PENDING.clear(); }
@@ -1646,11 +1727,25 @@ public final class NyanLexFabric implements ClientModInitializer {
     private boolean handleOverlayMessage(Component message) {
         if (service == null || message == null) return true;
         long sequence = ++actionBarSequence;
+        // The action bar has one cell: the request of the overlay this one replaces is only
+        // worth keeping if this one asks for the very same text.
+        String replaced = pendingActionBarRequest;
+        pendingActionBarRequest = null;
+        // A dialogue box is translated block by block when it is drawn (OverlayDialogueView),
+        // never as one line made of HUD numbers and half-typed text.
+        if (OverlayDialogueView.isDialogue(message)) {
+            if (replaced != null) service.cancelActionBarRequest(replaced);
+            return true;
+        }
         Component source = FabricTextStyle.resolveLegacyCodes(message);
         DisplayMode mode = service.actionBarMode();
-        if (mode == DisplayMode.ORIGINAL_ONLY) return true;
+        if (mode == DisplayMode.ORIGINAL_ONLY) {
+            if (replaced != null) service.cancelActionBarRequest(replaced);
+            return true;
+        }
         FabricTextStyle.MarkedChat marked = FabricTextStyle.markChatContent(source, 0);
         String request = marked.marked() ? marked.text() : source.getString();
+        if (replaced != null && !replaced.equals(request)) service.cancelActionBarRequest(replaced);
         if (!service.wantsActionBarTranslation(request)) return true;
 
         TranslationDecision cached = service.translateActionBar(request);
@@ -1659,6 +1754,7 @@ public final class NyanLexFabric implements ClientModInitializer {
             return false;
         }
 
+        pendingActionBarRequest = request;
         service.requestActionBarAsync(request, translated -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc == null) return;
@@ -1743,8 +1839,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         if (service == null || message == null) return false;
         observeChatDeliveryContext(Minecraft.getInstance());
         final boolean systemMessage = params == null;
-        final Component renderedMessage = FabricTextStyle.resolveLegacyCodes(
-                params == null ? message : decorate(params, message));
+        final Component renderedMessage = renderedChatLine(message);
         if (params != null) params = null;
         DisplayMode mode = service.chatMode();
         if (mode == DisplayMode.ORIGINAL_ONLY) return false;
@@ -2192,6 +2287,16 @@ public final class NyanLexFabric implements ClientModInitializer {
         return params != null ? params.decorate(line) : line;
     }
 
+    /**
+     * The chat line to translate and show. ClientReceiveMessageEvents.ALLOW_CHAT delivers the line vanilla is about to draw:
+     * Fabric API has already applied ChatType.Bound#decorate (the "<name> text", "[Server] text", "* name text" format) on the
+     * signed, the filtered signed and the disguised path alike, so the line is used as received. Decorating it again printed
+     * the sender twice. System messages (ALLOW_GAME) never carry a chat type and are used as received too.
+     */
+    static Component renderedChatLine(Component message) {
+        return FabricTextStyle.resolveLegacyCodes(message);
+    }
+
     private static Component chatLine(Font font, Component message, boolean hasPrefix, int contentStart,
                                       String translated) {
         net.minecraft.network.chat.Style interactive =
@@ -2440,6 +2545,7 @@ public final class NyanLexFabric implements ClientModInitializer {
         maybeMigrateKeybinds(mc);
         SCREEN_RENDER_STACK.remove();
         refreshScannedScreen();
+        rebuildScreenAfterLanguageFlip(mc);
         if (settingsScreenRequested) {
             settingsScreenRequested = false;
             openSettings(mc);
@@ -2456,7 +2562,7 @@ public final class NyanLexFabric implements ClientModInitializer {
             }
         }
         if (screenScanKey != null && service != null) {
-            // P in the world (no screen open): translate the HUD text. With a screen open the
+            // The scan key in the world (no screen open): translate the HUD text. With a screen open the
             // key goes to the screen handler (the scan of that screen).
             while (screenScanKey.consumeClick()) {
                 if (mc == null || mc.level == null || mc.screen != null) continue;
@@ -2503,7 +2609,7 @@ public final class NyanLexFabric implements ClientModInitializer {
     }
 
     /**
-     * P with no screen open: translate what the HUD is drawing right now -- every scoreboard row,
+     * The scan key with no screen open: translate what the HUD is drawing right now -- every scoreboard row,
      * boss bar name, title and subtitle, action bar line and name tag shown during the next few
      * frames. It passes the same Google gate and consent box as R and the screen scan.
      */
@@ -2517,15 +2623,23 @@ public final class NyanLexFabric implements ClientModInitializer {
     private void startHudScan() {
         com.dragonmeow.nyanlex.service.TranslationService current = service;
         if (current == null) return;
-        current.beginHudCapture(NyanLexFabric::onHudScanDone);
+        // The scan only sees text that is looked up while its window is open. Renderers that
+        // already settled on a wording (name-plate displays) do not look anything up, so make
+        // them decide again now; otherwise their text is never scanned and never asked again.
+        if (current.beginHudCapture(NyanLexFabric::onHudScanDone)) FabricTextStyle.clearRenderMemo();
     }
 
     private static void onHudScanDone(int count) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
-        mc.execute(() -> feedback(count > 0
-                ? Component.translatable("message.nyanlex.hud_scan", count)
-                : Component.translatable("message.nyanlex.hud_scan_none")));
+        mc.execute(() -> {
+            // The scan discarded the scanned rows to ask again: renderers that settled on the old
+            // wording (name-plate displays) must decide again.
+            if (count > 0) FabricTextStyle.clearRenderMemo();
+            feedback(count > 0
+                    ? Component.translatable("message.nyanlex.hud_scan", count)
+                    : Component.translatable("message.nyanlex.hud_scan_none"));
+        });
     }
 
     /** Rescan one render frame without replacing the widgets' original labels. */
@@ -2606,6 +2720,23 @@ public final class NyanLexFabric implements ClientModInitializer {
         boolean current = screenRefreshRequested == mc.screen;
         screenRefreshRequested = null;
         if (current) refreshCurrentQuestScreen();
+    }
+
+    /**
+     * After the show-original key switched the game's language table, rebuilds the open screen the
+     * way a window resize does, so labels and lines it resolved while being built are resolved again
+     * in the new language. Screens that look keys up while drawing do not need this; it only runs when
+     * the key actually changed the language layer (never for a game already in English).
+     */
+    private static void rebuildScreenAfterLanguageFlip(Minecraft mc) {
+        if (!languageRebuildRequested) return;
+        languageRebuildRequested = false;
+        if (mc == null || mc.screen == null) return;
+        try {
+            mc.screen.resize(mc, mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());
+        } catch (RuntimeException e) {
+            LOGGER.warn("[{}] could not rebuild the open screen after the language switch: {}", MOD_ID, e.toString());
+        }
     }
 
     private void warmOpenContainerItems(Minecraft mc) {

@@ -36,8 +36,7 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
     private void nyanlex$initComposer(CallbackInfo ci) {
         if (!HookGuard.enter("ChatComposer.initComposer")) return;
         try {
-            if (LegacyTranslatorMod.config() == null || !LegacyTranslatorMod.config().chatComposerEnabled
-                    || input.getValue().startsWith("/")) return;
+            if (LegacyTranslatorMod.config() == null || !LegacyTranslatorMod.config().chatComposerEnabled) return;
             String draft = nyanlex$draft == null ? ChatComposerPanel.savedDraft() : nyanlex$draft.getValue();
             nyanlex$keepDraftFocus = nyanlex$draft != null && nyanlex$draft.isFocused();
             if (nyanlex$composer != null) nyanlex$composer.close();
@@ -72,7 +71,7 @@ public abstract class ChatComposerMixin extends Screen implements ChatComposerPa
         LegacyTranslatorMod.config().chatComposerX = x; LegacyTranslatorMod.config().chatComposerY = y; LegacyTranslatorMod.saveConfig();
     }
     @Unique @Override public void fill(String text) {
-        input.setValue(text);
+        input.insertText(text);
         nyanlex$focusChat();
     }
     @Unique @Override public boolean current() { return minecraft.screen == this; }

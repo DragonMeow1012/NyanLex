@@ -2,11 +2,15 @@ package com.dragonmeow.nyanlex.neoforge26;
 
 import com.dragonmeow.nyanlex.config.SecretText;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
+import com.dragonmeow.nyanlex.translate.AiFeatureMemory;
+import com.dragonmeow.nyanlex.translate.AnthropicWire;
 import com.dragonmeow.nyanlex.translate.AntigravityCliClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient.AccountSnapshot;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient.LoginStart;
 import com.dragonmeow.nyanlex.translate.CodexAppServerClient.ModelOption;
+import com.dragonmeow.nyanlex.translate.HttpEndpointPolicy;
+import com.dragonmeow.nyanlex.translate.ReasoningEffort;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -49,7 +53,13 @@ public final class Neo26AiScreen extends Screen {
     private List<String> statusLines = List.of();
 
     // Compute widget and text positions together; shrink gaps on short screens.
+    private List<String> claudeNoteLines = List.of();
     private int layProv;
+    private int layClaudeNote;
+    /** Row under the key field: thinking strength, plus fast mode where the service has one. */
+    private int layApiOptions;
+    /** Claude's endpoint is fixed; its field is only left out when the screen is too short for everything. */
+    private boolean hideEndpoint;
     private int layMode;
     private int layBaseLabel;
     private int layBase;
@@ -71,11 +81,32 @@ public final class Neo26AiScreen extends Screen {
 
     private void computeLayout(TranslatorConfig cfg) {
         wrappedStatus = null;
+        boolean claude = isClaudeProvider(cfg);
+        claudeNoteLines = claude
+                ? com.dragonmeow.nyanlex.config.UiText.wrap(
+                        Component.translatable("screen.nyanlex.ai.claude.note").getString(), FIELD_W, this.font::width)
+                : List.of();
+        hideEndpoint = false;
+        tight = false;
+        if (placeRows(cfg, claude)) return;
+        // Even the tightest gaps do not fit: 測試連接 and 完成 share one row.
+        tight = true;
+        if (claude && layStatus + 10 > this.height - 4) {
+            // The Claude endpoint is fixed, so its field is the first thing to give up.
+            hideEndpoint = true;
+            if (placeRows(cfg, claude)) {
+                tight = false;
+                return;
+            }
+        }
+        layDone = cfg.usesLocalAiCli() ? layCodexTest : layTest;
+    }
+
+    /** Lay the rows out with the largest gaps that fit above 完成; false when none do (positions are then the tightest). */
+    private boolean placeRows(TranslatorConfig cfg, boolean claude) {
         boolean accountModes = isOpenAiProvider(cfg) || isGeminiProvider(cfg);
         boolean localCli = cfg.usesLocalAiCli();
         int[] gaps = {10, 6, 4, 2};
-        tight = false;
-        boolean fitted = false;
         for (int gi = 0; gi < gaps.length; gi++) {
             int g = gaps[gi];
             int small = Math.min(g, 6);
@@ -104,15 +135,23 @@ public final class Neo26AiScreen extends Screen {
                 y += statusHeight();
             } else {
                 y += Math.min(g, 4);
-                layBaseLabel = y;
-                layBase = y + 12;
-                y = layBase + 20 + g;
+                if (claude) {
+                    layClaudeNote = y;
+                    y += claudeNoteLines.size() * 10 + small;
+                }
+                if (!hideEndpoint) {
+                    layBaseLabel = y;
+                    layBase = y + 12;
+                    y = layBase + 20 + g;
+                }
                 layModelLabel = y;
                 layModel = y + 12;
                 y = layModel + 20 + g;
                 layKeysLabel = y;
                 layKeys = y + 12;
                 y = layKeys + 20 + Math.min(g, 8);
+                layApiOptions = y;
+                y += 20 + Math.min(g, 8);
                 layTest = y;
                 y += 20;
                 layStatus = y + 2;
@@ -120,16 +159,11 @@ public final class Neo26AiScreen extends Screen {
             }
             layDone = Math.max(y + 4, 210);
             if (layDone + 20 <= this.height - 4) {
-                fitted = true;
-                break;
+                layDone = Math.min(layDone, Math.max(4, this.height - 24));
+                return true;
             }
         }
-        if (!fitted) {
-            tight = true;
-            layDone = localCli ? layCodexTest : layTest;
-            return;
-        }
-        layDone = Math.min(layDone, Math.max(4, this.height - 24));
+        return false;
     }
 
     public Neo26AiScreen(Screen parent) {
@@ -153,7 +187,7 @@ public final class Neo26AiScreen extends Screen {
             initApi(x);
         }
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
-                .bounds(tight ? (!cfg.usesLocalAiCli() && isOpenAiProvider(cfg) ? x + 216 : this.width / 2 + 3) : this.width / 2 - 100, layDone, tight ? (!cfg.usesLocalAiCli() && isOpenAiProvider(cfg) ? 104 : FIELD_W / 2 - 3) : 200, 20).build());
+                .bounds(tight ? this.width / 2 + 3 : this.width / 2 - 100, layDone, tight ? FIELD_W / 2 - 3 : 200, 20).build());
 
         if (cfg.usesCodex() && !this.initialCodexRefreshStarted) {
             this.initialCodexRefreshStarted = true;
@@ -167,8 +201,8 @@ public final class Neo26AiScreen extends Screen {
 
     private void addProviderButtons(int x, int y) {
         TranslatorConfig cfg = NyanLexNeoForge26.config();
-        int gap = 6;
-        int width = (FIELD_W - gap * 3) / 4;
+        int gap = 4;
+        int width = (FIELD_W - gap * 4) / 5;
         addProviderButton(providerLabel("Gemini", isGeminiProvider(cfg)),
                 x, y, width, this::selectGeminiProvider);
         addProviderButton(providerLabel("OpenAI", isOpenAiProvider(cfg)),
@@ -176,11 +210,14 @@ public final class Neo26AiScreen extends Screen {
         addProviderButton(providerLabel("DeepSeek", !cfg.usesLocalAiCli()
                         && isEndpoint(cfg.aiBaseUrl, "https://api.deepseek.com")),
                 x + (width + gap) * 2, y, width,
-                () -> selectApiProvider("https://api.deepseek.com", "deepseek-chat"));
+                () -> selectApiProvider("https://api.deepseek.com", "deepseek-flash"));
+        addProviderButton(providerLabel("Claude", isClaudeProvider(cfg)),
+                x + (width + gap) * 3, y, width,
+                () -> selectApiProvider(TranslatorConfig.ANTHROPIC_API_URL, TranslatorConfig.DEFAULT_CLAUDE_MODEL));
         addProviderButton(providerLabel(
                         Component.translatable("screen.nyanlex.ai.custom").getString(),
                         !cfg.usesLocalAiCli() && !isKnownApiEndpoint(cfg.aiBaseUrl)),
-                x + (width + gap) * 3, y, width,
+                x + (width + gap) * 4, y, width,
                 () -> selectApiProvider("http://127.0.0.1:11434/v1", ""));
     }
 
@@ -218,7 +255,7 @@ public final class Neo26AiScreen extends Screen {
         this.baseUrlBox = new EditBox(this.font, x, baseY, FIELD_W, 20, Component.translatable("screen.nyanlex.ai.endpoint"));
         this.baseUrlBox.setMaxLength(256);
         this.baseUrlBox.setValue(cfg.aiBaseUrl == null ? "" : cfg.aiBaseUrl);
-        this.addRenderableWidget(this.baseUrlBox);
+        if (!this.hideEndpoint) this.addRenderableWidget(this.baseUrlBox);
 
         this.modelBox = new EditBox(this.font, x, modelY, 228, 20, Component.translatable("screen.nyanlex.ai.model"));
         this.modelBox.setMaxLength(128);
@@ -249,6 +286,7 @@ public final class Neo26AiScreen extends Screen {
                     ? "screen.nyanlex.ai.keys.hide"
                     : "screen.nyanlex.ai.keys.show"));
         }).bounds(x + KEY_FIELD_W + KEY_BUTTON_GAP, keysY, KEY_BUTTON_W, 20).build());
+        addApiOptionButtons(cfg, x, layApiOptions);
 
         this.testButton = Button.builder(Component.translatable("screen.nyanlex.ai.test"), b -> {
             saveApiFields();
@@ -259,9 +297,8 @@ public final class Neo26AiScreen extends Screen {
                     this.modelBox.getValue().trim(),
                     parseKeys(this.keysBox.getValue()),
                     this::showConnectionTestResult);
-        }).bounds(x, testY, isOpenAiProvider(cfg) ? (tight ? 102 : 157) : (tight ? FIELD_W / 2 - 3 : FIELD_W), 20).build();
+        }).bounds(x, testY, tight ? FIELD_W / 2 - 3 : FIELD_W, 20).build();
         this.addRenderableWidget(this.testButton);
-        if (isOpenAiProvider(cfg)) addFastModeButton(x + (tight ? 108 : 163), testY, tight ? 102 : 157);
     }
 
     private void showConnectionTestResult(String result) {
@@ -294,6 +331,63 @@ public final class Neo26AiScreen extends Screen {
                 }).rememberChoice(false, value -> cfg.hideAiFastModeNotice = value));
     }
 
+    /**
+     * Thinking strength for every API service; services with a fast mode (OpenAI, Claude) put its
+     * switch beside it, the others let the strength button use the whole row.
+     */
+    private void addApiOptionButtons(TranslatorConfig cfg, int x, int y) {
+        boolean claude = isClaudeProvider(cfg);
+        boolean openAi = !claude && isOpenAiProvider(cfg);
+        Button effort = Button.builder(Component.translatable("screen.nyanlex.ai.codex.effort",
+                        Neo26LocalAiEffortScreen.label(cfg.apiEffortFor(cfg.aiBaseUrl), true)),
+                        b -> openApiEffortPicker())
+                .bounds(x, y, claude || openAi ? 157 : FIELD_W, 20).build();
+        effort.active = !this.busy;
+        this.addRenderableWidget(effort);
+        if (openAi) addFastModeButton(x + 163, y, 157);
+        if (claude) addClaudeFastModeButton(cfg, x + 163, y, 157);
+    }
+
+    private void addClaudeFastModeButton(TranslatorConfig cfg, int x, int y, int width) {
+        boolean fastUnsupported = AiFeatureMemory.shared().isUnsupported(cfg.aiModel, AnthropicWire.Feature.FAST);
+        Component fastState = Component.translatable(
+                cfg.claudeFastMode ? "screen.nyanlex.ai.fast.on" : "screen.nyanlex.ai.fast.off");
+        this.addRenderableWidget(Button.builder(fastUnsupported
+                ? Component.translatable("screen.nyanlex.ai.claude.fast.unsupported", fastState)
+                : fastState,
+                b -> toggleClaudeFastMode()).bounds(x, y, width, 20).build());
+    }
+
+    private void openApiEffortPicker() {
+        if (this.minecraft == null) return;
+        saveCurrentFields();
+        TranslatorConfig cfg = NyanLexNeoForge26.config();
+        String endpoint = cfg.aiBaseUrl;
+        // The six strength choices are shared; model capability is handled by
+        // the request layer, which steps down and remembers it.
+        this.minecraft.setScreenAndShow(new Neo26LocalAiEffortScreen(this).withLevels(
+                ReasoningEffort.VALUES,
+                cfg.apiEffortFor(endpoint), selected -> cfg.rememberApiEffort(endpoint, selected)));
+    }
+
+    private void toggleClaudeFastMode() {
+        saveCurrentFields();
+        TranslatorConfig cfg = NyanLexNeoForge26.config();
+        if (cfg.claudeFastMode || cfg.hideClaudeFastModeNotice) {
+            cfg.claudeFastMode = !cfg.claudeFastMode;
+            NyanLexNeoForge26.saveConfig();
+            this.rebuildWidgets();
+            return;
+        }
+        this.minecraft.setScreenAndShow(new ConfirmDialogScreen(this,
+                Component.translatable("screen.nyanlex.ai.fast.title"),
+                Component.translatable("screen.nyanlex.ai.claude.fast.message"),
+                Component.translatable("screen.nyanlex.ai.fast.enable"), () -> {
+                    cfg.claudeFastMode = true;
+                    NyanLexNeoForge26.saveConfig();
+                }).rememberChoice(false, value -> cfg.hideClaudeFastModeNotice = value));
+    }
+
     private void readApiModels() {
         if (this.busy || this.minecraft == null) return;
         saveApiFields();
@@ -310,7 +404,10 @@ public final class Neo26AiScreen extends Screen {
                     this.busy = false;
                     if (!isCurrentScreen() || NyanLexNeoForge26.config().usesLocalAiCli()
                             || !endpoint.equals(this.baseUrlBox.getValue().trim())
-                            || !keys.equals(parseKeys(this.keysBox.getValue()))) return;
+                            || !keys.equals(parseKeys(this.keysBox.getValue()))) {
+                        discardModelRead();
+                        return;
+                    }
                     if (models.isEmpty()) {
                         setStatus(Component.translatable("screen.nyanlex.ai.api.no_models").getString(), true);
                         return;
@@ -329,13 +426,38 @@ public final class Neo26AiScreen extends Screen {
                 onMain(() -> {
                     this.busy = false;
                     if (isCurrentScreen() && !NyanLexNeoForge26.config().usesLocalAiCli()
-                            && endpoint.equals(this.baseUrlBox.getValue().trim())) {
+                            && endpoint.equals(this.baseUrlBox.getValue().trim())
+                            && keys.equals(parseKeys(this.keysBox.getValue()))) {
                         saveApiFields();
-                        setStatus(Component.translatable("screen.nyanlex.ai.api.models_failed", errorMessage(error)).getString(), true);
+                        setStatus(Component.translatable("screen.nyanlex.ai.api.models_failed", modelErrorText(endpoint, error)).getString(), true);
+                    } else {
+                        discardModelRead();
                     }
                 });
             }
         });
+    }
+
+    /**
+     * The model read finished for a URL or key that is no longer on screen: drop its result,
+     * clear the loading line and rebuild so the buttons are usable again. What the user has
+     * typed meanwhile is kept.
+     */
+    private void discardModelRead() {
+        this.busy = false;
+        if (this.status.equals(Component.translatable("screen.nyanlex.ai.api.loading_models").getString())) {
+            this.status = "";
+        }
+        if (!isCurrentScreen()) return;
+        if (!NyanLexNeoForge26.config().usesLocalAiCli()) saveApiFields();
+        this.rebuildWidgets();
+    }
+
+    /** The failure text, with a plain-language hint appended for Claude's well-known HTTP errors. */
+    private static String modelErrorText(String endpoint, Throwable error) {
+        String message = errorMessage(error);
+        String hint = HttpEndpointPolicy.isAnthropic(endpoint) ? AnthropicWire.hintKey(message) : null;
+        return hint == null ? message : message + " " + Component.translatable(hint).getString();
     }
 
     private void initCodex(int x) {
@@ -881,7 +1003,14 @@ public final class Neo26AiScreen extends Screen {
             drawStatus(graphics);
         } else {
             int x = this.width / 2 - FIELD_W / 2;
-            graphics.text(this.font, Component.translatable("screen.nyanlex.ai.endpoint"), x, layBaseLabel, 0xFFA0A0A0, false);
+            int noteY = layClaudeNote;
+            if (isClaudeProvider(cfg)) {
+                for (String line : claudeNoteLines) {
+                    graphics.text(this.font, line, x, noteY, 0xFFA4A9B8, false);
+                    noteY += 10;
+                }
+            }
+            if (!hideEndpoint) graphics.text(this.font, Component.translatable("screen.nyanlex.ai.endpoint"), x, layBaseLabel, 0xFFA0A0A0, false);
             graphics.text(this.font, Component.translatable("screen.nyanlex.ai.model"), x, layModelLabel, 0xFFA0A0A0, false);
             graphics.text(this.font, Component.translatable("screen.nyanlex.ai.keys"), x, layKeysLabel, 0xFFA0A0A0, false);
             drawStatus(graphics);
@@ -1002,10 +1131,15 @@ public final class Neo26AiScreen extends Screen {
                 "https://generativelanguage.googleapis.com/v1beta/openai"));
     }
 
+    private static boolean isClaudeProvider(TranslatorConfig cfg) {
+        return cfg != null && !cfg.usesLocalAiCli() && HttpEndpointPolicy.isAnthropic(cfg.aiBaseUrl);
+    }
+
     private static boolean isKnownApiEndpoint(String url) {
         return isEndpoint(url, "https://generativelanguage.googleapis.com/v1beta/openai")
                 || isEndpoint(url, OPENAI_API_URL)
-                || isEndpoint(url, "https://api.deepseek.com");
+                || isEndpoint(url, "https://api.deepseek.com")
+                || HttpEndpointPolicy.isAnthropic(url);
     }
 
     private static boolean isEndpoint(String left, String right) {
@@ -1031,6 +1165,8 @@ public final class Neo26AiScreen extends Screen {
         String oldUrl = cfg.aiBaseUrl;
         String oldModel = cfg.aiModel;
         String oldAntigravityModel = cfg.antigravityModel;
+        String oldEffort = cfg.apiEffortFor(cfg.aiBaseUrl);
+        boolean oldClaudeFast = cfg.claudeFastMode;
         List<String> oldKeys = cfg.aiApiKeys == null ? List.of() : List.copyOf(cfg.aiApiKeys);
         if (!cfg.usesLocalAiCli()) saveApiFields();
         NyanLexNeoForge26.saveConfig();
@@ -1038,6 +1174,8 @@ public final class Neo26AiScreen extends Screen {
                 || !java.util.Objects.equals(oldUrl, cfg.aiBaseUrl)
                 || !java.util.Objects.equals(oldModel, cfg.aiModel)
                 || !java.util.Objects.equals(oldAntigravityModel, cfg.antigravityModel)
+                || !java.util.Objects.equals(oldEffort, cfg.apiEffortFor(cfg.aiBaseUrl))
+                || oldClaudeFast != cfg.claudeFastMode
                 || !oldKeys.equals(cfg.aiApiKeys)) {
             Neo26TextStyle.clearRenderMemo();
         }

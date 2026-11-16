@@ -16,7 +16,7 @@ public final class FileLocations {
     /** Ids in display order. Each id has lang keys {@code nyanlex.files.<id>} (title) and
      *  {@code nyanlex.files.<id>.desc} (what the file is for). */
     public static final List<String> IDS = List.of(
-            "config", "ai_cache", "gt_google",
+            "config", "ai_cache", "gt_google", "manual",
             "failures", "hub_cache", "hub_state", "debug_log");
 
     private static final String PREFIX = HubPaths.FILE_PREFIX;
@@ -49,6 +49,8 @@ public final class FileLocations {
             out.add(new Entry("gt_" + provider.id(),
                     dir.resolve(PREFIX + "-cache-" + provider.id() + "-" + tag + ".json")));
         }
+        // The translations the player wrote by hand in the translation manager, one file per language.
+        out.add(new Entry("manual", dir.resolve(PREFIX + "-manual-" + tag + ".json")));
         out.add(new Entry("failures", dir.resolve(PREFIX + "-failures-" + tag + ".json")));
         out.add(new Entry("hub_cache", dir.resolve(HubPaths.hubCacheFileName(language))));
         out.add(new Entry("hub_state", dir.resolve(HubPaths.stateFileName())));

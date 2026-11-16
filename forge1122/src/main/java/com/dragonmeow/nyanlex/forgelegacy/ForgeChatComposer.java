@@ -32,7 +32,7 @@ public final class ForgeChatComposer {
             panel = null;
             screen = event.getGui();
             chat = chatField((GuiChat) screen);
-            if (chat == null || chat.getText().startsWith("/")) return;
+            if (chat == null) return;
             final java.util.List<String[]> languages = new java.util.ArrayList<String[]>();
             languages.add(new String[]{"en", "English"});
             for (net.minecraft.client.resources.Language lang : mc.getLanguageManager().getLanguages())
@@ -51,7 +51,7 @@ public final class ForgeChatComposer {
                 public void position(double x, double y) {
                     NyanLexForge.config().chatComposerX = x; NyanLexForge.config().chatComposerY = y; NyanLexForge.save();
                 }
-                public void fill(String text) { chat.setText(text); focusChat(); }
+                public void fill(String text) { chat.writeText(text); focusChat(); }
                 public boolean current() { return mc.currentScreen == screen; }
                 public void execute(Runnable action) { mc.addScheduledTask(action); }
                 public void translate(String source, String target, java.util.function.BiConsumer<String, String> callback) {

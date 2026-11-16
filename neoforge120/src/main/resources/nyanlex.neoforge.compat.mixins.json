@@ -3,6 +3,7 @@
   "minVersion": "0.8",
   "package": "com.dragonmeow.nyanlex.neoforge.mixin",
   "compatibilityLevel": "JAVA_17",
+  "refmap": "nyanlex.neoforge.refmap.json",
   "client": [
     "TextFieldMixin",
     "JadeObjectNameMixin"

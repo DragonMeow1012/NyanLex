@@ -12,7 +12,7 @@ Set-StrictMode -Version 2.0
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$releaseVersion = '1.0.0'
+$releaseVersion = '1.0.1'
 $artifactBaseName = 'NyanLex-Translator'
 # 18 release targets: 16 projects with their own sources, plus fabric263/neoforge263,
 # which compile the fabric26/neoforge26 sources and resources with platform263.
@@ -289,7 +289,8 @@ $rows = @(
         -MainClass 'com.dragonmeow.nyanlex.fabric26.NyanLexFabric26' `
         -SettingsClass 'com.dragonmeow.nyanlex.fabric26.Fabric26ConfigScreen'
     # No sources of its own: fabric263/build.gradle compiles ../fabric26 (java and
-    # resources) plus ../platform263, against Minecraft 26.3 / Fabric Loader 0.19.5.
+    # resources) plus ../platform263, against Minecraft 26.3 / Fabric Loader 0.19.3
+    # (the oldest Loader it supports; see PACKAGING.md for why not a newer one).
     New-FabricRow -Key 'fabric263' -Project 'fabric263' -Minecraft '26.3' `
         -LoaderRange '>=0.19.0' -JavaRange '>=25' -SourceRelease 25 `
         -ClassMajor 69 -RuntimeJdk 25 -HarnessKind 'modern' `
@@ -675,12 +676,20 @@ function Assert-DeliveryLanguageText {
     }
 }
 
+# Sources a shared-source project compiles from its own src/main/java instead of the shared
+# tree (paths relative to src/main/java). A Mixin accessor has to match the field's exact type,
+# so a type that moved to another package between Minecraft versions needs its own copy.
+$versionSpecificSources = @{
+    'fabric263' = @('com/dragonmeow/nyanlex/fabric26/mixin/BakedSheetGlyphAccessor.java')
+}
+
 function Get-SharedSourceIssues {
     param([Parameter(Mandatory = $true)]$Row)
 
-    # fabric263/neoforge263 have no sources of their own. Prove that build.gradle compiles
-    # exactly the shared tree this matrix inspects plus the platform directory, and packages
-    # exactly that tree's resources, before trusting classes/resources found there.
+    # fabric263/neoforge263 share another project's sources. Prove that build.gradle compiles
+    # exactly the shared tree this matrix inspects plus the platform directory (and only the
+    # declared version-specific sources), and packages exactly that tree's resources, before
+    # trusting classes/resources found there.
     $issues = @()
     $buildFile = Join-Path $Row.ProjectRoot 'build.gradle'
     if (-not (Test-Path -LiteralPath $buildFile -PathType Leaf)) {
@@ -697,12 +706,73 @@ function Get-SharedSourceIssues {
     $gradleCode = [regex]::Replace($gradleCode, '(?m)^[ \t]*//.*$', '')
     $shared = [regex]::Escape('../' + $Row.SourceProject)
     $platform = [regex]::Escape('../' + $Row.PlatformProject)
+    $own = @()
+    if ($versionSpecificSources.ContainsKey($Row.Key)) {
+        $own = @($versionSpecificSources[$Row.Key])
+    }
+    $ownDirPattern = if ($own.Count -gt 0) { "\s*,\s*['""]src/main/java['""]" } else { '' }
     $javaPattern = "java\.setSrcDirs\(\s*\[\s*['""]$shared/src/main/java['""]\s*,\s*" +
-        "['""]$platform/src/main/java['""]\s*\]\s*\)"
+        "['""]$platform/src/main/java['""]$ownDirPattern\s*\]\s*\)"
     $resourcePattern = "resources\.setSrcDirs\(\s*\[\s*['""]$shared/src/main/resources['""]\s*\]\s*\)"
     if ([regex]::Matches($gradleCode, $javaPattern).Count -ne 1) {
-        $issues += ("build.gradle does not compile exactly ../{0} + ../{1} java sources" -f
-            $Row.SourceProject, $Row.PlatformProject)
+        $issues += ("build.gradle does not compile exactly ../{0} + ../{1} java sources{2}" -f
+            $Row.SourceProject, $Row.PlatformProject,
+            $(if ($own.Count -gt 0) { ' + its declared version-specific sources' } else { '' }))
+    }
+    # Version-specific sources: the project's own src/main/java holds exactly the declared
+    # files, each replaces one same-named file of the shared tree, and the single java.exclude
+    # removes only those shared copies. Anything else would let the two trees drift unseen.
+    $ownRoot = Join-Path $Row.ProjectRoot 'src\main\java'
+    $ownFiles = @()
+    if (Test-Path -LiteralPath $ownRoot -PathType Container) {
+        $ownFiles = @(Get-ChildItem -LiteralPath $ownRoot -Recurse -File | ForEach-Object {
+            $_.FullName.Substring($ownRoot.Length + 1).Replace('\', '/')
+        })
+    }
+    $excludeCount = [regex]::Matches($gradleCode, 'java\.exclude\b').Count
+    if ($own.Count -eq 0) {
+        if ($ownFiles.Count -ne 0) {
+            $issues += "undeclared sources under $ownRoot"
+        }
+        if ($excludeCount -ne 0) {
+            $issues += 'build.gradle excludes java sources but declares no version-specific source'
+        }
+    } else {
+        $undeclared = @($ownFiles | Where-Object { $_ -cnotin $own })
+        $missingOwn = @($own | Where-Object { $_ -cnotin $ownFiles })
+        if ($undeclared.Count -ne 0) {
+            $issues += "undeclared sources under ${ownRoot}: $($undeclared -join ', ')"
+        }
+        if ($missingOwn.Count -ne 0) {
+            $issues += "missing version-specific sources: $($missingOwn -join ', ')"
+        }
+        $sharedJavaRoot = Join-Path $Row.SourceRoot 'src\main\java'
+        $leafNames = @()
+        foreach ($relative in $own) {
+            $leaf = ($relative -split '/')[-1]
+            $leafNames += $leaf
+            $sharedCopy = Join-Path $sharedJavaRoot $relative.Replace('/', '\')
+            if (-not (Test-Path -LiteralPath $sharedCopy -PathType Leaf)) {
+                $issues += "version-specific source $relative replaces nothing in ../$($Row.SourceProject)"
+            }
+            $sameName = @(Get-ChildItem -LiteralPath $sharedJavaRoot -Recurse -File -Filter $leaf)
+            if ($sameName.Count -ne 1) {
+                $issues += ("java.exclude matches by file name, but ../{0} has {1} files named {2}" -f
+                    $Row.SourceProject, $sameName.Count, $leaf)
+            }
+        }
+        $sharedMarker = [regex]::Escape('/' + $Row.SourceProject + '/src/main/java/')
+        $excludedNames = @([regex]::Matches($gradleCode,
+            "element\.name\s*==\s*['""](?<n>[^'""]+)['""]") | ForEach-Object {
+                $_.Groups['n'].Value
+            })
+        $scopedToShared = [regex]::Matches($gradleCode,
+            "\.contains\(\s*['""]$sharedMarker['""]\s*\)\s*&&").Count -eq 1
+        if ($excludeCount -ne 1 -or -not $scopedToShared -or
+                (@($excludedNames | Sort-Object) -join '|') -cne (@($leafNames | Sort-Object) -join '|')) {
+            $issues += ('build.gradle must exclude exactly the shared copies of: {0}' -f
+                ($leafNames -join ', '))
+        }
     }
     if ([regex]::Matches($gradleCode, $resourcePattern).Count -ne 1) {
         $issues += "build.gradle does not package exactly ../$($Row.SourceProject) resources"

@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-@Mod(modid = "nyanlex", name = "NyanLex Translator", version = "1.0.0", clientSideOnly = true)
+@Mod(modid = "nyanlex", name = "NyanLex Translator", version = "1.0.1", clientSideOnly = true)
 public final class NyanLexForge {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static NyanLexForge instance;

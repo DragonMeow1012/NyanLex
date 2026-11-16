@@ -71,4 +71,11 @@ public interface PersistentStore {
     /** Switch the active target-language partition when this store supports it. */
     default void setLanguage(String targetLanguage) {
     }
+
+    /** Whether a write is still persisted. A file store that hit an I/O error keeps its rows in
+     *  memory but stops writing; callers that must not lose a row (the manual translations)
+     *  check this. Default: always writable (in-memory fakes). */
+    default boolean isWritable() {
+        return true;
+    }
 }

@@ -74,5 +74,15 @@
       "from": "nyanlex$scrollComposer(double mx, double my, double amount, CallbackInfoReturnable<Boolean> ci)",
       "to": "nyanlex$scrollComposer(double mx, double my, double horizontal, double amount, CallbackInfoReturnable<Boolean> ci)"
     }
+  ],
+  "com/dragonmeow/nyanlex/fabric/TranslationManagerScreen.java": [
+    {
+      "from": "mouseScrolled(double mouseX, double mouseY, double delta)",
+      "to": "mouseScrolled(double mouseX, double mouseY, double horizontal, double delta)"
+    },
+    {
+      "from": "        this.renderBackground(g); // 1.20.1: Screen.render does not draw the background\n",
+      "to": ""
+    }
   ]
 }

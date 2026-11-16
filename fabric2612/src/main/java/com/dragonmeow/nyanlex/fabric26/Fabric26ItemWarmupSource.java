@@ -125,6 +125,12 @@ final class Fabric26ItemWarmupSource implements ItemWarmupSource {
         }
 
         @Override
+        public boolean showingOriginal() {
+            TranslationService s = NyanLexFabric26.service();
+            return s != null && s.isShowOriginalOnly();
+        }
+
+        @Override
         public boolean usesCodex() {
             TranslationService s = NyanLexFabric26.service();
             return s != null && s.isCodexEngine();

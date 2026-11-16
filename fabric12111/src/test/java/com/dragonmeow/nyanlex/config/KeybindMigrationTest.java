@@ -75,6 +75,32 @@ class KeybindMigrationTest {
     }
 
     @Test
+    void aSavedScreenScanBindingIsNeverReplacedWhateverTheDefaultIs() {
+        // The default of the screen-scan key changed from P to backslash. A player who already has
+        // the key saved (P, or anything else) must keep it: the saved current line blocks every
+        // carry-over from an earlier identity, and with no line at all nothing is touched either.
+        String savedP = "key_key.nyanlex.screenscan:key.keyboard.p\n"
+                + "key_key.nyanslate.screenscan:key.keyboard.o\n"
+                + "key_key.mctranslator.screenscan:key.keyboard.i\n";
+        assertTrue(KeybindMigration.findUnmigratedBindings(savedP, SUFFIXES).isEmpty());
+
+        String noLine = "version:1\nkey_key.attack:key.mouse.left\n";
+        assertTrue(KeybindMigration.findUnmigratedBindings(noLine, SUFFIXES).isEmpty());
+    }
+
+    @Test
+    void anEarlierSavedPIsCarriedOverAsPAndNotChangedToTheNewDefault() {
+        // An earlier-identity player whose saved value is P keeps P: the parser hands back the
+        // saved value verbatim and never substitutes a default.
+        String options = "key_key.nyanslate.screenscan:key.keyboard.p\n";
+
+        Map<String, String> result = KeybindMigration.findUnmigratedBindings(options, SUFFIXES);
+
+        assertEquals(1, result.size());
+        assertEquals("key.keyboard.p", result.get("screenscan"));
+    }
+
+    @Test
     void noOldBindingsYieldsEmptyMap() {
         String options = "key_key.nyanlex.mode:key.keyboard.g\n";
         assertTrue(KeybindMigration.findUnmigratedBindings(options, SUFFIXES).isEmpty());

@@ -71,6 +71,11 @@ public final class TranslatorConfig {
     public boolean aiTitle = false;
     public boolean aiActionBar = false;
     public boolean aiBook = false;
+    /**
+     * Also write the translation of titles, subtitles and dialogue boxes into the player's own
+     * chat (local only, never sent), so text that vanishes quickly can be read again.
+     */
+    public boolean logTransientToChat = false;
     /** Engine for the custom-GUI text surface ({@link #screenTextMode}) and the "translate this screen" hotkey. */
     public boolean aiScreenText = false;
 

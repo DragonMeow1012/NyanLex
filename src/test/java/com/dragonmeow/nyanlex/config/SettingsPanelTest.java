@@ -744,6 +744,7 @@ class SettingsPanelTest {
         p.setCategory(SettingsCategory.ADVANCED);
         int collapsed = p.rowCount();
         assertFalse(p.isExpanded(SettingsModel.FILES_GROUP_ID));
+        p.keyPressed(SettingsPanel.KEY_END, false, false); // the group sits below the cards of this page
         click(p, p.headerBounds(SettingsModel.FILES_GROUP_ID));
         assertTrue(p.isExpanded(SettingsModel.FILES_GROUP_ID));
         assertEquals(collapsed + FileLocations.IDS.size(), p.rowCount());

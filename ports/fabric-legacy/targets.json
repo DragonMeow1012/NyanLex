@@ -1,12 +1,12 @@
 {
   "1.17": {
-    "fabricApi": "0.46.1+1.17",
+    "fabricApi": "0.35.2+1.17",
     "sourceProject": "fabric1171",
     "java": 16,
     "fabricApiId": "fabric"
   },
   "1.18": {
-    "fabricApi": "0.46.6+1.18",
+    "fabricApi": "0.46.3+1.18",
     "sourceProject": "fabric1182",
     "java": 17,
     "fabricApiId": "fabric"
@@ -22,6 +22,13 @@
     "sourceProject": "fabric1182",
     "java": 17,
     "profile": "pre1193",
+    "sourceOverrides": {
+      "com/dragonmeow/nyanlex/fabric/BorrowedGlyphs.java": "fabric1194",
+      "com/dragonmeow/nyanlex/fabric/mixin/BakedGlyphAccessor.java": "fabric1194"
+    },
+    "addMixins": [
+      "BakedGlyphAccessor"
+    ],
     "fabricApiId": "fabric"
   },
   "1.19.1": {
@@ -30,7 +37,15 @@
     "java": 17,
     "profile": "pre1193",
     "patchProfiles": [
-      "signed1191"
+      "signed1191",
+      "shadow1191"
+    ],
+    "sourceOverrides": {
+      "com/dragonmeow/nyanlex/fabric/BorrowedGlyphs.java": "fabric1194",
+      "com/dragonmeow/nyanlex/fabric/mixin/BakedGlyphAccessor.java": "fabric1194"
+    },
+    "addMixins": [
+      "BakedGlyphAccessor"
     ],
     "fabricApiId": "fabric"
   },
@@ -40,7 +55,15 @@
     "java": 17,
     "profile": "pre1193",
     "patchProfiles": [
-      "signed1191"
+      "signed1191",
+      "shadow1191"
+    ],
+    "sourceOverrides": {
+      "com/dragonmeow/nyanlex/fabric/BorrowedGlyphs.java": "fabric1194",
+      "com/dragonmeow/nyanlex/fabric/mixin/BakedGlyphAccessor.java": "fabric1194"
+    },
+    "addMixins": [
+      "BakedGlyphAccessor"
     ],
     "fabricApiId": "fabric-api"
   },
@@ -49,6 +72,9 @@
     "sourceProject": "fabric1194",
     "java": 17,
     "profile": "pre1194",
+    "dropMixins": [
+      "TextDisplayMixin"
+    ],
     "fabricApiId": "fabric-api"
   },
   "1.20": {

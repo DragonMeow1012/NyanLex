@@ -72,7 +72,7 @@
   ],
   "com/dragonmeow/nyanlex/neoforge/mixin/GuiScoreboardMixin.java": [
     {
-      "from": "\n            method = \"lambda$displayScoreboardSidebar$*\",\n",
+      "from": "\n            method = \"/^lambda\\\\$displayScoreboardSidebar\\\\$\\\\d+$/\",\n",
       "to": "\n            method = \"displayScoreboardSidebar\",\n",
       "count": 1
     }

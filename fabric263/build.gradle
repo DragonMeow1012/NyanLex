@@ -10,7 +10,7 @@ base {
     archivesName = project.archives_base_name
 }
 
-// Final jar name: NyanLex-Translator-1.0.0-Fabric-26.3.jar (name-version-loader-mcversion)
+// Final jar name: NyanLex-Translator-1.0.1-Fabric-26.3.jar (name-version-loader-mcversion)
 tasks.named('jar') {
     // Folders of the earlier project names can linger (empty) in a working copy; none of them may reach a release jar.
     exclude 'assets/nyanslate/**', 'assets/mctranslator/**'
@@ -54,6 +54,13 @@ processResources {
 
 // Share translation and loader code; browser integration follows the target API.
 sourceSets.main {
-    java.setSrcDirs(['../fabric26/src/main/java', '../platform263/src/main/java'])
+    // 'src/main/java' holds the few classes that must differ from the 26.2 tree. 26.3 moved the
+    // GpuTextureView type to another package and a Mixin accessor has to match the field's exact
+    // type, so BakedSheetGlyphAccessor has its own copy there; the 26.2 one is left out.
+    java.setSrcDirs(['../fabric26/src/main/java', '../platform263/src/main/java', 'src/main/java'])
+    java.exclude { element ->
+        element.file.toString().replace('\\', '/').contains('/fabric26/src/main/java/')
+                && element.name == 'BakedSheetGlyphAccessor.java'
+    }
     resources.setSrcDirs(['../fabric26/src/main/resources'])
 }

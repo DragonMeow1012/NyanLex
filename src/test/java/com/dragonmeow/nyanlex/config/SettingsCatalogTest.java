@@ -47,12 +47,12 @@ class SettingsCatalogTest {
     @Test
     void entryCountsPerPage() {
         assertEquals(5, SettingsCatalog.entries(SettingsPage.GENERAL).size(), "快速設定, 線上翻譯, 翻譯語言, 快捷鍵");
-        assertEquals(18 + 1, SettingsCatalog.entries(SettingsPage.DISPLAY).size(), "nine surfaces with their service, plus 不翻譯詞彙");
+        assertEquals(18 + 2, SettingsCatalog.entries(SettingsPage.DISPLAY).size(), "nine surfaces with their service, plus 不翻譯詞彙 and 標題與對話留在聊天欄");
         assertEquals(9, SettingsCatalog.rows(SettingsPage.DISPLAY).size());
         assertEquals(2, SettingsCatalog.entries(SettingsPage.SERVICE).size());
         assertEquals(2, SettingsCatalog.entries(SettingsPage.PACK).size(), "偵測並下載, 清除下載的翻譯包");
         assertEquals(5, SettingsCatalog.entries(SettingsPage.MINE).size());
-        assertEquals(5, SettingsCatalog.entries(SettingsPage.ADVANCED).size());
+        assertEquals(6, SettingsCatalog.entries(SettingsPage.ADVANCED).size(), "譯文管理, 聊天順序, 備用服務, 請求冷卻, 批次, 偵錯模式");
     }
 
     @Test
@@ -244,6 +244,24 @@ class SettingsCatalogTest {
         // pressing a non-config entry never touches the config
         TranslatorConfig cfg = new TranslatorConfig();
         SettingsCatalog.byId("clear_cache").press(cfg);
+        assertFalse(cfg.translationRequestsEnabled);
+    }
+
+    @Test
+    void theTranslationManagerIsAnActionCardOnTheAdvancedPage() {
+        SettingEntry manager = SettingsCatalog.byId("manager");
+        assertEquals(SettingEntry.Type.ACTION, manager.type());
+        assertEquals(SettingAction.OPEN_TRANSLATION_MANAGER, manager.action());
+        assertEquals(SettingsPage.ADVANCED, manager.page());
+        assertEquals("nyanlex.settings.manager", manager.labelKey());
+        assertEquals("nyanlex.settings.manager.tip", manager.tipKey());
+        assertFalse(manager.destructive());
+        assertNull(manager.state(new TranslatorConfig()), "an action card has no state text");
+        assertEquals(SettingsPage.values().length, SettingsCatalog.pages().size(), "no page was added for it");
+        assertEquals(SettingsCategory.values().length, SettingsModel.categories().size(), "and no category");
+        // pressing it never touches the config
+        TranslatorConfig cfg = new TranslatorConfig();
+        manager.press(cfg);
         assertFalse(cfg.translationRequestsEnabled);
     }
 

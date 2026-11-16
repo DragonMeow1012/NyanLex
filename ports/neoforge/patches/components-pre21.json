@@ -132,6 +132,16 @@
       "from": "\n                () -> g.drawStringWithBackdrop(font, text, x, y, width, color));\n",
       "to": "\n                () -> g.drawString(font, text, x, y, color));\n",
       "count": 1
+    },
+    {
+      "from": "\n                        () -> g.drawStringWithBackdrop(font, dialogue, x, y, width, color));\n",
+      "to": "\n                        () -> g.drawString(font, dialogue, x, y, color));\n",
+      "count": 1
+    },
+    {
+      "from": "\n            method = \"/^lambda\\\\$displayScoreboardSidebar\\\\$\\\\d+$/\",\n",
+      "to": "\n            method = \"lambda$displayScoreboardSidebar$14\",\n",
+      "count": 1
     }
   ],
   "com/dragonmeow/nyanlex/neoforge/mixin/OptionsScreenMixin.java": [

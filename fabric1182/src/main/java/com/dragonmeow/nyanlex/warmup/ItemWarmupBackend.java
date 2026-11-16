@@ -30,6 +30,15 @@ public interface ItemWarmupBackend {
         return false;
     }
 
+    /**
+     * The player is looking at the original text (the show-original key is on). Game-language
+     * text then reads as untranslated, so the warm-up stops opening new work and looks at no
+     * further item until the key is off again; nothing it already sent is touched.
+     */
+    default boolean showingOriginal() {
+        return false;
+    }
+
     /** The AI engine is a serialized local CLI: the warm-up keeps one request at a time. */
     default boolean usesSerialLocalAi() {
         return usesCodex();

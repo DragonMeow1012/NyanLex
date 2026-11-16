@@ -52,7 +52,7 @@ public final class CodexAppServerClient implements AutoCloseable {
     private static final int MAX_STDERR_LINE_CHARS = 16_384;
     private static final int MAX_IDENTIFIER_CHARS = 4_096;
     private static final int MAX_ACTIVE_THREADS = 512;
-    private static final String CLIENT_VERSION = "1.0.0";
+    private static final String CLIENT_VERSION = "1.0.1";
     private static final List<String> DISABLED_TRANSLATION_FEATURES = List.of(
             "apps",
             "auth_elicitation",

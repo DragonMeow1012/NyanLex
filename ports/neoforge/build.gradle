@@ -116,10 +116,41 @@ sourceSets.main {
 }
 tasks.named('compileJava') { dependsOn(generateAdapters) }
 
+// Client mixins this port supplies for a game version (through profiles/ or overrides/) that the source
+// tree's mixin config does not list; they are registered right after FontSetBorrowMixin. A name the
+// source config already lists is left alone, so the entry is never duplicated if the source tree gains it.
+def sourceMixinConfigs = new File(sourceProject, 'src/main/resources').listFiles()
+        .findAll { it.name.endsWith('.mixins.json') }.collect { it.getText('UTF-8') }.join('\n')
+def extraClientMixins = ((spec.extraClientMixins ?: []) as List<String>)
+        .findAll { !sourceMixinConfigs.contains('"' + it + '"') }
 processResources {
     inputs.property('target', target)
     inputs.property('modVersion', project.version)
     inputs.property('neoForgeVersion', spec.neoforge)
+    inputs.property('extraClientMixins', extraClientMixins)
+    if (!extraClientMixins.isEmpty()) {
+        filesMatching('*.mixins.json') {
+            filter { line ->
+                if (line.trim() != '"FontSetBorrowMixin",') return line
+                ([line] + extraClientMixins.collect { line.replace('FontSetBorrowMixin', it as String) }).join('\n')
+            }
+        }
+    }
+    // The NeoForge 1.20.1 source tree is reobfuscated for Forge 47, so its mixin configs name a refmap. NeoForge
+    // 1.20.2+ runs with Mojang names and this port builds no refmap: drop the entry rather than leave it dangling.
+    if (legacyNamespace) {
+        filesMatching('*.mixins.json') {
+            filter { line -> line.trim().startsWith('"refmap"') ? null : line }
+        }
+    }
+    // The NeoForge 1.20.1 source tree ships a mod resource pack descriptor for pack_format 15 (Minecraft
+    // 1.20.1); a target that declares its own resource pack format gets that value instead.
+    inputs.property('packFormat', spec.packFormat ?: 0)
+    if (spec.packFormat) {
+        filesMatching('pack.mcmeta') {
+            filter { line -> line.replace('"pack_format": 15', "\"pack_format\": ${spec.packFormat}".toString()) }
+        }
+    }
     filesMatching(['META-INF/neoforge.mods.toml', 'META-INF/mods.toml']) {
         expand(version: project.version, minecraft_range: "[${target}]", neoforge_range: "[${spec.neoforge},)")
         filter { line ->
@@ -128,7 +159,9 @@ processResources {
                     .replace('modId = "forge"', 'modId = "neoforge"')
                     .replace('[47,)', "[${spec.neoforge},)")
                     .replace('[1.20.1,1.20.2)', "[${target}]")
-                if (target != '1.20.2') line = line.replace('mandatory = true', 'type = "required"')
+                // NeoForge 20.2.x and 20.3.x run FML 1.0.16 (see the neoforge POMs), which only reads the
+                // `mandatory` dependency field; the `type` field arrives with FML 2.0 in 20.4.
+                if (!(target in ['1.20.2', '1.20.3'])) line = line.replace('mandatory = true', 'type = "required"')
             }
             if (pre21) line = line.replace('loaderVersion = "[4,)"', 'loaderVersion = "[1,)"')
             line.replace('[1.21.1,1.21.2)', "[${target}]").replace('[21.1.0,)', "[${spec.neoforge},)")

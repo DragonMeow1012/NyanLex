@@ -13,7 +13,7 @@ import argparse
 
 from release_matrix import BASE_TARGETS, targets
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 ROOT = Path(__file__).resolve().parent.parent
 LEGACY_TARGETS = [target.project for target in BASE_TARGETS if target.java == 8]
 PREFIX = "com/dragonmeow/nyanlex/"

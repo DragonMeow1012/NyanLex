@@ -132,7 +132,7 @@
     {
       "from": "\n        if (mc == null || mc.gui.screen() == null) return;\n",
       "to": "\n        if (mc == null || mc.screen == null) return;\n",
-      "count": 1
+      "count": 2
     },
     {
       "from": "\n            Object gui = mc.gui.screen().getClass().getMethod(\"getGui\").invoke(mc.gui.screen());\n",
@@ -238,6 +238,16 @@
       "from": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),\n",
       "to": "\n        mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.add(mc.getToastManager(),\n",
       "count": 1
+    },
+    {
+      "from": "\n            mc.gui.screen().resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());\n",
+      "to": "\n            mc.screen.resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());\n",
+      "count": 1
+    },
+    {
+      "from": "\n        if (mc != null && SCREEN_CAPTURE.active(mc.gui.screen())) return true;\n",
+      "to": "\n        if (mc != null && SCREEN_CAPTURE.active(mc.screen)) return true;\n",
+      "count": 1
     }
   ],
   "com/dragonmeow/nyanlex/neoforge26/Neo26CliSetupScreen.java": [
@@ -282,6 +292,20 @@
     {
       "from": "\n    @Unique @Override public boolean current() { return minecraft.gui.screen() == this; }\n",
       "to": "\n    @Unique @Override public boolean current() { return minecraft.screen == this; }\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/TransientChatLogger.java": [
+    {
+      "from": "\n        mc.gui.hud.getChat().addClientSystemMessage(line);\n",
+      "to": "\n        mc.gui.getChat().addClientSystemMessage(line);\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/NyanLexHooks.java": [
+    {
+      "from": "\n            \"LanguageInstance.originalTable\",\n",
+      "to": "\n            \"LanguageInstance.originalTable\",\n            \"LanguageLookup.originalExists\",\n            \"LanguageLookup.originalText\",\n",
       "count": 1
     }
   ]

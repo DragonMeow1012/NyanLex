@@ -33,6 +33,10 @@ public final class ScreenTextInput {
             if (screen instanceof TranslationConfigScreen settings && settings.isTyping()) {
                 return true;
             }
+            // The translation manager (search and edit boxes drawn by the panel, not widgets).
+            if (screen instanceof TranslationManagerScreen manager && manager.isTyping()) {
+                return true;
+            }
             // Vanilla text-entry screens, whichever widget holds focus (chat incl. the bed chat,
             // signs, books, command blocks).
             if (screen instanceof ChatScreen || screen instanceof SignEditScreen

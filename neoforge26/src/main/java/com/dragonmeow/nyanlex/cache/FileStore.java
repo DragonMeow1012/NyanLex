@@ -259,6 +259,13 @@ public final class FileStore implements PersistentStore {
         return values.size();
     }
 
+    @Override
+    public boolean isWritable() {
+        synchronized (lock) {
+            return !readOnly;
+        }
+    }
+
     private void load() {
         synchronized (lock) {
             if (!Files.isRegularFile(file)) {

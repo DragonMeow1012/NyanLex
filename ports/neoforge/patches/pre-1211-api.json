@@ -1,0 +1,33 @@
+{
+  "com/dragonmeow/nyanlex/neoforge26/BorrowedGlyphs.java": [
+    {
+      "from": "TextRenderable.Styled probe = ",
+      "to": "TextRenderable probe = ",
+      "count": 2
+    },
+    {
+      "from": "\n        public TextRenderable.Styled createGlyph(float x, float y, int color, int shadowColor, Style style,\n",
+      "to": "\n        public TextRenderable createGlyph(float x, float y, int color, int shadowColor, Style style,\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/NyanLexNeoForge26.java": [
+    {
+      "from": "\n            mc.screen.resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());\n",
+      "to": "\n            mc.screen.resize(mc, mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());\n",
+      "count": 1
+    }
+  ],
+  "com/dragonmeow/nyanlex/neoforge26/mixin/LanguageLookupMixin.java": [
+    {
+      "from": "\nimport java.util.Locale;\n",
+      "to": "\n",
+      "count": 1
+    },
+    {
+      "from": "String.format(Locale.ROOT, text, args)",
+      "to": "String.format(text, args)",
+      "count": 1
+    }
+  ]
+}

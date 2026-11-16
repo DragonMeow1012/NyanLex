@@ -34,6 +34,10 @@ public final class Fabric26TextInput {
             if (screen instanceof Fabric26ConfigScreen settings && settings.isTyping()) {
                 return true;
             }
+            // The translation manager (search and edit boxes drawn by the panel, not widgets).
+            if (screen instanceof Fabric26ManagerScreen manager && manager.isTyping()) {
+                return true;
+            }
             // Vanilla text-entry screens, whichever widget holds focus (chat incl. the bed chat,
             // signs incl. hanging signs, books, command blocks).
             if (screen instanceof ChatScreen || screen instanceof AbstractSignEditScreen

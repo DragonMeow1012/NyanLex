@@ -2,6 +2,7 @@ package com.dragonmeow.nyanlex.service;
 
 import com.dragonmeow.nyanlex.warmup.WarmupCategory;
 
+import com.dragonmeow.nyanlex.cache.ManualTranslations;
 import com.dragonmeow.nyanlex.cache.TranslationCache;
 import com.dragonmeow.nyanlex.config.DisplayMode;
 import com.dragonmeow.nyanlex.config.TranslatorConfig;
@@ -52,6 +53,8 @@ public final class TranslationService {
     private final TranslatorConfig config;
     private final TranslationCache google;
     private final TranslationCache ai;
+    /** Request keys withdrawn by {@link #cancelActionBarRequest}, consumed by their completion. */
+    private final java.util.Set<String> withdrawnRequests = java.util.concurrent.ConcurrentHashMap.newKeySet();
     /** Runtime language actually installed in both caches.  This is deliberately
      * independent from the mutable config object: UI code may edit the config before
      * notifying the service, but that must never make a real cache switch look like a
@@ -59,6 +62,14 @@ public final class TranslationService {
     private volatile String activeTargetLang;
     /** Loader-side visible-surface invalidation after an actual target-language change. */
     private volatile Runnable targetLangChangeListener = () -> { };
+    /**
+     * The show-original key. While it is on, the game's own language files resolve to English
+     * (see OriginalLanguageSwitch), which makes text the target-language filter normally skips
+     * look untranslated. So the rule is: no NEW translation work is opened while it is on (every
+     * request, warm-up and retranslate entry checks this flag, as does the all-item warm-up
+     * driver through its backend); requests queued or in flight before it was switched on are
+     * left alone and finish normally.
+     */
     private volatile boolean showOriginalOnly;
     /**
      * 2026-10-02 correction: "manual item translation" is no longer a global flag the
@@ -104,6 +115,12 @@ public final class TranslationService {
      *  {@link #invalidatedNameFailures}: a short-lived, explicitly-triggered signal, never
      *  steady-state cache, so overflow clears the whole set rather than evicting LRU. */
     private final Set<String> forceFreshKeys = ConcurrentHashMap.newKeySet();
+    /** The player's manual translations (null until the loader attaches them) and the model of the
+     *  translation manager screen that edits them. See {@link #setManualTranslations}. */
+    private volatile ManualTranslations manual;
+    private volatile TranslationManager manager;
+    /** Loader-side hook run after a manual translation changed (clears its render memos). */
+    private volatile Runnable manualChangeListener = () -> { };
     /** At most one context-aware correction per item name and target language in a
      *  session. Prevents a stubborn model from creating a hover-triggered retry loop. */
     private final Set<String> contextualItemNameRetries = ConcurrentHashMap.newKeySet();
@@ -371,9 +388,18 @@ public final class TranslationService {
         return own;
     }
 
-    /** Repository read-through that an explicit R/P retranslate of {@code key} switched off. */
+    /** Repository read-through that an explicit R/P retranslate of {@code key} switched off, and
+     *  that a manual translation of the sentence always outranks. */
     private String hubValue(String key) {
-        return forceFreshKeys.contains(key) ? null : hubCachedValue(key);
+        if (forceFreshKeys.contains(key)) return null;
+        // A sentence deleted in the translation manager is blocked under its template key,
+        // which covers every number variant of it (the keys R/P add are exact sources).
+        if (!forceFreshKeys.isEmpty() && key != null && forceFreshKeys.contains(ai.semanticKey(key))) {
+            return null;
+        }
+        ManualTranslations rows = manual;
+        if (rows != null && !rows.isEmpty() && ai.hasManualTranslation(key)) return null;
+        return hubCachedValue(key);
     }
 
     /** Shared request admission for cache tiers outside the selected engine. The engine
@@ -415,7 +441,7 @@ public final class TranslationService {
                                  Consumer<String> callback, boolean always,
                                  boolean followAiRecovery) {
         requestByEngineDetailed(useAi, source, exactStyle,
-                (value, ignoredFinality) -> callback.accept(value), always, followAiRecovery);
+                (value, ignoredFinality) -> callback.accept(value), always, followAiRecovery, false);
     }
 
     @FunctionalInterface
@@ -426,6 +452,13 @@ public final class TranslationService {
     private void requestByEngineDetailed(boolean useAi, String source, boolean exactStyle,
                                          EngineResultConsumer callback, boolean always,
                                          boolean followAiRecovery) {
+        requestByEngineDetailed(useAi, source, exactStyle, callback, always, followAiRecovery, false);
+    }
+
+    /** @param highPriority the AI request leads the next batch and skips the collection window */
+    private void requestByEngineDetailed(boolean useAi, String source, boolean exactStyle,
+                                         EngineResultConsumer callback, boolean always,
+                                         boolean followAiRecovery, boolean highPriority) {
         if (keepsKnownName(source)) {
             callback.accept(cachedValue(useAi, source), true);
             return;
@@ -454,7 +487,10 @@ public final class TranslationService {
         }
 
         AtomicBoolean finalAiDelivered = new AtomicBoolean();
-        requestCache(ai, source, exactStyle, primary -> {
+        requestCache(ai, source, exactStyle, highPriority, primary -> {
+            // Withdrawn on purpose (see cancelActionBarRequest): nobody wants an answer, so
+            // there is no failure to recover from and no fallback request to buy.
+            if (primary == null && withdrawnRequests.remove(source)) return;
             String finalNow = ai.getCachedFinal(source);
             boolean styleFallbackOnly = exactStyle && finalNow != null
                     && TextFilter.isStyleFallback(finalNow);
@@ -533,6 +569,13 @@ public final class TranslationService {
         else cache.requestCoalesced(source, callback, always);
     }
 
+    /** The primary request of a surface; high priority only applies to plain (not colour-exact) text. */
+    private static void requestCache(TranslationCache cache, String source, boolean exactStyle,
+                                     boolean highPriority, Consumer<String> callback, boolean always) {
+        if (highPriority && !exactStyle) cache.requestCoalescedHigh(source, callback, always);
+        else requestCache(cache, source, exactStyle, callback, always);
+    }
+
     public boolean toggleShowOriginal() {
         return showOriginalOnly = !showOriginalOnly;
     }
@@ -572,7 +615,7 @@ public final class TranslationService {
     }
 
     public void requestScreenTextAsync(String source, Consumer<String> onResult) {
-        if (!TextFilter.shouldTranslate(source, activeTargetLang)) return;
+        if (showOriginalOnly || !TextFilter.shouldTranslate(source, activeTargetLang)) return;
         String request = screenTextRequest(source);
         NameMasker.Masked masked = asyncMask(request, onResult);
         if (masked == null || !translatableMasked(masked, false)) return;
@@ -627,6 +670,46 @@ public final class TranslationService {
                         LayoutPreserver.matchOuterWhitespace(source, restored)));
             }
         }, false, true);
+    }
+
+    /**
+     * Asks for the translation of text that is on screen right now, or not at all: when the AI
+     * engine cannot send this very moment (cooling down, rate-limit gate closed, requests
+     * switched off, an earlier batch still running) nothing is queued and no send slot is
+     * reserved, and {@code false} comes back so the caller asks again with whatever is on screen
+     * then. Otherwise the request goes out like {@link #requestActionBarAsync} (same masking,
+     * same AI-failure fallback) but at high priority, so it does not wait for the collection
+     * window. The answer is not delivered to a callback: the caller reads it from the cache.
+     *
+     * @return {@code true} when the request was accepted (queued, or nothing needs asking),
+     *         {@code false} when it was not asked for (engine busy, not the AI engine, or the
+     *         text is not wanted)
+     */
+    public boolean requestActionBarNow(String source) {
+        if (!config.aiActionBar || !wantsActionBarTranslation(source)) return false;
+        if (!ai.maySendNow()) return false;
+        NameMasker.Masked masked = asyncMask(source, composed -> { });
+        if (masked == null || !translatableMasked(masked, false)) return true;
+        requestByEngineDetailed(config.aiActionBar, masked.text(), false, (translated, finalResult) -> { },
+                false, true, true);
+        return true;
+    }
+
+    /**
+     * The action bar has a single cell, so only its newest text matters: withdraws the request
+     * {@link #requestActionBarAsync} made for a text that was replaced before it was sent. A
+     * request that already left stays; see {@link TranslationCache#cancelUnsent(String)}.
+     */
+    public void cancelActionBarRequest(String source) {
+        if (source == null || !config.aiActionBar) return;
+        NameMasker.Masked masked = mask(source);
+        if (masked.hasEntities() && !translatableMasked(masked, false)) masked = maskPlain(source);
+        String key = masked.text();
+        if (withdrawnRequests.size() > 64) withdrawnRequests.clear();
+        withdrawnRequests.add(key);
+        // Nothing was withdrawn (already sent, or shared with another surface): the mark has
+        // no request to attach to and must not swallow a later genuine failure.
+        if (!ai.cancelUnsent(key)) withdrawnRequests.remove(key);
     }
 
     public void translateChatSegmentsAsync(List<String> texts, Consumer<List<String>> onAll) {
@@ -752,6 +835,102 @@ public final class TranslationService {
         enchantComposeMemo.clear();
         structuredComposeMemo.clear();
         legacyConvertAttempted.clear();
+        // The cleared rows are gone from the manager's list; the manual rows stay on purpose.
+        managerSourcesChanged();
+    }
+
+    // -------------------------------------------------------------------------
+    // Manual translations (translation manager)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Attach the player's manual translations (opened by the loader for the active language) to both
+     * engine caches and create the manager model. Call once, right after the service is built.
+     * A manual translation outranks every automatic source and nothing automatic can overwrite
+     * it; {@link #clearTranslations()} keeps it.
+     */
+    public void setManualTranslations(ManualTranslations rows) {
+        this.manual = rows;
+        if (google != null) google.setManualTranslations(rows);
+        if (ai != null && ai != google) ai.setManualTranslations(rows);
+        TranslationManager previous = manager;
+        manager = rows == null ? null : new TranslationManager(this, ai, google, rows);
+        if (previous != null) previous.close();
+        onManualChanged();
+    }
+
+    public ManualTranslations manualTranslations() {
+        return manual;
+    }
+
+    /**
+     * The model the translation manager screen works on, or {@code null} while no manual store is
+     * attached ({@link #setManualTranslations}).
+     */
+    public TranslationManagerModel manager() {
+        return manager;
+    }
+
+    /** Loader hook run after a manual translation was saved, reverted or deleted (clear the render memos). */
+    public void setManualChangeListener(Runnable listener) {
+        manualChangeListener = listener == null ? () -> { } : listener;
+    }
+
+    /**
+     * Forgets what was composed from cache content that a manual change just altered: the
+     * composed enchant-list and structured-tooltip paragraphs (consulted before any per-name
+     * lookup, so a stale one would keep showing the old wording), and the legacy conversion
+     * marks. Then runs the loader hook. The render path's own memos belong to the loader.
+     */
+    public void onManualChanged() {
+        enchantComposeMemo.clear();
+        structuredComposeMemo.clear();
+        legacyConvertAttempted.clear();
+        try {
+            manualChangeListener.run();
+        } catch (RuntimeException ignored) {
+            // A loader repaint hook must never break the cache update.
+        }
+    }
+
+    /**
+     * Throws away everything stored for the sentence with this semantic key, the manual rows too,
+     * so that it is translated again the next time it appears: both engine caches (semantic row,
+     * colour rows, failure marks, retry state, waiting and in-flight requests) and the repository
+     * read-through for it. Nothing is requested now. Scans the caches for the colour rows, so call
+     * it from a background thread; the manager passes the rows it already knows instead.
+     */
+    public void discardTranslation(String semanticKey) {
+        discardTranslation(semanticKey, null);
+    }
+
+    /** @param colorKeys the colour rows of the sentence when the caller knows them (no scan), or null */
+    void discardTranslation(String semanticKey, Collection<String> colorKeys) {
+        if (semanticKey == null) return;
+        // Block the repository first, so no frame between the steps below shows its older row.
+        if (forceFreshKeys.size() >= 512) forceFreshKeys.clear();
+        forceFreshKeys.add(semanticKey);
+        ManualTranslations rows = manual;
+        if (rows != null) {
+            List<String> mine = new ArrayList<>(rows.colorKeysOf(semanticKey));
+            mine.add(semanticKey);
+            rows.removeAll(mine);
+        }
+        if (google != null) {
+            if (colorKeys == null) google.invalidateFamily(semanticKey);
+            else google.invalidateFamily(semanticKey, colorKeys);
+        }
+        if (ai != null && ai != google) {
+            if (colorKeys == null) ai.invalidateFamily(semanticKey);
+            else ai.invalidateFamily(semanticKey, colorKeys);
+        }
+        onManualChanged();
+    }
+
+    /** The cached rows the manager lists changed under it (cleared, language or provider switched). */
+    private void managerSourcesChanged() {
+        TranslationManager current = manager;
+        if (current != null) current.sourcesChanged();
     }
 
     public String targetLang() { return activeTargetLang; }
@@ -781,6 +960,7 @@ public final class TranslationService {
         enchantComposeMemo.clear();
         structuredComposeMemo.clear();
         legacyConvertAttempted.clear();
+        managerSourcesChanged();
         try { targetLangChangeListener.run(); }
         catch (RuntimeException ignored) { }
     }
@@ -806,6 +986,8 @@ public final class TranslationService {
         enchantComposeMemo.clear();
         structuredComposeMemo.clear();
         legacyConvertAttempted.clear();
+        // The caches switched the shared manual file with their own files; the list is of another language now.
+        managerSourcesChanged();
         try {
             targetLangChangeListener.run();
         } catch (RuntimeException ignored) {
@@ -2145,7 +2327,7 @@ public final class TranslationService {
     /** Called by the HUD lookups: records the exact text the render hook asked about. */
     private void noteHud(HudSurface surface, String text) {
         HudCapture capture = hudCapture;
-        if (capture == null || text == null || text.isBlank()) return;
+        if (capture == null || showOriginalOnly || text == null || text.isBlank()) return;
         if (hudMode(surface) == DisplayMode.ORIGINAL_ONLY
                 || !TextFilter.shouldTranslate(text, activeTargetLang)) return;
         synchronized (hudLock) {
@@ -2181,6 +2363,9 @@ public final class TranslationService {
     private int sendHudCapture(HudCapture capture) {
         // Cache-only mode (master switch off): nothing may be discarded that cannot be bought again.
         if (!requestsEnabled()) return 0;
+        // Show-original is on: the texts collected may be game-language text shown in English, and
+        // invalidating their rows without being able to resend would only lose translations.
+        if (showOriginalOnly) return 0;
         List<String> viaMachine = new ArrayList<>();
         List<String> viaAi = new ArrayList<>();
         for (Map.Entry<HudSurface, LinkedHashSet<String>> entry : capture.texts.entrySet()) {
@@ -2209,8 +2394,9 @@ public final class TranslationService {
     public int pendingCount() { return google.pendingCount() + ai.pendingCount(); }
     public void retranslate(List<String> sources) {
         // Cache-only mode: deleting rows that cannot be re-requested would only hide
-        // translations, so an explicit retranslate is a no-op while requests are off.
-        if (!requestsEnabled()) return;
+        // translations, so an explicit retranslate is a no-op while requests are off. Same while
+        // the show-original key is on: nothing may be sent, so nothing may be invalidated.
+        if (showOriginalOnly || !requestsEnabled()) return;
         invalidateSources(sources);
         enchantComposeMemo.clear();
         structuredComposeMemo.clear();
@@ -2222,7 +2408,7 @@ public final class TranslationService {
 
     /** Explicit rescan: discard stale/failed rows, then queue the original screen inputs. */
     public void retranslateScreen(List<String> sources) {
-        if (!requestsEnabled()) return; // see retranslate(): never invalidate without resending
+        if (showOriginalOnly || !requestsEnabled()) return; // see retranslate(): never invalidate without resending
         invalidateSources(sources);
         // Same three memos retranslate() clears, for the same reason: translateScreenText()
         // passes enchantList=true (see the warm call below), so an enchant/scroll-list-shaped
@@ -2397,10 +2583,22 @@ public final class TranslationService {
         noteHud(HudSurface.TITLE, text);
         return lookup(text, config.titleMode, config.aiTitle, false, false, false, config.aiTitle);
     }
+    /** Cache-only title lookup: never queues a request (for text that is no longer on screen). */
+    public TranslationDecision peekTitle(String text) {
+        return lookup(text, config.titleMode, config.aiTitle, false, false, false, false);
+    }
     public TranslationDecision translateActionBar(String text) {
         noteHud(HudSurface.ACTION_BAR, text);
         return lookup(text, config.actionBarMode, config.aiActionBar, false, false, false,
                 config.aiActionBar);
+    }
+    /**
+     * Cache-only action-bar lookup: never queues a request, whatever the engine. For callers
+     * that decide for themselves when a text is worth asking for (overlay dialogue blocks).
+     */
+    public TranslationDecision peekActionBar(String text) {
+        noteHud(HudSurface.ACTION_BAR, text);
+        return lookup(text, config.actionBarMode, config.aiActionBar, false, false, false, false);
     }
     public TranslationDecision translateBook(String text) {
         return lookup(text, config.bookMode, config.aiBook, true, false, false, config.aiBook);
@@ -2569,6 +2767,9 @@ public final class TranslationService {
     }
 
     public boolean warmUp(String source) {
+        // Show-original is on: nothing is requested and the unit is NOT reported as warmed, so a
+        // caller that scans with this never counts it done; it asks again once the key is off.
+        if (showOriginalOnly) return false;
         if (config.tooltipMode == DisplayMode.ORIGINAL_ONLY
                 || !shouldTranslateItem(source)) return true;
         NameMasker.Masked masked = mask(source);
@@ -2922,7 +3123,7 @@ public final class TranslationService {
         // Manual item mode (config.aiTooltip == false): this correction mechanism exists
         // purely to fix up a NAME it may itself re-request (see below) -- it must never
         // fire from merely hovering, so the very next check already excludes it.
-        if (!config.aiTooltip || itemName == null || itemName.isBlank()
+        if (showOriginalOnly || !config.aiTooltip || itemName == null || itemName.isBlank()
                 || tooltipSources == null || tooltipSources.isEmpty()) return;
 
         Collection<String> protectedNow = names();
@@ -2932,6 +3133,8 @@ public final class TranslationService {
         NameMasker.Masked maskedName = NameMasker.mask(itemName, protectedNow, termsNow, entitiesNow);
         if (maskedName.hasMasks()) return;
         TranslationCache selected = cache(true);
+        // A name the player wrote by hand is final: neither the tooltip title nor a retry may touch it.
+        if (selected.hasManualTranslation(maskedName.text())) return;
         // Wording known only from a colour projection (its semantic row was evicted, or is the
         // session copy rebuilt from that projection) is display-only here: before, such a
         // line had no semantic row at all, and reconciling it would buy suffix/context requests.
@@ -3057,7 +3260,8 @@ public final class TranslationService {
     private void warmMasked(List<String> sources, boolean includeContext,
                             DisplayMode mode, boolean useAi, boolean highPriority,
                             boolean itemText, boolean enchantList) {
-        if (mode == DisplayMode.ORIGINAL_ONLY || sources == null) return;
+        // Innermost gate of every warm/request/retranslate batch: no new work while show-original is on.
+        if (showOriginalOnly || mode == DisplayMode.ORIGINAL_ONLY || sources == null) return;
         Collection<String> protectedNow = names();
         DoNotTranslateMatcher termsNow = doNotTranslateTerms();
         ItemEntityRegistry entitiesNow = entitiesNow();

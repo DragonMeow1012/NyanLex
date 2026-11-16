@@ -33,7 +33,7 @@ public abstract class BossBarMixin {
             TranslationService service = NyanLexFabric.service();
             if (service != null && text != null) {
                 Component translated = FabricTextStyle.renderTranslated("bossBar", text, service::translateBossBar);
-                if (translated != null) {
+                if (translated != null && !NyanLexFabric.projectionSuppressed()) {
                     int center = x + font.width(text) / 2; // original name's centre
                     java.util.List<Component> lines = FabricTextStyle.splitLines(translated);
                     if (lines.size() <= 1) {

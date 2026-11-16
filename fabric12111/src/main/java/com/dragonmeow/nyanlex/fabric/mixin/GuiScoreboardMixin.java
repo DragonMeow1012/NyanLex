@@ -2,6 +2,8 @@ package com.dragonmeow.nyanlex.fabric.mixin;
 
 import com.dragonmeow.nyanlex.translate.HookGuard;
 import com.dragonmeow.nyanlex.fabric.NyanLexFabric;
+import com.dragonmeow.nyanlex.fabric.OverlayDialogueView;
+import com.dragonmeow.nyanlex.fabric.TransientChatLogger;
 import com.dragonmeow.nyanlex.fabric.FabricTextStyle;
 import com.dragonmeow.nyanlex.service.TranslationDecision;
 import com.dragonmeow.nyanlex.service.TranslationService;
@@ -45,6 +47,15 @@ import java.util.function.Function;
  */
 @Mixin(Gui.class)
 public abstract class GuiScoreboardMixin {
+
+    @Shadow
+    private Component title;
+
+    @Shadow
+    private Component subtitle;
+
+    /** Set by the title redirect for the one draw call that follows: subtitle or title. */
+    private static boolean nyanlex$subtitleDraw;
 
     @Shadow @Final
     private static Comparator<PlayerScoreEntry> SCORE_DISPLAY_ORDER;
@@ -174,7 +185,8 @@ public abstract class GuiScoreboardMixin {
             // Do not fall back to translating this isolated row: the outer hook already
             // queued its complete blank-line-delimited paragraph (or intentionally kept it).
             Component translated = text == null ? null : nyanlex$takeScoreboardRow(text);
-            Component toDraw = translated == null ? text : translated;
+            Component toDraw = translated == null || NyanLexFabric.projectionSuppressed()
+                    ? text : translated;
             Component rendered = toDraw;
             com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(
                     () -> g.drawString(font, rendered, x, y, color, shadow));
@@ -221,6 +233,7 @@ public abstract class GuiScoreboardMixin {
         }
         try {
             TranslationService s = NyanLexFabric.service();
+            nyanlex$subtitleDraw = text == this.subtitle;
             nyanlex$backdrop("title", g, font, text, x, y, width, color, s == null ? null : s::translateTitle);
         } catch (Throwable guardError) {
             HookGuard.fail("GuiScoreboard.title", guardError);
@@ -240,6 +253,14 @@ public abstract class GuiScoreboardMixin {
             return;
         }
         try {
+            // An overlay dialogue box is translated block by block and drawn in place; it never
+            // goes down the one-line path below (its HUD numbers and typed text change every frame).
+            Component dialogue = OverlayDialogueView.view(text, font);
+            if (dialogue != null) {
+                com.dragonmeow.nyanlex.translate.InternalRenderGuard.run(
+                        () -> g.drawStringWithBackdrop(font, dialogue, x, y, width, color));
+                return;
+            }
             TranslationService s = NyanLexFabric.service();
             nyanlex$backdrop("actionBar", g, font, text, x, y, width, color, s == null ? null : s::translateActionBar);
         } catch (Throwable guardError) {
@@ -255,7 +276,10 @@ public abstract class GuiScoreboardMixin {
                                              Function<String, TranslationDecision> fn) {
         if (fn != null && text != null) {
             Component translated = FabricTextStyle.renderTranslated(surfaceId, text, fn);
-            if (translated != null) {
+            if ("title".equals(surfaceId) && TransientChatLogger.on()) {
+                TransientChatLogger.title(nyanlex$subtitleDraw, text, translated != null);
+            }
+            if (translated != null && !NyanLexFabric.projectionSuppressed()) {
                 int center = x + font.width(text) / 2; // keep the original's centre
                 java.util.List<Component> lines = FabricTextStyle.splitLines(translated);
                 if (lines.size() <= 1) {

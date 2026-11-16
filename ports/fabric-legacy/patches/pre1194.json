@@ -96,5 +96,17 @@
       "from": "Lnet/minecraft/client/gui/Font$DisplayMode;",
       "to": "Z"
     }
+  ],
+  "com/dragonmeow/nyanlex/fabric/OriginalLanguage.java": [
+    {
+      "from": "                table = ClientLanguage.loadFrom(manager,\n                        List.of(selectedLanguageCode, OriginalLanguageSwitch.ORIGINAL_LANGUAGE_CODE), false);",
+      "to": "                table = ClientLanguage.loadFrom(manager, List.of(\n                        new net.minecraft.client.resources.language.LanguageInfo(selectedLanguageCode, \"\", \"\", false),\n                        new net.minecraft.client.resources.language.LanguageInfo(\n                                OriginalLanguageSwitch.ORIGINAL_LANGUAGE_CODE, \"US\", \"English\", false)));"
+    }
+  ],
+  "com/dragonmeow/nyanlex/fabric/NyanLexHooks.java": [
+    {
+      "from": "            \"TextDisplay.refresh\",\n            \"TextDisplay.text\",\n",
+      "to": ""
+    }
   ]
 }

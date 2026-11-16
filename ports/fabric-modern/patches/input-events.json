@@ -15,6 +15,17 @@
     {"from":"net.minecraft.util.Util", "to":"net.minecraft.Util"}
   ],
   "com/dragonmeow/nyanlex/fabric/NyanLexFabric.java": [
+    {"from":"Identifier", "to":"ResourceLocation"},
+    {"from":"mc.screen.resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight())", "to":"mc.screen.resize(mc, mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight())"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/BorrowedGlyphs.java": [
+    {"from":"Identifier", "to":"ResourceLocation"},
+    {"from":"TextRenderable.Styled", "to":"TextRenderable"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/OverlayDialogueView.java": [
+    {"from":"Identifier", "to":"ResourceLocation"}
+  ],
+  "com/dragonmeow/nyanlex/fabric/mixin/GlyphStitcherAccessor.java": [
     {"from":"Identifier", "to":"ResourceLocation"}
   ],
   "com/dragonmeow/nyanlex/fabric/mixin/BookPageMixin.java": [
